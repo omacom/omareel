@@ -46,7 +46,9 @@ MotionTrack MotionTrack::build(double duration, int sourceWidth, int sourceHeigh
             }
         }
     }
-    raw = CursorPath::decimate(raw, captureFps);
+    // Samples are normalized, so the one-pixel threshold must be normalized too — otherwise
+    // every move is "less than a pixel" and only the first and last samples survive.
+    raw = CursorPath::decimate(raw, captureFps, 1.0 / std::max(1, std::max(sourceWidth, sourceHeight)));
     if (raw.isEmpty()) raw << CursorSample{0.0, {0.5, 0.5}};
 
     const int count = std::max(1, int(std::ceil(track.m_duration * SampleRate)) + 1);

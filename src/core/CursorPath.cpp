@@ -5,7 +5,8 @@
 
 using namespace OmaRecord;
 
-QVector<CursorSample> CursorPath::decimate(const QVector<CursorSample> &raw, double fps)
+QVector<CursorSample> CursorPath::decimate(const QVector<CursorSample> &raw, double fps,
+                                           double minDistance)
 {
     if (raw.isEmpty()) return {};
     QVector<CursorSample> result{raw.first()};
@@ -13,7 +14,7 @@ QVector<CursorSample> CursorPath::decimate(const QVector<CursorSample> &raw, dou
     for (qsizetype i = 1; i < raw.size(); ++i) {
         const auto &last = result.last();
         const QPointF delta = raw[i].position - last.position;
-        if (raw[i].time - last.time < window || std::hypot(delta.x(), delta.y()) < 1.0) continue;
+        if (raw[i].time - last.time < window || std::hypot(delta.x(), delta.y()) < minDistance) continue;
         result << raw[i];
     }
     if (raw.last().time > result.last().time) result << raw.last();
