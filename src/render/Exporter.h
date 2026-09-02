@@ -1,11 +1,14 @@
 #pragma once
 
 #include <QObject>
+#include <QSize>
 #include <QVariantList>
 #include <QVariantMap>
 #include <atomic>
 
 namespace OmaRecord {
+
+QSize paddedEvenSize(int width, int height);
 
 struct ExportOptions {
     QString bundlePath;
@@ -15,6 +18,7 @@ struct ExportOptions {
     QString quality;
     int gifFps = 0;
     int gifWidth = 0;
+    bool timing = false;
 };
 
 class CompositionState : public QObject

@@ -10,7 +10,7 @@ FfmpegDecoder::~FfmpegDecoder()
 }
 
 bool FfmpegDecoder::start(const QString &path, double startTime, double length, double fps,
-                          int width, int height, QString *error)
+                          int width, int height, bool scale, QString *error)
 {
     cancel();
     m_cancelled = false;
@@ -20,6 +20,7 @@ bool FfmpegDecoder::start(const QString &path, double startTime, double length, 
     m_fps = fps;
     m_width = width;
     m_height = height;
+    m_scale = scale;
     m_hardware = true;
     m_deliveredFrame = false;
     m_eof = false;
@@ -34,10 +35,14 @@ bool FfmpegDecoder::launch(bool hardware, QString *error)
 {
     QStringList args{QStringLiteral("-v"), QStringLiteral("error")};
     if (hardware) args << QStringLiteral("-hwaccel") << QStringLiteral("cuda");
+    const QString videoFilter = m_scale
+        ? QStringLiteral("fps=%1,format=rgba,scale=%2:%3:flags=bilinear")
+              .arg(m_fps, 0, 'g', 12).arg(m_width).arg(m_height)
+        : QStringLiteral("fps=%1").arg(m_fps, 0, 'g', 12);
     args << QStringLiteral("-ss") << QString::number(m_start, 'f', 6)
          << QStringLiteral("-i") << m_path
          << QStringLiteral("-t") << QString::number(m_length, 'f', 6)
-         << QStringLiteral("-vf") << QStringLiteral("fps=%1").arg(m_fps, 0, 'g', 12)
+         << QStringLiteral("-vf") << videoFilter
          << QStringLiteral("-f") << QStringLiteral("rawvideo")
          << QStringLiteral("-pix_fmt") << QStringLiteral("rgba") << QStringLiteral("-");
     m_process.setProcessChannelMode(QProcess::SeparateChannels);
@@ -54,17 +59,19 @@ bool FfmpegDecoder::readFrame(QImage *image, QString *error)
 {
     if (m_cancelled) { if (error) *error = QStringLiteral("Export cancelled"); return false; }
     const qint64 needed = qint64(m_width) * m_height * 4;
-    QByteArray bytes;
-    bytes.reserve(needed);
-    while (bytes.size() < needed && !m_cancelled) {
+    QImage next(m_width, m_height, QImage::Format_RGBA8888);
+    qint64 received = 0;
+    while (received < needed && !m_cancelled) {
         if (m_process.bytesAvailable() == 0 && !m_process.waitForReadyRead(30000)) {
             if (m_process.state() == QProcess::NotRunning) break;
             if (error) *error = QStringLiteral("Timed out reading decoded video");
             return false;
         }
-        bytes += m_process.read(needed - bytes.size());
+        const qint64 amount = m_process.read(reinterpret_cast<char *>(next.bits()) + received,
+                                             needed - received);
+        if (amount > 0) received += amount;
     }
-    if (bytes.size() != needed) {
+    if (received != needed) {
         const QString details = QString::fromUtf8(m_process.readAllStandardError()).trimmed();
         if (m_hardware && !m_deliveredFrame && !m_cancelled) {
             m_process.kill();
@@ -76,8 +83,7 @@ bool FfmpegDecoder::readFrame(QImage *image, QString *error)
         if (!details.isEmpty() && error) *error = details;
         return false;
     }
-    *image = QImage(reinterpret_cast<const uchar *>(bytes.constData()), m_width, m_height,
-                    m_width * 4, QImage::Format_RGBA8888).copy();
+    *image = std::move(next);
     m_deliveredFrame = true;
     if (error) error->clear();
     return true;

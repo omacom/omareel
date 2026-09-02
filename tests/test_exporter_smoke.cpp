@@ -6,6 +6,7 @@
 #include <QJsonDocument>
 #include <QProcess>
 #include <QTemporaryDir>
+#include <QTimer>
 #include <QtTest>
 
 using namespace OmaRecord;
@@ -14,6 +15,12 @@ class ExporterSmokeTest : public QObject
 {
     Q_OBJECT
 private slots:
+    void padsOddDimensionsToEven()
+    {
+        QCOMPARE(paddedEvenSize(1367, 781), QSize(1368, 782));
+        QCOMPARE(paddedEvenSize(1920, 1080), QSize(1920, 1080));
+    }
+
     void exportsTwoSecondH264()
     {
         if (QStandardPaths::findExecutable(QStringLiteral("ffmpeg")).isEmpty()
@@ -63,6 +70,24 @@ private slots:
         QCOMPARE(stream.value("height").toInt(), 360);
         const double duration = root.value("format").toObject().value("duration").toString().toDouble();
         QVERIFY(duration > 1.9 && duration < 2.1);
+
+        const QString cancelledOutput = temporary.filePath(QStringLiteral("cancelled.mp4"));
+        QFile sentinel(cancelledOutput);
+        QVERIFY(sentinel.open(QIODevice::WriteOnly));
+        QCOMPARE(sentinel.write("keep"), qint64(4));
+        sentinel.close();
+        Exporter cancelledExporter;
+        QString cancellationFailure;
+        connect(&cancelledExporter, &Exporter::failed, this,
+                [&](const QString &message) { cancellationFailure = message; });
+        QTimer::singleShot(1, &cancelledExporter, &Exporter::cancel);
+        cancelledExporter.exportBundle({bundle, cancelledOutput, 60, 640,
+                                        QStringLiteral("low"), 0, 0});
+        QVERIFY(cancellationFailure.contains(QStringLiteral("cancelled"), Qt::CaseInsensitive));
+        QVERIFY(sentinel.open(QIODevice::ReadOnly));
+        QCOMPARE(sentinel.readAll(), QByteArray("keep"));
+        QCOMPARE(QDir(temporary.path()).entryList({QStringLiteral(".omarecord-export-*.mp4")},
+                                                  QDir::Files), QStringList());
     }
 };
 

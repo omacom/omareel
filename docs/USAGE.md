@@ -53,6 +53,8 @@ saved immediately with `Ctrl+S`.
 Exports `.mp4` or `.gif`. Common options are `--fps N`, `--width W`, and `--quality LEVEL`.
 Quality may be `low`, `medium`, `high`, `best`, `web-low`, `web-high`, `social`, or `studio`.
 GIF-specific overrides are `--gif-fps N` and `--gif-width W`.
+Add `--timing` to print average decode wait, upload, render, readback, encoder-write, and
+end-to-end throughput measurements.
 
 ### `probe BUNDLE`
 

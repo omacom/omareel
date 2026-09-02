@@ -42,7 +42,7 @@ static int usage(const QString &error = {})
               "      Open a recording bundle in the editor.\n"
               "  export <bundle> -o <file.mp4|file.gif> [options]\n"
               "      Export with --fps N, --width W, --quality LEVEL, --gif-fps N,\n"
-              "      or --gif-width W.\n"
+              "      --gif-width W, or --timing.\n"
               "  probe <bundle>\n"
               "      Print a JSON summary of a recording bundle.\n"
               "  help\n"
@@ -106,7 +106,8 @@ static int exportCommand(const QStringList &arguments)
             else if (arg == QLatin1String("--quality")) options.quality = value;
             else if (arg == QLatin1String("--gif-fps")) options.gifFps = value.toInt();
             else options.gifWidth = value.toInt();
-        } else return usage(QStringLiteral("unknown export option %1").arg(arg));
+        } else if (arg == QLatin1String("--timing")) options.timing = true;
+        else return usage(QStringLiteral("unknown export option %1").arg(arg));
     }
     if (options.outputPath.isEmpty()) return usage(QStringLiteral("export requires -o <file>"));
     if (!options.outputPath.endsWith(QStringLiteral(".mp4"), Qt::CaseInsensitive)
@@ -124,7 +125,8 @@ static int exportCommand(const QStringList &arguments)
     bool success = false;
     QString failure;
     QObject::connect(&exporter, &Exporter::progress, [](int frame, int total) {
-        QTextStream(stderr) << '\r' << "Exporting " << frame << '/' << total << Qt::flush;
+        if (frame == total || frame == 1 || frame % 10 == 0)
+            QTextStream(stderr) << '\r' << "Exporting " << frame << '/' << total << Qt::flush;
     });
     QObject::connect(&exporter, &Exporter::finished, [&](const QString &path) {
         success = true;

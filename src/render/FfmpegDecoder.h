@@ -13,7 +13,7 @@ public:
     FfmpegDecoder() = default;
     ~FfmpegDecoder();
     bool start(const QString &path, double start, double length, double fps,
-               int width, int height, QString *error = nullptr);
+               int width, int height, bool scale, QString *error = nullptr);
     bool readFrame(QImage *image, QString *error = nullptr);
     void cancel();
     bool atEnd() const { return m_eof; }
@@ -27,6 +27,7 @@ private:
     double m_fps = 60.0;
     int m_width = 0;
     int m_height = 0;
+    bool m_scale = false;
     bool m_hardware = true;
     bool m_deliveredFrame = false;
     bool m_eof = false;
