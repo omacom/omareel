@@ -111,6 +111,7 @@ target_link_libraries(omarecord_render PUBLIC omarecord_core Qt6::Concurrent Qt6
 
 qt_add_executable(omarecord src/main.cpp)
 target_link_libraries(omarecord PRIVATE omarecord_render Qt6::Quick Qt6::Multimedia)
+target_compile_definitions(omarecord PRIVATE OMARECORD_VERSION="${PROJECT_VERSION}")
 
 include(CTest)
 if(BUILD_TESTING)

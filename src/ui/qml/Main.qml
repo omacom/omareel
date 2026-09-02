@@ -46,7 +46,9 @@ ApplicationWindow {
                 }
             }
             SidePanel {
-                Layout.preferredWidth: 340
+                Layout.preferredWidth: 300
+                Layout.minimumWidth: 300
+                Layout.maximumWidth: 300
                 Layout.fillHeight: true
             }
         }

@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+packages=(
+  gpu-screen-recorder ffmpeg slurp qt6-base qt6-declarative qt6-multimedia
+  qt6-svg libevdev xdg-desktop-portal cmake ninja qt6-shadertools
+)
+
+if ! command -v makepkg >/dev/null 2>&1 || ! command -v pacman >/dev/null 2>&1; then
+  printf 'install-omarchy: makepkg and pacman are required\n' >&2
+  exit 1
+fi
+
+missing=()
+while IFS= read -r package; do
+  [[ -n "$package" ]] && missing+=("$package")
+done < <(pacman -T "${packages[@]}" 2>/dev/null || true)
+
+if ((${#missing[@]})); then
+  if command -v omarchy-pkg-add >/dev/null 2>&1; then
+    omarchy-pkg-add "${missing[@]}"
+  elif ((EUID == 0)); then
+    pacman -S --needed "${missing[@]}"
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo pacman -S --needed "${missing[@]}"
+  else
+    printf 'install-omarchy: missing packages and sudo is unavailable: %s\n' "${missing[*]}" >&2
+    exit 1
+  fi
+fi
+
+exec "$repo_dir/bin/install"

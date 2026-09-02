@@ -4,6 +4,7 @@ import QtQuick.Layouts
 
 Rectangle {
     id: root
+    objectName: "sidePanel"
     color: "#18191f"
     border.color: "#292b32"
     property int section: 0
@@ -16,7 +17,9 @@ Rectangle {
         anchors.fill: parent
         spacing: 0
         Rectangle {
-            Layout.preferredWidth: 58
+            Layout.preferredWidth: 48
+            Layout.minimumWidth: 48
+            Layout.maximumWidth: 48
             Layout.fillHeight: true
             color: "#131419"
             Column {
@@ -27,7 +30,7 @@ Rectangle {
                     delegate: ToolButton {
                         required property var modelData
                         required property int index
-                        width: 58; height: 52
+                        width: 48; height: 48
                         icon.source: "qrc:/omarecord/assets/icons/" + modelData.icon
                         icon.width: 21; icon.height: 21
                         checked: root.section === index
@@ -55,20 +58,24 @@ Rectangle {
                 font.pixelSize: 16
             }
             ScrollView {
+                id: scroller
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 clip: true
+                contentWidth: availableWidth
+                ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                 Loader {
-                    x: 14
-                    width: parent.width - 28
+                    x: 12
+                    width: scroller.availableWidth - 24
+                    height: item ? item.implicitHeight : 0
                     sourceComponent: root.section === 0 ? backgroundPanel : root.section === 1 ? shapePanel : root.section === 2 ? cursorPanel : root.section === 3 ? zoomPanel : audioPanel
                 }
             }
         }
     }
-    Component { id: backgroundPanel; BackgroundPanel { width: 254 } }
-    Component { id: shapePanel; ShapePanel { width: 254 } }
-    Component { id: cursorPanel; CursorPanel { width: 254 } }
-    Component { id: zoomPanel; ZoomPanel { width: 254 } }
-    Component { id: audioPanel; AudioPanel { width: 254 } }
+    Component { id: backgroundPanel; BackgroundPanel { } }
+    Component { id: shapePanel; ShapePanel { } }
+    Component { id: cursorPanel; CursorPanel { } }
+    Component { id: zoomPanel; ZoomPanel { } }
+    Component { id: audioPanel; AudioPanel { } }
 }

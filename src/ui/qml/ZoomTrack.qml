@@ -21,12 +21,13 @@ Item {
             x: Math.max(0, outputStart) * root.pixelsPerSecond
             width: Math.max(18, (outputEnd-outputStart) * root.pixelsPerSecond)
             height: root.height
-            radius: 5
-            color: editor.selectedZoomId === modelData.id ? "#3478d4" : "#275d9f"
-            border.color: editor.selectedZoomId === modelData.id ? "#79b4ff" : "#3975bc"
+            radius: 6
+            color: editor.selectedZoomId === modelData.id ? "#606be2" : "#4f5bd5"
+            border.color: editor.selectedZoomId === modelData.id ? "#aeb5ff" : "#7680e8"
+            HoverHandler { id: zoomHover }
             Label {
                 anchors.centerIn: parent
-                width: parent.width - 18
+                width: Math.max(0, parent.width - 20)
                 elide: Text.ElideRight
                 horizontalAlignment: Text.AlignHCenter
                 text: "Zoom " + Number(modelData.level).toFixed(1) + "× · " + (typeof modelData.target === "object" ? "Manual" : "Auto")
@@ -44,6 +45,8 @@ Item {
             }
             Rectangle {
                 width: 7; height: parent.height; radius: 3; color: "#a8ceff"
+                opacity: editor.selectedZoomId === modelData.id || zoomHover.hovered ? 1 : 0
+                Behavior on opacity { NumberAnimation { duration: 100 } }
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.SizeHorCursor
                     property real pressX; property real originalOutput
@@ -54,6 +57,8 @@ Item {
             }
             Rectangle {
                 anchors.right: parent.right; width: 7; height: parent.height; radius: 3; color: "#a8ceff"
+                opacity: editor.selectedZoomId === modelData.id || zoomHover.hovered ? 1 : 0
+                Behavior on opacity { NumberAnimation { duration: 100 } }
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.SizeHorCursor
                     property real pressX; property real originalOutput

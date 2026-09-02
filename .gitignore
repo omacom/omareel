@@ -2,3 +2,6 @@ build/
 *.omarecord/
 .cache/
 compile_commands.json
+pkg/pkg/
+pkg/src/
+pkg/*.pkg.tar.*

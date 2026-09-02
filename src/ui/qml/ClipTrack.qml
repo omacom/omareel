@@ -19,10 +19,11 @@ Item {
             x: root.outputStart(index) * root.pixelsPerSecond
             width: Math.max(20, (modelData.out-modelData.in)/modelData.speed * root.pixelsPerSecond)
             height: root.height
-            radius: 5
+            radius: 6
             color: editor.selectedClipId === modelData.id ? Qt.rgba(theme.accent.r, theme.accent.g, theme.accent.b, .52) : Qt.rgba(theme.accent.r, theme.accent.g, theme.accent.b, .30)
             border.color: editor.selectedClipId === modelData.id ? theme.accent : Qt.rgba(theme.accent.r, theme.accent.g, theme.accent.b, .65)
             clip: true
+            HoverHandler { id: clipHover }
             Repeater {
                 model: editor.waveform
                 delegate: Rectangle {
@@ -42,8 +43,12 @@ Item {
             }
             Label {
                 anchors.centerIn: parent
-                text: Number(modelData.speed).toFixed(modelData.speed % 1 ? 2 : 0) + "×"
+                width: Math.max(0, parent.width - 22)
+                horizontalAlignment: Text.AlignHCenter
+                elide: Text.ElideRight
+                text: (clipBlock.width < 68 ? "" : "Clip · ") + Number(modelData.speed).toFixed(modelData.speed % 1 ? 2 : 0) + "×"
                 font.bold: true
+                color: "white"
                 background: Rectangle { color: "#16171c"; radius: 4 }
                 padding: 4
                 MouseArea { anchors.fill: parent; onClicked: speedMenu.open() }
@@ -56,7 +61,9 @@ Item {
                 }
             }
             Rectangle {
-                width: 8; height: parent.height; color: editor.selectedClipId === modelData.id ? theme.accent : "#9ca0aa"; radius: 3
+                width: 8; height: parent.height; color: theme.accent; radius: 3
+                opacity: editor.selectedClipId === modelData.id || clipHover.hovered ? 1 : 0
+                Behavior on opacity { NumberAnimation { duration: 100 } }
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.SizeHorCursor
                     property real pressX; property real originalIn
@@ -66,7 +73,9 @@ Item {
                 }
             }
             Rectangle {
-                anchors.right: parent.right; width: 8; height: parent.height; color: editor.selectedClipId === modelData.id ? theme.accent : "#9ca0aa"; radius: 3
+                anchors.right: parent.right; width: 8; height: parent.height; color: theme.accent; radius: 3
+                opacity: editor.selectedClipId === modelData.id || clipHover.hovered ? 1 : 0
+                Behavior on opacity { NumberAnimation { duration: 100 } }
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.SizeHorCursor
                     property real pressX; property real originalOut

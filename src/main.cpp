@@ -10,6 +10,8 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
+#include <QImage>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -19,6 +21,11 @@
 #include <QQmlContext>
 #include <QStandardPaths>
 #include <QTextStream>
+#include <QTimer>
+
+#ifndef OMARECORD_VERSION
+#define OMARECORD_VERSION "unknown"
+#endif
 
 using namespace OmaRecord;
 
@@ -26,11 +33,59 @@ static int usage(const QString &error = {})
 {
     QTextStream stream(error.isEmpty() ? stdout : stderr);
     if (!error.isEmpty()) stream << "omarecord: " << error << '\n';
-    stream << "usage: omarecord record [--fullscreen|--region|--window] [options]\n"
-              "       omarecord edit <bundle>\n"
-              "       omarecord export <bundle> -o <file> [--fps N] [--width W]\n"
-              "       omarecord probe <bundle>\n";
+    stream << "usage: omarecord [command]\n\n"
+              "commands:\n"
+              "  record [--region|--fullscreen|--window] [options]\n"
+              "      Toggle recording (region is the default). Options: --fps N, --dir PATH,\n"
+              "      --with-desktop-audio, --with-microphone-audio, --no-open, --stop.\n"
+              "  edit <bundle.omarecord>\n"
+              "      Open a recording bundle in the editor.\n"
+              "  export <bundle> -o <file.mp4|file.gif> [options]\n"
+              "      Export with --fps N, --width W, --quality LEVEL, --gif-fps N,\n"
+              "      or --gif-width W.\n"
+              "  probe <bundle>\n"
+              "      Print a JSON summary of a recording bundle.\n"
+              "  help\n"
+              "      Show this help.\n\n"
+              "Running omarecord without a command opens the launcher.\n";
     return error.isEmpty() ? 0 : 2;
+}
+
+static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplication &app)
+{
+    const QString path = qEnvironmentVariable("OMARECORD_SCREENSHOT");
+    if (path.isEmpty() || engine.rootObjects().isEmpty()) return;
+
+    auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
+    if (!window) return;
+
+    const QString size = qEnvironmentVariable("OMARECORD_SCREENSHOT_SIZE");
+    const QStringList dimensions = size.toLower().split(QLatin1Char('x'));
+    bool widthOk = false;
+    bool heightOk = false;
+    const int width = dimensions.value(0).toInt(&widthOk);
+    const int height = dimensions.value(1).toInt(&heightOk);
+    if (dimensions.size() == 2 && widthOk && heightOk && width > 0 && height > 0)
+        window->resize(width, height);
+
+    static const QHash<QString, int> panels{
+        {QStringLiteral("background"), 0}, {QStringLiteral("shape"), 1},
+        {QStringLiteral("cursor"), 2}, {QStringLiteral("zoom"), 3},
+        {QStringLiteral("audio"), 4}
+    };
+    const QString panel = qEnvironmentVariable("OMARECORD_SCREENSHOT_PANEL").toLower();
+    if (panels.contains(panel)) {
+        if (QObject *sidePanel = window->findChild<QObject *>(QStringLiteral("sidePanel")))
+            sidePanel->setProperty("section", panels.value(panel));
+    }
+
+    QTimer::singleShot(3000, &app, [&app, window, path] {
+        QDir().mkpath(QFileInfo(path).absolutePath());
+        const QImage image = window->grabWindow();
+        const bool saved = !image.isNull() && image.save(path);
+        if (!saved) QTextStream(stderr) << "omarecord: could not save UI screenshot to " << path << '\n';
+        app.exit(saved ? 0 : 2);
+    });
 }
 
 static int exportCommand(const QStringList &arguments)
@@ -181,6 +236,12 @@ int main(int argc, char **argv)
 {
     const bool exporting = argc > 1 && QByteArray(argv[1]) == "export";
     const bool graphical = argc == 1 || (argc > 1 && QByteArray(argv[1]) == "edit");
+    // Screenshot mode must be independent of compositor capture and GPU backend quirks.
+    // It still exercises the real QML window and QQuickWindow::grabWindow().
+    if (!qEnvironmentVariableIsEmpty("OMARECORD_SCREENSHOT")) {
+        qputenv("QT_QPA_PLATFORM", "offscreen");
+        qputenv("QT_QPA_PLATFORMTHEME", QByteArray());
+    }
     if (qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY")
         && qEnvironmentVariableIsEmpty("DISPLAY")) {
         if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")) qputenv("QT_QPA_PLATFORM", "offscreen");
@@ -210,6 +271,7 @@ int main(int argc, char **argv)
         QObject::connect(&launcher, &Launcher::quitRequested, &app, &QCoreApplication::quit);
         engine.load(QUrl(QStringLiteral("qrc:/qt/qml/Omarecord/Launcher.qml")));
         if (engine.rootObjects().isEmpty()) return 2;
+        configureDebugScreenshot(engine, app);
         return app.exec();
     }
     const QString command = args[1];
@@ -234,8 +296,14 @@ int main(int argc, char **argv)
         engine.rootContext()->setContextProperty(QStringLiteral("comp"), &editor);
         engine.load(QUrl(QStringLiteral("qrc:/qt/qml/Omarecord/Main.qml")));
         if (engine.rootObjects().isEmpty()) return 2;
+        configureDebugScreenshot(engine, app);
         return app.exec();
     }
-    if (command == QLatin1String("--help") || command == QLatin1String("help")) return usage();
+    if (command == QLatin1String("--version") || command == QLatin1String("-V")) {
+        QTextStream(stdout) << "omarecord " << OMARECORD_VERSION << '\n';
+        return 0;
+    }
+    if (command == QLatin1String("--help") || command == QLatin1String("-h")
+        || command == QLatin1String("help")) return usage();
     return usage(QStringLiteral("unknown command %1").arg(command));
 }

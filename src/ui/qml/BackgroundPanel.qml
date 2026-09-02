@@ -6,19 +6,29 @@ import QtQuick.Layouts
 ColumnLayout {
     id: root
     spacing: 12
-    ButtonGroup { id: types }
     RowLayout {
         Layout.fillWidth: true
+        spacing: 2
         Repeater {
             model: [{t:"wallpaper",l:"Wallpaper"},{t:"gradient",l:"Gradient"},{t:"color",l:"Color"},{t:"image",l:"Image"}]
-            delegate: Button {
+            delegate: Rectangle {
                 required property var modelData
                 Layout.fillWidth: true
-                text: modelData.l
-                checkable: true
-                checked: editor.project.background.type === modelData.t
-                ButtonGroup.group: types
-                onClicked: editor.setProjectValue("background.type", modelData.t)
+                Layout.preferredHeight: 30
+                radius: 6
+                color: editor.project.background.type === modelData.t
+                    ? Qt.rgba(theme.accent.r, theme.accent.g, theme.accent.b, 0.28) : "#23252c"
+                border.color: editor.project.background.type === modelData.t ? theme.accent : "#343741"
+                Label {
+                    anchors.fill: parent
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    text: modelData.l
+                    font.pixelSize: 10
+                    font.bold: editor.project.background.type === modelData.t
+                    color: editor.project.background.type === modelData.t ? "white" : "#c1c3ca"
+                }
+                MouseArea { anchors.fill: parent; onClicked: editor.setProjectValue("background.type", modelData.t) }
             }
         }
     }

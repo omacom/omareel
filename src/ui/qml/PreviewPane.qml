@@ -7,9 +7,18 @@ Rectangle {
     color: "#0d0e12"
     clip: true
 
-    Rectangle {
+    Item {
+        id: previewArea
+        anchors.fill: parent
+        anchors.leftMargin: 24
+        anchors.rightMargin: 24
+        anchors.topMargin: 24
+        anchors.bottomMargin: 46
+
+        Rectangle {
+        id: previewFrame
         anchors.centerIn: parent
-        width: Math.min(parent.width - 64, (parent.height - 54) * editor.outputWidth / editor.outputHeight)
+        width: Math.min(parent.width, parent.height * editor.outputWidth / editor.outputHeight)
         height: width * editor.outputHeight / editor.outputWidth
         color: "#08090b"
         border.color: "#30323a"
@@ -77,11 +86,12 @@ Rectangle {
                 }
             }
         }
+        }
     }
     Label {
-        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.right: previewArea.right
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: 10
+        anchors.bottomMargin: 12
         text: editor.formatTime(editor.position) + "  /  " + editor.formatTime(editor.duration)
         color: "#8f929d"
         font.family: "monospace"

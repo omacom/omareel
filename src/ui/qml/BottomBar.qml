@@ -16,8 +16,11 @@ Rectangle {
         {label:"Portrait 4:5", value:"4:5"}
     ]
     RowLayout {
-        anchors.fill: parent
-        anchors.margins: 10
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.leftMargin: 10
+        anchors.rightMargin: 10
         ComboBox {
             Layout.preferredWidth: 145
             model: root.aspects
