@@ -9,7 +9,7 @@ ColumnLayout {
         for (let i=0;i<editor.zooms.length;i++) if (editor.zooms[i].id === editor.selectedZoomId) return editor.zooms[i]
         return null
     }
-    Label { text: selected ? "Selected zoom" : "Select a zoom on the timeline"; font.bold: true; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+    Label { text: selected ? "Selected zoom" : "Select a zoom on the timeline"; font.weight: Font.DemiBold; font.pixelSize: 13; wrapMode: Text.WordWrap; Layout.fillWidth: true }
     ColumnLayout {
         visible: root.selected !== null
         Layout.fillWidth: true
@@ -22,17 +22,18 @@ ColumnLayout {
         }
         RowLayout {
             Layout.fillWidth: true
-            Label { text: "Level"; Layout.fillWidth: true }
-            Label { text: root.selected ? Number(root.selected.level).toFixed(1) + "×" : "" }
+            Label { text: "Level"; Layout.fillWidth: true; color: "#aeb1bd"; font.pixelSize: 12 }
+            Label { text: root.selected ? Number(root.selected.level).toFixed(1) + "×" : ""; font.family: "monospace"; font.pixelSize: 11; color: "#858894" }
         }
         Slider {
             Layout.fillWidth: true; from: 1; to: 4; stepSize: 0.05; value: root.selected ? root.selected.level : 2
             onPressedChanged: pressed ? editor.beginCoalescedEdit("zoom-level") : editor.endCoalescedEdit()
             onMoved: editor.setZoomLevel(editor.selectedZoomId, value, true)
         }
-        Label { text: "Target" }
+        Label { text: "Target"; color: "#aeb1bd"; font.pixelSize: 12 }
         ComboBox {
             Layout.fillWidth: true
+            Layout.preferredHeight: 32
             model: ["Auto", "Manual"]
             currentIndex: root.selected && typeof root.selected.target === "object" ? 1 : 0
             onActivated: currentIndex === 0 ? editor.setZoomTarget(editor.selectedZoomId, "auto") : editor.setPickingZoomTarget(true)
@@ -41,10 +42,11 @@ ColumnLayout {
         Button { Layout.fillWidth: true; text: "Remove zoom"; onClicked: editor.removeZoom(editor.selectedZoomId) }
     }
     Rectangle { Layout.fillWidth: true; height: 1; color: "#30313a" }
-    Label { text: "Motion"; font.bold: true }
+    Label { text: "Motion"; font.weight: Font.DemiBold; font.pixelSize: 13 }
     ComboBox {
         id: springPreset
         Layout.fillWidth: true
+        Layout.preferredHeight: 32
         model: ["Smooth", "Default", "Snappy"]
         currentIndex: 1
         onActivated: {
@@ -57,6 +59,6 @@ ColumnLayout {
         }
     }
     PanelSlider { Layout.fillWidth: true; label: "Edge snapping"; path: "zoomStyle.snapToEdgesRatio"; from: 0; to: 0.5; value: editor.project.zoomStyle.snapToEdgesRatio; stepSize: 0.01; decimals: 2 }
-    Switch { text: "Instant boundaries"; checked: editor.project.zoomStyle.instantAnimation; onToggled: editor.setProjectValue("zoomStyle.instantAnimation", checked) }
+    Switch { Layout.preferredHeight: 32; text: "Instant boundaries"; checked: editor.project.zoomStyle.instantAnimation; onToggled: editor.setProjectValue("zoomStyle.instantAnimation", checked) }
     Button { Layout.fillWidth: true; text: "Regenerate zooms"; onClicked: editor.regenerateZooms() }
 }

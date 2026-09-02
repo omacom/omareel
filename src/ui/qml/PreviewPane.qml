@@ -4,7 +4,7 @@ import QtQuick.Controls
 Rectangle {
     id: root
     required property bool cropMode
-    color: "#0d0e12"
+    color: Qt.darker(theme.background, 1.18)
     clip: true
 
     Item {
@@ -21,8 +21,9 @@ Rectangle {
         width: Math.min(parent.width, parent.height * editor.outputWidth / editor.outputHeight)
         height: width * editor.outputHeight / editor.outputWidth
         color: "#08090b"
-        border.color: "#30323a"
+        border.color: "#10ffffff"
         border.width: 1
+        radius: 8
         clip: true
         Item {
             id: scaled
@@ -95,5 +96,6 @@ Rectangle {
         text: editor.formatTime(editor.position) + "  /  " + editor.formatTime(editor.duration)
         color: "#8f929d"
         font.family: "monospace"
+        font.pixelSize: 11
     }
 }

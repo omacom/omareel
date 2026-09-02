@@ -8,7 +8,7 @@ ColumnLayout {
     spacing: 12
     RowLayout {
         Layout.fillWidth: true
-        spacing: 2
+        spacing: 4
         Repeater {
             model: [{t:"wallpaper",l:"Wallpaper"},{t:"gradient",l:"Gradient"},{t:"color",l:"Color"},{t:"image",l:"Image"}]
             delegate: Rectangle {
@@ -24,7 +24,7 @@ ColumnLayout {
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                     text: modelData.l
-                    font.pixelSize: 10
+                    font.pixelSize: 11
                     font.bold: editor.project.background.type === modelData.t
                     color: editor.project.background.type === modelData.t ? "white" : "#c1c3ca"
                 }
@@ -42,12 +42,15 @@ ColumnLayout {
         clip: true
         delegate: Item {
             required property var modelData
+            required property int index
             width: GridView.view.cellWidth; height: GridView.view.cellHeight
             Rectangle {
-                anchors.fill: parent; anchors.margins: 4; radius: 7
-                border.width: editor.project.background.wallpaper === modelData.path ? 2 : 1
-                border.color: editor.project.background.wallpaper === modelData.path ? theme.accent : "#3a3c45"
-                Image { anchors.fill: parent; anchors.margins: 2; source: modelData.url; fillMode: Image.PreserveAspectCrop; clip: true }
+                anchors.fill: parent; anchors.margins: 4; radius: 6; clip: true
+                property bool selected: editor.project.background.wallpaper === modelData.path
+                    || (editor.project.background.wallpaper === "omarchy:current" && index === 0)
+                border.width: selected ? 2 : 1
+                border.color: selected ? theme.accent : "#3a3c45"
+                Image { anchors.fill: parent; anchors.margins: 2; source: modelData.url; sourceSize.width: 400; sourceSize.height: 240; fillMode: Image.PreserveAspectCrop }
                 MouseArea { anchors.fill: parent; onClicked: editor.setProjectValue("background.wallpaper", modelData.path) }
             }
         }
@@ -62,7 +65,12 @@ ColumnLayout {
         clip: true
         delegate: Rectangle {
             required property var modelData
-            width: GridView.view.cellWidth - 8; height: GridView.view.cellHeight - 8; radius: 7
+            property bool selected: editor.project.background.gradient.stops.length > 1
+                && editor.project.background.gradient.stops[0][0] === modelData[0]
+                && editor.project.background.gradient.stops[editor.project.background.gradient.stops.length - 1][0] === modelData[modelData.length - 1]
+            width: GridView.view.cellWidth - 8; height: GridView.view.cellHeight - 8; radius: 6
+            border.width: selected ? 2 : 1
+            border.color: selected ? theme.accent : "#22ffffff"
             gradient: Gradient {
                 GradientStop { position: 0; color: modelData[0] }
                 GradientStop { position: 1; color: modelData[modelData.length - 1] }
@@ -87,7 +95,7 @@ ColumnLayout {
     RowLayout {
         visible: editor.project.background.type === "color"
         Layout.fillWidth: true
-        Label { text: "Background color"; Layout.fillWidth: true }
+        Label { text: "Background color"; Layout.fillWidth: true; color: "#aeb1bd"; font.pixelSize: 12 }
         Rectangle { width: 44; height: 28; radius: 5; color: editor.project.background.color; border.color: "#777"; MouseArea { anchors.fill: parent; onClicked: colorDialog.open() } }
     }
     PanelSlider { Layout.fillWidth: true; label: "Blur"; path: "background.blur"; from: 0; to: 100; value: editor.project.background.blur; stepSize: 1 }

@@ -10,10 +10,12 @@ ApplicationWindow {
     height: 900
     minimumWidth: 1100
     minimumHeight: 700
-    color: "#111216"
+    color: theme.background
     title: editor.bundleName + " — omarecord"
     Material.theme: Material.Dark
     Material.accent: theme.accent
+    Material.background: theme.background
+    Material.foreground: theme.foreground
     property real timelineScale: 1
     property bool cropMode: false
 
@@ -21,6 +23,7 @@ ApplicationWindow {
         anchors.fill: parent
         spacing: 0
         TopBar {
+            id: topBar
             Layout.fillWidth: true
             onShowExport: exportDialog.open()
         }
@@ -46,29 +49,29 @@ ApplicationWindow {
                 }
             }
             SidePanel {
-                Layout.preferredWidth: 300
-                Layout.minimumWidth: 300
-                Layout.maximumWidth: 300
+                Layout.preferredWidth: 320
+                Layout.minimumWidth: 320
+                Layout.maximumWidth: 320
                 Layout.fillHeight: true
             }
         }
         Timeline {
             Layout.fillWidth: true
-            Layout.preferredHeight: 230
+            Layout.preferredHeight: 168
             scaleFactor: window.timelineScale
         }
     }
 
     ExportDialog { id: exportDialog; parent: Overlay.overlay }
 
-    Shortcut { sequence: "Space"; onActivated: editor.playPause() }
-    Shortcut { sequence: "Left"; onActivated: editor.stepFrames(-1) }
-    Shortcut { sequence: "Right"; onActivated: editor.stepFrames(1) }
-    Shortcut { sequence: "Shift+Left"; onActivated: editor.seek(editor.position - 1) }
-    Shortcut { sequence: "Shift+Right"; onActivated: editor.seek(editor.position + 1) }
-    Shortcut { sequence: "S"; onActivated: editor.splitAtPlayhead() }
-    Shortcut { sequence: "Z"; onActivated: editor.addZoomAt(editor.position) }
-    Shortcut { sequence: "Delete"; onActivated: editor.selectedZoomId ? editor.removeZoom(editor.selectedZoomId) : editor.removeClip(editor.selectedClipId) }
+    Shortcut { sequence: "Space"; enabled: !topBar.nameFieldFocused; onActivated: editor.playPause() }
+    Shortcut { sequence: "Left"; enabled: !topBar.nameFieldFocused; onActivated: editor.stepFrames(-1) }
+    Shortcut { sequence: "Right"; enabled: !topBar.nameFieldFocused; onActivated: editor.stepFrames(1) }
+    Shortcut { sequence: "Shift+Left"; enabled: !topBar.nameFieldFocused; onActivated: editor.seek(editor.position - 1) }
+    Shortcut { sequence: "Shift+Right"; enabled: !topBar.nameFieldFocused; onActivated: editor.seek(editor.position + 1) }
+    Shortcut { sequence: "S"; enabled: !topBar.nameFieldFocused; onActivated: editor.splitAtPlayhead() }
+    Shortcut { sequence: "Z"; enabled: !topBar.nameFieldFocused; onActivated: editor.addZoomAt(editor.position) }
+    Shortcut { sequence: "Delete"; enabled: !topBar.nameFieldFocused; onActivated: editor.selectedZoomId ? editor.removeZoom(editor.selectedZoomId) : editor.removeClip(editor.selectedClipId) }
     Shortcut { sequence: "Ctrl+Z"; onActivated: editor.undo() }
     Shortcut { sequence: "Ctrl+Shift+Z"; onActivated: editor.redo() }
     Shortcut { sequence: "Ctrl+S"; onActivated: editor.saveNow() }

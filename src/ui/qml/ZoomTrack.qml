@@ -22,8 +22,9 @@ Item {
             width: Math.max(18, (outputEnd-outputStart) * root.pixelsPerSecond)
             height: root.height
             radius: 6
-            color: editor.selectedZoomId === modelData.id ? "#606be2" : "#4f5bd5"
-            border.color: editor.selectedZoomId === modelData.id ? "#aeb5ff" : "#7680e8"
+            color: "#4f5bd5"
+            border.width: 1
+            border.color: editor.selectedZoomId === modelData.id || zoomHover.hovered ? "#b9beff" : "#7882ed"
             HoverHandler { id: zoomHover }
             Label {
                 anchors.centerIn: parent
@@ -33,6 +34,7 @@ Item {
                 text: "Zoom " + Number(modelData.level).toFixed(1) + "× · " + (typeof modelData.target === "object" ? "Manual" : "Auto")
                 color: "white"
                 font.pixelSize: 11
+                font.weight: Font.DemiBold
             }
             MouseArea {
                 anchors.fill: parent
@@ -44,8 +46,8 @@ Item {
                 onReleased: editor.endCoalescedEdit()
             }
             Rectangle {
-                width: 7; height: parent.height; radius: 3; color: "#a8ceff"
-                opacity: editor.selectedZoomId === modelData.id || zoomHover.hovered ? 1 : 0
+                width: 6; height: parent.height; radius: 3; color: "#aeb5ff"
+                opacity: editor.selectedZoomId === modelData.id ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: 100 } }
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.SizeHorCursor
@@ -56,8 +58,8 @@ Item {
                 }
             }
             Rectangle {
-                anchors.right: parent.right; width: 7; height: parent.height; radius: 3; color: "#a8ceff"
-                opacity: editor.selectedZoomId === modelData.id || zoomHover.hovered ? 1 : 0
+                anchors.right: parent.right; width: 6; height: parent.height; radius: 3; color: "#aeb5ff"
+                opacity: editor.selectedZoomId === modelData.id ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: 100 } }
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.SizeHorCursor

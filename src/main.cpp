@@ -16,6 +16,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
+#include <QQuickStyle>
 #include <QQuickWindow>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
@@ -238,6 +239,10 @@ int main(int argc, char **argv)
 {
     const bool exporting = argc > 1 && QByteArray(argv[1]) == "export";
     const bool graphical = argc == 1 || (argc > 1 && QByteArray(argv[1]) == "edit");
+    if (graphical) {
+        QQuickStyle::setStyle(QStringLiteral("Material"));
+        qputenv("QT_QUICK_CONTROLS_MATERIAL_VARIANT", "Dense");
+    }
     // Screenshot mode must be independent of compositor capture and GPU backend quirks.
     // It still exercises the real QML window and QQuickWindow::grabWindow().
     if (!qEnvironmentVariableIsEmpty("OMARECORD_SCREENSHOT")) {

@@ -105,6 +105,7 @@ qt_add_resources(omarecord_render "omarecord_assets"
         assets/icons/zoom.svg assets/icons/audio.svg assets/icons/undo.svg assets/icons/redo.svg
         assets/icons/scissors.svg assets/icons/play.svg assets/icons/pause.svg
         assets/icons/skip-back.svg assets/icons/skip-forward.svg
+        assets/icons/monitor.svg assets/icons/region.svg assets/icons/window.svg assets/icons/film.svg
 )
 target_include_directories(omarecord_render PUBLIC src src/render)
 target_link_libraries(omarecord_render PUBLIC omarecord_core Qt6::Concurrent Qt6::Quick Qt6::QuickControls2 Qt6::Multimedia Qt6::OpenGL)

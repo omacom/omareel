@@ -3,6 +3,7 @@
 #include "core/Project.h"
 
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
 #include <QProcess>
@@ -26,7 +27,10 @@ Launcher::Launcher(QObject *parent): QObject(parent) { refresh(); }
 void Launcher::refresh()
 {
     m_recentBundles.clear();
-    const QDir root(QDir(QStandardPaths::writableLocation(QStandardPaths::MoviesLocation)).filePath(QStringLiteral("omarecord")));
+    const QString overridePath = qEnvironmentVariable("OMARECORD_RECENTS_DIR");
+    const QDir root(overridePath.isEmpty()
+        ? QDir(QStandardPaths::writableLocation(QStandardPaths::MoviesLocation)).filePath(QStringLiteral("omarecord"))
+        : QDir(overridePath).absolutePath());
     const auto entries = root.entryInfoList({QStringLiteral("*.omarecord")}, QDir::Dirs | QDir::NoDotAndDotDot, QDir::Time);
     for (const auto &entry : entries.mid(0, 12)) {
         QString name = entry.completeBaseName();
@@ -39,6 +43,7 @@ void Launcher::refresh()
         const QString thumb = QDir(entry.absoluteFilePath()).filePath(QStringLiteral("thumb.jpg"));
         m_recentBundles << QVariantMap{{QStringLiteral("path"), entry.absoluteFilePath()},
             {QStringLiteral("name"), name}, {QStringLiteral("duration"), mediaDuration(QDir(entry.absoluteFilePath()).filePath(QStringLiteral("screen.mp4")))},
+            {QStringLiteral("date"), entry.lastModified().toString(Qt::ISODate)},
             {QStringLiteral("thumbnail"), QFileInfo(thumb).isFile() ? QUrl::fromLocalFile(thumb).toString() : QString()}};
     }
     emit recentBundlesChanged();

@@ -4,7 +4,7 @@ import QtQuick.Controls
 Item {
     id: root
     required property real pixelsPerSecond
-    height: 58
+    height: 44
     function outputStart(index) {
         let value = 0
         for (let i=0;i<index;i++) value += (editor.clips[i].out-editor.clips[i].in)/editor.clips[i].speed
@@ -20,8 +20,9 @@ Item {
             width: Math.max(20, (modelData.out-modelData.in)/modelData.speed * root.pixelsPerSecond)
             height: root.height
             radius: 6
-            color: editor.selectedClipId === modelData.id ? Qt.rgba(theme.accent.r, theme.accent.g, theme.accent.b, .52) : Qt.rgba(theme.accent.r, theme.accent.g, theme.accent.b, .30)
-            border.color: editor.selectedClipId === modelData.id ? theme.accent : Qt.rgba(theme.accent.r, theme.accent.g, theme.accent.b, .65)
+            color: Qt.rgba(theme.accent.r, theme.accent.g, theme.accent.b, .35)
+            border.width: 1
+            border.color: editor.selectedClipId === modelData.id || clipHover.hovered ? Qt.lighter(theme.accent, 1.22) : theme.accent
             clip: true
             HoverHandler { id: clipHover }
             Repeater {
@@ -46,11 +47,11 @@ Item {
                 width: Math.max(0, parent.width - 22)
                 horizontalAlignment: Text.AlignHCenter
                 elide: Text.ElideRight
-                text: (clipBlock.width < 68 ? "" : "Clip · ") + Number(modelData.speed).toFixed(modelData.speed % 1 ? 2 : 0) + "×"
-                font.bold: true
+                text: clipBlock.width < 68 ? "" : "Clip · " + Number(modelData.speed).toFixed(modelData.speed % 1 ? 2 : 0) + "×"
+                font.weight: Font.DemiBold
+                font.pixelSize: 11
                 color: "white"
-                background: Rectangle { color: "#16171c"; radius: 4 }
-                padding: 4
+                padding: 3
                 MouseArea { anchors.fill: parent; onClicked: speedMenu.open() }
             }
             Menu {
@@ -61,8 +62,8 @@ Item {
                 }
             }
             Rectangle {
-                width: 8; height: parent.height; color: theme.accent; radius: 3
-                opacity: editor.selectedClipId === modelData.id || clipHover.hovered ? 1 : 0
+                width: 6; height: parent.height; color: theme.accent; radius: 3
+                opacity: editor.selectedClipId === modelData.id ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: 100 } }
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.SizeHorCursor
@@ -73,8 +74,8 @@ Item {
                 }
             }
             Rectangle {
-                anchors.right: parent.right; width: 8; height: parent.height; color: theme.accent; radius: 3
-                opacity: editor.selectedClipId === modelData.id || clipHover.hovered ? 1 : 0
+                anchors.right: parent.right; width: 6; height: parent.height; color: theme.accent; radius: 3
+                opacity: editor.selectedClipId === modelData.id ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: 100 } }
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.SizeHorCursor

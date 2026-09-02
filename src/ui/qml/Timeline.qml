@@ -4,17 +4,18 @@ import QtQuick.Controls
 Rectangle {
     id: root
     required property real scaleFactor
-    color: "#15161b"
-    border.color: "#292b32"
-    property real labelWidth: 82
+    color: theme.background
+    border.color: "#10ffffff"
+    property real labelWidth: 76
     property real basePixels: Math.max(55, (width-labelWidth-24) / Math.max(1, editor.duration))
     property real pixelsPerSecond: basePixels * scaleFactor
+    property real tickInterval: pixelsPerSecond >= 120 ? 0.2 : pixelsPerSecond >= 72 ? 0.5 : 1
 
     Column {
         x: 0; y: 0; width: labelWidth; height: parent.height
         Item { width: parent.width; height: 40 }
-        Label { width: parent.width; height: 70; leftPadding: 16; verticalAlignment: Text.AlignVCenter; text: "Clip"; color: "#a8aab3" }
-        Label { width: parent.width; height: 58; leftPadding: 16; verticalAlignment: Text.AlignVCenter; text: "Zoom"; color: "#a8aab3" }
+        Label { width: parent.width; height: 56; leftPadding: 14; verticalAlignment: Text.AlignVCenter; text: "Clip"; color: "#9296a3"; font.pixelSize: 11 }
+        Label { width: parent.width; height: 56; leftPadding: 14; verticalAlignment: Text.AlignVCenter; text: "Zoom"; color: "#9296a3"; font.pixelSize: 11 }
     }
     Flickable {
         id: flick
@@ -31,28 +32,30 @@ Rectangle {
                 id: ruler
                 width: parent.width; height: 40
                 Repeater {
-                    model: Math.ceil(editor.duration) + 1
+                    model: Math.ceil(editor.duration / root.tickInterval) + 1
                     delegate: Item {
                         required property int index
-                        x: index * root.pixelsPerSecond
+                        property real tickTime: index * root.tickInterval
+                        property bool major: Math.abs(tickTime - Math.round(tickTime)) < .001
+                        x: tickTime * root.pixelsPerSecond
                         width: 1; height: ruler.height
-                        Rectangle { width: 1; height: index % 5 === 0 ? 12 : 6; color: "#555864" }
-                        Label { visible: index % Math.max(1, Math.ceil(65/root.pixelsPerSecond)) === 0; x: 5; y: 2; text: editor.formatTime(index); color: "#727581"; font.pixelSize: 10 }
+                        Rectangle { anchors.bottom: parent.bottom; width: 1; height: parent.major ? 11 : 5; color: parent.major ? "#535766" : "#343743" }
+                        Label { visible: parent.major && Math.round(parent.tickTime) % Math.max(1, Math.ceil(62/root.pixelsPerSecond)) === 0; x: 5; y: 6; text: editor.formatTime(parent.tickTime); color: "#747887"; font.pixelSize: 10; font.family: "monospace" }
                     }
                 }
                 MouseArea { anchors.fill: parent; onClicked: editor.seek(mouse.x / root.pixelsPerSecond) }
             }
-            Rectangle { x: 0; y: 40; width: parent.width; height: 70; color: "#1b1c22" }
-            ClipTrack { x: 0; y: 46; width: parent.width; pixelsPerSecond: root.pixelsPerSecond }
-            Rectangle { x: 0; y: 110; width: parent.width; height: 58; color: "#181a20" }
-            ZoomTrack { x: 0; y: 117; width: parent.width; pixelsPerSecond: root.pixelsPerSecond }
+            Rectangle { x: 0; y: 40; width: parent.width; height: 56; color: Qt.lighter(theme.background, 1.08); border.color: "#0cffffff" }
+            ClipTrack { x: 0; y: 46; width: parent.width; height: 44; pixelsPerSecond: root.pixelsPerSecond }
+            Rectangle { x: 0; y: 96; width: parent.width; height: 56; color: Qt.lighter(theme.background, 1.04); border.color: "#0cffffff" }
+            ZoomTrack { x: 0; y: 102; width: parent.width; height: 44; pixelsPerSecond: root.pixelsPerSecond }
             Rectangle {
                 id: playhead
                 x: editor.position * root.pixelsPerSecond - 1
-                y: 30; width: 2; height: 145
-                color: "#ff5e72"
+                y: 35; width: 2; height: 117
+                color: theme.accent
                 z: 20
-                Rectangle { x: -5; y: -2; width: 12; height: 12; radius: 6; color: parent.color }
+                Rectangle { x: -4; y: -2; width: 10; height: 10; radius: 5; color: parent.color }
                 MouseArea {
                     x: -8; width: 18; y: -8; height: parent.height + 16
                     cursorShape: Qt.SizeHorCursor
