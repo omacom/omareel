@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Quick Multimedia OpenGL Svg Test)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Concurrent Gui Quick QuickControls2 Multimedia OpenGL Svg Test)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBEVDEV REQUIRED IMPORTED_TARGET libevdev)
 
@@ -37,12 +37,31 @@ set_source_files_properties(
     src/ui/qml/Background.qml
     src/ui/qml/RoundedFrame.qml
     src/ui/qml/CursorOverlay.qml
+    src/ui/qml/Main.qml
+    src/ui/qml/TopBar.qml
+    src/ui/qml/PreviewPane.qml
+    src/ui/qml/BottomBar.qml
+    src/ui/qml/SidePanel.qml
+    src/ui/qml/PanelSlider.qml
+    src/ui/qml/BackgroundPanel.qml
+    src/ui/qml/ShapePanel.qml
+    src/ui/qml/CursorPanel.qml
+    src/ui/qml/ZoomPanel.qml
+    src/ui/qml/AudioPanel.qml
+    src/ui/qml/ExportDialog.qml
+    src/ui/qml/Timeline.qml
+    src/ui/qml/ClipTrack.qml
+    src/ui/qml/ZoomTrack.qml
+    src/ui/qml/Launcher.qml
     PROPERTIES QT_RESOURCE_ALIAS ""
 )
 set_source_files_properties(src/ui/qml/Composition.qml PROPERTIES QT_RESOURCE_ALIAS "Composition.qml")
 set_source_files_properties(src/ui/qml/Background.qml PROPERTIES QT_RESOURCE_ALIAS "Background.qml")
 set_source_files_properties(src/ui/qml/RoundedFrame.qml PROPERTIES QT_RESOURCE_ALIAS "RoundedFrame.qml")
 set_source_files_properties(src/ui/qml/CursorOverlay.qml PROPERTIES QT_RESOURCE_ALIAS "CursorOverlay.qml")
+foreach(qml_name IN ITEMS Main TopBar PreviewPane BottomBar SidePanel PanelSlider BackgroundPanel ShapePanel CursorPanel ZoomPanel AudioPanel ExportDialog Timeline ClipTrack ZoomTrack Launcher)
+    set_source_files_properties(src/ui/qml/${qml_name}.qml PROPERTIES QT_RESOURCE_ALIAS "${qml_name}.qml")
+endforeach()
 qt_add_qml_module(omarecord_render
     URI Omarecord
     VERSION 1.0
@@ -52,18 +71,43 @@ qt_add_qml_module(omarecord_render
         src/render/FrameSource.h src/render/FrameSource.cpp
         src/render/FfmpegDecoder.h src/render/FfmpegDecoder.cpp
         src/render/Exporter.h src/render/Exporter.cpp
+        src/render/PreviewSink.h src/render/PreviewSink.cpp
+        src/ui/Editor.h src/ui/Editor.cpp
+        src/ui/Launcher.h src/ui/Launcher.cpp
     QML_FILES
         src/ui/qml/Composition.qml
         src/ui/qml/Background.qml
         src/ui/qml/RoundedFrame.qml
         src/ui/qml/CursorOverlay.qml
+        src/ui/qml/Main.qml
+        src/ui/qml/TopBar.qml
+        src/ui/qml/PreviewPane.qml
+        src/ui/qml/BottomBar.qml
+        src/ui/qml/SidePanel.qml
+        src/ui/qml/PanelSlider.qml
+        src/ui/qml/BackgroundPanel.qml
+        src/ui/qml/ShapePanel.qml
+        src/ui/qml/CursorPanel.qml
+        src/ui/qml/ZoomPanel.qml
+        src/ui/qml/AudioPanel.qml
+        src/ui/qml/ExportDialog.qml
+        src/ui/qml/Timeline.qml
+        src/ui/qml/ClipTrack.qml
+        src/ui/qml/ZoomTrack.qml
+        src/ui/qml/Launcher.qml
 )
 qt_add_resources(omarecord_render "omarecord_assets"
     PREFIX "/omarecord"
-    FILES assets/cursors/arrow.svg assets/cursors/pointer.svg
+    FILES
+        assets/cursors/arrow.svg assets/cursors/pointer.svg
+        assets/gradients.json
+        assets/icons/background.svg assets/icons/shape.svg assets/icons/cursor.svg
+        assets/icons/zoom.svg assets/icons/audio.svg assets/icons/undo.svg assets/icons/redo.svg
+        assets/icons/scissors.svg assets/icons/play.svg assets/icons/pause.svg
+        assets/icons/skip-back.svg assets/icons/skip-forward.svg
 )
 target_include_directories(omarecord_render PUBLIC src src/render)
-target_link_libraries(omarecord_render PUBLIC omarecord_core Qt6::Quick Qt6::Multimedia Qt6::OpenGL)
+target_link_libraries(omarecord_render PUBLIC omarecord_core Qt6::Concurrent Qt6::Quick Qt6::QuickControls2 Qt6::Multimedia Qt6::OpenGL)
 
 qt_add_executable(omarecord src/main.cpp)
 target_link_libraries(omarecord PRIVATE omarecord_render Qt6::Quick Qt6::Multimedia)
@@ -78,6 +122,9 @@ if(BUILD_TESTING)
     qt_add_executable(test_exporter_smoke tests/test_exporter_smoke.cpp)
     target_link_libraries(test_exporter_smoke PRIVATE omarecord_render Qt6::Test)
     add_test(NAME exporter_smoke COMMAND test_exporter_smoke)
+    qt_add_executable(test_editor tests/test_editor.cpp)
+    target_link_libraries(test_editor PRIVATE omarecord_render Qt6::Test)
+    add_test(NAME editor COMMAND test_editor)
 endif()
 
 install(TARGETS omarecord RUNTIME DESTINATION bin)

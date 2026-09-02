@@ -2,6 +2,9 @@
 #include "core/ZoomTimeline.h"
 #include "record/Recorder.h"
 #include "render/Exporter.h"
+#include "core/Theme.h"
+#include "ui/Editor.h"
+#include "ui/Launcher.h"
 
 #include <QGuiApplication>
 #include <QDir>
@@ -12,6 +15,8 @@
 #include <QJsonObject>
 #include <QProcess>
 #include <QQuickWindow>
+#include <QQmlApplicationEngine>
+#include <QQmlContext>
 #include <QStandardPaths>
 #include <QTextStream>
 
@@ -175,7 +180,8 @@ static int probeCommand(const QString &bundle)
 int main(int argc, char **argv)
 {
     const bool exporting = argc > 1 && QByteArray(argv[1]) == "export";
-    if (exporting && qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY")
+    const bool graphical = argc == 1 || (argc > 1 && QByteArray(argv[1]) == "edit");
+    if (qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY")
         && qEnvironmentVariableIsEmpty("DISPLAY")) {
         if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")) qputenv("QT_QPA_PLATFORM", "offscreen");
         qputenv("QT_QPA_PLATFORMTHEME", QByteArray());
@@ -186,12 +192,25 @@ int main(int argc, char **argv)
         if (headless) QQuickWindow::setSceneGraphBackend(QStringLiteral("software"));
         else QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
     }
+    if (graphical) {
+        if (qEnvironmentVariable("QT_QPA_PLATFORM") == QLatin1String("offscreen"))
+            QQuickWindow::setSceneGraphBackend(QStringLiteral("software"));
+        else QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
+    }
     QGuiApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("omarecord"));
+    app.setOrganizationName(QStringLiteral("omarecord"));
     const QStringList args = app.arguments();
     if (args.size() < 2) {
-        QTextStream(stderr) << "omarecord: launcher not implemented yet\n";
-        return 2;
+        Theme theme;
+        Launcher launcher;
+        QQmlApplicationEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        engine.rootContext()->setContextProperty(QStringLiteral("launcher"), &launcher);
+        QObject::connect(&launcher, &Launcher::quitRequested, &app, &QCoreApplication::quit);
+        engine.load(QUrl(QStringLiteral("qrc:/qt/qml/Omarecord/Launcher.qml")));
+        if (engine.rootObjects().isEmpty()) return 2;
+        return app.exec();
     }
     const QString command = args[1];
     if (command == QLatin1String("__record-daemon")) return Recorder::daemonMain(args.mid(2));
@@ -202,8 +221,20 @@ int main(int argc, char **argv)
     }
     if (command == QLatin1String("export")) return exportCommand(args.mid(2));
     if (command == QLatin1String("edit")) {
-        QTextStream(stderr) << "not implemented yet\n";
-        return 2;
+        if (args.size() != 3) return usage(QStringLiteral("edit requires a bundle"));
+        Editor editor(QDir(args[2]).absolutePath());
+        if (!editor.isValid()) {
+            QTextStream(stderr) << "omarecord: " << editor.errorString() << '\n';
+            return 1;
+        }
+        Theme theme;
+        QQmlApplicationEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        engine.rootContext()->setContextProperty(QStringLiteral("editor"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("comp"), &editor);
+        engine.load(QUrl(QStringLiteral("qrc:/qt/qml/Omarecord/Main.qml")));
+        if (engine.rootObjects().isEmpty()) return 2;
+        return app.exec();
     }
     if (command == QLatin1String("--help") || command == QLatin1String("help")) return usage();
     return usage(QStringLiteral("unknown command %1").arg(command));

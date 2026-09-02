@@ -9,6 +9,9 @@ using namespace OmaRecord;
 FrameSource::FrameSource(QQuickItem *parent): QQuickItem(parent)
 {
     setFlag(ItemHasContents, true);
+    m_image = QImage(1, 1, QImage::Format_RGBA8888);
+    m_image.fill(Qt::black);
+    ++m_revision;
 }
 
 void FrameSource::setImage(const QImage &image)

@@ -4,6 +4,7 @@ import Omarecord
 
 Item {
     id: root
+    readonly property alias frameSource: video
     required property var settings
     required property var crop
     property bool softwareRendering: false

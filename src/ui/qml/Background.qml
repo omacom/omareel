@@ -11,16 +11,32 @@ Item {
         color: root.settings.color || "#1a1b26"
         visible: root.settings.type === "color" || root.settings.type === "none" || !backgroundImage.visible
     }
-    Rectangle {
+    Canvas {
+        id: gradientCanvas
         anchors.fill: parent
         visible: root.settings.type === "gradient"
-        gradient: Gradient {
-            orientation: Gradient.Horizontal
-            GradientStop { position: 0; color: root.settings.gradient.stops[0][0] }
-            GradientStop { position: 1; color: root.settings.gradient.stops[root.settings.gradient.stops.length - 1][0] }
+        onWidthChanged: requestPaint()
+        onHeightChanged: requestPaint()
+        onPaint: {
+            const ctx = getContext("2d")
+            ctx.reset()
+            const angle = (root.settings.gradient.angle - 90) * Math.PI / 180
+            const radius = Math.sqrt(width * width + height * height) / 2
+            const cx = width / 2
+            const cy = height / 2
+            const dx = Math.cos(angle) * radius
+            const dy = Math.sin(angle) * radius
+            const gradient = ctx.createLinearGradient(cx - dx, cy - dy, cx + dx, cy + dy)
+            const stops = root.settings.gradient.stops
+            for (let i = 0; i < stops.length; ++i)
+                gradient.addColorStop(stops[i][1], stops[i][0])
+            ctx.fillStyle = gradient
+            ctx.fillRect(0, 0, width, height)
         }
-        rotation: root.settings.gradient.angle - 90
-        scale: 1.5
+        Connections {
+            target: root
+            function onSettingsChanged() { gradientCanvas.requestPaint() }
+        }
     }
     Image {
         id: backgroundImage

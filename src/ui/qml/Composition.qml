@@ -3,6 +3,8 @@ import Omarecord
 
 Item {
     id: composition
+    // Preview-only access point. Exporter continues finding the same objectName.
+    readonly property alias frameSource: frame.frameSource
     width: comp.outputWidth
     height: comp.outputHeight
     property real ref: height / 1080
