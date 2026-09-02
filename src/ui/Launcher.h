@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QDateTime>
 #include <QObject>
 #include <QVariantList>
 
@@ -23,6 +24,9 @@ signals:
     void errorOccurred(const QString &message);
 
 private:
+    static QString formatDuration(double seconds);
+    static QString formatDate(const QDateTime &dateTime);
+    void probeDurationAsync(const QString &bundlePath);
     QVariantList m_recentBundles;
 };
 

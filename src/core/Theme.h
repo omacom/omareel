@@ -13,17 +13,22 @@ class Theme : public QObject
     Q_PROPERTY(QColor accentForeground READ accentForeground NOTIFY changed)
     Q_PROPERTY(QColor background READ background NOTIFY changed)
     Q_PROPERTY(QColor lighterBackground READ lighterBackground NOTIFY changed)
+    Q_PROPERTY(QColor darkBackground READ darkBackground NOTIFY changed)
     Q_PROPERTY(QColor foreground READ foreground NOTIFY changed)
+    Q_PROPERTY(bool dark READ dark NOTIFY changed)
 public:
     explicit Theme(QObject *parent = nullptr);
     QColor accent() const { return m_accent; }
-    QColor accentForeground() const { return m_accentForeground; }
+    QColor accentForeground() const;
     QColor background() const { return m_background; }
     QColor lighterBackground() const { return m_lighterBackground; }
+    QColor darkBackground() const { return m_darkBackground; }
     QColor foreground() const { return m_foreground; }
+    bool dark() const { return m_dark; }
 
 signals:
     void changed();
+    void sourceChanged();
 
 private slots:
     void reload();
@@ -32,10 +37,11 @@ private:
     void rearmWatcher();
     QFileSystemWatcher m_watcher;
     QColor m_accent = QColor(QStringLiteral("#7aa2f7"));
-    QColor m_accentForeground = QColor(QStringLiteral("#101116"));
     QColor m_background = QColor(QStringLiteral("#1a1b26"));
     QColor m_lighterBackground = QColor(QStringLiteral("#24283b"));
+    QColor m_darkBackground = QColor(QStringLiteral("#14151d"));
     QColor m_foreground = QColor(QStringLiteral("#c0caf5"));
+    bool m_dark = true;
 };
 
 } // namespace OmaRecord

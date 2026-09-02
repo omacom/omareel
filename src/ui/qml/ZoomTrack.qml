@@ -4,10 +4,11 @@ import QtQuick.Controls
 Item {
     id: root
     required property real pixelsPerSecond
-    height: 44
+    required property Item focusTarget
     MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton
+        onPressed: root.focusTarget.forceActiveFocus()
         onDoubleClicked: editor.addZoomAt(mouse.x / root.pixelsPerSecond, 2)
     }
     Repeater {
@@ -22,9 +23,9 @@ Item {
             width: Math.max(18, (outputEnd-outputStart) * root.pixelsPerSecond)
             height: root.height
             radius: 6
-            color: "#4f5bd5"
+            color: Qt.alpha(theme.accent, .62)
             border.width: 1
-            border.color: editor.selectedZoomId === modelData.id || zoomHover.hovered ? "#b9beff" : "#7882ed"
+            border.color: editor.selectedZoomId === modelData.id || zoomHover.hovered ? Qt.lighter(theme.accent, 1.25) : theme.accent
             HoverHandler { id: zoomHover }
             Label {
                 anchors.centerIn: parent
@@ -32,7 +33,7 @@ Item {
                 elide: Text.ElideRight
                 horizontalAlignment: Text.AlignHCenter
                 text: "Zoom " + Number(modelData.level).toFixed(1) + "× · " + (typeof modelData.target === "object" ? "Manual" : "Auto")
-                color: "white"
+                color: theme.accentForeground
                 font.pixelSize: 11
                 font.weight: Font.DemiBold
             }
@@ -41,30 +42,30 @@ Item {
                 anchors.leftMargin: 8; anchors.rightMargin: 8
                 cursorShape: Qt.OpenHandCursor
                 property real pressX; property real originalOutput
-                onPressed: { editor.selectedZoomId = modelData.id; pressX = mapToItem(root, mouse.x, mouse.y).x; originalOutput = zoomBlock.outputStart; editor.beginCoalescedEdit("move-"+modelData.id) }
+                onPressed: { root.focusTarget.forceActiveFocus(); editor.selectedZoomId = modelData.id; pressX = mapToItem(root, mouse.x, mouse.y).x; originalOutput = zoomBlock.outputStart; editor.beginCoalescedEdit("move-"+modelData.id) }
                 onPositionChanged: if (pressed) editor.moveZoom(modelData.id, editor.outputToSource(Math.max(0, originalOutput + (mapToItem(root, mouse.x, mouse.y).x-pressX)/root.pixelsPerSecond)))
                 onReleased: editor.endCoalescedEdit()
             }
             Rectangle {
-                width: 6; height: parent.height; radius: 3; color: "#aeb5ff"
+                width: 6; height: parent.height; radius: 3; color: Qt.lighter(theme.accent, 1.2)
                 opacity: editor.selectedZoomId === modelData.id ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: 100 } }
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.SizeHorCursor
                     property real pressX; property real originalOutput
-                    onPressed: { editor.selectedZoomId = modelData.id; pressX=mapToItem(root,mouse.x,mouse.y).x; originalOutput=zoomBlock.outputStart; editor.beginCoalescedEdit("resize-"+modelData.id) }
+                    onPressed: { root.focusTarget.forceActiveFocus(); editor.selectedZoomId = modelData.id; pressX=mapToItem(root,mouse.x,mouse.y).x; originalOutput=zoomBlock.outputStart; editor.beginCoalescedEdit("resize-"+modelData.id) }
                     onPositionChanged: if (pressed) editor.resizeZoom(modelData.id, editor.outputToSource(Math.max(0, originalOutput+(mapToItem(root,mouse.x,mouse.y).x-pressX)/root.pixelsPerSecond)), modelData.end)
                     onReleased: editor.endCoalescedEdit()
                 }
             }
             Rectangle {
-                anchors.right: parent.right; width: 6; height: parent.height; radius: 3; color: "#aeb5ff"
+                anchors.right: parent.right; width: 6; height: parent.height; radius: 3; color: Qt.lighter(theme.accent, 1.2)
                 opacity: editor.selectedZoomId === modelData.id ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: 100 } }
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.SizeHorCursor
                     property real pressX; property real originalOutput
-                    onPressed: { editor.selectedZoomId = modelData.id; pressX=mapToItem(root,mouse.x,mouse.y).x; originalOutput=zoomBlock.outputEnd; editor.beginCoalescedEdit("resize-"+modelData.id) }
+                    onPressed: { root.focusTarget.forceActiveFocus(); editor.selectedZoomId = modelData.id; pressX=mapToItem(root,mouse.x,mouse.y).x; originalOutput=zoomBlock.outputEnd; editor.beginCoalescedEdit("resize-"+modelData.id) }
                     onPositionChanged: if (pressed) editor.resizeZoom(modelData.id, modelData.start, editor.outputToSource(Math.max(0, originalOutput+(mapToItem(root,mouse.x,mouse.y).x-pressX)/root.pixelsPerSecond)))
                     onReleased: editor.endCoalescedEdit()
                 }

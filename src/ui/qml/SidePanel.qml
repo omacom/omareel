@@ -1,13 +1,12 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls.impl as ControlsImpl
 import QtQuick.Layouts
 
 Rectangle {
     id: root
     objectName: "sidePanel"
     color: theme.lighterBackground
-    border.color: "#10ffffff"
+    border.color: Qt.alpha(theme.foreground, .06)
     property int section: 0
     readonly property var sections: [
         {name:"Background", icon:"background.svg"}, {name:"Shape", icon:"shape.svg"},
@@ -29,34 +28,21 @@ Rectangle {
                 spacing: 4
                 Repeater {
                     model: root.sections
-                    delegate: ToolButton {
+                    delegate: IconToolButton {
                         id: railButton
                         required property var modelData
                         required property int index
-                        x: 4; width: 44; height: 44
+                        anchors.horizontalCenter: parent.horizontalCenter
                         icon.source: "qrc:/omarecord/assets/icons/" + modelData.icon
-                        icon.width: 20; icon.height: 20
-                        icon.color: checked ? theme.accentForeground : theme.foreground
-                        contentItem: Item {
-                            ControlsImpl.IconImage {
-                                anchors.centerIn: parent
-                                source: railButton.icon.source
-                                width: 20; height: 20
-                                sourceSize.width: 40; sourceSize.height: 40
-                                color: railButton.checked ? theme.accentForeground : theme.foreground
-                            }
-                        }
+                        toolIconColor: checked ? theme.accentForeground : theme.foreground
                         checked: root.section === index
                         checkable: true
-                        focusPolicy: Qt.TabFocus
                         Accessible.name: modelData.name
                         ToolTip.visible: hovered
                         ToolTip.text: modelData.name
                         onClicked: root.section = index
-                        background: Rectangle {
-                            radius: 7
-                            color: parent.checked ? theme.accent : parent.hovered ? "#12ffffff" : "transparent"
-                        }
+                        hoverColor: checked ? theme.accent : Qt.alpha(theme.foreground, .07)
+                        background: Rectangle { radius: 7; color: railButton.checked ? theme.accent : railButton.hovered ? railButton.hoverColor : "transparent" }
                     }
                 }
             }

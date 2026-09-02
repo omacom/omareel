@@ -25,16 +25,17 @@ Dialog {
         RowLayout {
             Layout.fillWidth: true
             TextField { Layout.fillWidth: true; readOnly: true; text: root.outputPath }
-            Button { text: "Choose…"; onClicked: outputDialog.open() }
+            Button { text: "Choose…"; topInset: 0; bottomInset: 0; onClicked: outputDialog.open() }
         }
         ProgressBar { Layout.fillWidth: true; visible: editor.exporting; value: editor.exportProgress }
         Label { Layout.fillWidth: true; visible: editor.exportError.length > 0; text: editor.exportError; color: "#ff7676"; wrapMode: Text.WordWrap }
         RowLayout {
             Layout.fillWidth: true
             Item { Layout.fillWidth: true }
-            Button { text: editor.exporting ? "Cancel" : "Close"; onClicked: editor.exporting ? editor.cancelExport() : root.close() }
+            Button { text: editor.exporting ? "Cancel" : "Close"; topInset: 0; bottomInset: 0; onClicked: editor.exporting ? editor.cancelExport() : root.close() }
             Button {
                 text: "Export"; highlighted: true; enabled: !editor.exporting
+                topInset: 0; bottomInset: 0
                 onClicked: editor.exportTo(root.outputPath, {fps:Number(fpsBox.currentText), height:Number(heightBox.currentText), quality:qualityBox.currentText})
             }
         }

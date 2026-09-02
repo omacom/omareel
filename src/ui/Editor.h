@@ -9,6 +9,7 @@
 #include <QMediaPlayer>
 #include <QObject>
 #include <QTimer>
+#include <QSet>
 #include <QVariantList>
 #include <QVariantMap>
 #include <memory>
@@ -143,6 +144,7 @@ public:
     Q_INVOKABLE void cancelExport();
     Q_INVOKABLE QString defaultExportPath(const QString &format) const;
     Q_INVOKABLE QString formatTime(double seconds) const;
+    Q_INVOKABLE void refreshOmarchyTheme();
 
 signals:
     void projectChanged();
@@ -218,6 +220,11 @@ private:
     QVariantList m_waveform;
     QFutureWatcher<QVariantList> m_waveformWatcher;
     QVariantList m_gradients;
+    mutable QVariantMap m_projectMapCache;
+    mutable bool m_projectMapCacheValid = false;
+    mutable QVariantList m_wallpapersCache;
+    mutable bool m_wallpapersCacheValid = false;
+    mutable QSet<QString> m_pendingThumbnails;
     Exporter *m_exporter = nullptr;
     double m_exportProgress = 0.0;
     bool m_exporting = false;

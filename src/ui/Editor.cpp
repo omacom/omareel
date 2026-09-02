@@ -2,6 +2,7 @@
 
 #include "core/ClipTimeline.h"
 #include "core/ZoomTimeline.h"
+#include "core/OmarchyPaths.h"
 #include "render/Exporter.h"
 #include "render/FrameSource.h"
 #include "render/PreviewSink.h"
@@ -17,6 +18,7 @@
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QQuickWindow>
+#include <QPointer>
 #include <QStandardPaths>
 #include <QUrl>
 #include <QVideoSink>
@@ -207,30 +209,30 @@ bool Editor::loadBundle()
 
 QVariantMap Editor::projectMap() const
 {
+    if (m_projectMapCacheValid) return m_projectMapCache;
     QVariantMap result = m_project.toJson().toVariantMap();
     QVariantMap background = result.value(QStringLiteral("background")).toMap();
     QString image;
     if (m_project.background.type == QLatin1String("image")) image = m_project.background.image;
     else if (m_project.background.type == QLatin1String("wallpaper")) {
         image = m_project.background.wallpaper;
-        if (image == QLatin1String("omarchy:current")) {
-            const QVariantList list = wallpapers();
-            if (!list.isEmpty()) image = list.first().toMap().value(QStringLiteral("path")).toString();
-        }
+        if (image == QLatin1String("omarchy:current")) image = OmarchyPaths::currentBackground();
     }
     background[QStringLiteral("resolvedImage")] = image.isEmpty() ? QString() : QUrl::fromLocalFile(image).toString();
     result[QStringLiteral("background")] = background;
-    return result;
+    m_projectMapCache = result;
+    m_projectMapCacheValid = true;
+    return m_projectMapCache;
 }
 
 QVariantList Editor::clips() const
 {
-    return m_project.toJson().value(QStringLiteral("clips")).toArray().toVariantList();
+    return projectMap().value(QStringLiteral("clips")).toList();
 }
 
 QVariantList Editor::zooms() const
 {
-    return m_project.toJson().value(QStringLiteral("zooms")).toArray().toVariantList();
+    return projectMap().value(QStringLiteral("zooms")).toList();
 }
 
 double Editor::duration() const { return ClipTimeline(m_project.clips).totalDuration(); }
@@ -308,6 +310,7 @@ void Editor::endCoalescedEdit()
 
 void Editor::changed(bool motion)
 {
+    m_projectMapCacheValid = false;
     if (m_audioOutput) {
         m_audioOutput->setVolume(std::clamp(m_project.audio.volume, 0.0, 1.0));
         m_audioOutput->setMuted(!m_project.audio.desktop && !m_project.audio.mic);
@@ -732,12 +735,42 @@ void Editor::deletePreset(const QString &rawName)
 
 QVariantList Editor::wallpapers() const
 {
-    const QDir directory(QDir::homePath() + QStringLiteral("/.local/state/omarchy/current/theme/backgrounds"));
+    if (m_wallpapersCacheValid) return m_wallpapersCache;
     QVariantList result;
-    for (const auto &file : directory.entryInfoList({QStringLiteral("*.png"), QStringLiteral("*.jpg"), QStringLiteral("*.jpeg"), QStringLiteral("*.webp")}, QDir::Files, QDir::Name))
-        result << QVariantMap{{QStringLiteral("name"), file.completeBaseName()}, {QStringLiteral("path"), file.absoluteFilePath()},
-                             {QStringLiteral("url"), QUrl::fromLocalFile(file.absoluteFilePath()).toString()}};
-    return result;
+    for (const QString &path : OmarchyPaths::themeBackgrounds()) {
+        const QFileInfo file(path);
+        const QString thumbnail = OmarchyPaths::wallpaperThumbnailPath(path);
+        const bool ready = QFileInfo(thumbnail).isFile();
+        result << QVariantMap{{QStringLiteral("name"), file.completeBaseName()},
+                             {QStringLiteral("path"), file.absoluteFilePath()},
+                             {QStringLiteral("url"), QUrl::fromLocalFile(file.absoluteFilePath()).toString()},
+                             {QStringLiteral("thumbnailUrl"), QUrl::fromLocalFile(ready ? thumbnail : path).toString()}};
+        if (!ready && !m_pendingThumbnails.contains(thumbnail)) {
+            m_pendingThumbnails.insert(thumbnail);
+            const QPointer<Editor> self(const_cast<Editor *>(this));
+            (void) QtConcurrent::run([self, path, thumbnail] {
+                OmarchyPaths::generateWallpaperThumbnail(path, thumbnail);
+                if (!self) return;
+                QMetaObject::invokeMethod(self, [self, thumbnail] {
+                    if (!self) return;
+                    self->m_pendingThumbnails.remove(thumbnail);
+                    self->m_wallpapersCacheValid = false;
+                    emit self->wallpapersChanged();
+                }, Qt::QueuedConnection);
+            });
+        }
+    }
+    m_wallpapersCache = result;
+    m_wallpapersCacheValid = true;
+    return m_wallpapersCache;
+}
+
+void Editor::refreshOmarchyTheme()
+{
+    m_wallpapersCacheValid = false;
+    m_projectMapCacheValid = false;
+    emit wallpapersChanged();
+    emit projectChanged();
 }
 
 void Editor::exportTo(const QString &pathValue, const QVariantMap &settings)
@@ -795,8 +828,8 @@ void Editor::cancelExport()
 
 QString Editor::defaultExportPath(const QString &format) const
 {
-    const QString directory = QDir(QStandardPaths::writableLocation(QStandardPaths::MoviesLocation)).filePath(QStringLiteral("omarecord"));
-    return QDir(directory).filePath(m_project.name + (format == QLatin1String("gif") ? QStringLiteral(".gif") : QStringLiteral(".mp4")));
+    return QDir(OmarchyPaths::recordingsDirectory()).filePath(
+        m_project.name + (format == QLatin1String("gif") ? QStringLiteral(".gif") : QStringLiteral(".mp4")));
 }
 
 QString Editor::formatTime(double seconds) const

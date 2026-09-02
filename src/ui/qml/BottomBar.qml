@@ -6,7 +6,7 @@ Rectangle {
     id: root
     height: 52
     color: theme.lighterBackground
-    border.color: "#10ffffff"
+    border.color: Qt.alpha(theme.foreground, .06)
     property real timelineScale: 1
     property bool cropMode: false
     readonly property var aspects: [
@@ -15,6 +15,11 @@ Rectangle {
         {label:"Vertical 9:16", value:"9:16"}, {label:"Tall 3:4", value:"3:4"},
         {label:"Portrait 4:5", value:"4:5"}
     ]
+    function aspectIndex(value) {
+        for (let i = 0; i < aspects.length; ++i)
+            if (aspects[i].value === value) return i
+        return 0
+    }
     RowLayout {
         anchors.fill: parent
         anchors.leftMargin: 12
@@ -34,11 +39,7 @@ Rectangle {
                     textRole: "label"
                     font.pixelSize: 12
                     focusPolicy: Qt.TabFocus
-                    Component.onCompleted: {
-                        for (let i = 0; i < model.length; ++i) {
-                            if (model[i].value === editor.project.aspect) currentIndex = i
-                        }
-                    }
+                    currentIndex: root.aspectIndex(editor.project.aspect)
                     onActivated: editor.setProjectValue("aspect", model[currentIndex].value)
                 }
                 Button {
@@ -48,12 +49,13 @@ Rectangle {
                     checkable: true
                     checked: root.cropMode
                     focusPolicy: Qt.TabFocus
+                    topInset: 0; bottomInset: 0
                     font.pixelSize: 12
                     onToggled: root.cropMode = checked
                     background: Rectangle {
                         radius: 6
-                        color: parent.checked ? Qt.rgba(theme.accent.r, theme.accent.g, theme.accent.b, .22) : parent.hovered ? "#10ffffff" : "transparent"
-                        border.color: parent.checked ? theme.accent : "#22ffffff"
+                        color: parent.checked ? Qt.alpha(theme.accent, .22) : parent.hovered ? Qt.alpha(theme.foreground, .06) : "transparent"
+                        border.color: parent.checked ? theme.accent : Qt.alpha(theme.foreground, .13)
                     }
                 }
             }
@@ -61,31 +63,29 @@ Rectangle {
         RowLayout {
             Layout.alignment: Qt.AlignHCenter
             spacing: 2
-            ToolButton {
+            IconToolButton {
                 Layout.preferredWidth: 32; Layout.preferredHeight: 32
-                icon.source: "qrc:/omarecord/assets/icons/skip-back.svg"; icon.width: 19; icon.height: 19; icon.color: theme.foreground
-                focusPolicy: Qt.TabFocus; Accessible.name: "Go to start"; onClicked: editor.seekBoundary(-1)
-                background: Rectangle { radius: 6; color: parent.hovered ? "#12ffffff" : "transparent" }
+                icon.source: "qrc:/omarecord/assets/icons/skip-back.svg"; icon.width: 19; icon.height: 19
+                Accessible.name: "Go to start"; onClicked: editor.seekBoundary(-1)
             }
             ToolButton {
                 Layout.preferredWidth: 36; Layout.preferredHeight: 36
                 icon.source: editor.playing ? "qrc:/omarecord/assets/icons/pause.svg" : "qrc:/omarecord/assets/icons/play.svg"
                 icon.width: 20; icon.height: 20; icon.color: theme.accentForeground
                 focusPolicy: Qt.TabFocus; Accessible.name: editor.playing ? "Pause" : "Play"; onClicked: editor.playPause()
+                topInset: 0; bottomInset: 0
                 background: Rectangle { radius: 18; color: parent.pressed ? Qt.darker(theme.accent, 1.12) : theme.accent }
             }
-            ToolButton {
+            IconToolButton {
                 Layout.preferredWidth: 32; Layout.preferredHeight: 32
-                icon.source: "qrc:/omarecord/assets/icons/skip-forward.svg"; icon.width: 19; icon.height: 19; icon.color: theme.foreground
-                focusPolicy: Qt.TabFocus; Accessible.name: "Go to end"; onClicked: editor.seekBoundary(1)
-                background: Rectangle { radius: 6; color: parent.hovered ? "#12ffffff" : "transparent" }
+                icon.source: "qrc:/omarecord/assets/icons/skip-forward.svg"; icon.width: 19; icon.height: 19
+                Accessible.name: "Go to end"; onClicked: editor.seekBoundary(1)
             }
-            Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 20; Layout.leftMargin: 6; Layout.rightMargin: 6; color: "#18ffffff" }
-            ToolButton {
+            Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 20; Layout.leftMargin: 6; Layout.rightMargin: 6; color: Qt.alpha(theme.foreground, .09) }
+            IconToolButton {
                 Layout.preferredWidth: 32; Layout.preferredHeight: 32
-                icon.source: "qrc:/omarecord/assets/icons/scissors.svg"; icon.width: 19; icon.height: 19; icon.color: theme.foreground
-                focusPolicy: Qt.TabFocus; Accessible.name: "Split clip"; ToolTip.visible: hovered; ToolTip.text: "Split at playhead (S)"; onClicked: editor.splitAtPlayhead()
-                background: Rectangle { radius: 6; color: parent.hovered ? "#12ffffff" : "transparent" }
+                icon.source: "qrc:/omarecord/assets/icons/scissors.svg"; icon.width: 19; icon.height: 19
+                Accessible.name: "Split clip"; ToolTip.visible: hovered; ToolTip.text: "Split at playhead (S)"; onClicked: editor.splitAtPlayhead()
             }
         }
         Item {

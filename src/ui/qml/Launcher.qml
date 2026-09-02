@@ -13,15 +13,15 @@ ApplicationWindow {
     minimumHeight: 520
     title: "omarecord"
     color: theme.background
-    Material.theme: Material.Dark
+    Material.theme: theme.dark ? Material.Dark : Material.Light
     Material.accent: theme.accent
     Material.background: theme.background
     Material.foreground: theme.foreground
 
     readonly property var recordModes: [
-        { mode: "fullscreen", label: "Full screen", hint: "Ctrl + 1", icon: "monitor.svg" },
-        { mode: "region", label: "Region", hint: "Ctrl + 2", icon: "region.svg" },
-        { mode: "window", label: "Window", hint: "Ctrl + 3", icon: "window.svg" }
+        { mode: "fullscreen", label: "Full screen", shortcut: "Ctrl+1", icon: "monitor.svg" },
+        { mode: "region", label: "Region", shortcut: "Ctrl+2", icon: "region.svg" },
+        { mode: "window", label: "Window", shortcut: "Ctrl+3", icon: "window.svg" }
     ]
 
     ColumnLayout {
@@ -44,7 +44,7 @@ ApplicationWindow {
             Label {
                 text: "Capture once. Polish every detail."
                 font.pixelSize: 13
-                color: "#9a9eab"
+                color: Qt.alpha(theme.foreground, .62)
             }
         }
 
@@ -62,6 +62,7 @@ ApplicationWindow {
                     Layout.fillHeight: true
                     hoverEnabled: true
                     focusPolicy: Qt.TabFocus
+                    topInset: 0; bottomInset: 0
                     onClicked: launcher.record(modelData.mode)
                     contentItem: RowLayout {
                         spacing: 13
@@ -71,7 +72,7 @@ ApplicationWindow {
                             Rectangle {
                                 anchors.fill: parent
                                 radius: 12
-                                color: Qt.rgba(theme.accent.r, theme.accent.g, theme.accent.b, .16)
+                                color: Qt.alpha(theme.accent, .16)
                             }
                             Image {
                                 anchors.centerIn: parent
@@ -91,18 +92,18 @@ ApplicationWindow {
                                 color: theme.foreground
                             }
                             Label {
-                                text: modelData.hint
+                                text: modelData.shortcut.replace("+", " + ")
                                 font.pixelSize: 10
                                 font.family: "monospace"
-                                color: "#7f8391"
+                                color: Qt.alpha(theme.foreground, .48)
                             }
                         }
                     }
                     background: Rectangle {
                         radius: 10
-                        color: parent.pressed ? "#1affffff" : parent.hovered ? "#12ffffff" : theme.lighterBackground
+                        color: parent.pressed ? Qt.alpha(theme.foreground, .10) : parent.hovered ? Qt.alpha(theme.foreground, .07) : theme.lighterBackground
                         border.width: 1
-                        border.color: parent.hovered ? Qt.rgba(theme.accent.r, theme.accent.g, theme.accent.b, .72) : "#16ffffff"
+                        border.color: parent.hovered ? Qt.alpha(theme.accent, .72) : Qt.alpha(theme.foreground, .09)
                     }
                 }
             }
@@ -116,18 +117,19 @@ ApplicationWindow {
                 font.pixelSize: 16
                 font.weight: Font.DemiBold
             }
-            Label { text: launcher.recentBundles.length; color: "#777b89"; font.pixelSize: 11 }
+            Label { text: launcher.recentBundles.length; color: Qt.alpha(theme.foreground, .46); font.pixelSize: 11 }
             Item { Layout.fillWidth: true }
             Button {
                 Layout.preferredHeight: 32
                 text: "Open bundle…"
                 font.pixelSize: 12
                 focusPolicy: Qt.TabFocus
+                topInset: 0; bottomInset: 0
                 onClicked: folderDialog.open()
                 background: Rectangle {
                     radius: 6
-                    color: parent.hovered ? "#10ffffff" : "transparent"
-                    border.color: parent.hovered ? "#3bffffff" : "#24ffffff"
+                    color: parent.hovered ? Qt.alpha(theme.foreground, .06) : "transparent"
+                    border.color: parent.hovered ? Qt.alpha(theme.foreground, .23) : Qt.alpha(theme.foreground, .14)
                 }
             }
         }
@@ -143,7 +145,7 @@ ApplicationWindow {
                 model: launcher.recentBundles
                 readonly property int columns: Math.max(1, Math.floor(width / 260))
                 cellWidth: width / columns
-                cellHeight: 202
+                cellHeight: Math.ceil((cellWidth - 36) * 9 / 16) + 84
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
@@ -156,12 +158,13 @@ ApplicationWindow {
                         anchors.margins: 6
                         hoverEnabled: true
                         focusPolicy: Qt.TabFocus
+                        topInset: 0; bottomInset: 0
                         onClicked: launcher.openBundle(modelData.path)
                         background: Rectangle {
                             radius: 10
-                            color: parent.pressed ? "#1affffff" : parent.hovered ? "#10ffffff" : theme.lighterBackground
+                            color: parent.pressed ? Qt.alpha(theme.foreground, .10) : parent.hovered ? Qt.alpha(theme.foreground, .06) : theme.lighterBackground
                             border.width: 1
-                            border.color: parent.hovered ? Qt.rgba(theme.accent.r, theme.accent.g, theme.accent.b, .72) : "#14ffffff"
+                            border.color: parent.hovered ? Qt.alpha(theme.accent, .72) : Qt.alpha(theme.foreground, .08)
                         }
                         contentItem: ColumnLayout {
                             spacing: 7
@@ -184,7 +187,7 @@ ApplicationWindow {
                                     anchors.centerIn: parent
                                     visible: modelData.thumbnail === ""
                                     text: "No preview"
-                                    color: "#646875"
+                                    color: Qt.alpha(theme.foreground, .40)
                                     font.pixelSize: 11
                                 }
                             }
@@ -198,9 +201,9 @@ ApplicationWindow {
                             }
                             RowLayout {
                                 Layout.fillWidth: true
-                                Label { text: window.formatDate(modelData.date); color: "#858997"; font.pixelSize: 11 }
+                                Label { text: modelData.dateText; color: Qt.alpha(theme.foreground, .52); font.pixelSize: 11 }
                                 Item { Layout.fillWidth: true }
-                                Label { text: window.formatTime(modelData.duration); color: "#858997"; font.pixelSize: 11; font.family: "monospace" }
+                                Label { text: modelData.durationText; color: Qt.alpha(theme.foreground, .52); font.pixelSize: 11; font.family: "monospace" }
                             }
                         }
                     }
@@ -219,19 +222,18 @@ ApplicationWindow {
                     opacity: .45
                 }
                 Label { text: "No recordings yet"; font.pixelSize: 14; font.weight: Font.DemiBold; Layout.alignment: Qt.AlignHCenter }
-                Label { text: "Your finished recordings will appear here."; color: "#7f8391"; font.pixelSize: 12; Layout.alignment: Qt.AlignHCenter }
+                Label { text: "Your finished recordings will appear here."; color: Qt.alpha(theme.foreground, .48); font.pixelSize: 12; Layout.alignment: Qt.AlignHCenter }
             }
         }
     }
 
-    function formatTime(seconds) {
-        let s = Math.round(seconds)
-        return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0")
+    Instantiator {
+        model: window.recordModes
+        delegate: Shortcut {
+            required property var modelData
+            sequence: modelData.shortcut
+            onActivated: launcher.record(modelData.mode)
+        }
     }
-    function formatDate(value) { return Qt.formatDate(new Date(value), "MMM d, yyyy") }
-
-    Shortcut { sequence: "Ctrl+1"; onActivated: launcher.record("fullscreen") }
-    Shortcut { sequence: "Ctrl+2"; onActivated: launcher.record("region") }
-    Shortcut { sequence: "Ctrl+3"; onActivated: launcher.record("window") }
     FolderDialog { id: folderDialog; title: "Open an omarecord bundle"; onAccepted: launcher.openBundle(selectedFolder) }
 }

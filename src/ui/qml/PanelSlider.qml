@@ -14,9 +14,9 @@ ColumnLayout {
     spacing: 4
     RowLayout {
         Layout.fillWidth: true
-        Label { text: root.label; color: "#aeb1bd"; font.pixelSize: 12 }
+        PanelLabel { text: root.label }
         Item { Layout.fillWidth: true }
-        Label { text: Number(root.value).toFixed(root.decimals); color: "#858894"; font.family: "monospace"; font.pixelSize: 11 }
+        PanelValue { text: Number(root.value).toFixed(root.decimals) }
     }
     Slider {
         Layout.fillWidth: true

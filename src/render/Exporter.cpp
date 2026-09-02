@@ -5,6 +5,7 @@
 #include "core/ClipTimeline.h"
 #include "core/InputLog.h"
 #include "core/MotionTrack.h"
+#include "core/OmarchyPaths.h"
 #include "core/Project.h"
 #include "core/ZoomTimeline.h"
 
@@ -86,14 +87,6 @@ static double outputAspect(const QString &aspect, int sourceWidth, int sourceHei
     return (sourceWidth * crop.width()) / std::max(1.0, sourceHeight * crop.height());
 }
 
-static QString wallpaperPath()
-{
-    QDir directory(QDir::homePath() + QStringLiteral("/.local/state/omarchy/current/theme/backgrounds"));
-    const auto files = directory.entryInfoList({QStringLiteral("*.png"), QStringLiteral("*.jpg"),
-        QStringLiteral("*.jpeg"), QStringLiteral("*.webp")}, QDir::Files, QDir::Name);
-    return files.isEmpty() ? QString() : files.first().absoluteFilePath();
-}
-
 static QVariantMap projectMap(const Project &project)
 {
     QVariantMap map = project.toJson().toVariantMap();
@@ -102,7 +95,7 @@ static QVariantMap projectMap(const Project &project)
     if (project.background.type == QLatin1String("image")) image = project.background.image;
     else if (project.background.type == QLatin1String("wallpaper"))
         image = project.background.wallpaper == QLatin1String("omarchy:current")
-            ? wallpaperPath() : project.background.wallpaper;
+            ? OmarchyPaths::currentBackground() : project.background.wallpaper;
     background[QStringLiteral("resolvedImage")] = image.isEmpty() ? QString() : QUrl::fromLocalFile(image).toString();
     map[QStringLiteral("background")] = background;
     return map;

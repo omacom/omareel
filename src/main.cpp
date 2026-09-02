@@ -3,6 +3,7 @@
 #include "record/Recorder.h"
 #include "render/Exporter.h"
 #include "core/Theme.h"
+#include "core/OmarchyPaths.h"
 #include "ui/Editor.h"
 #include "ui/Launcher.h"
 
@@ -158,8 +159,7 @@ static int recordCommand(const QStringList &arguments)
         return 1;
     }
     RecordOptions options;
-    options.outputDirectory = QDir(QStandardPaths::writableLocation(QStandardPaths::MoviesLocation))
-                                  .filePath(QStringLiteral("omarecord"));
+    options.outputDirectory = OmarchyPaths::recordingsDirectory();
     int modeCount = 0;
     for (int i = 0; i < arguments.size(); ++i) {
         const QString arg = arguments[i];
@@ -301,6 +301,7 @@ int main(int argc, char **argv)
         engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
         engine.rootContext()->setContextProperty(QStringLiteral("editor"), &editor);
         engine.rootContext()->setContextProperty(QStringLiteral("comp"), &editor);
+        QObject::connect(&theme, &Theme::sourceChanged, &editor, &Editor::refreshOmarchyTheme);
         engine.load(QUrl(QStringLiteral("qrc:/qt/qml/Omarecord/Main.qml")));
         if (engine.rootObjects().isEmpty()) return 2;
         configureDebugScreenshot(engine, app);

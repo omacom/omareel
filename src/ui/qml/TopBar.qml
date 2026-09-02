@@ -6,9 +6,14 @@ Rectangle {
     id: root
     height: 48
     color: theme.lighterBackground
-    border.color: "#10ffffff"
-    property bool nameFieldFocused: projectName.activeFocus
+    border.color: Qt.alpha(theme.foreground, .06)
     signal showExport()
+    signal restoreEditorFocus()
+    onRestoreEditorFocus: window.restoreEditorFocus()
+    function commitProjectName() {
+        if (projectName.text !== editor.bundleName)
+            editor.setProjectValue("name", projectName.text)
+    }
 
     RowLayout {
         anchors.fill: parent
@@ -34,40 +39,43 @@ Rectangle {
             focusPolicy: Qt.StrongFocus
             background: Rectangle {
                 radius: 6
-                color: projectName.activeFocus ? "#16000000" : "transparent"
+                color: projectName.activeFocus ? Qt.alpha(theme.darkBackground, .32) : "transparent"
                 border.width: 1
-                border.color: projectName.activeFocus ? theme.accent : "#16ffffff"
+                border.color: projectName.activeFocus ? theme.accent : Qt.alpha(theme.foreground, .09)
             }
-            onEditingFinished: editor.setProjectValue("name", text)
+            onEditingFinished: root.commitProjectName()
+            onAccepted: {
+                root.commitProjectName()
+                focus = false
+                root.restoreEditorFocus()
+            }
+            Keys.onEscapePressed: event => {
+                text = editor.bundleName
+                focus = false
+                root.restoreEditorFocus()
+                event.accepted = true
+            }
         }
         Item { Layout.fillWidth: true }
-        ToolButton {
+        IconToolButton {
             Layout.preferredWidth: 32
             Layout.preferredHeight: 32
             enabled: editor.canUndo
             icon.source: "qrc:/omarecord/assets/icons/undo.svg"
-            icon.width: 20; icon.height: 20
-            icon.color: enabled ? theme.foreground : "#55ffffff"
-            focusPolicy: Qt.TabFocus
             Accessible.name: "Undo"
             ToolTip.visible: hovered
             ToolTip.text: "Undo"
             onClicked: editor.undo()
-            background: Rectangle { radius: 6; color: parent.hovered ? "#12ffffff" : "transparent" }
         }
-        ToolButton {
+        IconToolButton {
             Layout.preferredWidth: 32
             Layout.preferredHeight: 32
             enabled: editor.canRedo
             icon.source: "qrc:/omarecord/assets/icons/redo.svg"
-            icon.width: 20; icon.height: 20
-            icon.color: enabled ? theme.foreground : "#55ffffff"
-            focusPolicy: Qt.TabFocus
             Accessible.name: "Redo"
             ToolTip.visible: hovered
             ToolTip.text: "Redo"
             onClicked: editor.redo()
-            background: Rectangle { radius: 6; color: parent.hovered ? "#12ffffff" : "transparent" }
         }
         Button {
             id: presetButton
@@ -76,11 +84,12 @@ Rectangle {
             text: "Presets  ▾"
             font.pixelSize: 12
             focusPolicy: Qt.TabFocus
+            topInset: 0; bottomInset: 0
             onClicked: presetsMenu.open()
             background: Rectangle {
                 radius: 6
-                color: parent.hovered ? "#10ffffff" : "transparent"
-                border.color: parent.hovered ? "#38ffffff" : "#22ffffff"
+                color: parent.hovered ? Qt.alpha(theme.foreground, .06) : "transparent"
+                border.color: parent.hovered ? Qt.alpha(theme.foreground, .22) : Qt.alpha(theme.foreground, .13)
             }
         }
         Button {
@@ -90,6 +99,7 @@ Rectangle {
             font.pixelSize: 12
             font.weight: Font.DemiBold
             focusPolicy: Qt.TabFocus
+            topInset: 0; bottomInset: 0
             contentItem: Label {
                 text: parent.text
                 color: theme.accentForeground
@@ -107,8 +117,8 @@ Rectangle {
 
     Menu {
         id: presetsMenu
-        x: presetButton.mapToItem(root, 0, 0).x
-        y: root.height - 3
+        parent: presetButton
+        y: presetButton.height
         MenuItem { text: "Save current…"; onTriggered: savePresetDialog.open() }
         MenuSeparator { }
         Repeater {

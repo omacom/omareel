@@ -4,7 +4,7 @@ import QtQuick.Controls
 Item {
     id: root
     required property real pixelsPerSecond
-    height: 44
+    required property Item focusTarget
     function outputStart(index) {
         let value = 0
         for (let i=0;i<index;i++) value += (editor.clips[i].out-editor.clips[i].in)/editor.clips[i].speed
@@ -16,13 +16,14 @@ Item {
             id: clipBlock
             required property var modelData
             required property int index
+            readonly property bool selected: editor.selectedClipId === modelData.id
             x: root.outputStart(index) * root.pixelsPerSecond
             width: Math.max(20, (modelData.out-modelData.in)/modelData.speed * root.pixelsPerSecond)
             height: root.height
             radius: 6
-            color: Qt.rgba(theme.accent.r, theme.accent.g, theme.accent.b, .35)
+            color: Qt.alpha(theme.accent, .35)
             border.width: 1
-            border.color: editor.selectedClipId === modelData.id || clipHover.hovered ? Qt.lighter(theme.accent, 1.22) : theme.accent
+            border.color: clipBlock.selected || clipHover.hovered ? Qt.lighter(theme.accent, 1.22) : theme.accent
             clip: true
             HoverHandler { id: clipHover }
             Repeater {
@@ -35,11 +36,12 @@ Item {
                     width: Math.max(1, clipBlock.width / Math.max(1, editor.waveform.length) - 1)
                     height: Math.max(1, modelData * (clipBlock.height - 14))
                     y: (clipBlock.height - height) / 2
-                    color: "#73ffffff"
+                    color: Qt.alpha(theme.foreground, .45)
                 }
             }
             MouseArea {
                 anchors.fill: parent
+                onPressed: root.focusTarget.forceActiveFocus()
                 onClicked: editor.selectedClipId = modelData.id
             }
             Label {
@@ -50,9 +52,9 @@ Item {
                 text: clipBlock.width < 68 ? "" : "Clip · " + Number(modelData.speed).toFixed(modelData.speed % 1 ? 2 : 0) + "×"
                 font.weight: Font.DemiBold
                 font.pixelSize: 11
-                color: "white"
+                color: theme.accentForeground
                 padding: 3
-                MouseArea { anchors.fill: parent; onClicked: speedMenu.open() }
+                MouseArea { anchors.fill: parent; onPressed: root.focusTarget.forceActiveFocus(); onClicked: speedMenu.open() }
             }
             Menu {
                 id: speedMenu
@@ -63,24 +65,26 @@ Item {
             }
             Rectangle {
                 width: 6; height: parent.height; color: theme.accent; radius: 3
-                opacity: editor.selectedClipId === modelData.id ? 1 : 0
+                opacity: clipBlock.selected || clipHover.hovered ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: 100 } }
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.SizeHorCursor
+                    enabled: clipBlock.selected
                     property real pressX; property real originalIn
-                    onPressed: { pressX = mapToItem(root, mouse.x, mouse.y).x; originalIn = modelData.in; editor.beginCoalescedEdit("trim-"+modelData.id) }
+                    onPressed: { root.focusTarget.forceActiveFocus(); pressX = mapToItem(root, mouse.x, mouse.y).x; originalIn = modelData.in; editor.beginCoalescedEdit("trim-"+modelData.id) }
                     onPositionChanged: if (pressed) editor.trimClip(modelData.id, originalIn + (mapToItem(root, mouse.x, mouse.y).x-pressX) / root.pixelsPerSecond * modelData.speed, modelData.out)
                     onReleased: editor.endCoalescedEdit()
                 }
             }
             Rectangle {
                 anchors.right: parent.right; width: 6; height: parent.height; color: theme.accent; radius: 3
-                opacity: editor.selectedClipId === modelData.id ? 1 : 0
+                opacity: clipBlock.selected || clipHover.hovered ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: 100 } }
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.SizeHorCursor
+                    enabled: clipBlock.selected
                     property real pressX; property real originalOut
-                    onPressed: { pressX = mapToItem(root, mouse.x, mouse.y).x; originalOut = modelData.out; editor.beginCoalescedEdit("trim-"+modelData.id) }
+                    onPressed: { root.focusTarget.forceActiveFocus(); pressX = mapToItem(root, mouse.x, mouse.y).x; originalOut = modelData.out; editor.beginCoalescedEdit("trim-"+modelData.id) }
                     onPositionChanged: if (pressed) editor.trimClip(modelData.id, modelData.in, originalOut + (mapToItem(root, mouse.x, mouse.y).x-pressX) / root.pixelsPerSecond * modelData.speed)
                     onReleased: editor.endCoalescedEdit()
                 }

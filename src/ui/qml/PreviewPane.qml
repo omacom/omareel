@@ -1,11 +1,15 @@
 import QtQuick
 import QtQuick.Controls
 
-Rectangle {
+FocusScope {
     id: root
     required property bool cropMode
-    color: Qt.darker(theme.background, 1.18)
     clip: true
+    Rectangle { anchors.fill: parent; color: theme.darkBackground }
+    MouseArea {
+        anchors.fill: parent
+        onPressed: root.forceActiveFocus()
+    }
 
     Item {
         id: previewArea
@@ -20,8 +24,8 @@ Rectangle {
         anchors.centerIn: parent
         width: Math.min(parent.width, parent.height * editor.outputWidth / editor.outputHeight)
         height: width * editor.outputHeight / editor.outputWidth
-        color: "#08090b"
-        border.color: "#10ffffff"
+        color: theme.darkBackground
+        border.color: Qt.alpha(theme.foreground, .06)
         border.width: 1
         radius: 8
         clip: true
@@ -40,6 +44,7 @@ Rectangle {
                 anchors.fill: parent
                 enabled: editor.pickingZoomTarget
                 cursorShape: Qt.CrossCursor
+                onPressed: root.forceActiveFocus()
                 onClicked: editor.setZoomTargetFromPreview(mouse.x / width, mouse.y / height)
             }
             Rectangle {
@@ -60,7 +65,7 @@ Rectangle {
                         width: cropRect.handleSize; height: width; radius: width / 2
                         x: modelData.x * cropRect.width - width / 2
                         y: modelData.y * cropRect.height - height / 2
-                        color: theme.accent; border.color: "white"
+                        color: theme.accent; border.color: theme.accentForeground
                         MouseArea {
                             anchors.fill: parent
                             drag.target: parent
@@ -94,7 +99,7 @@ Rectangle {
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 12
         text: editor.formatTime(editor.position) + "  /  " + editor.formatTime(editor.duration)
-        color: "#8f929d"
+        color: Qt.alpha(theme.foreground, .58)
         font.family: "monospace"
         font.pixelSize: 11
     }

@@ -9,7 +9,17 @@ ColumnLayout {
         for (let i=0;i<editor.zooms.length;i++) if (editor.zooms[i].id === editor.selectedZoomId) return editor.zooms[i]
         return null
     }
-    Label { text: selected ? "Selected zoom" : "Select a zoom on the timeline"; font.weight: Font.DemiBold; font.pixelSize: 13; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+    readonly property var zoomStyle: editor.project.zoomStyle
+    readonly property var motionPresets: [[2.6,170,44], [2.25,200,40], [1.4,300,34]]
+    function motionIndex() {
+        const spring = zoomStyle.spring
+        for (let i = 0; i < motionPresets.length; ++i) {
+            const p = motionPresets[i]
+            if (Math.abs(spring.mass-p[0]) < .001 && Math.abs(spring.stiffness-p[1]) < .001 && Math.abs(spring.damping-p[2]) < .001) return i
+        }
+        return -1
+    }
+    PanelHeading { text: selected ? "Selected zoom" : "Select a zoom on the timeline"; wrapMode: Text.WordWrap; Layout.fillWidth: true }
     ColumnLayout {
         visible: root.selected !== null
         Layout.fillWidth: true
@@ -22,15 +32,15 @@ ColumnLayout {
         }
         RowLayout {
             Layout.fillWidth: true
-            Label { text: "Level"; Layout.fillWidth: true; color: "#aeb1bd"; font.pixelSize: 12 }
-            Label { text: root.selected ? Number(root.selected.level).toFixed(1) + "×" : ""; font.family: "monospace"; font.pixelSize: 11; color: "#858894" }
+            PanelLabel { text: "Level"; Layout.fillWidth: true }
+            PanelValue { text: root.selected ? Number(root.selected.level).toFixed(1) + "×" : "" }
         }
         Slider {
             Layout.fillWidth: true; from: 1; to: 4; stepSize: 0.05; value: root.selected ? root.selected.level : 2
             onPressedChanged: pressed ? editor.beginCoalescedEdit("zoom-level") : editor.endCoalescedEdit()
             onMoved: editor.setZoomLevel(editor.selectedZoomId, value, true)
         }
-        Label { text: "Target"; color: "#aeb1bd"; font.pixelSize: 12 }
+        PanelLabel { text: "Target" }
         ComboBox {
             Layout.fillWidth: true
             Layout.preferredHeight: 32
@@ -41,16 +51,16 @@ ColumnLayout {
         Button { Layout.fillWidth: true; text: editor.pickingZoomTarget ? "Click the preview…" : "Pick point on preview"; highlighted: editor.pickingZoomTarget; onClicked: editor.setPickingZoomTarget(!editor.pickingZoomTarget) }
         Button { Layout.fillWidth: true; text: "Remove zoom"; onClicked: editor.removeZoom(editor.selectedZoomId) }
     }
-    Rectangle { Layout.fillWidth: true; height: 1; color: "#30313a" }
-    Label { text: "Motion"; font.weight: Font.DemiBold; font.pixelSize: 13 }
+    Rectangle { Layout.fillWidth: true; height: 1; color: Qt.alpha(theme.foreground, .10) }
+    PanelHeading { text: "Motion" }
     ComboBox {
         id: springPreset
         Layout.fillWidth: true
         Layout.preferredHeight: 32
         model: ["Smooth", "Default", "Snappy"]
-        currentIndex: 1
+        currentIndex: root.motionIndex()
         onActivated: {
-            let v = currentIndex === 0 ? [2.6,170,44] : currentIndex === 1 ? [2.25,200,40] : [1.4,300,34]
+            let v = root.motionPresets[currentIndex]
             editor.beginCoalescedEdit("zoom-spring")
             editor.setProjectValue("zoomStyle.spring.mass", v[0], true)
             editor.setProjectValue("zoomStyle.spring.stiffness", v[1], true)
