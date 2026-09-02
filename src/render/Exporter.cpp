@@ -661,6 +661,10 @@ bool Exporter::run(const ExportOptions &options, QString *error)
             if (error) *error = QStringLiteral("Could not finalize output %1").arg(options.outputPath);
             return false;
         }
+        // QTemporaryFile creates 0600 files; exports are meant to be shared, so give
+        // them the ordinary umask-style permissions a freshly written file would have.
+        QFile::setPermissions(options.outputPath, QFile::ReadOwner | QFile::WriteOwner
+                              | QFile::ReadGroup | QFile::ReadOther);
     } else {
         rawFile.flush();
         QStringList args{QStringLiteral("-y"), QStringLiteral("-v"), QStringLiteral("error"),
