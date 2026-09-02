@@ -4,6 +4,7 @@
 #include "render/Exporter.h"
 #include "core/Theme.h"
 #include "core/OmarchyPaths.h"
+#include "core/RecordingPreferences.h"
 #include "ui/Editor.h"
 #include "ui/Launcher.h"
 #include "ui/RecordingBar.h"
@@ -49,7 +50,7 @@ static int usage(const QString &error = {})
               "commands:\n"
               "  record [--region|--fullscreen|--window] [options]\n"
               "      Toggle recording (region is the default). Options: --fps N, --dir PATH,\n"
-              "      --with-desktop-audio, --with-microphone-audio, --no-open, --no-bar,\n"
+              "      --with-desktop-audio, --with-microphone-audio, --no-audio, --no-open, --no-bar,\n"
               "      --stop, --cancel.\n"
               "  edit <bundle.omarecord>\n"
               "      Open a recording bundle in the editor.\n"
@@ -84,13 +85,28 @@ static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplicat
     static const QHash<QString, int> panels{
         {QStringLiteral("background"), 0}, {QStringLiteral("shape"), 1},
         {QStringLiteral("cursor"), 2}, {QStringLiteral("zoom"), 3},
-        {QStringLiteral("audio"), 4}
+        {QStringLiteral("clip"), 4}, {QStringLiteral("camera"), 5},
+        {QStringLiteral("audio"), 6}
     };
     const QString panel = qEnvironmentVariable("OMARECORD_SCREENSHOT_PANEL").toLower();
     if (panels.contains(panel)) {
         if (QObject *sidePanel = window->findChild<QObject *>(QStringLiteral("sidePanel")))
             sidePanel->setProperty("section", panels.value(panel));
+        if (QObject *editorObject = engine.rootContext()->contextProperty(QStringLiteral("editor")).value<QObject *>()) {
+            if (panel == QLatin1String("zoom")) {
+                const QVariantList zooms = editorObject->property("zooms").toList();
+                if (!zooms.isEmpty())
+                    editorObject->setProperty("selectedZoomId", zooms.first().toMap().value(QStringLiteral("id")));
+            } else if (panel == QLatin1String("clip")) {
+                const QVariantList clips = editorObject->property("clips").toList();
+                if (!clips.isEmpty())
+                    editorObject->setProperty("selectedClipId", clips.first().toMap().value(QStringLiteral("id")));
+            }
+        }
     }
+    if (qEnvironmentVariable("OMARECORD_SCREENSHOT_PICK_ZOOM") == QLatin1String("1"))
+        if (QObject *editor = engine.rootContext()->contextProperty(QStringLiteral("editor")).value<QObject *>())
+            editor->setProperty("pickingZoomTarget", true);
 
     QTimer::singleShot(3000, &app, [&app, window, path] {
         QDir().mkpath(QFileInfo(path).absolutePath());
@@ -174,6 +190,15 @@ static int recordCommand(const QStringList &arguments)
     }
     RecordOptions options;
     options.outputDirectory = OmarchyPaths::recordingsDirectory();
+    const RecordingPreferences preferences = RecordingPreferences::load();
+    const bool explicitAudio = arguments.contains(QStringLiteral("--with-desktop-audio"))
+        || arguments.contains(QStringLiteral("--with-microphone-audio"))
+        || arguments.contains(QStringLiteral("--no-audio"));
+    if (!explicitAudio) {
+        options.desktopAudio = preferences.systemAudio;
+        options.microphoneAudio = preferences.microphone;
+    }
+    options.microphoneDevice = preferences.microphoneDevice;
     int modeCount = 0;
     for (int i = 0; i < arguments.size(); ++i) {
         const QString arg = arguments[i];
@@ -182,6 +207,14 @@ static int recordCommand(const QStringList &arguments)
         else if (arg == QLatin1String("--window")) { options.mode = CaptureMode::Window; ++modeCount; }
         else if (arg == QLatin1String("--with-desktop-audio")) options.desktopAudio = true;
         else if (arg == QLatin1String("--with-microphone-audio")) options.microphoneAudio = true;
+        else if (arg == QLatin1String("--no-audio")) {
+            options.desktopAudio = false;
+            options.microphoneAudio = false;
+        }
+        else if (arg == QLatin1String("--microphone-device")) {
+            if (++i >= arguments.size()) return usage(QStringLiteral("--microphone-device requires a value"));
+            options.microphoneDevice = arguments[i];
+        }
         else if (arg == QLatin1String("--no-open")) options.noOpen = true;
         else if (arg == QLatin1String("--no-bar")) options.noBar = true;
         else if (arg == QLatin1String("--fps") || arg == QLatin1String("--dir")) {
@@ -193,6 +226,10 @@ static int recordCommand(const QStringList &arguments)
         }
     }
     if (modeCount > 1) return usage(QStringLiteral("choose only one capture mode"));
+    if (arguments.contains(QStringLiteral("--no-audio"))
+        && (arguments.contains(QStringLiteral("--with-desktop-audio"))
+            || arguments.contains(QStringLiteral("--with-microphone-audio"))))
+        return usage(QStringLiteral("--no-audio cannot be combined with audio enable flags"));
     if (options.fps <= 0 || options.fps > 240) return usage(QStringLiteral("fps must be between 1 and 240"));
     if (qEnvironmentVariable("OMARECORD_NO_BAR") == QLatin1String("1")) options.noBar = true;
     QString message;

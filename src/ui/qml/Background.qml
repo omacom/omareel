@@ -9,7 +9,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         color: root.settings.color || "#1a1b26"
-        visible: root.settings.type === "color" || root.settings.type === "none" || !backgroundImage.visible
+        visible: root.settings.type !== "none" && (root.settings.type === "color" || !backgroundImage.visible)
     }
     Canvas {
         id: gradientCanvas

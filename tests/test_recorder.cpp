@@ -1,6 +1,8 @@
 #include "record/Recorder.h"
+#include "core/RecordingPreferences.h"
 
 #include <QtTest>
+#include <QTemporaryDir>
 #include <limits>
 
 using namespace OmaRecord;
@@ -36,6 +38,26 @@ private slots:
         QFETCH(double, duration);
         QFETCH(int, expected);
         QCOMPARE(int(Recorder::classifyGsrExit(exitCode, stopRequested, fileSize, duration)), expected);
+    }
+
+    void recordingPreferencesRoundTrip()
+    {
+        QTemporaryDir config;
+        QVERIFY(config.isValid());
+        qputenv("XDG_CONFIG_HOME", config.path().toUtf8());
+        RecordingPreferences preferences = RecordingPreferences::load();
+        QVERIFY(preferences.systemAudio);
+        QVERIFY(preferences.microphone);
+        QCOMPARE(preferences.microphoneDevice, QStringLiteral("default_input"));
+        QCOMPARE(preferences.webcam.value(QStringLiteral("enabled")).toBool(), false);
+        preferences.systemAudio = false;
+        preferences.microphoneDevice = QStringLiteral("test_input");
+        QString error;
+        QVERIFY2(preferences.save(&error), qPrintable(error));
+        const RecordingPreferences loaded = RecordingPreferences::load();
+        QVERIFY(!loaded.systemAudio);
+        QCOMPARE(loaded.microphoneDevice, QStringLiteral("test_input"));
+        QCOMPARE(loaded.webcam.value(QStringLiteral("shape")).toString(), QStringLiteral("round"));
     }
 };
 

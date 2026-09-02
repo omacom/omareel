@@ -81,4 +81,5 @@ ApplicationWindow {
     Shortcut { sequence: "Ctrl+Shift+Z"; onActivated: editor.redo() }
     Shortcut { sequence: "Ctrl+S"; onActivated: { topBar.commitProjectName(); editor.saveNow() } }
     Shortcut { sequence: "Ctrl+E"; onActivated: { topBar.commitProjectName(); exportDialog.open() } }
+    Shortcut { sequence: "Escape"; enabled: editor.pickingZoomTarget; onActivated: editor.setPickingZoomTarget(false) }
 }

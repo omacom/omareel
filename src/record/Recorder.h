@@ -12,6 +12,7 @@ struct RecordOptions {
     QString outputDirectory;
     bool desktopAudio = false;
     bool microphoneAudio = false;
+    QString microphoneDevice = QStringLiteral("default_input");
     bool noOpen = false;
     bool noBar = false;
 };

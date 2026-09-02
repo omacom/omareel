@@ -1,0 +1,56 @@
+#include "RecordingPreferences.h"
+
+#include <QDir>
+#include <QFile>
+#include <QJsonDocument>
+#include <QSaveFile>
+#include <QStandardPaths>
+
+using namespace OmaRecord;
+
+QString RecordingPreferences::path()
+{
+    return QDir(QStandardPaths::writableLocation(QStandardPaths::ConfigLocation))
+        .filePath(QStringLiteral("omarecord/settings.json"));
+}
+
+RecordingPreferences RecordingPreferences::load()
+{
+    RecordingPreferences preferences;
+    QFile file(path());
+    if (!file.open(QIODevice::ReadOnly)) return preferences;
+    const QJsonObject root = QJsonDocument::fromJson(file.readAll()).object();
+    preferences.systemAudio = root.value(QStringLiteral("systemAudio")).toBool(true);
+    preferences.microphone = root.value(QStringLiteral("microphone")).toBool(true);
+    preferences.microphoneDevice = root.value(QStringLiteral("microphoneDevice"))
+                                       .toString(QStringLiteral("default_input"));
+    if (root.value(QStringLiteral("webcam")).isObject())
+        preferences.webcam = root.value(QStringLiteral("webcam")).toObject();
+    return preferences;
+}
+
+bool RecordingPreferences::save(QString *error) const
+{
+    const QString filePath = path();
+    if (!QDir().mkpath(QFileInfo(filePath).absolutePath())) {
+        if (error) *error = QStringLiteral("Could not create the settings directory");
+        return false;
+    }
+    QSaveFile file(filePath);
+    if (!file.open(QIODevice::WriteOnly)) {
+        if (error) *error = file.errorString();
+        return false;
+    }
+    const QJsonObject root{
+        {QStringLiteral("systemAudio"), systemAudio},
+        {QStringLiteral("microphone"), microphone},
+        {QStringLiteral("microphoneDevice"), microphoneDevice},
+        {QStringLiteral("webcam"), webcam}
+    };
+    if (file.write(QJsonDocument(root).toJson(QJsonDocument::Indented)) < 0 || !file.commit()) {
+        if (error) *error = file.errorString();
+        return false;
+    }
+    if (error) error->clear();
+    return true;
+}

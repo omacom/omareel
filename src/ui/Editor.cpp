@@ -184,6 +184,14 @@ bool Editor::loadBundle()
     m_sourceDuration = info.duration;
     m_fps = info.fps > 0.0 ? info.fps : 60.0;
     m_hasAudio = info.audio;
+    QFile captureFile(QDir(m_bundlePath).filePath(QStringLiteral("capture.json")));
+    if (captureFile.open(QIODevice::ReadOnly)) {
+        const QJsonObject audio = QJsonDocument::fromJson(captureFile.readAll()).object()
+                                      .value(QStringLiteral("audio")).toObject();
+        m_hasDesktopAudio = info.audio && audio.value(QStringLiteral("desktop")).toBool(false);
+        m_hasMicrophoneAudio = info.audio && audio.value(QStringLiteral("mic")).toBool(false);
+    }
+    m_hasCamera = QFileInfo(QDir(m_bundlePath).filePath(QStringLiteral("camera.mp4"))).isFile();
     if (QFileInfo(m_projectPath).isFile()) {
         m_project = Project::load(m_projectPath, &m_error);
         if (!m_error.isEmpty()) return false;
@@ -193,6 +201,8 @@ bool Editor::loadBundle()
         m_project = Project::defaults(name, m_sourceDuration);
     }
     if (m_project.clips.isEmpty()) m_project.clips = {Clip{QStringLiteral("c1"), 0.0, m_sourceDuration, 1.0}};
+    m_project.audio.desktop = m_project.audio.desktop && m_hasDesktopAudio;
+    m_project.audio.mic = m_project.audio.mic && m_hasMicrophoneAudio;
     m_input = InputLog::loadBundle(m_bundlePath, m_sourceDuration, &m_error);
     if (!m_error.isEmpty()) return false;
     if (!QFileInfo(m_projectPath).isFile()) {
@@ -203,7 +213,6 @@ bool Editor::loadBundle()
         m_autosaveTimer.start();
     }
     m_selectedClipId = m_project.clips.first().id;
-    if (!m_project.zooms.isEmpty()) m_selectedZoomId = m_project.zooms.first().id;
     return true;
 }
 
@@ -549,6 +558,21 @@ bool Editor::setClipSpeed(const QString &id, double speed)
     return true;
 }
 
+bool Editor::resetClipTrims(const QString &id)
+{
+    const int index = clipIndex(id);
+    if (index < 0) return false;
+    const double newIn = index > 0 ? m_project.clips[index - 1].out : 0.0;
+    const double newOut = index + 1 < m_project.clips.size()
+        ? m_project.clips[index + 1].in : m_sourceDuration;
+    if (newOut - newIn < 0.1) return false;
+    snapshot();
+    m_project.clips[index].in = newIn;
+    m_project.clips[index].out = newOut;
+    changed(false);
+    return true;
+}
+
 QString Editor::addZoomAt(double outputTime, double length)
 {
     const double start = std::clamp(outputToSource(outputTime), 0.0, std::max(0.0, m_sourceDuration - 1.0));
@@ -569,7 +593,10 @@ bool Editor::moveZoom(const QString &id, double sourceStart)
     const int index = zoomIndex(id);
     if (index < 0) return false;
     const double length = m_project.zooms[index].end - m_project.zooms[index].start;
-    sourceStart = std::clamp(sourceStart, 0.0, std::max(0.0, m_sourceDuration - length));
+    const double lower = index > 0 ? m_project.zooms[index - 1].end : 0.0;
+    const double upper = index + 1 < m_project.zooms.size()
+        ? m_project.zooms[index + 1].start - length : m_sourceDuration - length;
+    sourceStart = std::clamp(sourceStart, lower, std::max(lower, upper));
     snapshot(QStringLiteral("move-") + id);
     m_project.zooms[index].start = sourceStart;
     m_project.zooms[index].end = sourceStart + length;
@@ -581,8 +608,11 @@ bool Editor::resizeZoom(const QString &id, double sourceStart, double sourceEnd)
 {
     const int index = zoomIndex(id);
     if (index < 0) return false;
-    sourceStart = std::clamp(sourceStart, 0.0, m_sourceDuration);
-    sourceEnd = std::clamp(sourceEnd, 0.0, m_sourceDuration);
+    const double lower = index > 0 ? m_project.zooms[index - 1].end : 0.0;
+    const double upper = index + 1 < m_project.zooms.size()
+        ? m_project.zooms[index + 1].start : m_sourceDuration;
+    sourceStart = std::clamp(sourceStart, lower, upper);
+    sourceEnd = std::clamp(sourceEnd, lower, upper);
     if (sourceEnd - sourceStart < 1.0) return false;
     snapshot(QStringLiteral("resize-") + id);
     m_project.zooms[index].start = sourceStart;
@@ -649,9 +679,33 @@ void Editor::regenerateZooms()
     emit selectionChanged();
 }
 
-void Editor::setSelectedClipId(const QString &id) { if (id != m_selectedClipId || !m_selectedZoomId.isEmpty()) { m_selectedClipId = id; m_selectedZoomId.clear(); emit selectionChanged(); } }
-void Editor::setSelectedZoomId(const QString &id) { if (id != m_selectedZoomId || !m_selectedClipId.isEmpty()) { m_selectedZoomId = id; m_selectedClipId.clear(); emit selectionChanged(); } }
-void Editor::setPickingZoomTarget(bool value) { if (value != m_pickingZoomTarget) { m_pickingZoomTarget = value; emit pickingZoomTargetChanged(); } }
+void Editor::setSelectedClipId(const QString &id)
+{
+    if (id != m_selectedClipId || !m_selectedZoomId.isEmpty()) {
+        setPickingZoomTarget(false);
+        m_selectedClipId = id;
+        m_selectedZoomId.clear();
+        emit selectionChanged();
+    }
+}
+
+void Editor::setSelectedZoomId(const QString &id)
+{
+    if (id != m_selectedZoomId || !m_selectedClipId.isEmpty()) {
+        setPickingZoomTarget(false);
+        m_selectedZoomId = id;
+        m_selectedClipId.clear();
+        emit selectionChanged();
+    }
+}
+void Editor::setPickingZoomTarget(bool value)
+{
+    value = value && !m_selectedZoomId.isEmpty();
+    if (value != m_pickingZoomTarget) {
+        m_pickingZoomTarget = value;
+        emit pickingZoomTargetChanged();
+    }
+}
 
 void Editor::rebuildMotion()
 {

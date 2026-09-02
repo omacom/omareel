@@ -177,7 +177,9 @@ int Recorder::startDetached(const RecordOptions &options, QString *message)
         QStringLiteral("--dir"), options.outputDirectory
     };
     if (options.desktopAudio) arguments << QStringLiteral("--desktop-audio");
-    if (options.microphoneAudio) arguments << QStringLiteral("--microphone-audio");
+    if (options.microphoneAudio) arguments << QStringLiteral("--microphone-audio")
+                                           << QStringLiteral("--microphone-device")
+                                           << options.microphoneDevice;
     if (options.noOpen) arguments << QStringLiteral("--no-open");
     if (options.noBar) arguments << QStringLiteral("--no-bar");
     QProcess daemon;
@@ -421,6 +423,8 @@ int Recorder::daemonMain(const QStringList &arguments)
     options.outputDirectory = valueAfter(arguments, QStringLiteral("--dir"));
     options.desktopAudio = arguments.contains(QStringLiteral("--desktop-audio"));
     options.microphoneAudio = arguments.contains(QStringLiteral("--microphone-audio"));
+    options.microphoneDevice = valueAfter(arguments, QStringLiteral("--microphone-device"));
+    if (options.microphoneDevice.isEmpty()) options.microphoneDevice = QStringLiteral("default_input");
     options.noOpen = arguments.contains(QStringLiteral("--no-open"));
     options.noBar = arguments.contains(QStringLiteral("--no-bar"));
     CaptureRegion region;
@@ -473,11 +477,9 @@ int Recorder::daemonMain(const QStringList &arguments)
         << QStringLiteral("-fm") << QStringLiteral("cfr")
         << QStringLiteral("-k") << QStringLiteral("auto")
         << QStringLiteral("-fallback-cpu-encoding") << QStringLiteral("yes");
-    // "a|b" merges sources into one track; separate -a flags would produce two
-    // tracks that most players only play one of (same choice as omarchy-capture-screenrecording).
     QStringList audioSources;
     if (options.desktopAudio) audioSources << QStringLiteral("default_output");
-    if (options.microphoneAudio) audioSources << QStringLiteral("default_input");
+    if (options.microphoneAudio) audioSources << options.microphoneDevice;
     if (!audioSources.isEmpty())
         gsr << QStringLiteral("-a") << audioSources.join(QLatin1Char('|'))
             << QStringLiteral("-ac") << QStringLiteral("aac");
@@ -595,7 +597,8 @@ int Recorder::daemonMain(const QStringList &arguments)
                                 {"w", region.width}, {"h", region.height}}},
         {"scale", region.scale}, {"monitor", region.monitorName},
         {"first_frame_us", firstFrameUs}, {"started_us", startedUs}, {"stopped_us", stoppedUs},
-        {"audio", QJsonObject{{"desktop", options.desktopAudio}, {"mic", options.microphoneAudio}}}
+        {"audio", QJsonObject{{"desktop", options.desktopAudio}, {"mic", options.microphoneAudio},
+                                {"microphoneDevice", options.microphoneDevice}}}
     };
     ok = writeJson(bundle + QStringLiteral("/capture.json"), capture, &error) && ok;
 

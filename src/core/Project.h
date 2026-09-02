@@ -62,6 +62,15 @@ struct ZoomSegment {
     QPointF target{0.5, 0.5};
 };
 struct Audio { bool desktop = true; bool mic = true; double volume = 1.0; };
+struct Camera {
+    bool enabled = false;
+    QString position = QStringLiteral("bottom-right");
+    double size = 0.25;
+    QString shape = QStringLiteral("round");
+    double radius = 16.0;
+    bool mirror = true;
+    QPointF offset{0.02, 0.02};
+};
 struct GifExport { int fps = 15; int height = 480; QString quality = QStringLiteral("studio"); bool loop = true; };
 struct ExportSettings {
     QString format = QStringLiteral("mp4");
@@ -95,6 +104,7 @@ public:
     Frame frame;
     Cursor cursor;
     Audio audio;
+    Camera camera;
     ExportSettings exportSettings;
 };
 

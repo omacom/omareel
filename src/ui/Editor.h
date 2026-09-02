@@ -40,6 +40,9 @@ class Editor : public QObject
     Q_PROPERTY(int sourceHeight READ sourceHeight CONSTANT)
     Q_PROPERTY(double fps READ fps CONSTANT)
     Q_PROPERTY(bool hasAudio READ hasAudio CONSTANT)
+    Q_PROPERTY(bool hasDesktopAudio READ hasDesktopAudio CONSTANT)
+    Q_PROPERTY(bool hasMicrophoneAudio READ hasMicrophoneAudio CONSTANT)
+    Q_PROPERTY(bool hasCamera READ hasCamera CONSTANT)
     Q_PROPERTY(QVariantList waveform READ waveform NOTIFY waveformChanged)
     Q_PROPERTY(double position READ position NOTIFY positionChanged)
     Q_PROPERTY(bool playing READ playing NOTIFY playingChanged)
@@ -82,6 +85,9 @@ public:
     int sourceHeight() const { return m_sourceHeight; }
     double fps() const { return m_fps; }
     bool hasAudio() const { return m_hasAudio; }
+    bool hasDesktopAudio() const { return m_hasDesktopAudio; }
+    bool hasMicrophoneAudio() const { return m_hasMicrophoneAudio; }
+    bool hasCamera() const { return m_hasCamera; }
     QVariantList waveform() const { return m_waveform; }
     double position() const { return m_outputPosition; }
     bool playing() const;
@@ -128,6 +134,7 @@ public:
     Q_INVOKABLE bool trimClip(const QString &id, double newIn, double newOut);
     Q_INVOKABLE bool removeClip(const QString &id);
     Q_INVOKABLE bool mergeClip(const QString &id, int direction);
+    Q_INVOKABLE bool resetClipTrims(const QString &id);
     Q_INVOKABLE bool setClipSpeed(const QString &id, double speed);
     Q_INVOKABLE QString addZoomAt(double outputTime, double length = 2.0);
     Q_INVOKABLE bool moveZoom(const QString &id, double sourceStart);
@@ -193,6 +200,9 @@ private:
     int m_sourceHeight = 0;
     double m_fps = 60.0;
     bool m_hasAudio = false;
+    bool m_hasDesktopAudio = false;
+    bool m_hasMicrophoneAudio = false;
+    bool m_hasCamera = false;
     bool m_valid = false;
     QString m_error;
     QMediaPlayer m_player;

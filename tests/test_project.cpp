@@ -24,6 +24,13 @@ private slots:
         QCOMPARE(original.exportSettings.height, 1080);
         QCOMPARE(original.exportSettings.quality, QStringLiteral("social"));
         QCOMPARE(original.exportSettings.gif.height, 480);
+        QCOMPARE(original.camera.enabled, false);
+        QCOMPARE(original.camera.position, QStringLiteral("bottom-right"));
+        QCOMPARE(original.camera.size, 0.25);
+        QCOMPARE(original.camera.shape, QStringLiteral("round"));
+        QCOMPARE(original.camera.radius, 16.0);
+        QCOMPARE(original.camera.mirror, true);
+        QCOMPARE(original.camera.offset, QPointF(0.02, 0.02));
         QVERIFY(allowedAspects().contains(QStringLiteral("3:4")));
         QCOMPARE(allowedClipSpeeds().last(), 24.0);
         QTemporaryDir directory;

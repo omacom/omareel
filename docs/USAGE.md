@@ -31,8 +31,12 @@ clicks, and zooms non-destructively.
 is the default when no capture mode is given. `--window` selects a window-aligned region and
 `--fullscreen` records the focused monitor. Only one mode may be supplied.
 
-- `--with-desktop-audio` records system output.
-- `--with-microphone-audio` records the default microphone.
+- With no audio flag, capture uses the saved launcher preferences (system audio and microphone
+  both default on).
+- `--with-desktop-audio` records only system output unless the microphone flag is also present.
+- `--with-microphone-audio` records only the saved microphone device unless the system flag is
+  also present.
+- `--no-audio` records no audio and overrides the saved preferences.
 - `--fps N` sets capture rate from 1 through 240; the default is 60.
 - `--dir PATH` changes the bundle directory; the default is the `omarecord` directory under
   the user's XDG Videos directory.
@@ -105,7 +109,7 @@ clip, style, cursor, and zoom edits are stored in `project.json`.
 - `OMARECORD_SCREENSHOT=/path/out.png` makes `omarecord edit` capture its own window with
   `QQuickWindow::grabWindow()` three seconds after loading, save the PNG, and quit. The launcher
   supports the same capture flag.
-- `OMARECORD_SCREENSHOT_PANEL=background|shape|cursor|zoom|audio` selects an editor inspector
+- `OMARECORD_SCREENSHOT_PANEL=background|shape|cursor|zoom|clip|camera|audio` selects an editor inspector
   before the debug capture.
 - `OMARECORD_SCREENSHOT_SIZE=1440x900` sets the debug-capture window dimensions.
 - `OMARECORD_RECENTS_DIR=/path` overrides the launcher recordings directory (useful for UI testing).
@@ -122,6 +126,7 @@ omarecord edit Recording.omarecord
 ## Files
 
 - `${XDG_RUNTIME_DIR}/omarecord/recording.json` stores active recording state.
+- `${XDG_CONFIG_HOME}/omarecord/settings.json` stores launcher recording preferences.
 - `${XDG_VIDEOS_DIR}/omarecord/` is the default bundle location.
 - `/tmp/omarecord.log` is the opt-in recorder diagnostic log.
 

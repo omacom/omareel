@@ -3,6 +3,7 @@
 #include "core/Project.h"
 #include "core/OmarchyPaths.h"
 #include "core/RecordingMetadata.h"
+#include "core/RecordingPreferences.h"
 #include "record/Recorder.h"
 
 #include <QCoreApplication>
@@ -31,10 +32,76 @@ static qint64 monotonicUs()
 
 Launcher::Launcher(QObject *parent): QObject(parent)
 {
+    const RecordingPreferences preferences = RecordingPreferences::load();
+    m_systemAudio = preferences.systemAudio;
+    m_microphone = preferences.microphone;
+    m_microphoneDevice = preferences.microphoneDevice;
+    refreshAudioDevices();
     refresh();
     connect(&m_recordingTimer, &QTimer::timeout, this, &Launcher::refreshRecording);
     m_recordingTimer.start(1000);
     refreshRecording();
+}
+
+void Launcher::saveRecordingPreferences()
+{
+    RecordingPreferences preferences = RecordingPreferences::load();
+    preferences.systemAudio = m_systemAudio;
+    preferences.microphone = m_microphone;
+    preferences.microphoneDevice = m_microphoneDevice;
+    QString error;
+    if (!preferences.save(&error)) emit errorOccurred(error);
+}
+
+void Launcher::setSystemAudio(bool value)
+{
+    if (m_systemAudio == value) return;
+    m_systemAudio = value;
+    saveRecordingPreferences();
+    emit recordingPreferencesChanged();
+}
+
+void Launcher::setMicrophone(bool value)
+{
+    if (m_microphone == value) return;
+    m_microphone = value;
+    saveRecordingPreferences();
+    emit recordingPreferencesChanged();
+}
+
+void Launcher::setMicrophoneDevice(const QString &value)
+{
+    if (value.isEmpty() || m_microphoneDevice == value) return;
+    m_microphoneDevice = value;
+    saveRecordingPreferences();
+    emit recordingPreferencesChanged();
+}
+
+void Launcher::refreshAudioDevices()
+{
+    QProcess process;
+    process.start(QStringLiteral("gpu-screen-recorder"), {QStringLiteral("--list-audio-devices")});
+    QVariantList devices;
+    if (process.waitForFinished(5000) && process.exitCode() == 0) {
+        const QStringList lines = QString::fromUtf8(process.readAllStandardOutput()).split('\n', Qt::SkipEmptyParts);
+        for (const QString &line : lines) {
+            const int separator = line.indexOf(QLatin1Char('|'));
+            if (separator <= 0) continue;
+            const QString id = line.left(separator).trimmed();
+            if (id != QLatin1String("default_input") && !id.startsWith(QLatin1String("alsa_input."))) continue;
+            devices << QVariantMap{{QStringLiteral("value"), id},
+                                   {QStringLiteral("text"), line.mid(separator + 1).trimmed()}};
+        }
+    }
+    if (devices.isEmpty())
+        devices << QVariantMap{{QStringLiteral("value"), QStringLiteral("default_input")},
+                               {QStringLiteral("text"), QStringLiteral("Default input")}};
+    bool selectedFound = false;
+    for (const QVariant &device : devices)
+        selectedFound = selectedFound || device.toMap().value(QStringLiteral("value")) == m_microphoneDevice;
+    if (!selectedFound) m_microphoneDevice = QStringLiteral("default_input");
+    m_audioDevices = devices;
+    emit audioDevicesChanged();
 }
 
 void Launcher::refreshRecording()
@@ -132,7 +199,14 @@ void Launcher::record(const QString &mode)
 {
     if (m_recording) return;
     const QString option = QStringLiteral("--") + mode;
-    if (!QProcess::startDetached(QCoreApplication::applicationFilePath(), {QStringLiteral("record"), option})) {
+    QStringList arguments{QStringLiteral("record"), option};
+    if (!m_systemAudio && !m_microphone) arguments << QStringLiteral("--no-audio");
+    else {
+        if (m_systemAudio) arguments << QStringLiteral("--with-desktop-audio");
+        if (m_microphone) arguments << QStringLiteral("--with-microphone-audio")
+                                    << QStringLiteral("--microphone-device") << m_microphoneDevice;
+    }
+    if (!QProcess::startDetached(QCoreApplication::applicationFilePath(), arguments)) {
         emit errorOccurred(QStringLiteral("Could not start recording"));
         return;
     }

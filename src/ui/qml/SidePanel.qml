@@ -11,6 +11,7 @@ Rectangle {
     readonly property var sections: [
         {name:"Background", icon:"background.svg"}, {name:"Shape", icon:"shape.svg"},
         {name:"Cursor", icon:"cursor.svg"}, {name:"Zoom", icon:"zoom.svg"},
+        {name:"Clip", icon:"film.svg"}, {name:"Camera", icon:"camera.svg"},
         {name:"Audio", icon:"audio.svg"}
     ]
     RowLayout {
@@ -71,7 +72,12 @@ Rectangle {
                     x: 16
                     width: scroller.availableWidth - 32
                     height: item ? item.implicitHeight : 0
-                    sourceComponent: root.section === 0 ? backgroundPanel : root.section === 1 ? shapePanel : root.section === 2 ? cursorPanel : root.section === 3 ? zoomPanel : audioPanel
+                    sourceComponent: root.section === 0 ? backgroundPanel
+                        : root.section === 1 ? shapePanel
+                        : root.section === 2 ? cursorPanel
+                        : root.section === 3 ? zoomPanel
+                        : root.section === 4 ? clipPanel
+                        : root.section === 5 ? cameraPanel : audioPanel
                 }
             }
         }
@@ -80,5 +86,14 @@ Rectangle {
     Component { id: shapePanel; ShapePanel { } }
     Component { id: cursorPanel; CursorPanel { } }
     Component { id: zoomPanel; ZoomPanel { } }
+    Component { id: clipPanel; ClipPanel { } }
+    Component { id: cameraPanel; CameraPanel { } }
     Component { id: audioPanel; AudioPanel { } }
+    Connections {
+        target: editor
+        function onSelectionChanged() {
+            if (editor.selectedZoomId) root.section = 3
+            else if (editor.selectedClipId) root.section = 4
+        }
+    }
 }

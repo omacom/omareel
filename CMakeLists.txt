@@ -23,6 +23,7 @@ add_library(omarecord_core STATIC
     src/core/Theme.cpp
     src/core/OmarchyPaths.cpp
     src/core/RecordingMetadata.cpp
+    src/core/RecordingPreferences.cpp
     src/record/CursorSampler.cpp
     src/record/EvdevListener.cpp
     src/record/RegionPicker.cpp
@@ -55,6 +56,8 @@ set_source_files_properties(
     src/ui/qml/CursorPanel.qml
     src/ui/qml/ZoomPanel.qml
     src/ui/qml/AudioPanel.qml
+    src/ui/qml/ClipPanel.qml
+    src/ui/qml/CameraPanel.qml
     src/ui/qml/ExportDialog.qml
     src/ui/qml/Timeline.qml
     src/ui/qml/ClipTrack.qml
@@ -67,7 +70,7 @@ set_source_files_properties(src/ui/qml/Composition.qml PROPERTIES QT_RESOURCE_AL
 set_source_files_properties(src/ui/qml/Background.qml PROPERTIES QT_RESOURCE_ALIAS "Background.qml")
 set_source_files_properties(src/ui/qml/RoundedFrame.qml PROPERTIES QT_RESOURCE_ALIAS "RoundedFrame.qml")
 set_source_files_properties(src/ui/qml/CursorOverlay.qml PROPERTIES QT_RESOURCE_ALIAS "CursorOverlay.qml")
-foreach(qml_name IN ITEMS Main TopBar PreviewPane BottomBar SidePanel PanelSlider PanelLabel PanelHeading PanelValue IconToolButton BackgroundPanel ShapePanel CursorPanel ZoomPanel AudioPanel ExportDialog Timeline ClipTrack ZoomTrack Launcher RecordingBar)
+foreach(qml_name IN ITEMS Main TopBar PreviewPane BottomBar SidePanel PanelSlider PanelLabel PanelHeading PanelValue IconToolButton BackgroundPanel ShapePanel CursorPanel ZoomPanel AudioPanel ClipPanel CameraPanel ExportDialog Timeline ClipTrack ZoomTrack Launcher RecordingBar)
     set_source_files_properties(src/ui/qml/${qml_name}.qml PROPERTIES QT_RESOURCE_ALIAS "${qml_name}.qml")
 endforeach()
 qt_add_qml_module(omarecord_render
@@ -103,6 +106,8 @@ qt_add_qml_module(omarecord_render
         src/ui/qml/CursorPanel.qml
         src/ui/qml/ZoomPanel.qml
         src/ui/qml/AudioPanel.qml
+        src/ui/qml/ClipPanel.qml
+        src/ui/qml/CameraPanel.qml
         src/ui/qml/ExportDialog.qml
         src/ui/qml/Timeline.qml
         src/ui/qml/ClipTrack.qml
@@ -116,7 +121,7 @@ qt_add_resources(omarecord_render "omarecord_assets"
         assets/cursors/arrow.svg assets/cursors/pointer.svg
         assets/gradients.json
         assets/icons/background.svg assets/icons/shape.svg assets/icons/cursor.svg
-        assets/icons/zoom.svg assets/icons/audio.svg assets/icons/undo.svg assets/icons/redo.svg
+        assets/icons/zoom.svg assets/icons/audio.svg assets/icons/camera.svg assets/icons/undo.svg assets/icons/redo.svg
         assets/icons/scissors.svg assets/icons/play.svg assets/icons/pause.svg
         assets/icons/skip-back.svg assets/icons/skip-forward.svg
         assets/icons/monitor.svg assets/icons/region.svg assets/icons/window.svg assets/icons/film.svg

@@ -14,11 +14,15 @@ Item {
         model: editor.clips
         delegate: Rectangle {
             id: clipBlock
+            objectName: "clipBlock-" + modelData.id
             required property var modelData
             required property int index
             readonly property bool selected: editor.selectedClipId === modelData.id
+            property bool gestureActive: false
+            property real gestureX: 0
+            property real gestureWidth: 0
             x: root.outputStart(index) * root.pixelsPerSecond
-            width: Math.max(20, (modelData.out-modelData.in)/modelData.speed * root.pixelsPerSecond)
+            width: gestureActive ? gestureWidth : Math.max(20, (modelData.out-modelData.in)/modelData.speed * root.pixelsPerSecond)
             height: root.height
             radius: 6
             color: Qt.alpha(theme.accent, .35)
@@ -54,7 +58,14 @@ Item {
                 font.pixelSize: 11
                 color: theme.accentForeground
                 padding: 3
-                MouseArea { anchors.fill: parent; onPressed: root.focusTarget.forceActiveFocus(); onClicked: speedMenu.open() }
+                MouseArea {
+                    anchors.fill: parent
+                    onPressed: {
+                        root.focusTarget.forceActiveFocus()
+                        editor.selectedClipId = modelData.id
+                    }
+                    onClicked: speedMenu.open()
+                }
             }
             Menu {
                 id: speedMenu
@@ -70,10 +81,26 @@ Item {
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.SizeHorCursor
                     enabled: clipBlock.selected
-                    property real pressX; property real originalIn
-                    onPressed: { root.focusTarget.forceActiveFocus(); pressX = mapToItem(root, mouse.x, mouse.y).x; originalIn = modelData.in; editor.beginCoalescedEdit("trim-"+modelData.id) }
-                    onPositionChanged: if (pressed) editor.trimClip(modelData.id, originalIn + (mapToItem(root, mouse.x, mouse.y).x-pressX) / root.pixelsPerSecond * modelData.speed, modelData.out)
-                    onReleased: editor.endCoalescedEdit()
+                    property real pressTrackX; property real pressWidth; property real originalIn
+                    onPressed: {
+                        root.focusTarget.forceActiveFocus(); editor.selectedClipId = modelData.id
+                        pressTrackX = mapToItem(root, mouse.x, mouse.y).x
+                        pressWidth = clipBlock.width; originalIn = modelData.in
+                        clipBlock.gestureWidth = clipBlock.width; clipBlock.gestureActive = true
+                        editor.beginCoalescedEdit("trim-" + modelData.id)
+                    }
+                    onPositionChanged: if (pressed) {
+                        const delta = mapToItem(root, mouse.x, mouse.y).x - pressTrackX
+                        clipBlock.gestureWidth = Math.max(.1 / modelData.speed * root.pixelsPerSecond, pressWidth - delta)
+                    }
+                    onReleased: {
+                        const facade = editor
+                        const delta = pressWidth - clipBlock.gestureWidth
+                        clipBlock.gestureActive = false
+                        facade.trimClip(modelData.id, originalIn + delta / root.pixelsPerSecond * modelData.speed, modelData.out)
+                        facade.endCoalescedEdit()
+                    }
+                    onCanceled: { clipBlock.gestureActive = false; editor.endCoalescedEdit() }
                 }
             }
             Rectangle {
@@ -83,10 +110,26 @@ Item {
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.SizeHorCursor
                     enabled: clipBlock.selected
-                    property real pressX; property real originalOut
-                    onPressed: { root.focusTarget.forceActiveFocus(); pressX = mapToItem(root, mouse.x, mouse.y).x; originalOut = modelData.out; editor.beginCoalescedEdit("trim-"+modelData.id) }
-                    onPositionChanged: if (pressed) editor.trimClip(modelData.id, modelData.in, originalOut + (mapToItem(root, mouse.x, mouse.y).x-pressX) / root.pixelsPerSecond * modelData.speed)
-                    onReleased: editor.endCoalescedEdit()
+                    property real pressTrackX; property real pressWidth; property real originalOut
+                    onPressed: {
+                        root.focusTarget.forceActiveFocus(); editor.selectedClipId = modelData.id
+                        pressTrackX = mapToItem(root, mouse.x, mouse.y).x
+                        pressWidth = clipBlock.width; originalOut = modelData.out
+                        clipBlock.gestureWidth = clipBlock.width; clipBlock.gestureActive = true
+                        editor.beginCoalescedEdit("trim-" + modelData.id)
+                    }
+                    onPositionChanged: if (pressed) {
+                        const delta = mapToItem(root, mouse.x, mouse.y).x - pressTrackX
+                        clipBlock.gestureWidth = Math.max(.1 / modelData.speed * root.pixelsPerSecond, pressWidth + delta)
+                    }
+                    onReleased: {
+                        const facade = editor
+                        const delta = clipBlock.gestureWidth - pressWidth
+                        clipBlock.gestureActive = false
+                        facade.trimClip(modelData.id, modelData.in, originalOut + delta / root.pixelsPerSecond * modelData.speed)
+                        facade.endCoalescedEdit()
+                    }
+                    onCanceled: { clipBlock.gestureActive = false; editor.endCoalescedEdit() }
                 }
             }
         }

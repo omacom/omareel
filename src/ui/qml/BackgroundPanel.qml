@@ -21,21 +21,24 @@ ColumnLayout {
         Layout.fillWidth: true
         spacing: 4
         Repeater {
-            model: [{t:"wallpaper",l:"Wallpaper"},{t:"gradient",l:"Gradient"},{t:"color",l:"Color"},{t:"image",l:"Image"}]
+            model: [{t:"wallpaper",l:"Wallpaper"},{t:"gradient",l:"Gradient"},{t:"color",l:"Color"},{t:"image",l:"Image"},{t:"none",l:"None"}]
             delegate: Rectangle {
+                id: tab
                 required property var modelData
-                Layout.fillWidth: true
+                implicitWidth: tabLabel.implicitWidth + 10
+                Layout.preferredWidth: implicitWidth
                 Layout.preferredHeight: 30
                 radius: 6
                 color: root.background.type === modelData.t
                     ? Qt.alpha(theme.accent, .28) : theme.darkBackground
                 border.color: root.background.type === modelData.t ? theme.accent : Qt.alpha(theme.foreground, .13)
                 Label {
+                    id: tabLabel
                     anchors.fill: parent
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                     text: modelData.l
-                    font.pixelSize: 11
+                    font.pixelSize: 10
                     font.bold: root.background.type === modelData.t
                     color: root.background.type === modelData.t ? theme.accentForeground : Qt.alpha(theme.foreground, .76)
                 }
@@ -105,7 +108,15 @@ ColumnLayout {
         PanelLabel { text: "Background color"; Layout.fillWidth: true }
         Rectangle { width: 44; height: 28; radius: 5; color: root.background.color; border.color: Qt.alpha(theme.foreground, .4); MouseArea { anchors.fill: parent; onClicked: colorDialog.open() } }
     }
-    PanelSlider { Layout.fillWidth: true; label: "Blur"; path: "background.blur"; from: 0; to: 100; value: root.background.blur; stepSize: 1 }
+    PanelSlider { visible: root.background.type !== "none"; Layout.fillWidth: true; label: "Blur"; path: "background.blur"; from: 0; to: 100; value: root.background.blur; stepSize: 1 }
+    Label {
+        visible: root.background.type === "none"
+        Layout.fillWidth: true
+        text: "The video fills the output with no backdrop, padding, shadow, or rounded mask."
+        wrapMode: Text.WordWrap
+        color: Qt.alpha(theme.foreground, .62)
+        font.pixelSize: 11
+    }
     FileDialog {
         id: imageDialog
         title: "Choose a background image"

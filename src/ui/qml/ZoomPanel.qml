@@ -11,6 +11,11 @@ ColumnLayout {
     }
     readonly property var zoomStyle: editor.project.zoomStyle
     readonly property var motionPresets: [[2.6,170,44], [2.25,200,40], [1.4,300,34]]
+    readonly property var motionCaptions: [
+        "Smooth — relaxed movement with a gentle settle.",
+        "Default — balanced movement for most recordings.",
+        "Snappy — quick response with a crisp settle."
+    ]
     function motionIndex() {
         const spring = zoomStyle.spring
         for (let i = 0; i < motionPresets.length; ++i) {
@@ -68,7 +73,28 @@ ColumnLayout {
             editor.endCoalescedEdit()
         }
     }
+    Label {
+        Layout.fillWidth: true
+        text: root.motionCaptions[Math.max(0, springPreset.currentIndex)]
+        wrapMode: Text.WordWrap
+        color: Qt.alpha(theme.foreground, .58)
+        font.pixelSize: 11
+    }
     PanelSlider { Layout.fillWidth: true; label: "Edge snapping"; path: "zoomStyle.snapToEdgesRatio"; from: 0; to: 0.5; value: editor.project.zoomStyle.snapToEdgesRatio; stepSize: 0.01; decimals: 2 }
-    Switch { Layout.preferredHeight: 32; text: "Instant boundaries"; checked: editor.project.zoomStyle.instantAnimation; onToggled: editor.setProjectValue("zoomStyle.instantAnimation", checked) }
+    Label {
+        Layout.fillWidth: true
+        text: "How close to the frame edge the zoom may look. 0 keeps the camera centered on the target; higher lets it slide to the very edge"
+        wrapMode: Text.WordWrap
+        color: Qt.alpha(theme.foreground, .58)
+        font.pixelSize: 11
+    }
+    Switch { Layout.preferredHeight: 32; text: "Cut instead of glide"; checked: editor.project.zoomStyle.instantAnimation; onToggled: editor.setProjectValue("zoomStyle.instantAnimation", checked) }
+    Label {
+        Layout.fillWidth: true
+        text: "Jump straight to the zoom at its start/end instead of animating"
+        wrapMode: Text.WordWrap
+        color: Qt.alpha(theme.foreground, .58)
+        font.pixelSize: 11
+    }
     Button { Layout.fillWidth: true; text: "Regenerate zooms"; onClicked: editor.regenerateZooms() }
 }

@@ -134,6 +134,19 @@ Project Project::fromJson(const QJsonObject &root)
     p.audio.desktop = a.value("desktop").toBool(true);
     p.audio.mic = a.value("mic").toBool(true);
     p.audio.volume = a.value("volume").toDouble(1.0);
+    const auto camera = root.value("camera").toObject();
+    p.camera.enabled = camera.value("enabled").toBool(false);
+    p.camera.position = camera.value("position").toString("bottom-right");
+    p.camera.size = camera.value("size").toDouble(0.25);
+    const QString cameraShape = camera.value("shape").toString("round");
+    if (cameraShape == QLatin1String("round") || cameraShape == QLatin1String("rounded")
+        || cameraShape == QLatin1String("square"))
+        p.camera.shape = cameraShape;
+    p.camera.radius = camera.value("radius").toDouble(16.0);
+    p.camera.mirror = camera.value("mirror").toBool(true);
+    const auto cameraOffset = camera.value("offset").toObject();
+    p.camera.offset = QPointF(cameraOffset.value("x").toDouble(0.02),
+                              cameraOffset.value("y").toDouble(0.02));
     const auto e = root.value("export").toObject();
     p.exportSettings.format = e.value("format").toString("mp4");
     p.exportSettings.fps = e.value("fps").toInt(60);
@@ -182,6 +195,10 @@ QJsonObject Project::toJson() const
         {"zoomStyle", QJsonObject{{"spring", springToJson(zoomStyle.spring)}, {"snapToEdgesRatio", zoomStyle.snapToEdgesRatio}, {"instantAnimation", zoomStyle.instantAnimation}}},
         {"background", bg}, {"frame", frameJson}, {"cursor", cursorJson},
         {"audio", QJsonObject{{"desktop", audio.desktop}, {"mic", audio.mic}, {"volume", audio.volume}}},
+        {"camera", QJsonObject{{"enabled", camera.enabled}, {"position", camera.position},
+            {"size", camera.size}, {"shape", camera.shape}, {"radius", camera.radius},
+            {"mirror", camera.mirror}, {"offset", QJsonObject{{"x", camera.offset.x()},
+                {"y", camera.offset.y()}}}}},
         {"export", QJsonObject{{"format", exportSettings.format}, {"fps", exportSettings.fps}, {"height", exportSettings.height},
             {"quality", exportSettings.quality}, {"gif", QJsonObject{{"fps", exportSettings.gif.fps}, {"height", exportSettings.gif.height},
                 {"quality", exportSettings.gif.quality}, {"loop", exportSettings.gif.loop}}}}}};

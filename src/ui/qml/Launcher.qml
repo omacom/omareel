@@ -50,16 +50,47 @@ ApplicationWindow {
 
         Item {
             Layout.fillWidth: true
-            Layout.preferredHeight: 104
-            Layout.minimumHeight: 104
-            Layout.maximumHeight: 104
-            RowLayout {
+            Layout.preferredHeight: launcher.recording ? 104 : 164
+            Layout.minimumHeight: Layout.preferredHeight
+            Layout.maximumHeight: Layout.preferredHeight
+            ColumnLayout {
                 anchors.fill: parent
-                spacing: 12
+                spacing: 8
                 visible: !launcher.recording
-                Repeater {
-                    model: window.recordModes
-                    delegate: Button {
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 48
+                    spacing: 18
+                    Switch {
+                        text: "System audio"
+                        checked: launcher.systemAudio
+                        onToggled: launcher.systemAudio = checked
+                    }
+                    Switch {
+                        text: "Microphone"
+                        checked: launcher.microphone
+                        onToggled: launcher.microphone = checked
+                    }
+                    ComboBox {
+                        Layout.preferredWidth: 250
+                        Layout.preferredHeight: 36
+                        enabled: launcher.microphone
+                        textRole: "text"
+                        valueRole: "value"
+                        model: launcher.audioDevices
+                        Component.onCompleted: currentIndex = indexOfValue(launcher.microphoneDevice)
+                        onModelChanged: currentIndex = indexOfValue(launcher.microphoneDevice)
+                        onActivated: launcher.microphoneDevice = currentValue
+                    }
+                    Item { Layout.fillWidth: true }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    spacing: 12
+                    Repeater {
+                        model: window.recordModes
+                        delegate: Button {
                         required property var modelData
                         Layout.fillWidth: true
                         Layout.fillHeight: true
@@ -107,6 +138,7 @@ ApplicationWindow {
                             color: parent.pressed ? Qt.alpha(theme.foreground, .10) : parent.hovered ? Qt.alpha(theme.foreground, .07) : theme.lighterBackground
                             border.width: 1
                             border.color: parent.hovered ? Qt.alpha(theme.accent, .72) : Qt.alpha(theme.foreground, .09)
+                        }
                         }
                     }
                 }

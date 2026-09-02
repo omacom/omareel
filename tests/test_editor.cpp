@@ -1,10 +1,17 @@
 #include "ui/Editor.h"
+#include "core/Theme.h"
 
 #include <QDir>
 #include <QFile>
 #include <QProcess>
 #include <QSignalSpy>
 #include <QTemporaryDir>
+#include <QQmlComponent>
+#include <QQmlContext>
+#include <QQmlEngine>
+#include <QQuickItem>
+#include <QQuickWindow>
+#include <functional>
 #include <QtTest>
 
 using namespace OmaRecord;
@@ -39,6 +46,10 @@ private slots:
         Editor editor(m_bundle);
         QVERIFY2(editor.isValid(), qPrintable(editor.errorString()));
         QCOMPARE(editor.sourceWidth(), 320);
+        QVERIFY(!editor.hasAudio());
+        QVERIFY(!editor.hasDesktopAudio());
+        QVERIFY(!editor.hasMicrophoneAudio());
+        QVERIFY(!editor.hasCamera());
         QVERIFY(editor.duration() > 1.9);
         editor.seek(1.0);
         QVERIFY(editor.splitAtPlayhead());
@@ -73,6 +84,57 @@ private slots:
         for (const auto &entry : editor.zooms()) if (entry.toMap().value(QStringLiteral("id")) == id) zoom = entry.toMap();
         QCOMPARE(zoom.value(QStringLiteral("level")).toDouble(), 4.0);
         QVERIFY(editor.removeZoom(id));
+    }
+
+    void zoomTrackDragUsesTrackCoordinates()
+    {
+        QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));
+        Editor editor(m_bundle);
+        QVERIFY(editor.isValid());
+        while (!editor.zooms().isEmpty())
+            QVERIFY(editor.removeZoom(editor.zooms().first().toMap().value(QStringLiteral("id")).toString()));
+        const QString id = editor.addZoomAt(0.1, 1.0);
+        QVERIFY(!id.isEmpty());
+        const double originalStart = editor.zooms().first().toMap().value(QStringLiteral("start")).toDouble();
+
+        Theme theme;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("editor"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import QtQuick
+            import QtQuick.Window
+            import Omarecord
+            Window {
+                width: 600; height: 80; visible: true
+                Item { id: focusItem; anchors.fill: parent }
+                ZoomTrack { anchors.fill: parent; pixelsPerSecond: 200; focusTarget: focusItem }
+            })", QUrl());
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        std::unique_ptr<QObject> object(component.create());
+        auto *window = qobject_cast<QQuickWindow *>(object.get());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        const QString bodyName = QStringLiteral("zoomBody-") + id;
+        std::function<QQuickItem *(QQuickItem *)> findItem = [&](QQuickItem *parent) -> QQuickItem * {
+            if (parent->objectName() == bodyName) return parent;
+            for (QQuickItem *child : parent->childItems())
+                if (QQuickItem *match = findItem(child)) return match;
+            return nullptr;
+        };
+        auto *body = findItem(window->contentItem());
+        QTRY_VERIFY(body);
+        const QPoint start = body->mapToScene(QPointF(body->width() / 2, body->height() / 2)).toPoint();
+        QTest::mousePress(window, Qt::LeftButton, Qt::NoModifier, start);
+        QTest::mouseMove(window, start + QPoint(80, 0), 20);
+        QTest::mouseRelease(window, Qt::LeftButton, Qt::NoModifier, start + QPoint(80, 0));
+
+        QVariantMap moved;
+        for (const QVariant &entry : editor.zooms())
+            if (entry.toMap().value(QStringLiteral("id")).toString() == id) moved = entry.toMap();
+        QVERIFY(!moved.isEmpty());
+        QVERIFY(qAbs(moved.value(QStringLiteral("start")).toDouble() - (originalStart + 0.4)) < 0.06);
     }
 
     void exportThroughEditorApi()
