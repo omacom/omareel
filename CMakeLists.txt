@@ -7,6 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
 
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Concurrent Gui Quick QuickControls2 Multimedia OpenGL Svg Test)
+find_package(LayerShellQt REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBEVDEV REQUIRED IMPORTED_TARGET libevdev)
 
@@ -59,13 +60,14 @@ set_source_files_properties(
     src/ui/qml/ClipTrack.qml
     src/ui/qml/ZoomTrack.qml
     src/ui/qml/Launcher.qml
+    src/ui/qml/RecordingBar.qml
     PROPERTIES QT_RESOURCE_ALIAS ""
 )
 set_source_files_properties(src/ui/qml/Composition.qml PROPERTIES QT_RESOURCE_ALIAS "Composition.qml")
 set_source_files_properties(src/ui/qml/Background.qml PROPERTIES QT_RESOURCE_ALIAS "Background.qml")
 set_source_files_properties(src/ui/qml/RoundedFrame.qml PROPERTIES QT_RESOURCE_ALIAS "RoundedFrame.qml")
 set_source_files_properties(src/ui/qml/CursorOverlay.qml PROPERTIES QT_RESOURCE_ALIAS "CursorOverlay.qml")
-foreach(qml_name IN ITEMS Main TopBar PreviewPane BottomBar SidePanel PanelSlider PanelLabel PanelHeading PanelValue IconToolButton BackgroundPanel ShapePanel CursorPanel ZoomPanel AudioPanel ExportDialog Timeline ClipTrack ZoomTrack Launcher)
+foreach(qml_name IN ITEMS Main TopBar PreviewPane BottomBar SidePanel PanelSlider PanelLabel PanelHeading PanelValue IconToolButton BackgroundPanel ShapePanel CursorPanel ZoomPanel AudioPanel ExportDialog Timeline ClipTrack ZoomTrack Launcher RecordingBar)
     set_source_files_properties(src/ui/qml/${qml_name}.qml PROPERTIES QT_RESOURCE_ALIAS "${qml_name}.qml")
 endforeach()
 qt_add_qml_module(omarecord_render
@@ -80,6 +82,7 @@ qt_add_qml_module(omarecord_render
         src/render/PreviewSink.h src/render/PreviewSink.cpp
         src/ui/Editor.h src/ui/Editor.cpp
         src/ui/Launcher.h src/ui/Launcher.cpp
+        src/ui/RecordingBar.h src/ui/RecordingBar.cpp
     QML_FILES
         src/ui/qml/Composition.qml
         src/ui/qml/Background.qml
@@ -105,6 +108,7 @@ qt_add_qml_module(omarecord_render
         src/ui/qml/ClipTrack.qml
         src/ui/qml/ZoomTrack.qml
         src/ui/qml/Launcher.qml
+        src/ui/qml/RecordingBar.qml
 )
 qt_add_resources(omarecord_render "omarecord_assets"
     PREFIX "/omarecord"
@@ -121,12 +125,12 @@ target_include_directories(omarecord_render PUBLIC src src/render)
 target_link_libraries(omarecord_render PUBLIC omarecord_core Qt6::Concurrent Qt6::Quick Qt6::QuickControls2 Qt6::Multimedia Qt6::OpenGL)
 
 qt_add_executable(omarecord src/main.cpp)
-target_link_libraries(omarecord PRIVATE omarecord_render Qt6::Quick Qt6::Multimedia)
+target_link_libraries(omarecord PRIVATE omarecord_render Qt6::Quick Qt6::Multimedia LayerShellQt::Interface)
 target_compile_definitions(omarecord PRIVATE OMARECORD_VERSION="${PROJECT_VERSION}")
 
 include(CTest)
 if(BUILD_TESTING)
-    foreach(test_name IN ITEMS zoomtimeline cursorpath cliptimeline project inputlog regionpicker omarchypaths)
+    foreach(test_name IN ITEMS zoomtimeline cursorpath cliptimeline project inputlog regionpicker omarchypaths recorder)
         qt_add_executable(test_${test_name} tests/test_${test_name}.cpp)
         target_link_libraries(test_${test_name} PRIVATE omarecord_core Qt6::Test)
         add_test(NAME ${test_name} COMMAND test_${test_name})

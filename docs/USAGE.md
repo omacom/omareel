@@ -37,11 +37,28 @@ is the default when no capture mode is given. `--window` selects a window-aligne
 - `--dir PATH` changes the bundle directory; the default is the `omarecord` directory under
   the user's XDG Videos directory.
 - `--no-open` does not open the editor after the recording is finalized.
+- `--no-bar` does not show the recording bar.
 - `--stop` only stops; it returns status 1 when no recording is active.
+- `--cancel` stops and permanently discards the in-progress bundle.
 
 The Omarchy shell's live REC indicator watches `gpu-screen-recorder`. OmaRecord refreshes that
 indicator on both start and stop. A stop that needs a force-kill or cannot finalize sends a
 critical Omarchy notification.
+
+## Stopping a recording
+
+An active recording can be stopped in any of these ways:
+
+- Click **Stop** on the recording bar.
+- Click the REC indicator in the Omarchy bar.
+- Run `omarecord record` or `omarecord record --stop` again; the toggle form is intended for
+  keybinds.
+- Run `omarecord record --cancel` to stop and discard the recording instead of saving it.
+
+When two monitors are available, the recording bar is placed at the top center of the monitor
+that is not being recorded. On a single-monitor setup, the bar remains accessible at the top
+center but is visible inside the recording. Use `--no-bar` or set `OMARECORD_NO_BAR=1` on the
+start command to suppress it.
 
 ### `edit BUNDLE`
 
@@ -84,6 +101,7 @@ clip, style, cursor, and zoom edits are stored in `project.json`.
 ## Environment
 
 - `OMARECORD_DEBUG=1` appends `gpu-screen-recorder` stderr to `/tmp/omarecord.log`.
+- `OMARECORD_NO_BAR=1` suppresses the recording bar.
 - `OMARECORD_SCREENSHOT=/path/out.png` makes `omarecord edit` capture its own window with
   `QQuickWindow::grabWindow()` three seconds after loading, save the PNG, and quit. The launcher
   supports the same capture flag.

@@ -6,6 +6,10 @@
 #include "core/OmarchyPaths.h"
 #include "ui/Editor.h"
 #include "ui/Launcher.h"
+#include "ui/RecordingBar.h"
+
+#include <LayerShellQt/shell.h>
+#include <LayerShellQt/window.h>
 
 #include <QGuiApplication>
 #include <QDir>
@@ -19,11 +23,17 @@
 #include <QProcess>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <QScreen>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QStandardPaths>
 #include <QTextStream>
 #include <QTimer>
+#include <cerrno>
+#include <cstdio>
+#include <cstring>
+#include <unistd.h>
+#include <vector>
 
 #ifndef OMARECORD_VERSION
 #define OMARECORD_VERSION "unknown"
@@ -39,7 +49,8 @@ static int usage(const QString &error = {})
               "commands:\n"
               "  record [--region|--fullscreen|--window] [options]\n"
               "      Toggle recording (region is the default). Options: --fps N, --dir PATH,\n"
-              "      --with-desktop-audio, --with-microphone-audio, --no-open, --stop.\n"
+              "      --with-desktop-audio, --with-microphone-audio, --no-open, --no-bar,\n"
+              "      --stop, --cancel.\n"
               "  edit <bundle.omarecord>\n"
               "      Open a recording bundle in the editor.\n"
               "  export <bundle> -o <file.mp4|file.gif> [options]\n"
@@ -147,14 +158,17 @@ static int exportCommand(const QStringList &arguments)
 static int recordCommand(const QStringList &arguments)
 {
     if (Recorder::isRecording()) {
+        if (arguments.contains(QStringLiteral("--stop")) && arguments.contains(QStringLiteral("--cancel")))
+            return usage(QStringLiteral("choose either --stop or --cancel"));
+        const bool cancel = arguments.contains(QStringLiteral("--cancel"));
         QString bundle, error;
-        const int result = Recorder::stopExisting(arguments.contains(QStringLiteral("--stop")),
-                                                   &bundle, &error);
-        if (result == 0) QTextStream(stdout) << bundle << '\n';
+        const int result = Recorder::stopExisting(cancel, &bundle, &error);
+        if (result == 0)
+            QTextStream(stdout) << (cancel ? QStringLiteral("Recording discarded") : bundle) << '\n';
         else QTextStream(stderr) << "omarecord: " << error << '\n';
         return result;
     }
-    if (arguments.contains(QStringLiteral("--stop"))) {
+    if (arguments.contains(QStringLiteral("--stop")) || arguments.contains(QStringLiteral("--cancel"))) {
         QTextStream(stderr) << "omarecord: no recording is active\n";
         return 1;
     }
@@ -169,6 +183,7 @@ static int recordCommand(const QStringList &arguments)
         else if (arg == QLatin1String("--with-desktop-audio")) options.desktopAudio = true;
         else if (arg == QLatin1String("--with-microphone-audio")) options.microphoneAudio = true;
         else if (arg == QLatin1String("--no-open")) options.noOpen = true;
+        else if (arg == QLatin1String("--no-bar")) options.noBar = true;
         else if (arg == QLatin1String("--fps") || arg == QLatin1String("--dir")) {
             if (++i >= arguments.size()) return usage(QStringLiteral("%1 requires a value").arg(arg));
             if (arg == QLatin1String("--fps")) options.fps = arguments[i].toInt();
@@ -179,10 +194,42 @@ static int recordCommand(const QStringList &arguments)
     }
     if (modeCount > 1) return usage(QStringLiteral("choose only one capture mode"));
     if (options.fps <= 0 || options.fps > 240) return usage(QStringLiteral("fps must be between 1 and 240"));
+    if (qEnvironmentVariable("OMARECORD_NO_BAR") == QLatin1String("1")) options.noBar = true;
     QString message;
     const int result = Recorder::startDetached(options, &message);
     QTextStream(result == 0 ? stdout : stderr) << message << '\n';
     return result;
+}
+
+static QScreen *recordBarScreen(const QString &recordedMonitor)
+{
+    QProcess process;
+    process.start(QStringLiteral("hyprctl"), {QStringLiteral("-j"), QStringLiteral("monitors")});
+    if (!process.waitForFinished(3000) || process.exitCode() != 0)
+        return QGuiApplication::primaryScreen();
+
+    const QJsonArray monitors = QJsonDocument::fromJson(process.readAllStandardOutput()).array();
+    QString targetName = recordedMonitor;
+    int enabledCount = 0;
+    for (const QJsonValue &value : monitors) {
+        const QJsonObject monitor = value.toObject();
+        if (monitor.value(QStringLiteral("disabled")).toBool()) continue;
+        ++enabledCount;
+    }
+    if (enabledCount > 1) {
+        for (const QJsonValue &value : monitors) {
+            const QJsonObject monitor = value.toObject();
+            const QString name = monitor.value(QStringLiteral("name")).toString();
+            if (!monitor.value(QStringLiteral("disabled")).toBool() && name != recordedMonitor) {
+                targetName = name;
+                break;
+            }
+        }
+    }
+    for (QScreen *screen : QGuiApplication::screens()) {
+        if (screen->name() == targetName) return screen;
+    }
+    return QGuiApplication::primaryScreen();
 }
 
 static QJsonObject videoInfo(const QString &path)
@@ -237,8 +284,22 @@ static int probeCommand(const QString &bundle)
 
 int main(int argc, char **argv)
 {
+    // QProcess resolves executables to absolute paths, but Omarchy's REC indicator intentionally
+    // matches an argv[0] beginning with "gpu-screen-recorder". Preserve that public contract.
+    if (argc > 1 && std::strcmp(argv[1], "__record-gsr") == 0) {
+        std::vector<char *> gsrArguments;
+        gsrArguments.reserve(size_t(argc));
+        gsrArguments.push_back(const_cast<char *>("gpu-screen-recorder"));
+        for (int i = 2; i < argc; ++i) gsrArguments.push_back(argv[i]);
+        gsrArguments.push_back(nullptr);
+        ::execvp("gpu-screen-recorder", gsrArguments.data());
+        std::fprintf(stderr, "omarecord: could not exec gpu-screen-recorder: %s\n", std::strerror(errno));
+        return 127;
+    }
     const bool exporting = argc > 1 && QByteArray(argv[1]) == "export";
-    const bool graphical = argc == 1 || (argc > 1 && QByteArray(argv[1]) == "edit");
+    const bool recordBar = argc > 1 && QByteArray(argv[1]) == "__record-bar";
+    const bool graphical = argc == 1 || recordBar || (argc > 1 && QByteArray(argv[1]) == "edit");
+    if (recordBar) LayerShellQt::Shell::useLayerShell();
     if (graphical) {
         QQuickStyle::setStyle(QStringLiteral("Material"));
         qputenv("QT_QUICK_CONTROLS_MATERIAL_VARIANT", "Dense");
@@ -283,6 +344,31 @@ int main(int argc, char **argv)
     }
     const QString command = args[1];
     if (command == QLatin1String("__record-daemon")) return Recorder::daemonMain(args.mid(2));
+    if (command == QLatin1String("__record-bar")) {
+        Theme theme;
+        RecordingBar recordingBar;
+        QQmlApplicationEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        engine.rootContext()->setContextProperty(QStringLiteral("recordingBar"), &recordingBar);
+        QObject::connect(&recordingBar, &RecordingBar::finished, &app, &QCoreApplication::quit);
+        engine.load(QUrl(QStringLiteral("qrc:/qt/qml/Omarecord/RecordingBar.qml")));
+        if (engine.rootObjects().isEmpty()) return 2;
+        auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
+        if (!window) return 2;
+        QScreen *screen = recordBarScreen(recordingBar.recordedMonitor());
+        if (screen) window->setScreen(screen);
+        auto *layerWindow = LayerShellQt::Window::get(window);
+        layerWindow->setLayer(LayerShellQt::Window::LayerOverlay);
+        layerWindow->setAnchors(LayerShellQt::Window::AnchorTop);
+        layerWindow->setExclusiveZone(0);
+        layerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
+        layerWindow->setMargins(QMargins(0, 12, 0, 0));
+        layerWindow->setScope(QStringLiteral("omarecord-record-bar"));
+        layerWindow->setActivateOnShow(false);
+        if (screen) layerWindow->setScreen(screen);
+        window->show();
+        return app.exec();
+    }
     if (command == QLatin1String("record")) return recordCommand(args.mid(2));
     if (command == QLatin1String("probe")) {
         if (args.size() != 3) return usage(QStringLiteral("probe requires a bundle"));

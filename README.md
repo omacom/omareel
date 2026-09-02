@@ -62,6 +62,20 @@ omarecord probe Recording.omarecord
 omarecord help
 ```
 
+### Stopping a recording
+
+While recording, use any of these stop paths:
+
+- Click **Stop** on the recording bar.
+- Click the REC indicator in the Omarchy bar.
+- Run `omarecord record` or `omarecord record --stop` again. This is especially useful for a
+  keybind.
+- Run `omarecord record --cancel` to stop and permanently discard the recording bundle.
+
+With two monitors, the recording bar appears at the top center of the monitor that is not being
+recorded. With only one monitor, it appears inside the recording. Pass `--no-bar` or set
+`OMARECORD_NO_BAR=1` before starting if you do not want the bar to appear.
+
 ### Editor shortcuts
 
 | Key | Action |

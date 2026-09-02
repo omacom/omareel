@@ -8,7 +8,7 @@ arch=('x86_64')
 url='https://github.com/heyoodle/omarecord'
 license=('MIT')
 depends=('gpu-screen-recorder' 'ffmpeg' 'slurp' 'qt6-base' 'qt6-declarative'
-         'qt6-multimedia' 'qt6-svg' 'libevdev' 'xdg-desktop-portal')
+         'qt6-multimedia' 'qt6-svg' 'layer-shell-qt' 'libevdev' 'xdg-desktop-portal')
 optdepends=('gifsicle: optimize exported GIF files')
 makedepends=('cmake' 'ninja' 'qt6-shadertools')
 source=()

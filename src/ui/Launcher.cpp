@@ -3,6 +3,7 @@
 #include "core/Project.h"
 #include "core/OmarchyPaths.h"
 #include "core/RecordingMetadata.h"
+#include "record/Recorder.h"
 
 #include <QCoreApplication>
 #include <QDateTime>
@@ -11,6 +12,7 @@
 #include <QLocale>
 #include <QProcess>
 #include <QUrl>
+#include <ctime>
 
 using namespace OmaRecord;
 
@@ -20,7 +22,38 @@ static double processDuration(QProcess *process)
     return QString::fromUtf8(process->readAllStandardOutput()).trimmed().toDouble();
 }
 
-Launcher::Launcher(QObject *parent): QObject(parent) { refresh(); }
+static qint64 monotonicUs()
+{
+    timespec value{};
+    clock_gettime(CLOCK_MONOTONIC, &value);
+    return qint64(value.tv_sec) * 1000000 + value.tv_nsec / 1000;
+}
+
+Launcher::Launcher(QObject *parent): QObject(parent)
+{
+    refresh();
+    connect(&m_recordingTimer, &QTimer::timeout, this, &Launcher::refreshRecording);
+    m_recordingTimer.start(1000);
+    refreshRecording();
+}
+
+void Launcher::refreshRecording()
+{
+    const bool active = Recorder::isRecording();
+    if (active != m_recording) {
+        m_recording = active;
+        emit recordingChanged();
+    }
+    QString elapsed = QStringLiteral("00:00");
+    if (active) {
+        const qint64 startedUs = Recorder::recordingStartedUs();
+        elapsed = formatDuration(std::max<qint64>(0, monotonicUs() - startedUs) / 1000000.0);
+    }
+    if (elapsed != m_recordingElapsed) {
+        m_recordingElapsed = elapsed;
+        emit recordingElapsedChanged();
+    }
+}
 
 void Launcher::refresh()
 {
@@ -97,10 +130,23 @@ void Launcher::openBundle(const QString &pathValue)
 
 void Launcher::record(const QString &mode)
 {
+    if (m_recording) return;
     const QString option = QStringLiteral("--") + mode;
     if (!QProcess::startDetached(QCoreApplication::applicationFilePath(), {QStringLiteral("record"), option})) {
         emit errorOccurred(QStringLiteral("Could not start recording"));
         return;
     }
     emit quitRequested();
+}
+
+void Launcher::stopRecording()
+{
+    QString error;
+    if (!Recorder::signalExisting(false, &error)) emit errorOccurred(error);
+}
+
+void Launcher::cancelRecording()
+{
+    QString error;
+    if (!Recorder::signalExisting(true, &error)) emit errorOccurred(error);
 }

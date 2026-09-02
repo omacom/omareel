@@ -48,62 +48,134 @@ ApplicationWindow {
             }
         }
 
-        RowLayout {
+        Item {
             Layout.fillWidth: true
             Layout.preferredHeight: 104
             Layout.minimumHeight: 104
             Layout.maximumHeight: 104
-            spacing: 12
-            Repeater {
-                model: window.recordModes
-                delegate: Button {
-                    required property var modelData
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    hoverEnabled: true
-                    focusPolicy: Qt.TabFocus
-                    topInset: 0; bottomInset: 0
-                    onClicked: launcher.record(modelData.mode)
-                    contentItem: RowLayout {
-                        spacing: 13
-                        Item {
-                            Layout.preferredWidth: 48
-                            Layout.preferredHeight: 48
-                            Rectangle {
-                                anchors.fill: parent
-                                radius: 12
-                                color: Qt.alpha(theme.accent, .16)
+            RowLayout {
+                anchors.fill: parent
+                spacing: 12
+                visible: !launcher.recording
+                Repeater {
+                    model: window.recordModes
+                    delegate: Button {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        hoverEnabled: true
+                        focusPolicy: Qt.TabFocus
+                        topInset: 0; bottomInset: 0
+                        onClicked: launcher.record(modelData.mode)
+                        contentItem: RowLayout {
+                            spacing: 13
+                            Item {
+                                Layout.preferredWidth: 48
+                                Layout.preferredHeight: 48
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: 12
+                                    color: Qt.alpha(theme.accent, .16)
+                                }
+                                Image {
+                                    anchors.centerIn: parent
+                                    width: 24; height: 24
+                                    sourceSize.width: 48; sourceSize.height: 48
+                                    source: "qrc:/omarecord/assets/icons/" + modelData.icon
+                                }
                             }
-                            Image {
-                                anchors.centerIn: parent
-                                width: 24; height: 24
-                                sourceSize.width: 48; sourceSize.height: 48
-                                source: "qrc:/omarecord/assets/icons/" + modelData.icon
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 2
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: modelData.label
+                                    font.pixelSize: 15
+                                    font.weight: Font.DemiBold
+                                    color: theme.foreground
+                                }
+                                Label {
+                                    text: modelData.shortcut.replace("+", " + ")
+                                    font.pixelSize: 10
+                                    font.family: "monospace"
+                                    color: Qt.alpha(theme.foreground, .48)
+                                }
                             }
                         }
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 2
-                            Label {
-                                Layout.fillWidth: true
-                                text: modelData.label
-                                font.pixelSize: 15
-                                font.weight: Font.DemiBold
-                                color: theme.foreground
-                            }
-                            Label {
-                                text: modelData.shortcut.replace("+", " + ")
-                                font.pixelSize: 10
-                                font.family: "monospace"
-                                color: Qt.alpha(theme.foreground, .48)
+                        background: Rectangle {
+                            radius: 10
+                            color: parent.pressed ? Qt.alpha(theme.foreground, .10) : parent.hovered ? Qt.alpha(theme.foreground, .07) : theme.lighterBackground
+                            border.width: 1
+                            border.color: parent.hovered ? Qt.alpha(theme.accent, .72) : Qt.alpha(theme.foreground, .09)
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                visible: launcher.recording
+                radius: 10
+                color: theme.lighterBackground
+                border.width: 1
+                border.color: Qt.alpha(theme.foreground, .12)
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 22
+                    anchors.rightMargin: 16
+                    spacing: 12
+                    Rectangle {
+                        width: 11; height: 11; radius: 6; color: "#ef4444"
+                        SequentialAnimation on opacity {
+                            loops: Animation.Infinite
+                            NumberAnimation { from: 1; to: .35; duration: 700 }
+                            NumberAnimation { from: .35; to: 1; duration: 700 }
+                        }
+                    }
+                    Label {
+                        text: "Recording in progress · " + launcher.recordingElapsed
+                        font.pixelSize: 16
+                        font.weight: Font.DemiBold
+                    }
+                    Item { Layout.fillWidth: true }
+                    Button {
+                        Layout.preferredWidth: 82
+                        focusPolicy: Qt.TabFocus
+                        hoverEnabled: true
+                        onClicked: launcher.stopRecording()
+                        contentItem: Label {
+                            text: "Stop"
+                            color: theme.accentForeground
+                            font: parent.font
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        background: Rectangle {
+                            radius: 6
+                            color: parent.down ? Qt.darker(theme.accent, 1.15)
+                                               : parent.hovered ? Qt.lighter(theme.accent, 1.08) : theme.accent
+                        }
+                    }
+                    Button {
+                        id: launcherCancelButton
+                        Layout.preferredWidth: 90
+                        text: armed ? "Discard?" : "Cancel"
+                        flat: true
+                        focusPolicy: Qt.TabFocus
+                        property bool armed: false
+                        onClicked: {
+                            if (armed) launcher.cancelRecording()
+                            else {
+                                armed = true
+                                launcherCancelTimer.restart()
                             }
                         }
                     }
-                    background: Rectangle {
-                        radius: 10
-                        color: parent.pressed ? Qt.alpha(theme.foreground, .10) : parent.hovered ? Qt.alpha(theme.foreground, .07) : theme.lighterBackground
-                        border.width: 1
-                        border.color: parent.hovered ? Qt.alpha(theme.accent, .72) : Qt.alpha(theme.foreground, .09)
+                    Timer {
+                        id: launcherCancelTimer
+                        interval: 3000
+                        onTriggered: launcherCancelButton.armed = false
                     }
                 }
             }
@@ -232,6 +304,7 @@ ApplicationWindow {
         delegate: Shortcut {
             required property var modelData
             sequence: modelData.shortcut
+            enabled: !launcher.recording
             onActivated: launcher.record(modelData.mode)
         }
     }
