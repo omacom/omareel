@@ -261,3 +261,120 @@ docs/
 - **Phase 3 (editor):** full UI above, trim/split, zoom editing, preview parity with export.
 - **Phase 4 (Omarchy polish):** PKGBUILD + install script, desktop entry, notification with
   click-to-open, docs with Hyprland keybinding snippet, theme accent live-switching.
+
+## 8. Amendments from the the reference app reverse-engineering (docs/reference-notes.md)
+
+These override §3/§4 where they conflict. Phase 2 implements them in `core/` (with tests) and
+in the renderer.
+
+### 8.1 Motion is spring-driven and precomputed
+
+the reference app does not tween zoom with a fixed duration/easing; every animated quantity is a
+target fed to a damped spring. We do the same, and to keep preview and export identical **and**
+allow random access (scrubbing), `core/MotionTrack` precomputes the whole recording once per
+project change:
+
+- Fixed integration step `1/240 s` from source time 0 to duration, semi-implicit Euler,
+  state carried across steps. Output: arrays sampled at 240 Hz of
+  `zoomScale, zoomCx, zoomCy, cursorX, cursorY, cursorScale, cursorOpacity, cursorRotation`.
+- `MotionTrack::sample(t)` linearly interpolates between the two nearest steps.
+- Recompute is cheap (a 10 min recording = 144k steps); run it on a worker thread, debounced,
+  and swap atomically. The exporter always waits for a fresh track.
+
+Spring parameters (per-project, editable in the Zoom/Cursor panels, defaults from the reference app):
+
+```
+screenMovementSpring   { mass: 2.25, stiffness: 200, damping: 40 }   // zoom scale + center
+mouseMovementSpring    { mass: 3,    stiffness: 470, damping: 70 }   // cursor position
+mouseClickSpring       { mass: 0.3,  stiffness: 300, damping: 30 }   // cursor scale on click
+```
+
+Spring form: `a = (stiffness * (target - x) - damping * v) / mass`.
+
+`project.zoomStyle` becomes:
+
+```jsonc
+"zoomStyle": {"spring":{"mass":2.25,"stiffness":200,"damping":40},
+              "snapToEdgesRatio":0.25,      // auto mode edge snapping, see 8.3
+              "instantAnimation":false}
+"cursor": { ..., "smoothing": true,  // uses mouseMovementSpring; false = raw
+            "spring":{"mass":3,"stiffness":470,"damping":70},
+            "clickShrink":0.8, "rotateOnXMovementRatio":0.5 }
+```
+
+Drop `transitionIn/transitionOut/easing/followSmoothing/followDeadZone/lookahead`. Keep
+`Easing.h` only for UI/ripple animations.
+
+### 8.2 Auto-zoom generation (replaces §3 rules)
+
+For every button-down at video time `t` (seconds):
+
+```
+start = max(t - 0.3, 0)
+end   = min(t + 2.5, duration - 0.8)
+```
+
+- Ignore clicks at or after `duration - 1.0`.
+- Union overlapping ranges; merge ranges whose gap is ≤ 2.5 s.
+- Level 2.0, target auto. Min editable zoom length 1.0 s; splits leave ≥ 0.1 s each side.
+- Zoom level range is continuous 1.0 … 4.0 (slider), step 0.2 via keyboard.
+
+### 8.3 Zoom target evaluation (replaces "dead-zone follow" in §3)
+
+Zoom target for a range at time `t`, in normalized cropped-source coordinates:
+
+- **manual**: `manualTargetPoint`, edge snapping ratio forced to 0.
+- **auto**: take the cursor samples inside the range (if none, the nearest sample before/after
+  its start). Walk them in time order accumulating a *group* while the group's bounding box
+  still fits inside `50%` of the visible width and `70%` of the visible height at that zoom
+  level (visible = 1/level of the cropped frame). A sample that no longer fits starts a new
+  group. The target at time `t` is the bounding-box center of the group active at `t` (a group
+  becomes active at its first sample time). This makes the camera hold while the cursor works
+  in one area and glide when it moves away.
+- Edge snapping (auto only): `maxRatio = visible/content` per axis; `r = min(snapToEdgesRatio,
+  maxRatio)`; map each normalized target coordinate from `[r, 1 - r + 0.0001]` to `[0, 1]`
+  with clamping. Finally clamp so the viewport stays inside the frame.
+- Outside any range the target is scale 1, center (0.5, 0.5).
+- The spring (8.1) chases `(scale, cx, cy)`; `instantAnimation` snaps within 0.1 s of a
+  range boundary.
+
+### 8.4 Cursor details
+
+- Load-time decimation of raw samples: keep the first; drop a sample if it is within one frame
+  window (`1/fps`) of the last kept one or moved < 1 px.
+- Rotation: `clamp((x(t) - x(t - 0.4)) * 0.03 * rotateOnXMovementRatio, -20, 20)` degrees.
+- Click: cursor scale target `0.8` from up to 130 ms **before** a button-down (we know the
+  future) until button-up, via `mouseClickSpring`.
+- Click effect `circle` (the reference app's default ring; our `ripple` name maps to it): ring of
+  radius `16 * cursorSize` px @1080p, line width 2, alpha 0.6, lifetime 450 ms; scale
+  `0.2 → 3.5` and alpha knots `[0, .05, .8, 1] → [0, 1, 0, 0]` over the first 150 ms … 450 ms.
+  Ring color: black at 0.6 alpha (the reference app) — we use the Omarchy accent by default with a
+  "ring color" option.
+- `hideWhenIdleMs`: hidden style `{alpha 0, scale 0.8}`, pre-reveal 250 ms before the next move.
+
+### 8.5 Frame/shape defaults
+
+```
+frame.padding 0.10 (ratio of the shorter output side), radius 12 @1080p,
+shadow { enabled: true, intensity 0.75, blur 20, distance 25, angle 90 }   // replaces opacity/offsetY
+inset  { enabled:false, width 0, color "#000000", alpha 0.5 }
+cursor.size 1.5
+background default: type "wallpaper", wallpaper "omarchy:current"
+```
+
+### 8.6 Aspect presets and export
+
+Aspect: Auto (null), Wide 16:9, Square 1:1, Classic 4:3, Vertical 9:16, Tall 3:4, Portrait 4:5.
+
+Export:
+
+```
+MP4: height 720 | 1080 | 2160, fps 60/50/30/25/24/20/10, quality studio|social|web-high|web-low
+     bitrate = floor(w*h*fps*m), m: web-low .0075, web-high .0175, social .05, studio .3
+     h264_nvenc -b:v <bitrate> -maxrate <bitrate*1.2> -bufsize <bitrate*2> -profile high, fallback libx264
+GIF: height 480 | 720 | 1080, fps 50/30/25/20/15/10, quality studio (palettegen/paletteuse) |
+     social (plain gif encoder), loop on/off, then gifsicle --optimize=3 --lossy=30 if installed.
+Defaults: MP4 { fps 60, quality social, height 1080 }  GIF { fps 15, quality studio, height 480 }
+```
+
+Clip speed choices: 0.5 0.75 1 1.2 1.4 1.6 1.8 2 3 4 8 16 24 (stored as `speed`).
