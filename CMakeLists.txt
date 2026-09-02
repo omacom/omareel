@@ -116,7 +116,7 @@ target_compile_definitions(omarecord PRIVATE OMARECORD_VERSION="${PROJECT_VERSIO
 
 include(CTest)
 if(BUILD_TESTING)
-    foreach(test_name IN ITEMS zoomtimeline cursorpath cliptimeline project inputlog)
+    foreach(test_name IN ITEMS zoomtimeline cursorpath cliptimeline project inputlog regionpicker)
         qt_add_executable(test_${test_name} tests/test_${test_name}.cpp)
         target_link_libraries(test_${test_name} PRIVATE omarecord_core Qt6::Test)
         add_test(NAME ${test_name} COMMAND test_${test_name})

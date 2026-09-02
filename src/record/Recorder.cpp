@@ -5,6 +5,7 @@
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -34,6 +35,12 @@ QString Recorder::stateFilePath()
     return runtime + QStringLiteral("/omarecord/recording.json");
 }
 
+static QString lastErrorFilePath()
+{
+    return QFileInfo(Recorder::stateFilePath()).absolutePath()
+        + QStringLiteral("/last-error.txt");
+}
+
 static QJsonObject readState()
 {
     QFile file(Recorder::stateFilePath());
@@ -52,6 +59,30 @@ static void notifyStopFailure(const QString &detail)
                         {QStringLiteral("-u"), QStringLiteral("critical"),
                          QStringLiteral("-t"), QStringLiteral("5000"),
                          QStringLiteral("Screen recording error"), detail});
+}
+
+static void notifyStartFailure(const QString &detail)
+{
+    runOptionalDetached(QStringLiteral("omarchy-notification-send"),
+                        {QStringLiteral("-u"), QStringLiteral("critical"),
+                         QStringLiteral("Recording failed"), detail});
+}
+
+static void writeLastError(const QString &detail)
+{
+    QDir().mkpath(QFileInfo(lastErrorFilePath()).absolutePath());
+    QSaveFile file(lastErrorFilePath());
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) return;
+    file.write(detail.toUtf8());
+    file.write("\n");
+    file.commit();
+}
+
+static QString readLastError()
+{
+    QFile file(lastErrorFilePath());
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return {};
+    return QString::fromUtf8(file.readAll()).trimmed();
 }
 
 static bool processAlive(qint64 pid)
@@ -91,7 +122,9 @@ int Recorder::startDetached(const RecordOptions &options, QString *message)
         if (message) *message = error;
         return error == QLatin1String("Selection cancelled") ? 1 : 2;
     }
+    const QString selectionNote = error;
     QDir().mkpath(QFileInfo(stateFilePath()).absolutePath());
+    QFile::remove(lastErrorFilePath());
     QStringList arguments{
         QStringLiteral("__record-daemon"),
         QStringLiteral("--mode"), modeName(region.mode),
@@ -119,16 +152,48 @@ int Recorder::startDetached(const RecordOptions &options, QString *message)
         if (message) *message = QStringLiteral("Could not start recorder daemon");
         return 2;
     }
-    for (int i = 0; i < 100; ++i) {
+    QElapsedTimer readyTimer;
+    readyTimer.start();
+    bool stateAppeared = false;
+    while (readyTimer.elapsed() < 2000) {
         const auto state = readState();
         if (state.value("pid").toVariant().toLongLong() == pid) {
-            if (message) *message = QStringLiteral("Recording started");
-            return 0;
+            stateAppeared = true;
+            break;
+        }
+        if (!recorderDaemonAlive(pid)) {
+            QString reason = readLastError();
+            if (reason.isEmpty()) reason = QStringLiteral("Recorder daemon exited during startup");
+            QFile::remove(lastErrorFilePath());
+            if (message) *message = reason;
+            return 2;
         }
         QThread::msleep(20);
     }
-    if (message) *message = QStringLiteral("Recorder daemon did not become ready");
-    return 2;
+    if (!stateAppeared) {
+        if (message) *message = QStringLiteral("Recorder daemon did not become ready");
+        return 2;
+    }
+
+    QElapsedTimer stableTimer;
+    stableTimer.start();
+    while (stableTimer.elapsed() < 2500) {
+        const auto state = readState();
+        if (state.value("pid").toVariant().toLongLong() != pid || !recorderDaemonAlive(pid)) {
+            QString reason = readLastError();
+            if (reason.isEmpty()) reason = QStringLiteral("Recorder daemon exited during startup");
+            QFile::remove(lastErrorFilePath());
+            if (message) *message = reason;
+            return 2;
+        }
+        QThread::msleep(20);
+    }
+    if (message) {
+        *message = selectionNote.isEmpty()
+            ? QStringLiteral("Recording started")
+            : selectionNote + QLatin1Char('\n') + QStringLiteral("Recording started");
+    }
+    return 0;
 }
 
 int Recorder::stopExisting(bool onlyStop, QString *bundlePath, QString *error)
@@ -257,6 +322,46 @@ static bool writeJson(const QString &path, const QJsonObject &object, QString *e
     return true;
 }
 
+static void drainRecorderOutput(QProcess *process, QByteArray *tail, QFile *debugLog)
+{
+    const QByteArray chunk = process->readAll();
+    if (chunk.isEmpty()) return;
+    if (debugLog && debugLog->isOpen()) {
+        debugLog->write(chunk);
+        debugLog->flush();
+    }
+    tail->append(chunk);
+    constexpr qsizetype maximumTail = 4096;
+    if (tail->size() > maximumTail) tail->remove(0, tail->size() - maximumTail);
+}
+
+static QString lastNonEmptyLine(const QByteArray &output)
+{
+    const QList<QByteArray> lines = output.split('\n');
+    for (auto it = lines.crbegin(); it != lines.crend(); ++it) {
+        const QString line = QString::fromUtf8(*it).trimmed();
+        if (!line.isEmpty()) return line;
+    }
+    return {};
+}
+
+static int failRecorderStartup(const QString &reason, const QString &bundle, const QString &video,
+                               CursorSampler *cursorSampler, EvdevListener *evdevListener)
+{
+    cursorSampler->stop();
+    evdevListener->stop();
+    if (!QFileInfo(video).isFile() || QFileInfo(video).size() == 0)
+        QDir(bundle).removeRecursively();
+    writeLastError(reason);
+    QFile::remove(Recorder::stateFilePath());
+    runOptionalDetached(QStringLiteral("omarchy-shell"),
+                        {QStringLiteral("-q"), QStringLiteral("omarchy.indicators"),
+                         QStringLiteral("refresh")});
+    notifyStartFailure(reason);
+    QTextStream(stderr) << reason << '\n';
+    return 2;
+}
+
 int Recorder::daemonMain(const QStringList &arguments)
 {
     stopRequested = 0;
@@ -328,29 +433,51 @@ int Recorder::daemonMain(const QStringList &arguments)
     gsr << QStringLiteral("-o") << video;
 
     QProcess recorder;
-    if (qEnvironmentVariable("OMARECORD_DEBUG") == QLatin1String("1")) {
-        recorder.setProcessChannelMode(QProcess::SeparateChannels);
-        recorder.setStandardOutputFile(QProcess::nullDevice());
-        recorder.setStandardErrorFile(QStringLiteral("/tmp/omarecord.log"), QIODevice::Append);
-    } else {
-        recorder.setProcessChannelMode(QProcess::ForwardedChannels);
-    }
+    recorder.setProcessChannelMode(QProcess::MergedChannels);
+    QByteArray recorderOutput;
+    QFile debugLog(QStringLiteral("/tmp/omarecord.log"));
+    if (qEnvironmentVariable("OMARECORD_DEBUG") == QLatin1String("1"))
+        (void)debugLog.open(QIODevice::WriteOnly | QIODevice::Append);
     recorder.start(QStringLiteral("gpu-screen-recorder"), gsr);
     if (!recorder.waitForStarted(5000)) {
-        cursorSampler.stop(); evdevListener.stop(); QFile::remove(stateFilePath()); QDir(bundle).removeRecursively();
-        return 2;
+        drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
+        QString reason = lastNonEmptyLine(recorderOutput);
+        if (reason.isEmpty()) reason = recorder.errorString();
+        return failRecorderStartup(reason, bundle, video, &cursorSampler, &evdevListener);
     }
+    const qint64 recorderStartedUs = CursorSampler::monotonicUs();
     QJsonObject state{{"pid", daemonPid}, {"bundle", bundle}, {"started_us", startedUs},
                       {"no_open", options.noOpen}};
     if (!writeJson(stateFilePath(), state, &error)) {
         ::kill(pid_t(recorder.processId()), SIGINT);
         recorder.waitForFinished(5000);
-        cursorSampler.stop(); evdevListener.stop(); QDir(bundle).removeRecursively();
-        return 2;
+        drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
+        const QString reason = error.isEmpty()
+            ? QStringLiteral("Could not write recorder state")
+            : QStringLiteral("Could not write recorder state: %1").arg(error);
+        return failRecorderStartup(reason, bundle, video, &cursorSampler, &evdevListener);
     }
     runOptionalDetached(QStringLiteral("omarchy-shell"),
                         {QStringLiteral("-q"), QStringLiteral("omarchy.indicators"), QStringLiteral("refresh")});
-    while (!stopRequested && recorder.state() != QProcess::NotRunning) QThread::msleep(40);
+    while (!stopRequested && recorder.state() != QProcess::NotRunning
+           && CursorSampler::monotonicUs() - recorderStartedUs < 2000000) {
+        recorder.waitForFinished(0);
+        drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
+        QThread::msleep(40);
+    }
+    drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
+    if (!stopRequested && recorder.state() == QProcess::NotRunning) {
+        QString reason = lastNonEmptyLine(recorderOutput);
+        if (reason.isEmpty()) reason = QStringLiteral("gpu-screen-recorder exited before recording could start");
+        return failRecorderStartup(reason, bundle, video, &cursorSampler, &evdevListener);
+    }
+
+    while (!stopRequested && recorder.state() != QProcess::NotRunning) {
+        recorder.waitForFinished(0);
+        drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
+        QThread::msleep(40);
+    }
+    const bool unexpectedExit = !stopRequested && recorder.state() == QProcess::NotRunning;
     bool forcedStop = false;
     if (recorder.state() != QProcess::NotRunning) {
         ::kill(pid_t(recorder.processId()), SIGINT);
@@ -360,6 +487,8 @@ int Recorder::daemonMain(const QStringList &arguments)
             recorder.waitForFinished(1000);
         }
     }
+    drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
+    const QString recorderErrorLine = lastNonEmptyLine(recorderOutput);
     const bool recorderFailed = recorder.exitStatus() != QProcess::NormalExit || recorder.exitCode() != 0;
     const qint64 stoppedUs = CursorSampler::monotonicUs();
     cursorSampler.stop();
@@ -368,7 +497,8 @@ int Recorder::daemonMain(const QStringList &arguments)
     const auto deviceEvents = evdevListener.events();
     const qint64 firstFrameUs = firstFrameTimestamp(video + QStringLiteral(".ts"));
 
-    bool ok = !forcedStop && !recorderFailed && firstFrameUs > 0 && QFileInfo(video).size() > 0;
+    bool ok = !forcedStop && !recorderFailed && !unexpectedExit
+        && firstFrameUs > 0 && QFileInfo(video).size() > 0;
     ok = writeInputLog(bundle + QStringLiteral("/input.jsonl"), cursor, deviceEvents, region, &error) && ok;
     QJsonObject capture{
         {"version", 1}, {"fps", options.fps}, {"width", region.physicalWidth},
@@ -387,6 +517,8 @@ int Recorder::daemonMain(const QStringList &arguments)
         QStringLiteral("1"), QStringLiteral("-q:v"), QStringLiteral("3"),
         bundle + QStringLiteral("/thumb.jpg")});
     ffmpeg.waitForFinished(10000);
+    if (!ok && (!QFileInfo(video).isFile() || QFileInfo(video).size() == 0))
+        QDir(bundle).removeRecursively();
     QFile::remove(stateFilePath());
     runOptionalDetached(QStringLiteral("omarchy-shell"),
                         {QStringLiteral("-q"), QStringLiteral("omarchy.indicators"), QStringLiteral("refresh")});
@@ -398,9 +530,11 @@ int Recorder::daemonMain(const QStringList &arguments)
         if (!options.noOpen)
             QProcess::startDetached(QCoreApplication::applicationFilePath(), {QStringLiteral("edit"), bundle});
     } else {
-        const QString detail = forcedStop
+        QString detail = forcedStop
             ? QStringLiteral("Recording process had to be force-killed. Video may be corrupted.")
             : QStringLiteral("The recording could not be finalized. Set OMARECORD_DEBUG=1 and check /tmp/omarecord.log.");
+        if ((unexpectedExit || recorderFailed) && !recorderErrorLine.isEmpty())
+            detail += QStringLiteral("\ngpu-screen-recorder: %1").arg(recorderErrorLine);
         notifyStopFailure(detail);
     }
     return ok ? 0 : 2;

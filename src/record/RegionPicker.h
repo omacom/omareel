@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QString>
+#include <QStringList>
 
 namespace OmaRecord {
 
@@ -21,6 +22,7 @@ struct CaptureRegion {
 class RegionPicker
 {
 public:
+    static QStringList parseCaptureOptions(const QString &output);
     static bool pick(CaptureMode mode, CaptureRegion *region, QString *error = nullptr);
 };
 

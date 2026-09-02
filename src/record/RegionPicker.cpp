@@ -3,6 +3,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QElapsedTimer>
 #include <QProcess>
 #include <QPointF>
 #include <QRegularExpression>
@@ -41,6 +42,58 @@ static QVector<Monitor> monitors(QString *error)
                           object.value("focused").toBool()};
     }
     return result;
+}
+
+QStringList RegionPicker::parseCaptureOptions(const QString &output)
+{
+    static const QRegularExpression pattern(
+        QStringLiteral(R"(^\s*([^|\r\n]+?)\s*\|\s*\d+x\d+\s*$)"));
+    QStringList result;
+    for (const QString &line : output.split(QLatin1Char('\n'))) {
+        const auto match = pattern.match(line);
+        if (match.hasMatch()) {
+            const QString name = match.captured(1).trimmed();
+            if (!name.isEmpty() && !result.contains(name)) result << name;
+        }
+    }
+    return result;
+}
+
+static QStringList captureOptions()
+{
+    QProcess process;
+    QElapsedTimer timer;
+    timer.start();
+    process.start(QStringLiteral("gpu-screen-recorder"),
+                  {QStringLiteral("--list-capture-options")});
+    if (!process.waitForStarted(3000)) return {};
+    const int remainingMs = std::max(0, 3000 - int(timer.elapsed()));
+    if (!process.waitForFinished(remainingMs)) {
+        process.kill();
+        process.waitForFinished(1000);
+        return {};
+    }
+    if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) return {};
+    return RegionPicker::parseCaptureOptions(QString::fromUtf8(process.readAllStandardOutput()));
+}
+
+static const Monitor *capturableMonitor(const QVector<Monitor> &values, const Monitor *requested,
+                                        QString *note)
+{
+    const QStringList options = captureOptions();
+    if (options.isEmpty() || options.contains(requested->name)) return requested;
+    for (const QString &name : options) {
+        for (const auto &monitor : values) {
+            if (monitor.name == name) {
+                if (note) {
+                    *note = QStringLiteral("%1 is not capturable by gpu-screen-recorder; recording %2 instead")
+                                .arg(requested->name, monitor.name);
+                }
+                return &monitor;
+            }
+        }
+    }
+    return requested;
 }
 
 static bool parseRect(const QString &text, double *x, double *y, double *w, double *h)
@@ -98,6 +151,7 @@ bool RegionPicker::pick(CaptureMode mode, CaptureRegion *region, QString *error)
     if (mode == CaptureMode::Fullscreen) {
         const Monitor *monitor = &values.first();
         for (const auto &candidate : values) if (candidate.focused) monitor = &candidate;
+        monitor = capturableMonitor(values, monitor, error);
         *region = CaptureRegion{monitor->name, monitor->x, monitor->y,
                                 monitor->logicalWidth, monitor->logicalHeight, monitor->scale,
                                 monitor->physicalWidth, monitor->physicalHeight, mode};
@@ -131,9 +185,11 @@ bool RegionPicker::pick(CaptureMode mode, CaptureRegion *region, QString *error)
     if (selection.startsWith(QLatin1String("monitor:"))) {
         const QString name = selection.mid(8);
         for (const auto &monitor : values) if (monitor.name == name) {
-            *region = CaptureRegion{name, monitor.x, monitor.y, monitor.logicalWidth,
-                                    monitor.logicalHeight, monitor.scale, monitor.physicalWidth,
-                                    monitor.physicalHeight, CaptureMode::Fullscreen};
+            const Monitor *selected = capturableMonitor(values, &monitor, error);
+            *region = CaptureRegion{selected->name, selected->x, selected->y,
+                                    selected->logicalWidth, selected->logicalHeight,
+                                    selected->scale, selected->physicalWidth,
+                                    selected->physicalHeight, CaptureMode::Fullscreen};
             return true;
         }
         if (error) *error = QStringLiteral("Picker returned unknown monitor %1").arg(name);
