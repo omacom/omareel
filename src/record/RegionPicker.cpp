@@ -1,0 +1,152 @@
+#include "RegionPicker.h"
+
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QProcess>
+#include <QPointF>
+#include <QRegularExpression>
+#include <QStandardPaths>
+#include <cmath>
+#include <algorithm>
+
+using namespace OmaRecord;
+
+struct Monitor {
+    QString name;
+    double x, y, logicalWidth, logicalHeight, scale;
+    int physicalWidth, physicalHeight;
+    bool focused;
+};
+
+static QVector<Monitor> monitors(QString *error)
+{
+    QProcess process;
+    process.start(QStringLiteral("hyprctl"), {QStringLiteral("-j"), QStringLiteral("monitors")});
+    if (!process.waitForFinished(3000) || process.exitCode() != 0) {
+        if (error) *error = QStringLiteral("hyprctl monitors failed: %1").arg(QString::fromUtf8(process.readAllStandardError()));
+        return {};
+    }
+    QVector<Monitor> result;
+    for (const auto &value : QJsonDocument::fromJson(process.readAllStandardOutput()).array()) {
+        const auto object = value.toObject();
+        const double scale = object.value("scale").toDouble(1.0);
+        int physicalWidth = object.value("width").toInt();
+        int physicalHeight = object.value("height").toInt();
+        const int transform = object.value("transform").toInt();
+        if (transform % 2) std::swap(physicalWidth, physicalHeight);
+        result << Monitor{object.value("name").toString(), object.value("x").toDouble(),
+                          object.value("y").toDouble(), physicalWidth / scale,
+                          physicalHeight / scale, scale, physicalWidth, physicalHeight,
+                          object.value("focused").toBool()};
+    }
+    return result;
+}
+
+static bool parseRect(const QString &text, double *x, double *y, double *w, double *h)
+{
+    static const QRegularExpression pattern(
+        QStringLiteral(R"(^\s*(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)\s*$)"));
+    const auto match = pattern.match(text);
+    if (!match.hasMatch()) return false;
+    *x = match.captured(1).toDouble(); *y = match.captured(2).toDouble();
+    *w = match.captured(3).toDouble(); *h = match.captured(4).toDouble();
+    return true;
+}
+
+static const Monitor *monitorFor(const QVector<Monitor> &values, double x, double y, double w, double h)
+{
+    const QPointF center(x + w / 2.0, y + h / 2.0);
+    for (const auto &monitor : values) {
+        if (center.x() >= monitor.x && center.x() < monitor.x + monitor.logicalWidth
+            && center.y() >= monitor.y && center.y() < monitor.y + monitor.logicalHeight)
+            return &monitor;
+    }
+    return values.isEmpty() ? nullptr : &values.first();
+}
+
+static QString windowRectangles(QString *error)
+{
+    QProcess workspace;
+    workspace.start(QStringLiteral("hyprctl"), {QStringLiteral("-j"), QStringLiteral("activeworkspace")});
+    if (!workspace.waitForFinished(3000) || workspace.exitCode() != 0) return {};
+    const int activeId = QJsonDocument::fromJson(workspace.readAllStandardOutput()).object().value("id").toInt();
+    QProcess clients;
+    clients.start(QStringLiteral("hyprctl"), {QStringLiteral("-j"), QStringLiteral("clients")});
+    if (!clients.waitForFinished(3000) || clients.exitCode() != 0) {
+        if (error) *error = QStringLiteral("hyprctl clients failed");
+        return {};
+    }
+    QString lines;
+    for (const auto &value : QJsonDocument::fromJson(clients.readAllStandardOutput()).array()) {
+        const auto client = value.toObject();
+        if (client.value("workspace").toObject().value("id").toInt() != activeId
+            || client.value("hidden").toBool()) continue;
+        const auto at = client.value("at").toArray();
+        const auto size = client.value("size").toArray();
+        if (at.size() == 2 && size.size() == 2)
+            lines += QStringLiteral("%1,%2 %3x%4\n").arg(at[0].toInt()).arg(at[1].toInt())
+                     .arg(size[0].toInt()).arg(size[1].toInt());
+    }
+    return lines;
+}
+
+bool RegionPicker::pick(CaptureMode mode, CaptureRegion *region, QString *error)
+{
+    const auto values = monitors(error);
+    if (values.isEmpty()) return false;
+    if (mode == CaptureMode::Fullscreen) {
+        const Monitor *monitor = &values.first();
+        for (const auto &candidate : values) if (candidate.focused) monitor = &candidate;
+        *region = CaptureRegion{monitor->name, monitor->x, monitor->y,
+                                monitor->logicalWidth, monitor->logicalHeight, monitor->scale,
+                                monitor->physicalWidth, monitor->physicalHeight, mode};
+        return true;
+    }
+
+    QString program;
+    QStringList arguments;
+    QByteArray standardInput;
+    if (mode == CaptureMode::Region
+        && !QStandardPaths::findExecutable(QStringLiteral("omarchy-capture-region")).isEmpty()) {
+        program = QStringLiteral("omarchy-capture-region");
+        arguments = {QStringLiteral("smart"), QStringLiteral("--match-monitor")};
+    } else {
+        program = QStringLiteral("slurp");
+        arguments = {QStringLiteral("-o"), QStringLiteral("-f"), QStringLiteral("%x,%y %wx%h")};
+        if (mode == CaptureMode::Window) {
+            arguments.prepend(QStringLiteral("-r"));
+            standardInput = windowRectangles(error).toUtf8();
+        }
+    }
+    QProcess picker;
+    picker.start(program, arguments);
+    if (!picker.waitForStarted(2000)) { if (error) *error = picker.errorString(); return false; }
+    if (!standardInput.isEmpty()) { picker.write(standardInput); picker.closeWriteChannel(); }
+    if (!picker.waitForFinished(-1) || picker.exitCode() != 0) {
+        if (error) *error = QStringLiteral("Selection cancelled");
+        return false;
+    }
+    const QString selection = QString::fromUtf8(picker.readAllStandardOutput()).trimmed();
+    if (selection.startsWith(QLatin1String("monitor:"))) {
+        const QString name = selection.mid(8);
+        for (const auto &monitor : values) if (monitor.name == name) {
+            *region = CaptureRegion{name, monitor.x, monitor.y, monitor.logicalWidth,
+                                    monitor.logicalHeight, monitor.scale, monitor.physicalWidth,
+                                    monitor.physicalHeight, CaptureMode::Fullscreen};
+            return true;
+        }
+        if (error) *error = QStringLiteral("Picker returned unknown monitor %1").arg(name);
+        return false;
+    }
+    double x, y, w, h;
+    if (!parseRect(selection, &x, &y, &w, &h)) {
+        if (error) *error = QStringLiteral("Could not parse selection: %1").arg(selection);
+        return false;
+    }
+    const Monitor *monitor = monitorFor(values, x, y, w, h);
+    *region = CaptureRegion{monitor->name, x, y, w, h, monitor->scale,
+                            int(std::lround(w * monitor->scale)),
+                            int(std::lround(h * monitor->scale)), mode};
+    return true;
+}
