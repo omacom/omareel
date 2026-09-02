@@ -1,11 +1,11 @@
-# Maintainer: Ryan Hughes
+# Maintainer: Ryan <ryan@heyoodle.com>
 
 pkgname=omarecord
 pkgver=0.1.0
 pkgrel=1
 pkgdesc='Polished screen recorder and editor for Omarchy'
 arch=('x86_64')
-url='https://github.com/omacom/omarecord'
+url='https://github.com/heyoodle/omarecord'
 license=('MIT')
 depends=('gpu-screen-recorder' 'ffmpeg' 'slurp' 'qt6-base' 'qt6-declarative'
          'qt6-multimedia' 'qt6-svg' 'libevdev' 'xdg-desktop-portal')
