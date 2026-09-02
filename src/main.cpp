@@ -1,8 +1,9 @@
 #include "core/InputLog.h"
 #include "core/ZoomTimeline.h"
 #include "record/Recorder.h"
+#include "render/Exporter.h"
 
-#include <QCoreApplication>
+#include <QGuiApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -10,6 +11,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
+#include <QQuickWindow>
 #include <QStandardPaths>
 #include <QTextStream>
 
@@ -21,9 +23,61 @@ static int usage(const QString &error = {})
     if (!error.isEmpty()) stream << "omarecord: " << error << '\n';
     stream << "usage: omarecord record [--fullscreen|--region|--window] [options]\n"
               "       omarecord edit <bundle>\n"
-              "       omarecord export <bundle> -o <file>\n"
+              "       omarecord export <bundle> -o <file> [--fps N] [--width W]\n"
               "       omarecord probe <bundle>\n";
     return error.isEmpty() ? 0 : 2;
+}
+
+static int exportCommand(const QStringList &arguments)
+{
+    if (arguments.isEmpty()) return usage(QStringLiteral("export requires a bundle"));
+    ExportOptions options;
+    options.bundlePath = QDir(arguments.first()).absolutePath();
+    for (int i = 1; i < arguments.size(); ++i) {
+        const QString arg = arguments[i];
+        if (arg == QLatin1String("-o") || arg == QLatin1String("--fps")
+            || arg == QLatin1String("--width") || arg == QLatin1String("--quality")
+            || arg == QLatin1String("--gif-fps") || arg == QLatin1String("--gif-width")) {
+            if (++i >= arguments.size()) return usage(QStringLiteral("%1 requires a value").arg(arg));
+            const QString value = arguments[i];
+            if (arg == QLatin1String("-o")) options.outputPath = QFileInfo(value).absoluteFilePath();
+            else if (arg == QLatin1String("--fps")) options.fps = value.toInt();
+            else if (arg == QLatin1String("--width")) options.width = value.toInt();
+            else if (arg == QLatin1String("--quality")) options.quality = value;
+            else if (arg == QLatin1String("--gif-fps")) options.gifFps = value.toInt();
+            else options.gifWidth = value.toInt();
+        } else return usage(QStringLiteral("unknown export option %1").arg(arg));
+    }
+    if (options.outputPath.isEmpty()) return usage(QStringLiteral("export requires -o <file>"));
+    if (!options.outputPath.endsWith(QStringLiteral(".mp4"), Qt::CaseInsensitive)
+        && !options.outputPath.endsWith(QStringLiteral(".gif"), Qt::CaseInsensitive))
+        return usage(QStringLiteral("export output must end in .mp4 or .gif"));
+    if (options.fps < 0 || options.width < 0 || options.gifFps < 0 || options.gifWidth < 0)
+        return usage(QStringLiteral("frame rate and size options must be positive"));
+    const QStringList qualities{QStringLiteral("low"), QStringLiteral("medium"), QStringLiteral("high"),
+        QStringLiteral("best"), QStringLiteral("web-low"), QStringLiteral("web-high"),
+        QStringLiteral("social"), QStringLiteral("studio")};
+    if (!options.quality.isEmpty() && !qualities.contains(options.quality))
+        return usage(QStringLiteral("invalid quality %1").arg(options.quality));
+
+    Exporter exporter;
+    bool success = false;
+    QString failure;
+    QObject::connect(&exporter, &Exporter::progress, [](int frame, int total) {
+        QTextStream(stderr) << '\r' << "Exporting " << frame << '/' << total << Qt::flush;
+    });
+    QObject::connect(&exporter, &Exporter::finished, [&](const QString &path) {
+        success = true;
+        QTextStream(stderr) << '\n';
+        QTextStream(stdout) << path << '\n';
+    });
+    QObject::connect(&exporter, &Exporter::failed, [&](const QString &message) { failure = message; });
+    exporter.exportBundle(options);
+    if (!success) {
+        QTextStream(stderr) << '\n' << "omarecord: " << failure << '\n';
+        return 1;
+    }
+    return 0;
 }
 
 static int recordCommand(const QStringList &arguments)
@@ -120,7 +174,19 @@ static int probeCommand(const QString &bundle)
 
 int main(int argc, char **argv)
 {
-    QCoreApplication app(argc, argv);
+    const bool exporting = argc > 1 && QByteArray(argv[1]) == "export";
+    if (exporting && qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY")
+        && qEnvironmentVariableIsEmpty("DISPLAY")) {
+        if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")) qputenv("QT_QPA_PLATFORM", "offscreen");
+        qputenv("QT_QPA_PLATFORMTHEME", QByteArray());
+    }
+    if (exporting) {
+        const bool headless = qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY")
+                           && qEnvironmentVariableIsEmpty("DISPLAY");
+        if (headless) QQuickWindow::setSceneGraphBackend(QStringLiteral("software"));
+        else QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
+    }
+    QGuiApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("omarecord"));
     const QStringList args = app.arguments();
     if (args.size() < 2) {
@@ -134,7 +200,8 @@ int main(int argc, char **argv)
         if (args.size() != 3) return usage(QStringLiteral("probe requires a bundle"));
         return probeCommand(QDir(args[2]).absolutePath());
     }
-    if (command == QLatin1String("edit") || command == QLatin1String("export")) {
+    if (command == QLatin1String("export")) return exportCommand(args.mid(2));
+    if (command == QLatin1String("edit")) {
         QTextStream(stderr) << "not implemented yet\n";
         return 2;
     }

@@ -1,7 +1,6 @@
 #include "core/ZoomTimeline.h"
 
 #include <QtTest>
-#include <cmath>
 
 using namespace OmaRecord;
 
@@ -9,50 +8,47 @@ class ZoomTimelineTest : public QObject
 {
     Q_OBJECT
 private slots:
-    void generationRules()
+    void amendmentGenerationRules()
     {
-        const auto zooms = ZoomTimeline::generate({1.0, 2.5, 6.0, 6.4}, 10.0);
-        QCOMPARE(zooms.size(), 2);
-        QCOMPARE(zooms[0].start, 0.5);
-        QCOMPARE(zooms[0].end, 4.25);
-        QCOMPARE(zooms[1].start, 5.5);
-        QCOMPARE(zooms[1].end, 8.15);
-        QVERIFY(ZoomTimeline::generate({}, 10.0).isEmpty());
-        const auto edge = ZoomTimeline::generate({0.1}, 0.6);
-        QCOMPARE(edge.first().start, 0.0);
-        QCOMPARE(edge.first().end, 0.6);
+        const auto single = ZoomTimeline::generate({5.0}, 20.0);
+        QCOMPARE(single.size(), 1);
+        QCOMPARE(single[0].start, 4.7);
+        QCOMPARE(single[0].end, 7.5);
+        const auto merged = ZoomTimeline::generate({5.0, 7.0}, 20.0);
+        QCOMPARE(merged.size(), 1);
+        QCOMPARE(merged[0].start, 4.7);
+        QCOMPARE(merged[0].end, 9.5);
+        QVERIFY(ZoomTimeline::generate({19.5}, 20.0).isEmpty());
+        const auto clamped = ZoomTimeline::generate({18.9}, 20.0);
+        QCOMPARE(clamped.first().end, 19.2);
     }
 
-    void levelsAndOverlap()
+    void autoGroupsHoldAndRetarget()
     {
         ZoomStyle style;
-        style.transitionIn = style.transitionOut = 1.0;
-        QVector<ZoomSegment> one{{"z", 1.0, 4.0, 2.0, true, {}}};
-        QCOMPARE(ZoomTimeline::levelAt(one, 0.9, style), 1.0);
-        QCOMPARE(ZoomTimeline::levelAt(one, 1.0, style), 1.0);
-        QCOMPARE(ZoomTimeline::levelAt(one, 1.5, style), 1.5);
-        QCOMPARE(ZoomTimeline::levelAt(one, 2.0, style), 2.0);
-        QCOMPARE(ZoomTimeline::levelAt(one, 4.0, style), 1.0);
-        QVector<ZoomSegment> touching{{"a", 0.0, 2.0, 2.0, true, {}},
-                                      {"b", 2.0, 4.0, 2.0, true, {}}};
-        QCOMPARE(ZoomTimeline::levelAt(touching, 2.0, style), 2.0);
-        QVector<ZoomSegment> overlap{{"a", 0.0, 3.0, 2.0, true, {}},
-                                     {"b", 2.0, 5.0, 3.0, true, {}}};
-        QCOMPARE(ZoomTimeline::levelAt(overlap, 2.5, style), 2.5);
+        style.snapToEdgesRatio = 0.0;
+        QVector<ZoomSegment> zooms{{"z", 0.0, 4.0, 2.0, true, {}}};
+        QVector<CursorSample> samples{{0.0, {0.20, 0.30}}, {1.0, {0.30, 0.40}},
+                                      {2.0, {0.70, 0.65}}, {3.0, {0.75, 0.70}}};
+        const auto first = ZoomTimeline::targetAt(zooms, samples, 0.5, style);
+        const auto held = ZoomTimeline::targetAt(zooms, samples, 1.5, style);
+        QCOMPARE(first.center, held.center);
+        QVERIFY(std::abs(first.center.x() - 0.25) < 0.0001);
+        QVERIFY(std::abs(first.center.y() - 0.35) < 0.0001);
+        const auto second = ZoomTimeline::targetAt(zooms, samples, 2.1, style);
+        QVERIFY(second.center.x() > 0.6);
+        QVERIFY(second.center != first.center);
     }
 
-    void centerClampAndDeadZone()
+    void edgeSnapKeepsViewportInsideFrame()
     {
-        QCOMPARE(ZoomTimeline::clampCenter({0.0, 1.0}, 2.0), QPointF(0.25, 0.75));
         ZoomStyle style;
-        style.transitionIn = style.transitionOut = 0.0;
-        style.followDeadZone = 0.12;
-        QVector<ZoomSegment> zoom{{"z", 0.0, 5.0, 2.0, true, {}}};
-        const QPointF previous(0.5, 0.5);
-        QCOMPARE(ZoomTimeline::centerAt(zoom, 1.0, {0.52, 0.52}, previous, 1.0 / 60.0, style), previous);
-        const auto followed = ZoomTimeline::centerAt(zoom, 1.0, {0.8, 0.5}, previous, 0.1, style);
-        QVERIFY(followed.x() > 0.5);
-        QVERIFY(followed.x() <= 0.75);
+        QVector<ZoomSegment> zooms{{"z", 0.0, 2.0, 2.0, true, {}}};
+        const auto frame = ZoomTimeline::targetAt(zooms, {{0.0, {0.02, 0.98}}}, 1.0, style);
+        QCOMPARE(frame.center, QPointF(0.25, 0.75));
+        const double half = 0.5 / frame.scale;
+        QVERIFY(frame.center.x() - half >= 0.0);
+        QVERIFY(frame.center.y() + half <= 1.0);
     }
 };
 

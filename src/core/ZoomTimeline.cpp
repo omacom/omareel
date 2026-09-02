@@ -1,9 +1,7 @@
 #include "ZoomTimeline.h"
-#include "Easing.h"
 
 #include <QJsonObject>
 #include <algorithm>
-#include <cmath>
 
 using namespace OmaRecord;
 
@@ -11,60 +9,17 @@ QVector<ZoomSegment> ZoomTimeline::generate(const QVector<double> &clickDownTime
 {
     QVector<double> clicks = clickDownTimes;
     std::sort(clicks.begin(), clicks.end());
-    QVector<ZoomSegment> segments;
-    if (clicks.isEmpty() || duration <= 0.0) return segments;
-
-    int groupStart = 0;
-    for (int i = 1; i <= clicks.size(); ++i) {
-        if (i < clicks.size() && clicks[i] - clicks[i - 1] < 2.0) continue;
-        double start = std::max(0.0, clicks[groupStart] - 0.5);
-        double end = std::min(duration, clicks[i - 1] + 1.75);
-        if (end - start < 1.0) {
-            end = std::min(duration, start + 1.0);
-            start = std::max(0.0, end - 1.0);
-        }
-        if (!segments.isEmpty() && start - segments.last().end < 0.75) {
-            segments.last().end = std::max(segments.last().end, end);
+    QVector<ZoomSegment> result;
+    for (double click : clicks) {
+        if (duration <= 0.0 || click < 0.0 || click >= duration - 1.0) continue;
+        const double start = std::max(0.0, click - 0.3);
+        const double end = std::max(start, std::min(click + 2.5, duration - 0.8));
+        if (!result.isEmpty() && start - result.last().end <= 2.5) {
+            result.last().end = std::max(result.last().end, end);
         } else {
-            segments << ZoomSegment{QStringLiteral("z%1").arg(segments.size() + 1),
-                                    start, end, 2.0, true, QPointF(0.5, 0.5)};
+            result << ZoomSegment{QStringLiteral("z%1").arg(result.size() + 1),
+                                  start, end, 2.0, true, {0.5, 0.5}};
         }
-        groupStart = i;
-    }
-    return segments;
-}
-
-double ZoomTimeline::levelAt(const QVector<ZoomSegment> &segments, double time,
-                             const ZoomStyle &style)
-{
-    QVector<ZoomSegment> ordered = segments;
-    std::sort(ordered.begin(), ordered.end(), [](const auto &a, const auto &b) {
-        return a.start < b.start;
-    });
-    for (int i = 0; i + 1 < ordered.size(); ++i) {
-        const auto &left = ordered[i];
-        const auto &right = ordered[i + 1];
-        if (right.start > left.end + 1e-9 || time < right.start || time > left.end) continue;
-        const double overlap = left.end - right.start;
-        if (overlap <= 1e-9) return std::max(left.level, right.level);
-        return lerp(left.level, right.level,
-                    ease((time - right.start) / overlap, style.easing));
-    }
-    double result = 1.0;
-    for (int i = 0; i < ordered.size(); ++i) {
-        const auto &segment = ordered[i];
-        if (time < segment.start || time > segment.end) continue;
-        double amount = 1.0;
-        const double inDuration = std::min(style.transitionIn, segment.end - segment.start);
-        const double outDuration = std::min(style.transitionOut, segment.end - segment.start);
-        const bool joinedAtStart = i > 0 && ordered[i - 1].end + 1e-9 >= segment.start;
-        const bool joinedAtEnd = i + 1 < ordered.size()
-            && segment.end + 1e-9 >= ordered[i + 1].start;
-        if (!joinedAtStart && inDuration > 0.0 && time < segment.start + inDuration)
-            amount = ease((time - segment.start) / inDuration, style.easing);
-        if (!joinedAtEnd && outDuration > 0.0 && time > segment.end - outDuration)
-            amount = std::min(amount, ease((segment.end - time) / outDuration, style.easing));
-        result = std::max(result, lerp(1.0, segment.level, amount));
     }
     return result;
 }
@@ -72,44 +27,70 @@ double ZoomTimeline::levelAt(const QVector<ZoomSegment> &segments, double time,
 QPointF ZoomTimeline::clampCenter(const QPointF &center, double level)
 {
     const double half = 0.5 / std::max(1.0, level);
-    return QPointF(std::clamp(center.x(), half, 1.0 - half),
-                   std::clamp(center.y(), half, 1.0 - half));
+    return {std::clamp(center.x(), half, 1.0 - half),
+            std::clamp(center.y(), half, 1.0 - half)};
 }
 
-QPointF ZoomTimeline::centerAt(const QVector<ZoomSegment> &segments, double time,
-                               const QPointF &cursor, const QPointF &previousCenter,
-                               double deltaTime, const ZoomStyle &style)
+static QPointF snapEdges(QPointF target, double level, double ratio)
+{
+    const double visible = 1.0 / std::max(1.0, level);
+    const double r = std::min(std::max(0.0, ratio), visible);
+    const double denominator = std::max(0.0001, 1.0 - 2.0 * r + 0.0001);
+    target.setX(std::clamp((target.x() - r) / denominator, 0.0, 1.0));
+    target.setY(std::clamp((target.y() - r) / denominator, 0.0, 1.0));
+    return ZoomTimeline::clampCenter(target, level);
+}
+
+ZoomFrame ZoomTimeline::targetAt(const QVector<ZoomSegment> &segments,
+                                 const QVector<CursorSample> &samples,
+                                 double time, const ZoomStyle &style)
 {
     const ZoomSegment *active = nullptr;
     for (const auto &segment : segments) {
-        if (time >= segment.start && time <= segment.end) {
-            if (!active || segment.level > active->level) active = &segment;
-        }
+        if (time >= segment.start && time <= segment.end
+            && (!active || segment.start > active->start)) active = &segment;
     }
-    if (!active) return QPointF(0.5, 0.5);
-    const double level = levelAt(segments, time, style);
-    QPointF target = active->automaticTarget ? cursor : active->target;
+    if (!active) return {};
+    if (!active->automaticTarget)
+        return {active->level, clampCenter(active->target, active->level)};
 
-    if (active->automaticTarget) {
-        const double halfDeadZone = style.followDeadZone / (2.0 * level);
-        const QPointF difference = target - previousCenter;
-        if (std::abs(difference.x()) <= halfDeadZone
-            && std::abs(difference.y()) <= halfDeadZone) {
-            target = previousCenter;
+    QVector<CursorSample> relevant;
+    for (const auto &sample : samples)
+        if (sample.time >= active->start && sample.time <= active->end) relevant << sample;
+    if (relevant.isEmpty() && !samples.isEmpty()) {
+        const auto it = std::lower_bound(samples.begin(), samples.end(), active->start,
+            [](const CursorSample &sample, double t) { return sample.time < t; });
+        if (it == samples.begin()) relevant << *it;
+        else if (it == samples.end()) relevant << samples.last();
+        else relevant << (it->time - active->start < active->start - (it - 1)->time ? *it : *(it - 1));
+    }
+    if (relevant.isEmpty()) return {active->level, {0.5, 0.5}};
+
+    const double maxWidth = 0.5 / active->level;
+    const double maxHeight = 0.7 / active->level;
+    struct Group { double start; QPointF minimum; QPointF maximum; };
+    QVector<Group> groups{{relevant.first().time, relevant.first().position, relevant.first().position}};
+    for (qsizetype i = 1; i < relevant.size(); ++i) {
+        auto &group = groups.last();
+        const QPointF nextMin(std::min(group.minimum.x(), relevant[i].position.x()),
+                              std::min(group.minimum.y(), relevant[i].position.y()));
+        const QPointF nextMax(std::max(group.maximum.x(), relevant[i].position.x()),
+                              std::max(group.maximum.y(), relevant[i].position.y()));
+        if (nextMax.x() - nextMin.x() <= maxWidth && nextMax.y() - nextMin.y() <= maxHeight) {
+            group.minimum = nextMin;
+            group.maximum = nextMax;
         } else {
-            const double smoothing = std::clamp(style.followSmoothing, 0.0, 1.0);
-            const double tau = smoothing <= 0.0 ? 0.0 : 0.25 * smoothing / 0.85;
-            const double alpha = tau <= 0.0 ? 1.0 : 1.0 - std::exp(-deltaTime / tau);
-            target = previousCenter + difference * alpha;
+            groups << Group{relevant[i].time, relevant[i].position, relevant[i].position};
         }
     }
-
-    double phase = 1.0;
-    if (style.transitionIn > 0.0 && time < active->start + style.transitionIn)
-        phase = ease((time - active->start) / style.transitionIn, style.easing);
-    if (style.transitionOut > 0.0 && time > active->end - style.transitionOut)
-        phase = std::min(phase, ease((active->end - time) / style.transitionOut, style.easing));
-    return clampCenter(QPointF(0.5, 0.5) + (target - QPointF(0.5, 0.5)) * phase, level);
+    const Group *activeGroup = nullptr;
+    for (const auto &group : groups) {
+        if (group.start <= time) activeGroup = &group;
+        else break;
+    }
+    if (!activeGroup) return {active->level, {0.5, 0.5}};
+    const QPointF activeCenter = (activeGroup->minimum + activeGroup->maximum) / 2.0;
+    return {active->level, snapEdges(activeCenter, active->level, style.snapToEdgesRatio)};
 }
 
 QJsonValue ZoomTimeline::targetToJson(const ZoomSegment &segment)

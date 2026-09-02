@@ -1,16 +1,8 @@
 #pragma once
 
-#include <QString>
-#include <QVector>
+#include "Project.h"
 
 namespace OmaRecord {
-
-struct Clip {
-    QString id;
-    double in = 0.0;
-    double out = 0.0;
-    double speed = 1.0;
-};
 
 class ClipTimeline
 {

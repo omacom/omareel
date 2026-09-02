@@ -7,68 +7,205 @@
 
 using namespace OmaRecord;
 
-Project Project::defaults(const QString &name, double duration)
+static QColor parseColor(const QJsonValue &value, const QColor &fallback)
 {
-    QJsonObject root;
-    root["version"] = 1;
-    root["name"] = name;
-    root["aspect"] = "auto";
-    root["crop"] = QJsonObject{{"x", 0}, {"y", 0}, {"w", 1}, {"h", 1}};
-    root["clips"] = QJsonArray{QJsonObject{{"id", "c1"}, {"in", 0.0},
-                                            {"out", duration}, {"speed", 1.0}}};
-    root["zooms"] = QJsonArray{};
-    root["zoomStyle"] = QJsonObject{{"transitionIn", 0.7}, {"transitionOut", 0.7},
-                                      {"easing", "easeInOutCubic"},
-                                      {"followSmoothing", 0.85},
-                                      {"followDeadZone", 0.12}, {"lookahead", 0.0}};
-    root["background"] = QJsonObject{
-        {"type", "wallpaper"}, {"wallpaper", "omarchy:current"},
-        {"gradient", QJsonObject{{"angle", 135},
-          {"stops", QJsonArray{QJsonArray{"#ff8a00", 0}, QJsonArray{"#e52e71", 1}}}}},
-        {"color", "#1a1b26"}, {"image", QJsonValue::Null}, {"blur", 0}};
-    root["frame"] = QJsonObject{
-        {"padding", 0.08}, {"radius", 12},
-        {"shadow", QJsonObject{{"enabled", true}, {"opacity", 0.5},
-                                {"blur", 40}, {"offsetY", 20}}},
-        {"inset", QJsonObject{{"enabled", false}, {"width", 0},
-                               {"color", "#000000"}, {"alpha", 0.5}}}};
-    root["cursor"] = QJsonObject{{"visible", true}, {"size", 1.5}, {"smoothing", 0.8},
-                                   {"clickEffect", "ripple"}, {"clickShrink", 0.85},
-                                   {"hideWhenIdleMs", QJsonValue::Null}, {"style", "macos"}};
-    root["audio"] = QJsonObject{{"desktop", true}, {"mic", true}, {"volume", 1.0}};
-    root["export"] = QJsonObject{{"format", "mp4"}, {"fps", 60}, {"width", 1920},
-                                   {"quality", "high"},
-                                   {"gif", QJsonObject{{"fps", 20}, {"width", 960}}}};
-    return Project(root);
+    const QColor parsed(value.toString());
+    return parsed.isValid() ? parsed : fallback;
+}
+
+QJsonObject OmaRecord::springToJson(const Spring &s)
+{
+    return {{"mass", s.mass}, {"stiffness", s.stiffness}, {"damping", s.damping}};
+}
+
+Spring OmaRecord::springFromJson(const QJsonObject &json, const Spring &fallback)
+{
+    return {json.value("mass").toDouble(fallback.mass),
+            json.value("stiffness").toDouble(fallback.stiffness),
+            json.value("damping").toDouble(fallback.damping)};
+}
+
+QVector<double> OmaRecord::allowedClipSpeeds()
+{
+    return {0.5, 0.75, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 3.0, 4.0, 8.0, 16.0, 24.0};
+}
+
+QStringList OmaRecord::allowedAspects()
+{
+    return {QStringLiteral("auto"), QStringLiteral("16:9"), QStringLiteral("1:1"),
+            QStringLiteral("4:3"), QStringLiteral("9:16"), QStringLiteral("3:4"),
+            QStringLiteral("4:5")};
+}
+
+Project Project::defaults(const QString &projectName, double duration)
+{
+    Project result;
+    result.name = projectName;
+    result.clips = {Clip{QStringLiteral("c1"), 0.0, duration, 1.0}};
+    result.background.gradient.stops = {
+        {QColor(QStringLiteral("#ff8a00")), 0.0},
+        {QColor(QStringLiteral("#e52e71")), 1.0}};
+    return result;
+}
+
+Project Project::fromJson(const QJsonObject &root)
+{
+    Project p = defaults(root.value("name").toString(QStringLiteral("Untitled Recording")), 0.0);
+    p.version = root.value("version").toInt(1);
+    const QString aspect = root.value("aspect").isNull() ? QStringLiteral("auto")
+                                                          : root.value("aspect").toString("auto");
+    if (allowedAspects().contains(aspect)) p.aspect = aspect;
+    const auto crop = root.value("crop").toObject();
+    p.crop = QRectF(crop.value("x").toDouble(0.0), crop.value("y").toDouble(0.0),
+                    crop.value("w").toDouble(1.0), crop.value("h").toDouble(1.0));
+
+    p.clips.clear();
+    for (const auto &value : root.value("clips").toArray()) {
+        const auto o = value.toObject();
+        p.clips << Clip{o.value("id").toString(), o.value("in").toDouble(),
+                       o.value("out").toDouble(), o.value("speed").toDouble(1.0)};
+    }
+    p.zooms.clear();
+    for (const auto &value : root.value("zooms").toArray()) {
+        const auto o = value.toObject();
+        ZoomSegment z;
+        z.id = o.value("id").toString();
+        z.start = o.value("start").toDouble();
+        z.end = o.value("end").toDouble();
+        z.level = o.value("level").toDouble(2.0);
+        const auto target = o.value("target");
+        z.automaticTarget = !target.isObject();
+        if (target.isObject()) {
+            const auto t = target.toObject();
+            z.target = QPointF(t.value("x").toDouble(0.5), t.value("y").toDouble(0.5));
+        }
+        p.zooms << z;
+    }
+    const auto zs = root.value("zoomStyle").toObject();
+    p.zoomStyle.spring = springFromJson(zs.value("spring").toObject(), p.zoomStyle.spring);
+    p.zoomStyle.snapToEdgesRatio = zs.value("snapToEdgesRatio").toDouble(0.25);
+    p.zoomStyle.instantAnimation = zs.value("instantAnimation").toBool(false);
+
+    const auto bg = root.value("background").toObject();
+    p.background.type = bg.value("type").toString(p.background.type);
+    p.background.wallpaper = bg.value("wallpaper").toString(p.background.wallpaper);
+    p.background.color = parseColor(bg.value("color"), p.background.color);
+    p.background.image = bg.value("image").toString();
+    p.background.blur = bg.value("blur").toDouble();
+    const auto gradient = bg.value("gradient").toObject();
+    p.background.gradient.angle = gradient.value("angle").toDouble(135.0);
+    if (gradient.contains("stops")) {
+        p.background.gradient.stops.clear();
+        for (const auto &v : gradient.value("stops").toArray()) {
+            const auto a = v.toArray();
+            if (a.size() >= 2) p.background.gradient.stops << GradientStop{parseColor(a[0], Qt::black), a[1].toDouble()};
+        }
+    }
+
+    const auto f = root.value("frame").toObject();
+    p.frame.padding = f.value("padding").toDouble(0.10);
+    p.frame.radius = f.value("radius").toDouble(12.0);
+    const auto sh = f.value("shadow").toObject();
+    p.frame.shadow.enabled = sh.value("enabled").toBool(true);
+    p.frame.shadow.intensity = sh.value("intensity").toDouble(sh.value("opacity").toDouble(0.75));
+    p.frame.shadow.blur = sh.value("blur").toDouble(20.0);
+    p.frame.shadow.distance = sh.value("distance").toDouble(sh.value("offsetY").toDouble(25.0));
+    p.frame.shadow.angle = sh.value("angle").toDouble(90.0);
+    const auto in = f.value("inset").toObject();
+    p.frame.inset.enabled = in.value("enabled").toBool(false);
+    p.frame.inset.width = in.value("width").toDouble();
+    p.frame.inset.color = parseColor(in.value("color"), Qt::black);
+    p.frame.inset.alpha = in.value("alpha").toDouble(0.5);
+
+    const auto c = root.value("cursor").toObject();
+    p.cursor.visible = c.value("visible").toBool(true);
+    p.cursor.size = c.value("size").toDouble(1.5);
+    p.cursor.smoothing = c.value("smoothing").isBool() ? c.value("smoothing").toBool()
+                                                        : c.value("smoothing").toDouble(0.8) > 0.0;
+    p.cursor.spring = springFromJson(c.value("spring").toObject(), p.cursor.spring);
+    p.cursor.clickEffect = c.value("clickEffect").toString("ripple");
+    p.cursor.clickShrink = c.value("clickShrink").toDouble(0.8);
+    p.cursor.rotateOnXMovementRatio = c.value("rotateOnXMovementRatio").toDouble(0.5);
+    p.cursor.hideWhenIdleMs = c.value("hideWhenIdleMs").isNull() ? -1 : c.value("hideWhenIdleMs").toInt(-1);
+    p.cursor.style = c.value("style").toString("macos");
+    p.cursor.ringColor = parseColor(c.value("ringColor"), p.cursor.ringColor);
+
+    const auto a = root.value("audio").toObject();
+    p.audio.desktop = a.value("desktop").toBool(true);
+    p.audio.mic = a.value("mic").toBool(true);
+    p.audio.volume = a.value("volume").toDouble(1.0);
+    const auto e = root.value("export").toObject();
+    p.exportSettings.format = e.value("format").toString("mp4");
+    p.exportSettings.fps = e.value("fps").toInt(60);
+    p.exportSettings.height = e.value("height").toInt(1080);
+    p.exportSettings.quality = e.value("quality").toString("social");
+    const auto g = e.value("gif").toObject();
+    p.exportSettings.gif.fps = g.value("fps").toInt(15);
+    p.exportSettings.gif.height = g.value("height").toInt(480);
+    p.exportSettings.gif.quality = g.value("quality").toString("studio");
+    p.exportSettings.gif.loop = g.value("loop").toBool(true);
+    return p;
+}
+
+QJsonObject Project::toJson() const
+{
+    QJsonArray clipArray;
+    for (const auto &c : clips) clipArray << QJsonObject{{"id", c.id}, {"in", c.in}, {"out", c.out}, {"speed", c.speed}};
+    QJsonArray zoomArray;
+    for (const auto &z : zooms) {
+        QJsonValue target = z.automaticTarget ? QJsonValue(QStringLiteral("auto"))
+            : QJsonValue(QJsonObject{{"x", z.target.x()}, {"y", z.target.y()}});
+        zoomArray << QJsonObject{{"id", z.id}, {"start", z.start}, {"end", z.end}, {"level", z.level}, {"target", target}};
+    }
+    QJsonArray stops;
+    for (const auto &s : background.gradient.stops)
+        stops << QJsonArray{s.color.name(QColor::HexRgb), s.position};
+    const QJsonObject bg{{"type", background.type}, {"wallpaper", background.wallpaper},
+        {"gradient", QJsonObject{{"angle", background.gradient.angle}, {"stops", stops}}},
+        {"color", background.color.name(QColor::HexRgb)},
+        {"image", background.image.isEmpty() ? QJsonValue(QJsonValue::Null) : QJsonValue(background.image)},
+        {"blur", background.blur}};
+    const QJsonObject frameJson{{"padding", frame.padding}, {"radius", frame.radius},
+        {"shadow", QJsonObject{{"enabled", frame.shadow.enabled}, {"intensity", frame.shadow.intensity},
+            {"blur", frame.shadow.blur}, {"distance", frame.shadow.distance}, {"angle", frame.shadow.angle}}},
+        {"inset", QJsonObject{{"enabled", frame.inset.enabled}, {"width", frame.inset.width},
+            {"color", frame.inset.color.name(QColor::HexRgb)}, {"alpha", frame.inset.alpha}}}};
+    const QJsonObject cursorJson{{"visible", cursor.visible}, {"size", cursor.size}, {"smoothing", cursor.smoothing},
+        {"spring", springToJson(cursor.spring)}, {"clickEffect", cursor.clickEffect}, {"clickShrink", cursor.clickShrink},
+        {"rotateOnXMovementRatio", cursor.rotateOnXMovementRatio},
+        {"hideWhenIdleMs", cursor.hideWhenIdleMs < 0 ? QJsonValue(QJsonValue::Null) : QJsonValue(cursor.hideWhenIdleMs)},
+        {"style", cursor.style}, {"ringColor", cursor.ringColor.name(QColor::HexRgb)}};
+    return {{"version", version}, {"name", name},
+        {"aspect", aspect == QLatin1String("auto") ? QJsonValue(QJsonValue::Null) : QJsonValue(aspect)},
+        {"crop", QJsonObject{{"x", crop.x()}, {"y", crop.y()}, {"w", crop.width()}, {"h", crop.height()}}},
+        {"clips", clipArray}, {"zooms", zoomArray},
+        {"zoomStyle", QJsonObject{{"spring", springToJson(zoomStyle.spring)}, {"snapToEdgesRatio", zoomStyle.snapToEdgesRatio}, {"instantAnimation", zoomStyle.instantAnimation}}},
+        {"background", bg}, {"frame", frameJson}, {"cursor", cursorJson},
+        {"audio", QJsonObject{{"desktop", audio.desktop}, {"mic", audio.mic}, {"volume", audio.volume}}},
+        {"export", QJsonObject{{"format", exportSettings.format}, {"fps", exportSettings.fps}, {"height", exportSettings.height},
+            {"quality", exportSettings.quality}, {"gif", QJsonObject{{"fps", exportSettings.gif.fps}, {"height", exportSettings.gif.height},
+                {"quality", exportSettings.gif.quality}, {"loop", exportSettings.gif.loop}}}}}};
 }
 
 Project Project::load(const QString &path, QString *error)
 {
     QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) {
-        if (error) *error = file.errorString();
-        return Project();
-    }
+    if (!file.open(QIODevice::ReadOnly)) { if (error) *error = file.errorString(); return {}; }
     QJsonParseError parseError;
     const auto doc = QJsonDocument::fromJson(file.readAll(), &parseError);
     if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
-        if (error) *error = parseError.errorString();
-        return Project();
+        if (error) *error = parseError.errorString(); return {};
     }
     if (error) error->clear();
-    return Project(doc.object());
+    return fromJson(doc.object());
 }
 
 bool Project::save(const QString &path, QString *error) const
 {
     QSaveFile file(path);
-    if (!file.open(QIODevice::WriteOnly)) {
-        if (error) *error = file.errorString();
-        return false;
-    }
-    if (file.write(QJsonDocument(m_json).toJson(QJsonDocument::Indented)) < 0 || !file.commit()) {
-        if (error) *error = file.errorString();
-        return false;
+    if (!file.open(QIODevice::WriteOnly)) { if (error) *error = file.errorString(); return false; }
+    if (file.write(QJsonDocument(toJson()).toJson(QJsonDocument::Indented)) < 0 || !file.commit()) {
+        if (error) *error = file.errorString(); return false;
     }
     if (error) error->clear();
     return true;
