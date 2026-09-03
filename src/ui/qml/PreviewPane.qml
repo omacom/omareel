@@ -36,8 +36,6 @@ FocusScope {
         width: Math.min(parent.width, parent.height * editor.outputWidth / editor.outputHeight)
         height: width * editor.outputHeight / editor.outputWidth
         color: theme.normalFill
-        border.color: theme.normalBorder
-        border.width: 1
         radius: theme.radius
         clip: true
         Item {
@@ -147,6 +145,14 @@ FocusScope {
                     }
                 }
             }
+        }
+        Rectangle {
+            anchors.fill: parent
+            color: "transparent"
+            border.color: theme.normalBorder
+            border.width: 1
+            radius: theme.radius
+            z: 30
         }
         Rectangle {
             anchors.horizontalCenter: parent.horizontalCenter

@@ -25,7 +25,9 @@ Item {
             currentX = Math.max(0, Math.min(width, mouse.x))
             selecting = Math.abs(currentX - originX) >= 2
         }
-        onReleased: {
+        onReleased: mouse => {
+            currentX = Math.max(0, Math.min(width, mouse.x))
+            selecting = Math.abs(currentX - originX) >= 2
             if (selecting)
                 editor.selectZoomsInOutputRange(Math.min(originX, currentX) / root.pixelsPerSecond,
                                                 Math.max(originX, currentX) / root.pixelsPerSecond)

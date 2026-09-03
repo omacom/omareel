@@ -10,15 +10,22 @@ Rectangle {
     property int section: 0
     property string forcedTooltip: ""
     readonly property var sections: [
-        {name:"Background", caption:"Set the canvas behind your recording", icon:"palette.svg"},
-        {name:"Shape", caption:"Frame, spacing, and edge treatment", icon:"square.svg"},
-        {name:"Cursor", caption:"Pointer style, motion, and clicks", icon:"mouse-pointer-2.svg"},
-        {name:"Zoom", caption:"Focus areas and camera motion", icon:"zoom-in.svg"},
-        {name:"Clip", caption:"Timing, speed, and trims", icon:"film.svg"},
-        {name:"Camera", caption:"Webcam placement and appearance", icon:"camera.svg"},
-        {name:"Keystrokes", caption:"Show keyboard activity on screen", icon:"keyboard.svg"},
-        {name:"Audio", caption:"Recorded tracks and output volume", icon:"volume-2.svg"}
+        {name:"Background", meta:"", icon:"palette.svg"},
+        {name:"Shape", meta:"FRAME & SHADOW", icon:"square.svg"},
+        {name:"Cursor", meta:"POINTER & CLICKS", icon:"mouse-pointer-2.svg"},
+        {name:"Zoom", meta:"FOCUS & MOTION", icon:"zoom-in.svg"},
+        {name:"Clip", meta:"TRIM & SPEED", icon:"film.svg"},
+        {name:"Camera", meta:"WEBCAM BUBBLE", icon:"camera.svg"},
+        {name:"Keystrokes", meta:"SHORTCUT OVERLAY", icon:"keyboard.svg"},
+        {name:"Audio", meta:"TRACKS & VOLUME", icon:"volume-2.svg"}
     ]
+
+    function panelMeta(index) {
+        if (index !== 0)
+            return root.sections[index].meta
+        const name = String(theme.themeName).replace(/[-_]+/g, " ").toUpperCase()
+        return ("THEME · " + name).slice(0, 24)
+    }
 
     function setBackgroundExpanded(value) {
         root.section = 0
@@ -173,7 +180,7 @@ Rectangle {
                         Layout.fillWidth: true
                         iconSource: "qrc:/omarecord/assets/icons/lucide/" + root.sections[root.section].icon
                         title: root.sections[root.section].name
-                        meta: root.sections[root.section].caption + " · " + theme.themeName
+                        meta: root.panelMeta(root.section)
                     }
                     Item { Layout.fillHeight: true }
                     OmSeparator { Layout.fillWidth: true }
