@@ -13,6 +13,8 @@
 #include <LayerShellQt/window.h>
 
 #include <QGuiApplication>
+#include <QFont>
+#include <QFontDatabase>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -30,6 +32,7 @@
 #include <QStandardPaths>
 #include <QTextStream>
 #include <QTimer>
+#include <QRegularExpression>
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
@@ -41,6 +44,49 @@
 #endif
 
 using namespace OmaRecord;
+
+struct ResolvedFonts {
+    QString ui;
+    QString mono;
+};
+
+static QString availableFamily(const QStringList &families, const QStringList &candidates)
+{
+    for (const QString &candidate : candidates) {
+        for (const QString &family : families)
+            if (family.compare(candidate, Qt::CaseInsensitive) == 0) return family;
+    }
+    return {};
+}
+
+static ResolvedFonts resolveFonts()
+{
+    const QStringList families = QFontDatabase::families();
+    QProcess settings;
+    settings.start(QStringLiteral("gsettings"),
+                   {QStringLiteral("get"), QStringLiteral("org.gnome.desktop.interface"),
+                    QStringLiteral("font-name")});
+    QString desktopFamily;
+    if (settings.waitForFinished(1500) && settings.exitCode() == 0) {
+        QString value = QString::fromUtf8(settings.readAllStandardOutput()).trimmed();
+        if ((value.startsWith(QLatin1Char('\'')) && value.endsWith(QLatin1Char('\'')))
+            || (value.startsWith(QLatin1Char('"')) && value.endsWith(QLatin1Char('"'))))
+            value = value.mid(1, value.size() - 2);
+        const QRegularExpression sizeSuffix(QStringLiteral(R"(\s+\d+(?:\.\d+)?$)"));
+        value.remove(sizeSuffix);
+        desktopFamily = availableFamily(families, {value.trimmed()});
+    }
+    QString ui = desktopFamily;
+    if (ui.isEmpty()) ui = availableFamily(families,
+                                            {QStringLiteral("Inter"), QStringLiteral("Noto Sans")});
+    if (ui.isEmpty()) ui = QFontDatabase::systemFont(QFontDatabase::GeneralFont).family();
+    QString mono = availableFamily(families,
+                                   {QStringLiteral("Adwaita Mono"),
+                                    QStringLiteral("JetBrainsMono Nerd Font")});
+    if (mono.isEmpty()) mono = QFontDatabase::systemFont(QFontDatabase::FixedFont).family();
+    qInfo().noquote() << "omarecord: UI font" << ui << "; mono font" << mono;
+    return {ui, mono};
+}
 
 static int usage(const QString &error = {})
 {
@@ -417,6 +463,11 @@ int main(int argc, char **argv)
     QGuiApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("omarecord"));
     app.setOrganizationName(QStringLiteral("omarecord"));
+    const ResolvedFonts resolvedFonts = resolveFonts();
+    QFont applicationFont(resolvedFonts.ui);
+    applicationFont.setPixelSize(13);
+    QGuiApplication::setFont(applicationFont);
+    Theme::setFontFamilies(resolvedFonts.ui, resolvedFonts.mono);
     const QStringList args = app.arguments();
     if (args.size() < 2) {
         Theme theme;

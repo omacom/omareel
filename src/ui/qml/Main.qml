@@ -10,6 +10,8 @@ ApplicationWindow {
     height: 900
     minimumWidth: 1100
     minimumHeight: 700
+    font.family: theme.fontFamily
+    font.pixelSize: 13
     color: theme.background
     title: editor.bundleName + " — omarecord"
     Material.theme: theme.dark ? Material.Dark : Material.Light

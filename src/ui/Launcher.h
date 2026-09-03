@@ -56,6 +56,8 @@ public:
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void openBundle(const QString &path);
     Q_INVOKABLE void showBundleInFolder(const QString &path);
+    Q_INVOKABLE void showRecordingsFolder();
+    Q_INVOKABLE void renameBundle(const QString &path, const QString &name);
     Q_INVOKABLE void deleteBundle(const QString &path);
     Q_INVOKABLE void record();
     Q_INVOKABLE void stopRecording();

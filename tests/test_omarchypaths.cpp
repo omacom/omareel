@@ -48,7 +48,7 @@ private slots:
         colors.close();
         qputenv("OMARECORD_OMARCHY_STATE_DIR", state.path().toUtf8());
         Theme inferred;
-        QCOMPARE(inferred.lighterBackground(), QColor(QStringLiteral("#faf4ed")).lighter(112));
+        QCOMPARE(inferred.lighterBackground(), QColor(QStringLiteral("#faf4ed")).lighter(106));
         QCOMPARE(inferred.darkBackground(), QColor(qRound(250 * .75), qRound(244 * .75), qRound(237 * .75)));
         QVERIFY(!inferred.dark());
 

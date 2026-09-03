@@ -9,6 +9,8 @@ ApplicationWindow {
     visible: false
     width: recordingBar.webcam ? 408 : 236
     height: recordingBar.webcam ? 120 : 40
+    font.family: theme.fontFamily
+    font.pixelSize: 13
     color: "transparent"
     flags: Qt.FramelessWindowHint | Qt.Tool
     Material.theme: theme.dark ? Material.Dark : Material.Light

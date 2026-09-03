@@ -11,7 +11,10 @@
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLocale>
 #include <QMediaDevices>
 #include <QProcess>
@@ -234,19 +237,38 @@ void Launcher::refresh()
     const QDir root(OmarchyPaths::recordingsDirectory());
     const auto entries = root.entryInfoList({QStringLiteral("*.omarecord")}, QDir::Dirs | QDir::NoDotAndDotDot, QDir::Time);
     for (const auto &entry : entries.mid(0, 12)) {
-        QString name = entry.completeBaseName();
+        QString name;
         const QString projectPath = QDir(entry.absoluteFilePath()).filePath(QStringLiteral("project.json"));
         if (QFileInfo(projectPath).isFile()) {
             QString ignored;
             const Project project = Project::load(projectPath, &ignored);
-            if (ignored.isEmpty()) name = project.name;
+            if (ignored.isEmpty()) name = project.name.trimmed();
         }
+        QJsonObject capture;
+        QFile captureFile(QDir(entry.absoluteFilePath()).filePath(QStringLiteral("capture.json")));
+        if (captureFile.open(QIODevice::ReadOnly))
+            capture = QJsonDocument::fromJson(captureFile.readAll()).object();
+        const int width = capture.value(QStringLiteral("width")).toInt();
+        const int height = capture.value(QStringLiteral("height")).toInt();
+        const QJsonObject region = capture.value(QStringLiteral("region")).toObject();
+        const double scale = capture.value(QStringLiteral("scale")).toDouble(1.0);
+        QString mode = capture.value(QStringLiteral("mode")).toString();
+        if (mode.isEmpty()) {
+            const int regionWidth = qRound(region.value(QStringLiteral("w")).toDouble() * scale);
+            const int regionHeight = qRound(region.value(QStringLiteral("h")).toDouble() * scale);
+            mode = qAbs(regionWidth - width) <= 1 && qAbs(regionHeight - height) <= 1
+                ? QStringLiteral("fullscreen") : QStringLiteral("region");
+        }
+        const QString modeText = mode == QLatin1String("fullscreen") ? QStringLiteral("Screen")
+            : mode == QLatin1String("window") ? QStringLiteral("Window") : QStringLiteral("Area");
         const QString thumb = QDir(entry.absoluteFilePath()).filePath(QStringLiteral("thumb.jpg"));
         const double duration = RecordingMetadata::captureDuration(entry.absoluteFilePath());
         m_recentBundles << QVariantMap{{QStringLiteral("path"), entry.absoluteFilePath()},
-            {QStringLiteral("name"), name}, {QStringLiteral("duration"), duration},
+            {QStringLiteral("name"), name},
+            {QStringLiteral("titleText"), name.isEmpty() ? formatDate(entry.lastModified()) : name},
+            {QStringLiteral("detailText"), QStringLiteral("%1×%2 · %3").arg(width).arg(height).arg(modeText)},
+            {QStringLiteral("duration"), duration},
             {QStringLiteral("durationText"), duration > 0.0 ? formatDuration(duration) : QStringLiteral("--:--")},
-            {QStringLiteral("dateText"), formatDate(entry.lastModified())},
             {QStringLiteral("thumbnail"), QFileInfo(thumb).isFile() ? QUrl::fromLocalFile(thumb).toString() : QString()}};
         if (duration <= 0.0) probeDurationAsync(entry.absoluteFilePath());
     }
@@ -262,7 +284,15 @@ QString Launcher::formatDuration(double seconds)
 
 QString Launcher::formatDate(const QDateTime &dateTime)
 {
-    return QLocale().toString(dateTime.date(), QLocale::ShortFormat);
+    const QDate date = dateTime.date();
+    const QDate today = QDate::currentDate();
+    const QString time = dateTime.toString(QStringLiteral("HH:mm"));
+    if (date == today) return QStringLiteral("Today, %1").arg(time);
+    if (date == today.addDays(-1)) return QStringLiteral("Yesterday, %1").arg(time);
+    const QLocale english(QLocale::English);
+    if (date.year() == today.year())
+        return QStringLiteral("%1, %2").arg(english.toString(date, QStringLiteral("MMM d")), time);
+    return english.toString(date, QStringLiteral("MMM d, yyyy"));
 }
 
 void Launcher::probeDurationAsync(const QString &bundlePath)
@@ -312,6 +342,40 @@ void Launcher::showBundleInFolder(const QString &pathValue)
     }
     if (!QDesktopServices::openUrl(QUrl::fromLocalFile(bundle.absolutePath())))
         emit errorOccurred(QStringLiteral("Could not open the recordings folder"));
+}
+
+void Launcher::showRecordingsFolder()
+{
+    const QString path = OmarchyPaths::recordingsDirectory();
+    QDir().mkpath(path);
+    if (!QDesktopServices::openUrl(QUrl::fromLocalFile(path)))
+        emit errorOccurred(QStringLiteral("Could not open the recordings folder"));
+}
+
+void Launcher::renameBundle(const QString &pathValue, const QString &nameValue)
+{
+    const QUrl url(pathValue);
+    const QFileInfo bundle(url.isLocalFile() ? url.toLocalFile() : pathValue);
+    const QString name = nameValue.trimmed();
+    if (!bundle.isDir() || name.isEmpty()) {
+        emit errorOccurred(QStringLiteral("Enter a name for the recording"));
+        return;
+    }
+    const QString projectPath = QDir(bundle.absoluteFilePath()).filePath(QStringLiteral("project.json"));
+    QString error;
+    Project project = QFileInfo::exists(projectPath)
+        ? Project::load(projectPath, &error)
+        : Project::defaults(name, RecordingMetadata::captureDuration(bundle.absoluteFilePath()));
+    if (!error.isEmpty()) {
+        emit errorOccurred(error);
+        return;
+    }
+    project.name = name;
+    if (!project.save(projectPath, &error)) {
+        emit errorOccurred(error);
+        return;
+    }
+    refresh();
 }
 
 void Launcher::deleteBundle(const QString &pathValue)

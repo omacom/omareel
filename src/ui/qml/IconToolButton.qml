@@ -10,13 +10,27 @@ ToolButton {
     topInset: 0
     bottomInset: 0
     focusPolicy: Qt.TabFocus
-    property color toolIconColor: enabled ? theme.foreground : Qt.alpha(theme.foreground, .34)
-    property color hoverColor: Qt.alpha(theme.foreground, .07)
+    hoverEnabled: true
+    property color toolIconColor: enabled ? theme.foreground : theme.textFaint
+    property color hoverColor: theme.hairline
     icon.width: 20
     icon.height: 20
     icon.color: toolIconColor
-    background: Rectangle {
-        radius: 6
-        color: control.hovered ? control.hoverColor : "transparent"
+    background: Item {
+        Rectangle {
+            anchors.fill: parent
+            radius: 6
+            color: control.hovered ? control.hoverColor : "transparent"
+            Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
+        }
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: -3
+            radius: 9
+            color: "transparent"
+            border.width: 2
+            border.color: theme.accent
+            visible: control.visualFocus
+        }
     }
 }

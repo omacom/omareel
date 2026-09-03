@@ -3,10 +3,30 @@
 
 #include <QDir>
 #include <QFile>
+#include <QFont>
+#include <QCoreApplication>
 #include <QRegularExpression>
+#include <QGuiApplication>
 #include <cmath>
 
 using namespace OmaRecord;
+
+static QString configuredFontFamily;
+static QString configuredMonoFamily;
+
+static QColor withAlpha(const QColor &color, int alpha)
+{
+    QColor result = color;
+    result.setAlpha(alpha);
+    return result;
+}
+
+static QColor blend(const QColor &from, const QColor &toward, double amount)
+{
+    return QColor(qRound(from.red() * (1.0 - amount) + toward.red() * amount),
+                  qRound(from.green() * (1.0 - amount) + toward.green() * amount),
+                  qRound(from.blue() * (1.0 - amount) + toward.blue() * amount));
+}
 
 static double relativeLuminance(const QColor &color)
 {
@@ -20,10 +40,47 @@ static double relativeLuminance(const QColor &color)
 
 Theme::Theme(QObject *parent): QObject(parent)
 {
+    const bool hasGuiApplication = qobject_cast<QGuiApplication *>(QCoreApplication::instance());
+    m_fontFamily = configuredFontFamily.isEmpty()
+        ? (hasGuiApplication ? QGuiApplication::font().family() : QStringLiteral("sans-serif"))
+        : configuredFontFamily;
+    m_monoFamily = configuredMonoFamily.isEmpty() ? QStringLiteral("monospace")
+                                                   : configuredMonoFamily;
     const auto sourceChanged = [this] { emit this->sourceChanged(); reload(); };
     connect(&m_watcher, &QFileSystemWatcher::fileChanged, this, sourceChanged);
     connect(&m_watcher, &QFileSystemWatcher::directoryChanged, this, sourceChanged);
     reload();
+}
+
+void Theme::setFontFamilies(const QString &fontFamily, const QString &monoFamily)
+{
+    configuredFontFamily = fontFamily;
+    configuredMonoFamily = monoFamily;
+}
+
+QColor Theme::hairline() const
+{
+    return withAlpha(m_foreground, qRound(255 * .08));
+}
+
+QColor Theme::hairlineStrong() const
+{
+    return withAlpha(m_foreground, qRound(255 * .14));
+}
+
+QColor Theme::textMuted() const
+{
+    return withAlpha(m_foreground, qRound(255 * .62));
+}
+
+QColor Theme::textFaint() const
+{
+    return withAlpha(m_foreground, qRound(255 * .40));
+}
+
+QColor Theme::accentSoft() const
+{
+    return withAlpha(m_accent, qRound(255 * .14));
 }
 
 QColor Theme::accentForeground() const
@@ -57,7 +114,7 @@ void Theme::reload()
             else if (key == QLatin1String("foreground")) foreground = value;
         }
     }
-    if (!lighterBackground.isValid()) lighterBackground = background.lighter(112);
+    if (!lighterBackground.isValid()) lighterBackground = background.lighter(106);
     const QColor darkBackground(qRound(background.red() * .75),
                                 qRound(background.green() * .75),
                                 qRound(background.blue() * .75));
@@ -71,6 +128,7 @@ void Theme::reload()
     m_lighterBackground = lighterBackground;
     m_darkBackground = darkBackground;
     m_foreground = foreground;
+    m_record = blend(QColor(QStringLiteral("#ff453a")), accent, .15);
     m_dark = dark;
     rearmWatcher();
     if (didChange) emit changed();

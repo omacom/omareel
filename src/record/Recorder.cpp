@@ -732,6 +732,7 @@ int Recorder::daemonMain(const QStringList &arguments)
     QJsonObject capture{
         {"version", 1}, {"fps", options.fps}, {"width", region.physicalWidth},
         {"height", region.physicalHeight},
+        {"mode", modeName(region.mode)},
         {"region", QJsonObject{{"x", region.x}, {"y", region.y},
                                 {"w", region.width}, {"h", region.height}}},
         {"scale", region.scale}, {"monitor", region.monitorName},
