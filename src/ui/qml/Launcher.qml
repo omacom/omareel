@@ -148,15 +148,23 @@ ApplicationWindow {
         focusPolicy: Qt.TabFocus
         topInset: 0
         bottomInset: 0
-        leftPadding: 6
-        rightPadding: 6
+        leftPadding: 10
+        rightPadding: 8
+        topPadding: 0
+        bottomPadding: 0
         onClicked: toggleRequested()
         contentItem: RowLayout {
-            spacing: 4
+            spacing: 6
             ToolButton {
                 Layout.preferredWidth: 16
                 Layout.preferredHeight: 16
+                Layout.alignment: Qt.AlignVCenter
                 padding: 0
+                topInset: 0
+                bottomInset: 0
+                leftInset: 0
+                rightInset: 0
+                display: AbstractButton.IconOnly
                 enabled: false
                 opacity: chip.enabled ? 1 : .42
                 icon.width: 16
@@ -167,6 +175,7 @@ ApplicationWindow {
             }
             Label {
                 Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
                 text: chip.text
                 elide: Text.ElideRight
                 font.pixelSize: 12
@@ -179,12 +188,18 @@ ApplicationWindow {
             Item {
                 visible: chip.hasMenu
                 Layout.preferredWidth: 14
-                Layout.preferredHeight: 22
+                Layout.preferredHeight: 16
+                Layout.alignment: Qt.AlignVCenter
                 ToolButton {
                     anchors.centerIn: parent
                     width: 12
                     height: 12
                     padding: 0
+                    topInset: 0
+                    bottomInset: 0
+                    leftInset: 0
+                    rightInset: 0
+                    display: AbstractButton.IconOnly
                     enabled: false
                     opacity: 1
                     icon.width: 12
@@ -452,7 +467,7 @@ ApplicationWindow {
                     Layout.alignment: Qt.AlignVCenter
                     spacing: 8
                     CaptureChip {
-                        Layout.preferredWidth: 112
+                        Layout.preferredWidth: implicitWidth
                         text: "System audio"
                         iconFile: "volume-2.svg"
                         selected: launcher.systemAudio
@@ -460,7 +475,7 @@ ApplicationWindow {
                     }
                     CaptureChip {
                         id: microphoneChip
-                        Layout.preferredWidth: 124
+                        Layout.preferredWidth: implicitWidth
                         text: "Microphone"
                         iconFile: "mic.svg"
                         hasMenu: true
@@ -470,7 +485,7 @@ ApplicationWindow {
                     }
                     CaptureChip {
                         id: webcamChip
-                        Layout.preferredWidth: 105
+                        Layout.preferredWidth: implicitWidth
                         text: "Webcam"
                         iconFile: "video.svg"
                         hasMenu: true
