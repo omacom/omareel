@@ -140,6 +140,7 @@ public:
     Q_INVOKABLE void attachFrameSource(QObject *source);
     Q_INVOKABLE void attachCameraFrameSource(QObject *source);
     Q_INVOKABLE void setProjectValue(const QString &path, const QVariant &value, bool coalesce = false);
+    Q_INVOKABLE void applyGradientPreset(int index);
     Q_INVOKABLE void beginCoalescedEdit(const QString &key);
     Q_INVOKABLE void endCoalescedEdit();
     Q_INVOKABLE void undo();

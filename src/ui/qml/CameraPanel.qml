@@ -2,19 +2,12 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
+import Omarecord.Ui
 
 ColumnLayout {
     id: root
     spacing: theme.space.panelGap
     readonly property var camera: editor.project.camera
-
-    component ChoiceButton: EditorButton {
-        checkable: true
-        selected: checked
-        Layout.fillWidth: true
-        Layout.preferredHeight: 30
-        font.pixelSize: theme.font.bodySmall
-    }
 
     PanelHeading {
         visible: !editor.hasCamera
@@ -47,16 +40,21 @@ ColumnLayout {
 
         PanelLabel { text: "Position" }
         GridLayout {
-            Layout.fillWidth: true; columns: 2; columnSpacing: 6; rowSpacing: 6
+            Layout.fillWidth: true
+            columns: 2
+            columnSpacing: theme.space.md
+            rowSpacing: theme.space.md
             Repeater {
                 model: [
-                    {value:"top-left", text:"Top left"}, {value:"top-right", text:"Top right"},
-                    {value:"bottom-left", text:"Bottom left"}, {value:"bottom-right", text:"Bottom right"}
+                    {value:"top-left", label:"Top left"}, {value:"top-right", label:"Top right"},
+                    {value:"bottom-left", label:"Bottom left"}, {value:"bottom-right", label:"Bottom right"}
                 ]
-                delegate: ChoiceButton {
+                delegate: OmButton {
                     required property var modelData
-                    text: modelData.text
-                    checked: root.camera.position === modelData.value
+                    Layout.fillWidth: true
+                    bordered: true
+                    selected: root.camera.position === modelData.value
+                    text: modelData.label
                     onClicked: editor.setProjectValue("camera.position", modelData.value)
                 }
             }
@@ -64,57 +62,39 @@ ColumnLayout {
         PanelSlider { Layout.fillWidth: true; label: "Size"; path: "camera.size"; from: .1; to: .5; value: root.camera.size; stepSize: .01; decimals: 2 }
 
         PanelLabel { text: "Shape" }
-        RowLayout {
-            Layout.fillWidth: true; spacing: 5
-            Repeater {
-                model: [{value:"round", text:"Round"}, {value:"rounded", text:"Rounded"}, {value:"square", text:"Square"}]
-                delegate: ChoiceButton {
-                    required property var modelData
-                    text: modelData.text
-                    checked: root.camera.shape === modelData.value
-                    onClicked: editor.setProjectValue("camera.shape", modelData.value)
-                }
-            }
+        OmButtonGroup {
+            Layout.fillWidth: true
+            options: [{value:"round", label:"Round"}, {value:"rounded", label:"Rounded"}, {value:"square", label:"Square"}]
+            value: root.camera.shape
+            onChanged: value => editor.setProjectValue("camera.shape", value)
         }
         PanelSlider { visible: root.camera.shape === "rounded"; Layout.fillWidth: true; label: "Corner radius"; path: "camera.radius"; from: 0; to: 80; value: root.camera.radius; stepSize: 1 }
 
         PanelLabel { text: "Crop" }
-        RowLayout {
-            Layout.fillWidth: true; spacing: 5
-            ChoiceButton {
-                text: "Square"
-                checked: root.camera.shape === "round" || root.camera.crop === "square"
-                onClicked: editor.setProjectValue("camera.crop", "square")
-            }
-            ChoiceButton {
-                text: "Original"
-                enabled: root.camera.shape !== "round"
-                checked: root.camera.shape !== "round" && root.camera.crop === "original"
-                onClicked: editor.setProjectValue("camera.crop", "original")
-            }
+        OmButtonGroup {
+            Layout.fillWidth: true
+            options: [{value:"square", label:"Square"},
+                {value:"original", label:"Original", enabled: root.camera.shape !== "round"}]
+            value: root.camera.shape === "round" ? "square" : root.camera.crop
+            onChanged: value => editor.setProjectValue("camera.crop", value)
         }
 
         RowLayout {
             Layout.fillWidth: true
             PanelLabel { text: "Rotation"; Layout.fillWidth: true }
-            ToolButton {
+            OmIconButton {
                 enabled: false; opacity: 1; background: null
                 icon.source: "qrc:/omarecord/assets/icons/lucide/rotate-cw.svg"
                 icon.color: theme.foreground
                 icon.width: 15; icon.height: 15
             }
         }
-        RowLayout {
-            Layout.fillWidth: true; spacing: 5
-            Repeater {
-                model: [0, 90, 180, 270]
-                delegate: ChoiceButton {
-                    required property int modelData
-                    text: modelData + "°"
-                    checked: root.camera.rotation === modelData
-                    onClicked: editor.setProjectValue("camera.rotation", modelData)
-                }
-            }
+        OmButtonGroup {
+            Layout.fillWidth: true
+            options: [{value:0,label:"0°"}, {value:90,label:"90°"},
+                {value:180,label:"180°"}, {value:270,label:"270°"}]
+            value: root.camera.rotation
+            onChanged: value => editor.setProjectValue("camera.rotation", value)
         }
         EditorSwitch {
             Layout.preferredHeight: 32

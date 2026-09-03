@@ -30,6 +30,12 @@ Rectangle {
     function setBackgroundExpanded(value) {
         root.section = 0
         Qt.callLater(function() {
+            if (panelLoader.item) panelLoader.item.showAllWallpapers = value
+        })
+    }
+    function setGradientExpanded(value) {
+        root.section = 0
+        Qt.callLater(function() {
             if (panelLoader.item) panelLoader.item.showAllGradients = value
         })
     }
@@ -63,22 +69,19 @@ Rectangle {
                 spacing: 4
                 Repeater {
                     model: root.sections
-                    delegate: ToolButton {
+                    delegate: OmIconButton {
                         id: railButton
                         required property var modelData
                         required property int index
                         property bool tooltipReady: false
                         objectName: "railButton-" + modelData.name
                         anchors.horizontalCenter: parent.horizontalCenter
-                        width: 40
-                        height: 40
-                        padding: 0
-                        hoverEnabled: true
-                        focusPolicy: Qt.TabFocus
+                        width: theme.space.controlHeight
+                        height: theme.space.controlHeight
                         checkable: true
                         checked: root.section === index
-                        icon.width: 20
-                        icon.height: 20
+                        icon.width: 14
+                        icon.height: 14
                         icon.source: "qrc:/omarecord/assets/icons/lucide/" + modelData.icon
                         icon.color: checked ? theme.accent : theme.textMuted
                         Accessible.name: modelData.name
@@ -87,36 +90,13 @@ Rectangle {
                             if (hovered) tooltipDelay.restart()
                             else { tooltipDelay.stop(); tooltipReady = false }
                         }
-                        background: Item {
-                            Rectangle {
-                                anchors.fill: parent
-                                radius: theme.radius
-                                color: railButton.checked ? theme.selectedFill
-                                     : railButton.down ? theme.pressedFill
-                                     : railButton.hovered ? theme.hoverFill : "transparent"
-                                border.width: railButton.checked ? theme.selectedBorderWidth
-                                    : railButton.hovered ? theme.hoverBorderWidth : 0
-                                border.color: railButton.checked ? theme.selectedBorder : theme.hoverBorder
-                                Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
-                            }
-                            Rectangle {
-                                x: -8
-                                anchors.verticalCenter: parent.verticalCenter
-                                width: 2
-                                height: 24
-                                radius: 0
-                                color: theme.foreground
-                                visible: railButton.checked
-                            }
-                            Rectangle {
-                                anchors.fill: parent
-                                anchors.margins: -3
-                                radius: theme.radius
-                                color: "transparent"
-                                border.width: 2
-                                border.color: theme.hoverBorder
-                                visible: railButton.visualFocus
-                            }
+                        Rectangle {
+                            x: -14
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 2
+                            height: 20
+                            color: theme.foreground
+                            visible: railButton.checked
                         }
                         Timer {
                             id: tooltipDelay
@@ -151,6 +131,7 @@ Rectangle {
         }
 
         Rectangle {
+            id: inspectorPanel
             Layout.preferredWidth: 320
             Layout.minimumWidth: 320
             Layout.maximumWidth: 320
@@ -190,18 +171,18 @@ Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
-                    contentWidth: availableWidth
+                    contentWidth: width
                     ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                     ScrollBar.vertical.width: 6
                     Item {
-                        width: scroller.availableWidth
+                        width: scroller.width
                         implicitHeight: panelLoader.item ? panelLoader.item.implicitHeight + theme.space.panelPadding * 2 : 0
                         height: implicitHeight
                         Loader {
                             id: panelLoader
                             x: theme.space.panelPadding
                             y: theme.space.panelPadding
-                            width: parent.width - theme.space.panelPadding * 2
+                            width: inspectorPanel.width - theme.space.panelPadding * 2
                             height: item ? item.implicitHeight : 0
                             sourceComponent: root.section === 0 ? backgroundPanel
                                 : root.section === 1 ? shapePanel

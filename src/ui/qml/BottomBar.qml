@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import Omarecord.Ui
 
 Rectangle {
     id: root
@@ -76,41 +77,25 @@ Rectangle {
                 Accessible.name: "Go to start"
                 onClicked: editor.seekBoundary(-1)
             }
-            ToolButton {
+            OmButton {
                 Layout.preferredWidth: 40
                 Layout.preferredHeight: 40
                 width: 40
                 height: 40
-                topInset: 0
-                bottomInset: 0
-                padding: 0
-                hoverEnabled: true
-                focusPolicy: Qt.TabFocus
+                leftPadding: 0
+                rightPadding: 0
+                topPadding: 0
+                bottomPadding: 0
+                bordered: true
+                active: true
                 icon.source: editor.playing
                     ? "qrc:/omarecord/assets/icons/lucide/pause.svg"
                     : "qrc:/omarecord/assets/icons/lucide/play.svg"
                 icon.width: 20
                 icon.height: 20
-                icon.color: theme.accentForeground
+                icon.color: theme.foreground
                 Accessible.name: editor.playing ? "Pause" : "Play"
                 onClicked: editor.playPause()
-                background: Rectangle {
-                    radius: theme.radius
-                    color: parent.down ? theme.pressedFill
-                         : parent.hovered ? theme.hoverFill : theme.selectedFill
-                    border.width: 1
-                    border.color: parent.hovered ? theme.hoverBorder : theme.normalBorder
-                    Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.margins: -3
-                        radius: theme.radius
-                        color: "transparent"
-                        border.width: 2
-                        border.color: theme.hoverBorder
-                        visible: parent.parent.visualFocus
-                    }
-                }
             }
             IconToolButton {
                 icon.source: "qrc:/omarecord/assets/icons/lucide/skip-forward.svg"

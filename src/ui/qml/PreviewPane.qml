@@ -88,14 +88,14 @@ FocusScope {
             Rectangle {
                 id: manualTargetMarker
                 visible: scaled.selectedZoom && typeof scaled.selectedZoom.target === "object"
-                readonly property real targetX: scaled.selectedZoom ? scaled.selectedZoom.target.x : .5
-                readonly property real targetY: scaled.selectedZoom ? scaled.selectedZoom.target.y : .5
+                readonly property real targetX: visible ? Number(scaled.selectedZoom.target.x) : .5
+                readonly property real targetY: visible ? Number(scaled.selectedZoom.target.y) : .5
                 x: scaled.zoomOriginX + editor.zoom.scale * (scaled.frameX + targetX * scaled.videoWidth - scaled.zoomOriginX) - width / 2
                 y: scaled.zoomOriginY + editor.zoom.scale * (scaled.frameY + targetY * scaled.videoHeight - scaled.zoomOriginY) - height / 2
                 width: 18 / scaled.scale
                 height: width
                 radius: theme.radius
-            color: theme.accentSoft
+                color: theme.accentSoft
                 border.width: 2 / scaled.scale
                 border.color: theme.accent
                 z: 20

@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.impl
 import QtQuick.Layouts
-import QtQuick.Effects
 
 Button {
     id: control
@@ -11,6 +11,7 @@ Button {
     property bool primary: false
     property bool destructive: false
     property string tooltipText: ""
+    property url trailingIconSource
 
     implicitHeight: theme.space.controlHeight
     implicitWidth: contentRow.implicitWidth + leftPadding + rightPadding
@@ -25,9 +26,9 @@ Button {
     font.family: theme.fontFamily
     font.pixelSize: theme.font.body
     font.bold: selected
-    icon.width: theme.font.title
-    icon.height: theme.font.title
-    icon.color: destructive ? theme.record : selected ? theme.menuSelectedText : theme.foreground
+    icon.width: 14
+    icon.height: 14
+    icon.color: destructive ? theme.record : theme.foreground
 
     contentItem: RowLayout {
         id: contentRow
@@ -38,18 +39,11 @@ Button {
             Layout.preferredWidth: control.icon.width
             Layout.preferredHeight: control.icon.height
             Layout.alignment: Qt.AlignVCenter
-            Image {
-                id: buttonIcon
+            IconImage {
                 anchors.fill: parent
-                visible: false
                 source: control.icon.source
                 sourceSize: Qt.size(control.icon.width, control.icon.height)
-            }
-            MultiEffect {
-                anchors.fill: parent
-                source: buttonIcon
-                colorization: 1
-                colorizationColor: control.icon.color
+                color: control.icon.color
             }
         }
         Text {
@@ -57,9 +51,21 @@ Button {
             text: control.text
             color: !control.enabled ? theme.textFaint
                  : control.destructive ? theme.record
-                 : control.selected ? theme.menuSelectedText : theme.foreground
+                 : theme.foreground
             font: control.font
             Layout.alignment: Qt.AlignVCenter
+        }
+        Item {
+            visible: control.trailingIconSource.toString() !== ""
+            Layout.preferredWidth: 14
+            Layout.preferredHeight: 14
+            Layout.alignment: Qt.AlignVCenter
+            IconImage {
+                anchors.fill: parent
+                source: control.trailingIconSource
+                sourceSize: Qt.size(14, 14)
+                color: control.destructive ? theme.record : theme.foreground
+            }
         }
         Item { Layout.fillWidth: true }
     }
@@ -68,11 +74,13 @@ Button {
         radius: theme.radius
         color: control.down ? theme.pressedFill
              : control.primary ? theme.selectedFill
-             : theme.controlFill(control.visualFocus, control.hovered, control.selected || control.active)
+             : control.selected || control.active ? theme.selectedFill
+             : control.visualFocus || control.hovered ? theme.hoverFill
+             : control.bordered ? theme.normalFill : "transparent"
         border.width: control.primary ? 1
                     : (control.bordered || control.hovered || control.visualFocus || control.selected)
                       ? theme.controlBorderWidth(control.visualFocus, control.hovered, control.selected) : 0
-        border.color: control.primary ? theme.accent
+        border.color: control.primary ? Qt.alpha(theme.selectedBorder, 1)
                      : theme.controlBorder(control.visualFocus, control.hovered, control.selected)
         Behavior on color { ColorAnimation { duration: 120 } }
         Behavior on border.color { ColorAnimation { duration: 120 } }

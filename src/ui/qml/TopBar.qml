@@ -137,12 +137,11 @@ Rectangle {
             id: presetButton
             Layout.preferredWidth: 92
             text: "Presets"
-            icon.source: "qrc:/omarecord/assets/icons/lucide/chevron-down.svg"
+            trailingIconSource: "qrc:/omarecord/assets/icons/lucide/chevron-down.svg"
             onClicked: presetsMenu.open()
         }
         EditorButton {
             Layout.preferredWidth: 104
-            Layout.preferredHeight: 36
             primary: true
             text: "Export"
             icon.source: "qrc:/omarecord/assets/icons/lucide/download.svg"
@@ -230,6 +229,7 @@ Rectangle {
                 EditorButton { text: "Cancel"; onClicked: deletePresetDialog.close() }
                 EditorButton {
                     text: "Delete"
+                    primary: true
                     destructive: true
                     onClicked: { editor.deletePreset(deletePresetName.currentText); deletePresetDialog.close() }
                 }

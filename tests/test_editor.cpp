@@ -11,6 +11,7 @@
 #include <QQmlEngine>
 #include <QQuickItem>
 #include <QQuickWindow>
+#include <algorithm>
 #include <functional>
 #include <QtTest>
 
@@ -84,6 +85,86 @@ private slots:
         for (const auto &entry : editor.zooms()) if (entry.toMap().value(QStringLiteral("id")) == id) zoom = entry.toMap();
         QCOMPARE(zoom.value(QStringLiteral("level")).toDouble(), 4.0);
         QVERIFY(editor.removeZoom(id));
+    }
+
+    void gradientPresetUsesRequestedIndex()
+    {
+        QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));
+        Editor editor(m_bundle);
+        QVERIFY(editor.isValid());
+
+        const auto expectedStops = [&editor](int index) {
+            QVariantList result;
+            const QVariantList colours = editor.gradients().at(index).toList();
+            for (qsizetype i = 0; i < colours.size(); ++i)
+                result << QVariant::fromValue(QVariantList{colours.at(i).toString(),
+                    i / double(std::max<qsizetype>(1, colours.size() - 1))});
+            return result;
+        };
+
+        editor.applyGradientPreset(7);
+        QVariantMap background = editor.projectMap().value(QStringLiteral("background")).toMap();
+        QCOMPARE(background.value(QStringLiteral("type")).toString(), QStringLiteral("gradient"));
+        QCOMPARE(background.value(QStringLiteral("gradient")).toMap()
+                     .value(QStringLiteral("stops")).toList(), expectedStops(7));
+
+        editor.applyGradientPreset(3);
+        background = editor.projectMap().value(QStringLiteral("background")).toMap();
+        QCOMPARE(background.value(QStringLiteral("type")).toString(), QStringLiteral("gradient"));
+        QCOMPARE(background.value(QStringLiteral("gradient")).toMap()
+                     .value(QStringLiteral("stops")).toList(), expectedStops(3));
+        QVERIFY(expectedStops(7) != expectedStops(3));
+
+        Theme theme;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("editor"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import QtQuick
+            import QtQuick.Window
+            import Omarecord
+            Window {
+                width: 284; height: 900; visible: true
+                BackgroundPanel { anchors.fill: parent }
+            })", QUrl());
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        std::unique_ptr<QObject> object(component.create());
+        auto *window = qobject_cast<QQuickWindow *>(object.get());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        const auto findItem = [](QQuickItem *parent, const QString &name) {
+            std::function<QQuickItem *(QQuickItem *)> visit = [&](QQuickItem *item) -> QQuickItem * {
+                if (item->objectName() == name) return item;
+                for (QQuickItem *child : item->childItems())
+                    if (QQuickItem *match = visit(child)) return match;
+                return nullptr;
+            };
+            return visit(parent);
+        };
+        auto *tile7 = findItem(window->contentItem(), QStringLiteral("gradientTile-7"));
+        auto *tile3 = findItem(window->contentItem(), QStringLiteral("gradientTile-3"));
+        QTRY_VERIFY(tile7);
+        QTRY_VERIFY(tile3);
+
+        const auto clickTile = [window](QQuickItem *tile) {
+            const QPoint point = tile->mapToScene(QPointF(tile->width() / 2,
+                                                         tile->height() / 2)).toPoint();
+            QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, point);
+        };
+        clickTile(tile7);
+        QTRY_VERIFY(tile7->property("selected").toBool());
+        QVERIFY(!tile3->property("selected").toBool());
+        background = editor.projectMap().value(QStringLiteral("background")).toMap();
+        QCOMPARE(background.value(QStringLiteral("gradient")).toMap()
+                     .value(QStringLiteral("stops")).toList(), expectedStops(7));
+
+        clickTile(tile3);
+        QTRY_VERIFY(tile3->property("selected").toBool());
+        QVERIFY(!tile7->property("selected").toBool());
+        background = editor.projectMap().value(QStringLiteral("background")).toMap();
+        QCOMPARE(background.value(QStringLiteral("gradient")).toMap()
+                     .value(QStringLiteral("stops")).toList(), expectedStops(3));
     }
 
     void zoomTrackDragUsesTrackCoordinates()

@@ -1,6 +1,6 @@
 import QtQuick
+import QtQuick.Controls.impl
 import QtQuick.Layouts
-import QtQuick.Effects
 
 RowLayout {
     id: root
@@ -13,18 +13,11 @@ RowLayout {
     Item {
         Layout.preferredWidth: theme.font.display
         Layout.preferredHeight: theme.font.display
-        Image {
-            id: heroIcon
+        IconImage {
             anchors.fill: parent
             source: root.iconSource
             sourceSize: Qt.size(theme.font.display, theme.font.display)
-            visible: false
-        }
-        MultiEffect {
-            anchors.fill: parent
-            source: heroIcon
-            colorization: 1
-            colorizationColor: theme.foreground
+            color: theme.foreground
         }
     }
     ColumnLayout {

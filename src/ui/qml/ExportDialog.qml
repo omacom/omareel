@@ -230,7 +230,6 @@ Dialog {
             EditorButton {
                 visible: !editor.exporting
                 Layout.preferredWidth: 112
-                Layout.preferredHeight: 36
                 primary: true
                 text: "Export"
                 icon.source: "qrc:/omarecord/assets/icons/lucide/download.svg"

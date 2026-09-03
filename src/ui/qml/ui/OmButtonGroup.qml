@@ -12,6 +12,7 @@ RowLayout {
     onActiveFocusChanged: if (activeFocus && focusedIndex < 0) focusedIndex = selectedIndex()
     function optionValue(option) { return typeof option === "object" ? option.value : option }
     function optionLabel(option) { return typeof option === "object" ? option.label : option }
+    function optionEnabled(option) { return typeof option !== "object" || option.enabled === undefined || option.enabled }
     function selectedIndex() {
         for (let i = 0; i < options.length; ++i) if (optionValue(options[i]) === value) return i
         return 0
@@ -28,6 +29,7 @@ RowLayout {
             required property int index
             Layout.fillWidth: true
             text: root.optionLabel(modelData)
+            enabled: root.optionEnabled(modelData)
             bordered: true
             selected: root.optionValue(modelData) === root.value
             activeFocusOnTab: false

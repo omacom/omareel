@@ -116,7 +116,7 @@ clip, style, cursor, and zoom edits are stored in `project.json`.
   before the debug capture.
 - `OMARECORD_SCREENSHOT_SIZE=1440x900` sets the debug-capture window dimensions.
 - `OMARECORD_SCREENSHOT_TIME=SECONDS` seeks the editor before capture.
-- `OMARECORD_SCREENSHOT_VIEW=export|aspect|background-expanded|rail-tooltip|camera-proof` opens a transient
+- `OMARECORD_SCREENSHOT_VIEW=export|aspect|background-expanded|background-gradient-3|background-gradient-7|rail-tooltip|camera-proof` opens a transient
   editor surface before capture.
 - `OMARECORD_RECENTS_DIR=/path` overrides the launcher recordings directory (useful for UI testing).
 

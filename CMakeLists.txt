@@ -47,6 +47,7 @@ qt_add_qml_module(omarecord_ui STATIC
     OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/Omarecord/Ui
     QML_FILES
         src/ui/qml/ui/OmButton.qml
+        src/ui/qml/ui/OmIconButton.qml
         src/ui/qml/ui/OmButtonGroup.qml
         src/ui/qml/ui/OmToggle.qml
         src/ui/qml/ui/OmSlider.qml

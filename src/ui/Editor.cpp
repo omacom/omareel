@@ -433,6 +433,29 @@ void Editor::setProjectValue(const QString &path, const QVariant &value, bool co
     changed();
 }
 
+void Editor::applyGradientPreset(int index)
+{
+    if (index < 0 || index >= m_gradients.size()) return;
+    const QVariantList colours = m_gradients.at(index).toList();
+    if (colours.size() < 2) return;
+
+    QJsonArray stops;
+    for (qsizetype i = 0; i < colours.size(); ++i)
+        stops << QJsonArray{colours.at(i).toString(),
+                            i / double(std::max<qsizetype>(1, colours.size() - 1))};
+
+    const QJsonObject old = m_project.toJson();
+    QJsonObject next = setNested(old, {QStringLiteral("background"), QStringLiteral("type")},
+                                 0, QStringLiteral("gradient"));
+    next = setNested(next, {QStringLiteral("background"), QStringLiteral("gradient"),
+                            QStringLiteral("stops")}, 0, stops);
+    const Project parsed = Project::fromJson(next);
+    if (parsed.toJson() == old) return;
+    snapshot();
+    m_project = parsed;
+    changed();
+}
+
 void Editor::restore(const QJsonObject &json)
 {
     m_project = Project::fromJson(json);
@@ -999,6 +1022,7 @@ QVariantList Editor::wallpaperGroups() const
             const QString thumbnail = OmarchyPaths::wallpaperThumbnailPath(path);
             const bool ready = QFileInfo(thumbnail).isFile();
             wallpapers << QVariantMap{{QStringLiteral("name"), file.completeBaseName()},
+                {QStringLiteral("file"), file.fileName()},
                 {QStringLiteral("path"), file.absoluteFilePath()},
                 {QStringLiteral("url"), QUrl::fromLocalFile(file.absoluteFilePath()).toString()},
                 {QStringLiteral("thumbnailUrl"), QUrl::fromLocalFile(ready ? thumbnail : path).toString()}};

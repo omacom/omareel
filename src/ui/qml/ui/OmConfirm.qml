@@ -20,7 +20,7 @@ Item {
             id: buttons; width: parent.width; anchors.bottom: parent.bottom; spacing: theme.space.xl
             Item { Layout.fillWidth: true }
             OmButton { text: root.cancelText; bordered: true; onClicked: root.canceled() }
-            OmButton { text: root.confirmText; bordered: true; destructive: true; onClicked: root.confirmed() }
+            OmButton { text: root.confirmText; bordered: true; primary: true; destructive: true; onClicked: root.confirmed() }
         }
     }
 }

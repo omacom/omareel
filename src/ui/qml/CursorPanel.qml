@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
+import Omarecord.Ui
 
 ColumnLayout {
     id: root
@@ -32,6 +33,11 @@ ColumnLayout {
         return root.cursor.smoothing && Math.abs(root.cursor.spring.mass-mass) < .001
             && Math.abs(root.cursor.spring.stiffness-stiffness) < .001
             && Math.abs(root.cursor.spring.damping-damping) < .001
+    }
+    function motionValue() {
+        if (root.isMotion(1, 900, 60)) return "natural"
+        if (root.isMotion(3, 470, 70)) return "smooth"
+        return ""
     }
 
     EditorSwitch { Layout.preferredHeight: 32; text: "Show cursor"; checked: root.cursor.visible; onToggled: editor.setProjectValue("cursor.visible", checked) }
@@ -96,33 +102,13 @@ ColumnLayout {
     }
 
     PanelHeading { text: "Motion"; topPadding: 4 }
-    Rectangle {
+    OmButtonGroup {
         Layout.fillWidth: true
-        Layout.preferredHeight: 30
-        radius: theme.radius
-        color: theme.normalFill
-        border.width: 1
-        border.color: theme.normalBorder
-        RowLayout {
-            anchors.fill: parent
-            spacing: 0
-            Repeater {
-                model: [
-                    {label:"Natural", mass:1, stiffness:900, damping:60},
-                    {label:"Smooth", mass:3, stiffness:470, damping:70}
-                ]
-                delegate: EditorButton {
-                    required property var modelData
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    text: modelData.label
-                    checked: root.isMotion(modelData.mass, modelData.stiffness, modelData.damping)
-                    selected: checked
-                    font.pixelSize: theme.font.bodySmall
-                    font.weight: checked ? Font.DemiBold : Font.Normal
-                    onClicked: root.setMotion(modelData.mass, modelData.stiffness, modelData.damping)
-                }
-            }
+        options: [{label:"Natural", value:"natural"}, {label:"Smooth", value:"smooth"}]
+        value: root.motionValue()
+        onChanged: value => {
+            if (value === "natural") root.setMotion(1, 900, 60)
+            else root.setMotion(3, 470, 70)
         }
     }
     Label {

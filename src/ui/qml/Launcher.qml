@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.impl
 import QtQuick.Dialogs
 import QtQuick.Effects
 import QtQuick.Layouts
@@ -48,187 +49,38 @@ ApplicationWindow {
             settingsPopover.open()
     }
 
-    component FocusBackground: Item {
-        id: focusBackground
-        required property Item control
-        property color fill: "transparent"
-        property color stroke: "transparent"
-        property real cornerRadius: theme.radius
-        Rectangle {
-            anchors.fill: parent
-            radius: focusBackground.cornerRadius
-            color: focusBackground.fill
-            border.width: focusBackground.stroke.a > 0 ? 1 : 0
-            border.color: focusBackground.stroke
-            Behavior on color {
-                enabled: window.motionReady
-                ColorAnimation { duration: 120; easing.type: Easing.OutCubic }
-            }
-            Behavior on border.color {
-                enabled: window.motionReady
-                ColorAnimation { duration: 120; easing.type: Easing.OutCubic }
-            }
-        }
-        Rectangle {
-            anchors.fill: parent
-            anchors.margins: -3
-            radius: theme.radius
-            color: "transparent"
-            border.width: 2
-            border.color: theme.hoverBorder
-            visible: focusBackground.control.visualFocus
-        }
-    }
-
-    component GhostIconButton: ToolButton {
-        id: ghost
+    component GhostIconButton: OmIconButton {
         property string iconFile: ""
         property string tip: ""
-        implicitWidth: 32
-        implicitHeight: 32
-        width: 32
-        height: 32
-        padding: 0
-        topInset: 0
-        bottomInset: 0
-        hoverEnabled: true
-        focusPolicy: Qt.TabFocus
-        icon.width: 17
-        icon.height: 17
+        tooltipText: tip
         icon.color: enabled ? theme.foreground : theme.textFaint
         icon.source: window.iconRoot + iconFile
-        ToolTip.visible: hovered
-        ToolTip.text: tip
-        background: FocusBackground {
-            control: ghost
-            cornerRadius: theme.radius
-            fill: ghost.down ? theme.pressedFill
-                             : ghost.hovered ? theme.hoverFill : "transparent"
-            stroke: ghost.hovered ? theme.hoverBorder : "transparent"
-        }
     }
 
-    component QuietButton: Button {
-        id: quiet
-        implicitHeight: 32
-        topInset: 0
-        bottomInset: 0
-        leftPadding: 12
-        rightPadding: 12
-        hoverEnabled: true
-        focusPolicy: Qt.TabFocus
-        font.pixelSize: theme.font.body
-        font.weight: Font.Medium
-        contentItem: Label {
-            text: quiet.text
-            color: quiet.enabled ? theme.foreground : theme.textFaint
-            font: quiet.font
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-        }
-        background: FocusBackground {
-            control: quiet
-            cornerRadius: theme.radius
-            fill: quiet.highlighted ? theme.selectedFill
-                : quiet.down ? theme.pressedFill
-                : quiet.hovered ? theme.hoverFill : theme.normalFill
-            stroke: quiet.highlighted ? "transparent"
-                                      : quiet.hovered ? theme.hoverBorder : theme.normalBorder
-        }
+    component QuietButton: OmButton {
+        bordered: true
+        primary: highlighted
     }
 
-    component CaptureChip: Button {
+    component CaptureChip: OmButton {
         id: chip
-        property bool selected: false
         property string iconFile: ""
         property bool hasMenu: false
         signal toggleRequested()
         signal menuRequested()
-
-        implicitHeight: 30
-        height: 30
-        hoverEnabled: true
-        focusPolicy: Qt.TabFocus
-        topInset: 0
-        bottomInset: 0
-        leftPadding: 10
-        rightPadding: 8
-        topPadding: 0
-        bottomPadding: 0
+        bordered: true
+        icon.source: window.iconRoot + iconFile
+        trailingIconSource: hasMenu ? window.iconRoot + "chevron-down.svg" : ""
         onClicked: toggleRequested()
-        contentItem: RowLayout {
-            spacing: 6
-            ToolButton {
-                Layout.preferredWidth: 16
-                Layout.preferredHeight: 16
-                Layout.alignment: Qt.AlignVCenter
-                padding: 0
-                topInset: 0
-                bottomInset: 0
-                leftInset: 0
-                rightInset: 0
-                display: AbstractButton.IconOnly
-                enabled: false
-                opacity: chip.enabled ? 1 : .42
-                icon.width: 16
-                icon.height: 16
-                icon.source: window.iconRoot + chip.iconFile
-                icon.color: chip.selected ? theme.foreground : theme.textMuted
-                background: null
-            }
-            Label {
-                Layout.fillWidth: true
-                Layout.alignment: Qt.AlignVCenter
-                text: chip.text
-                elide: Text.ElideRight
-                font.pixelSize: theme.font.body
-                font.weight: Font.Medium
-                color: chip.enabled
-                       ? (chip.selected ? theme.foreground : theme.textMuted)
-                       : theme.textFaint
-                verticalAlignment: Text.AlignVCenter
-            }
-            Item {
-                visible: chip.hasMenu
-                Layout.preferredWidth: 14
-                Layout.preferredHeight: 16
-                Layout.alignment: Qt.AlignVCenter
-                ToolButton {
-                    anchors.centerIn: parent
-                    width: 12
-                    height: 12
-                    padding: 0
-                    topInset: 0
-                    bottomInset: 0
-                    leftInset: 0
-                    rightInset: 0
-                    display: AbstractButton.IconOnly
-                    enabled: false
-                    opacity: 1
-                    icon.width: 12
-                    icon.height: 12
-                    icon.source: window.iconRoot + "chevron-down.svg"
-                    icon.color: chip.selected ? theme.foreground : theme.textMuted
-                    background: null
-                }
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: function(mouse) {
-                        mouse.accepted = true
-                        chip.menuRequested()
-                    }
-                }
-            }
-        }
-        background: FocusBackground {
-            control: chip
-            cornerRadius: theme.radius
-            fill: chip.down ? theme.pressedFill
-                : chip.selected ? theme.selectedFill
-                : chip.hovered ? theme.hoverFill : theme.normalFill
-            stroke: chip.selected ? "transparent"
-                : chip.hovered ? theme.hoverBorder : theme.normalBorder
+        MouseArea {
+            visible: chip.hasMenu
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            width: 28
+            z: 2
+            cursorShape: Qt.PointingHandCursor
+            onClicked: chip.menuRequested()
         }
     }
 
@@ -241,20 +93,18 @@ ApplicationWindow {
         topPadding: 0
         bottomPadding: 0
         hoverEnabled: true
-        indicator: ToolButton {
+        indicator: Item {
             x: 10
             anchors.verticalCenter: parent.verticalCenter
             width: 14
             height: 14
             visible: menuItem.checkable && menuItem.checked
-            padding: 0
-            enabled: false
-            opacity: 1
-            icon.width: 14
-            icon.height: 14
-            icon.source: window.iconRoot + "check.svg"
-            icon.color: theme.accent
-            background: null
+            IconImage {
+                anchors.fill: parent
+                source: window.iconRoot + "check.svg"
+                sourceSize: Qt.size(14, 14)
+                color: theme.accent
+            }
         }
         contentItem: Label {
             text: menuItem.text
@@ -364,109 +214,18 @@ ApplicationWindow {
                 anchors.fill: parent
                 spacing: 0
                 visible: !window.showingRecording
-                Button {
+                OmButton {
                     id: recordButton
-                    Layout.preferredWidth: Math.min(272, 223 + Math.max(0, window.width - 720))
-                    Layout.preferredHeight: 64
-                    topInset: 0
-                    bottomInset: 0
-                    leftPadding: 0
-                    rightPadding: 0
-                    hoverEnabled: true
-                    focusPolicy: Qt.TabFocus
+                    Layout.preferredWidth: 112
+                    Layout.preferredHeight: theme.space.controlHeight
+                    Layout.alignment: Qt.AlignVCenter
+                    primary: true
+                    bordered: true
+                    text: "Record"
+                    icon.source: window.iconRoot + "circle.svg"
+                    icon.color: theme.record
                     onClicked: window.beginRecording()
                     Accessible.name: "Record"
-                    contentItem: RowLayout {
-                        spacing: 12
-                        Item {
-                            Layout.preferredWidth: 52
-                            Layout.preferredHeight: 52
-                            Rectangle {
-                                anchors.centerIn: parent
-                                width: 50
-                                height: 50
-                                radius: 25
-                                color: "transparent"
-                                border.width: 2
-                                border.color: Qt.alpha(theme.record, recordButton.hovered ? .60 : .30)
-                                Behavior on border.color {
-                                    enabled: window.motionReady
-                                    ColorAnimation { duration: 120; easing.type: Easing.OutCubic }
-                                }
-                            }
-                            Rectangle {
-                                anchors.centerIn: parent
-                                width: 44
-                                height: 44
-                                radius: 22
-                                color: theme.record
-                                scale: recordButton.down ? .96 : 1
-                                Behavior on scale {
-                                    enabled: window.motionReady
-                                    NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
-                                }
-                                Rectangle {
-                                    anchors.centerIn: parent
-                                    width: 16
-                                    height: 16
-                                    radius: 8
-                                    color: Qt.rgba(1, 1, 1, 1)
-                                }
-                            }
-                            Rectangle {
-                                anchors.fill: parent
-                                anchors.margins: -3
-                                radius: width / 2
-                                color: "transparent"
-                                border.width: 2
-                                border.color: theme.accent
-                                visible: recordButton.visualFocus
-                            }
-                        }
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            Layout.minimumWidth: 0
-                            spacing: 2
-                            Label {
-                                text: "Record"
-                                font.pixelSize: theme.font.title
-                                font.weight: Font.DemiBold
-                                color: theme.foreground
-                                lineHeight: 1.35
-                            }
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Layout.minimumWidth: 0
-                                spacing: 4
-                                Label {
-                                    Layout.fillWidth: true
-                                    Layout.minimumWidth: 0
-                                    text: "Area · Window · Screen"
-                                    elide: Text.ElideRight
-                                    font.pixelSize: theme.font.bodySmall
-                                    color: theme.textMuted
-                                    lineHeight: 1.35
-                                }
-                                Rectangle {
-                                    Layout.preferredWidth: shortcutLabel.implicitWidth + 6
-                                    Layout.preferredHeight: 20
-                                    radius: theme.radius
-                                    color: "transparent"
-                                    border.width: 1
-                                    border.color: theme.normalBorder
-                                    Label {
-                                        id: shortcutLabel
-                                        anchors.centerIn: parent
-                                        text: "Ctrl R"
-                                        font.family: theme.monoFamily
-                                        font.pixelSize: theme.font.bodySmall
-                                        color: theme.textMuted
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    background: Rectangle { color: "transparent" }
                 }
 
                 Item { Layout.fillWidth: true; Layout.minimumWidth: 8 }
@@ -559,11 +318,10 @@ ApplicationWindow {
                             radius: width / 2
                             color: theme.surfaceRaised
                             visible: !launcher.webcamPreviewAvailable
-                            ToolButton {
+                            OmIconButton {
                                 anchors.centerIn: parent
                                 width: 20
                                 height: 20
-                                padding: 0
                                 enabled: false
                                 opacity: 1
                                 icon.width: 20
@@ -760,12 +518,11 @@ ApplicationWindow {
                                                         Math.ceil(thumbnail.height * 2))
                                     visible: source.toString() !== ""
                                 }
-                                ToolButton {
+                                OmIconButton {
                                     anchors.centerIn: parent
                                     width: 24
                                     height: 24
                                     visible: recentDelegate.modelData.thumbnail === ""
-                                    padding: 0
                                     enabled: false
                                     opacity: 1
                                     icon.width: 24
@@ -815,12 +572,11 @@ ApplicationWindow {
                                     enabled: window.motionReady
                                     NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
                                 }
-                                ToolButton {
+                                OmIconButton {
                                     anchors.centerIn: parent
                                     anchors.horizontalCenterOffset: 1
                                     width: 17
                                     height: 17
-                                    padding: 0
                                     enabled: false
                                     opacity: 1
                                     icon.width: 17
@@ -912,11 +668,10 @@ ApplicationWindow {
                 anchors.centerIn: parent
                 visible: launcher.recentBundles.length === 0
                 spacing: 6
-                ToolButton {
+                OmIconButton {
                     Layout.preferredWidth: 28
                     Layout.preferredHeight: 28
                     Layout.alignment: Qt.AlignHCenter
-                    padding: 0
                     enabled: false
                     opacity: 1
                     icon.width: 28
@@ -1003,31 +758,16 @@ ApplicationWindow {
                 Label { text: "Rotate"; font.pixelSize: theme.font.body; color: theme.textMuted; Layout.fillWidth: true }
                 Repeater {
                     model: [0, 90, 180, 270]
-                    delegate: Button {
+                    delegate: OmButton {
                         required property int modelData
                         Layout.preferredWidth: 38
-                        Layout.preferredHeight: 26
-                        topInset: 0
-                        bottomInset: 0
-                        padding: 0
+                        Layout.preferredHeight: theme.space.controlHeight
                         text: modelData + "°"
                         font.family: theme.monoFamily
                         font.pixelSize: theme.font.caption
+                        bordered: true
+                        selected: launcher.webcamRotation === modelData
                         onClicked: launcher.webcamRotation = modelData
-                        contentItem: Label {
-                            text: parent.text
-                            font: parent.font
-                            color: theme.foreground
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        background: Rectangle {
-                            radius: theme.radius
-                            color: launcher.webcamRotation === modelData ? theme.selectedFill : theme.normalFill
-                            border.width: 1
-                            border.color: launcher.webcamRotation === modelData
-                                          ? theme.selectedBorder : theme.normalBorder
-                        }
                     }
                 }
             }
@@ -1055,31 +795,16 @@ ApplicationWindow {
                 Label { text: "Capture size"; font.pixelSize: theme.font.body; color: theme.textMuted; Layout.fillWidth: true }
                 Repeater {
                     model: [720, 1080]
-                    delegate: Button {
+                    delegate: OmButton {
                         required property int modelData
                         Layout.preferredWidth: 58
-                        Layout.preferredHeight: 26
-                        topInset: 0
-                        bottomInset: 0
-                        padding: 0
+                        Layout.preferredHeight: theme.space.controlHeight
                         text: modelData + "p"
                         font.family: theme.monoFamily
                         font.pixelSize: theme.font.caption
+                        bordered: true
+                        selected: launcher.webcamHeight === modelData
                         onClicked: launcher.webcamHeight = modelData
-                        contentItem: Label {
-                            text: parent.text
-                            font: parent.font
-                            color: theme.foreground
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        background: Rectangle {
-                            radius: theme.radius
-                            color: launcher.webcamHeight === modelData ? theme.selectedFill : theme.normalFill
-                            border.width: 1
-                            border.color: launcher.webcamHeight === modelData
-                                          ? theme.selectedBorder : theme.normalBorder
-                        }
                     }
                 }
             }
@@ -1209,6 +934,7 @@ ApplicationWindow {
                 QuietButton {
                     text: "Delete"
                     highlighted: true
+                    destructive: true
                     onClicked: {
                         launcher.deleteBundle(window.pendingDeletePath)
                         deleteDialog.close()
