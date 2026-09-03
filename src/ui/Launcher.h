@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QDateTime>
+#include <QCameraDevice>
 #include <QObject>
 #include <QTimer>
 #include <QVariantList>
@@ -20,6 +21,9 @@ class Launcher : public QObject
     Q_PROPERTY(bool webcam READ webcam WRITE setWebcam NOTIFY recordingPreferencesChanged)
     Q_PROPERTY(QString webcamDevice READ webcamDevice WRITE setWebcamDevice NOTIFY recordingPreferencesChanged)
     Q_PROPERTY(int webcamHeight READ webcamHeight WRITE setWebcamHeight NOTIFY recordingPreferencesChanged)
+    Q_PROPERTY(int webcamRotation READ webcamRotation WRITE setWebcamRotation NOTIFY recordingPreferencesChanged)
+    Q_PROPERTY(bool webcamFlipHorizontal READ webcamFlipHorizontal WRITE setWebcamFlipHorizontal NOTIFY recordingPreferencesChanged)
+    Q_PROPERTY(QVariant webcamCameraDevice READ webcamCameraDevice NOTIFY recordingPreferencesChanged)
     Q_PROPERTY(QVariantList webcamDevices READ webcamDevices NOTIFY webcamDevicesChanged)
 public:
     explicit Launcher(QObject *parent = nullptr);
@@ -33,6 +37,9 @@ public:
     bool webcam() const { return m_webcam; }
     QString webcamDevice() const { return m_webcamDevice; }
     int webcamHeight() const { return m_webcamHeight; }
+    int webcamRotation() const { return m_webcamRotation; }
+    bool webcamFlipHorizontal() const { return m_webcamFlipHorizontal; }
+    QVariant webcamCameraDevice() const;
     QVariantList webcamDevices() const { return m_webcamDevices; }
 
     void setSystemAudio(bool value);
@@ -41,6 +48,8 @@ public:
     void setWebcam(bool value);
     void setWebcamDevice(const QString &value);
     void setWebcamHeight(int value);
+    void setWebcamRotation(int value);
+    void setWebcamFlipHorizontal(bool value);
 
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void openBundle(const QString &path);
@@ -57,6 +66,7 @@ signals:
     void webcamDevicesChanged();
     void quitRequested();
     void errorOccurred(const QString &message);
+    void recordingStarting();
 
 private:
     static QString formatDuration(double seconds);
@@ -77,7 +87,11 @@ private:
     bool m_webcam = false;
     QString m_webcamDevice = QStringLiteral("/dev/video2");
     int m_webcamHeight = 1080;
+    int m_webcamRotation = 0;
+    bool m_webcamFlipHorizontal = false;
     QVariantList m_webcamDevices;
+    QList<QCameraDevice> m_cameraDevices;
+    bool m_startingRecording = false;
 };
 
 } // namespace OmaRecord

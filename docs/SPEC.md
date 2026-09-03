@@ -88,12 +88,15 @@ Move samples before the first frame or after stop are still stored (trimmed on l
 
 ### Webcam capture
 
-When enabled, the screen process is started first and a second capture process is launched
-immediately through the same recorder trampoline. The webcam command uses v4l2 capture at 30 fps,
-CFR, with its own first-frame timestamp file. If that process exits during startup, capture falls
-back to ffmpeg v4l2 at 1280x720 and records the first progress frame's monotonic timestamp.
-`capture.json.camera.backend` records `gpu-screen-recorder` or `ffmpeg-v4l2` for each bundle,
-along with the device, dimensions, frame rate, and first-frame timestamp.
+When enabled, the recording bar owns a Qt Multimedia capture session. One camera stream feeds both
+the live bar preview and the recorder, so the device is opened only once. The bar is also launched
+as a hidden capture host for `--no-bar`; this keeps camera ownership in an existing GUI process
+without turning the recording daemon into a GUI application. The first preview frame records the
+monotonic timestamp in `camera.mp4.ts`. If no frame arrives within two seconds, the bar releases the
+device and the daemon starts the V4L2 fallback capture. `capture.json.camera.backend` records
+`qt-multimedia` or `v4l2-fallback`, along with the device, dimensions, frame rate, first-frame
+timestamp, rotation, and horizontal flip. Rotation and flip affect previews and rendering but are
+not baked into `camera.mp4`.
 
 ## 3. Project model (`project.json`, version 1)
 
@@ -125,7 +128,7 @@ along with the device, dimensions, frame rate, and first-frame timestamp.
              "clickShrink":0.85,"hideWhenIdleMs":null,"style":"macos"},
   "audio": {"desktop":true,"mic":true,"volume":1.0},
   "camera": {"enabled":false,"position":"bottom-right","size":0.25,
-             "shape":"round","radius":16,"crop":"original","mirror":true,
+             "shape":"round","radius":16,"crop":"original","flipHorizontal":false,"rotation":0,
              "shadow":true,"scaleDuringZoom":0.7,"offset":{"x":0.02,"y":0.02}},
   "export": {"format":"mp4","fps":60,"width":1920,"quality":"high","gif":{"fps":20,"width":960}}
 }

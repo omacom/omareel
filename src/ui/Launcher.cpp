@@ -7,10 +7,12 @@
 #include "record/Recorder.h"
 
 #include <QCoreApplication>
+#include <QCameraDevice>
 #include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
 #include <QLocale>
+#include <QMediaDevices>
 #include <QProcess>
 #include <QSet>
 #include <QUrl>
@@ -40,6 +42,8 @@ Launcher::Launcher(QObject *parent): QObject(parent)
     m_webcam = preferences.webcamEnabled;
     m_webcamDevice = preferences.webcamDevice;
     m_webcamHeight = preferences.webcamHeight;
+    m_webcamRotation = preferences.webcamRotation;
+    m_webcamFlipHorizontal = preferences.webcamFlipHorizontal;
     refreshAudioDevices();
     refreshWebcamDevices();
     refresh();
@@ -57,6 +61,8 @@ void Launcher::saveRecordingPreferences()
     preferences.webcamEnabled = m_webcam;
     preferences.webcamDevice = m_webcamDevice;
     preferences.webcamHeight = m_webcamHeight;
+    preferences.webcamRotation = m_webcamRotation;
+    preferences.webcamFlipHorizontal = m_webcamFlipHorizontal;
     QString error;
     if (!preferences.save(&error)) emit errorOccurred(error);
 }
@@ -110,6 +116,37 @@ void Launcher::setWebcamHeight(int value)
     emit recordingPreferencesChanged();
 }
 
+void Launcher::setWebcamRotation(int value)
+{
+    value = ((value % 360) + 360) % 360;
+    if (value != 0 && value != 90 && value != 180 && value != 270) value = 0;
+    if (m_webcamRotation == value) return;
+    m_webcamRotation = value;
+    saveRecordingPreferences();
+    emit recordingPreferencesChanged();
+}
+
+void Launcher::setWebcamFlipHorizontal(bool value)
+{
+    if (m_webcamFlipHorizontal == value) return;
+    m_webcamFlipHorizontal = value;
+    saveRecordingPreferences();
+    emit recordingPreferencesChanged();
+}
+
+QVariant Launcher::webcamCameraDevice() const
+{
+    const QByteArray wanted = QFileInfo(m_webcamDevice).absoluteFilePath().toUtf8();
+    for (const QCameraDevice &device : m_cameraDevices)
+        if (device.id() == wanted) return QVariant::fromValue(device);
+    for (const QCameraDevice &device : m_cameraDevices) {
+        const QString id = QString::fromUtf8(device.id());
+        if (id.contains(m_webcamDevice) || id.endsWith(QFileInfo(m_webcamDevice).fileName()))
+            return QVariant::fromValue(device);
+    }
+    return {};
+}
+
 void Launcher::refreshAudioDevices()
 {
     QProcess process;
@@ -139,35 +176,20 @@ void Launcher::refreshAudioDevices()
 
 void Launcher::refreshWebcamDevices()
 {
-    QHash<QString, QString> names;
-    QProcess labels;
-    labels.start(QStringLiteral("v4l2-ctl"), {QStringLiteral("--list-devices")});
-    if (labels.waitForFinished(5000) && labels.exitCode() == 0) {
-        QString current;
-        const QStringList lines = QString::fromUtf8(labels.readAllStandardOutput()).split('\n');
-        for (const QString &line : lines) {
-            if (!line.startsWith(QLatin1Char('\t')) && !line.trimmed().isEmpty())
-                current = line.trimmed().section(QLatin1Char(':'), 0, 0);
-            else if (line.trimmed().startsWith(QLatin1String("/dev/video")))
-                names.insert(line.trimmed(), current);
-        }
-    }
-
-    QProcess process;
-    process.start(QStringLiteral("gpu-screen-recorder"), {QStringLiteral("--list-v4l2-devices")});
     QVariantList devices;
     QSet<QString> seen;
-    if (process.waitForFinished(5000) && process.exitCode() == 0) {
-        const QStringList lines = QString::fromUtf8(process.readAllStandardOutput()).split('\n', Qt::SkipEmptyParts);
-        for (const QString &line : lines) {
-            const QString device = line.section(QLatin1Char('|'), 0, 0).trimmed();
-            if (!device.startsWith(QLatin1String("/dev/video")) || seen.contains(device)) continue;
-            seen.insert(device);
-            const QString label = names.value(device);
-            devices << QVariantMap{{QStringLiteral("value"), device},
-                {QStringLiteral("text"), label.isEmpty() ? device
-                    : QStringLiteral("%1 (%2)").arg(label, device)}};
+    m_cameraDevices = QMediaDevices::videoInputs();
+    for (const QCameraDevice &camera : m_cameraDevices) {
+        QString path = QString::fromUtf8(camera.id());
+        if (!path.startsWith(QLatin1String("/dev/video"))) {
+            const QString id = path;
+            const qsizetype marker = id.indexOf(QLatin1String("/dev/video"));
+            if (marker >= 0) path = id.mid(marker).section(QLatin1Char(' '), 0, 0);
         }
+        if (!path.startsWith(QLatin1String("/dev/video")) || seen.contains(path)) continue;
+        seen.insert(path);
+        devices << QVariantMap{{QStringLiteral("value"), path},
+            {QStringLiteral("text"), QStringLiteral("%1 (%2)").arg(camera.description(), path)}};
     }
     if (devices.isEmpty() && QFileInfo::exists(m_webcamDevice))
         devices << QVariantMap{{QStringLiteral("value"), m_webcamDevice},
@@ -274,23 +296,28 @@ void Launcher::openBundle(const QString &pathValue)
 
 void Launcher::record(const QString &mode)
 {
-    if (m_recording) return;
-    const QString option = QStringLiteral("--") + mode;
-    QStringList arguments{QStringLiteral("record"), option};
-    if (!m_systemAudio && !m_microphone) arguments << QStringLiteral("--no-audio");
-    else {
-        if (m_systemAudio) arguments << QStringLiteral("--with-desktop-audio");
-        if (m_microphone) arguments << QStringLiteral("--with-microphone-audio")
-                                    << QStringLiteral("--microphone-device") << m_microphoneDevice;
-    }
-    if (m_webcam) arguments << QStringLiteral("--with-webcam")
-                            << QStringLiteral("--webcam-device") << m_webcamDevice
-                            << QStringLiteral("--webcam-height") << QString::number(m_webcamHeight);
-    if (!QProcess::startDetached(QCoreApplication::applicationFilePath(), arguments)) {
-        emit errorOccurred(QStringLiteral("Could not start recording"));
-        return;
-    }
-    emit quitRequested();
+    if (m_recording || m_startingRecording) return;
+    m_startingRecording = true;
+    emit recordingStarting();
+    QTimer::singleShot(150, this, [this, mode] {
+        const QString option = QStringLiteral("--") + mode;
+        QStringList arguments{QStringLiteral("record"), option};
+        if (!m_systemAudio && !m_microphone) arguments << QStringLiteral("--no-audio");
+        else {
+            if (m_systemAudio) arguments << QStringLiteral("--with-desktop-audio");
+            if (m_microphone) arguments << QStringLiteral("--with-microphone-audio")
+                                        << QStringLiteral("--microphone-device") << m_microphoneDevice;
+        }
+        if (m_webcam) arguments << QStringLiteral("--with-webcam")
+                                << QStringLiteral("--webcam-device") << m_webcamDevice
+                                << QStringLiteral("--webcam-height") << QString::number(m_webcamHeight);
+        if (!QProcess::startDetached(QCoreApplication::applicationFilePath(), arguments)) {
+            m_startingRecording = false;
+            emit errorOccurred(QStringLiteral("Could not start recording"));
+            return;
+        }
+        emit quitRequested();
+    });
 }
 
 void Launcher::stopRecording()

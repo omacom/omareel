@@ -3,14 +3,15 @@ import QtQuick.Controls
 import QtQuick.Controls.Material
 import QtQuick.Dialogs
 import QtQuick.Layouts
+import QtMultimedia
 
 ApplicationWindow {
     id: window
     visible: true
     width: 900
-    height: 600
+    height: 700
     minimumWidth: 760
-    minimumHeight: 520
+    minimumHeight: 620
     title: "omarecord"
     color: theme.background
     Material.theme: theme.dark ? Material.Dark : Material.Light
@@ -23,6 +24,22 @@ ApplicationWindow {
         { mode: "region", label: "Region", shortcut: "Ctrl+2", icon: "scan.svg" },
         { mode: "window", label: "Window", shortcut: "Ctrl+3", icon: "app-window.svg" }
     ]
+    readonly property bool cameraQuarterTurn: launcher.webcamRotation === 90
+                                               || launcher.webcamRotation === 270
+
+    Camera {
+        id: previewCamera
+        cameraDevice: launcher.webcamCameraDevice
+        active: launcher.webcam && !launcher.recording
+    }
+    CaptureSession {
+        camera: previewCamera
+        videoOutput: launcherCameraOutput
+    }
+    Connections {
+        target: launcher
+        function onRecordingStarting() { previewCamera.stop() }
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -50,7 +67,7 @@ ApplicationWindow {
 
         Item {
             Layout.fillWidth: true
-            Layout.preferredHeight: launcher.recording ? 104 : 204
+            Layout.preferredHeight: launcher.recording ? 104 : launcher.webcam ? 344 : 204
             Layout.minimumHeight: Layout.preferredHeight
             Layout.maximumHeight: Layout.preferredHeight
             ColumnLayout {
@@ -86,7 +103,7 @@ ApplicationWindow {
                 }
                 RowLayout {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 40
+                    Layout.preferredHeight: launcher.webcam ? 180 : 40
                     spacing: 18
                     Switch {
                         text: "Webcam"
@@ -94,27 +111,75 @@ ApplicationWindow {
                         checked: launcher.webcam
                         onToggled: launcher.webcam = checked
                     }
-                    ComboBox {
+                    ColumnLayout {
                         Layout.preferredWidth: 330
-                        Layout.preferredHeight: 36
-                        enabled: launcher.webcam
-                        textRole: "text"
-                        valueRole: "value"
-                        model: launcher.webcamDevices
-                        Component.onCompleted: currentIndex = indexOfValue(launcher.webcamDevice)
-                        onModelChanged: currentIndex = indexOfValue(launcher.webcamDevice)
-                        onActivated: launcher.webcamDevice = currentValue
+                        Layout.alignment: Qt.AlignTop
+                        spacing: 8
+                        ComboBox {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 36
+                            enabled: launcher.webcam
+                            textRole: "text"
+                            valueRole: "value"
+                            model: launcher.webcamDevices
+                            Component.onCompleted: currentIndex = indexOfValue(launcher.webcamDevice)
+                            onModelChanged: currentIndex = indexOfValue(launcher.webcamDevice)
+                            onActivated: launcher.webcamDevice = currentValue
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            ComboBox {
+                                Layout.preferredWidth: 112
+                                Layout.preferredHeight: 36
+                                enabled: launcher.webcam
+                                model: [{text:"720p",value:720},{text:"1080p",value:1080}]
+                                textRole: "text"
+                                valueRole: "value"
+                                currentIndex: launcher.webcamHeight === 720 ? 0 : 1
+                                onActivated: launcher.webcamHeight = currentValue
+                                Accessible.name: "Webcam capture resolution"
+                            }
+                            ToolButton {
+                                Layout.preferredWidth: 36; Layout.preferredHeight: 36
+                                enabled: launcher.webcam
+                                icon.source: "qrc:/omarecord/assets/icons/lucide/rotate-cw.svg"
+                                icon.color: theme.foreground
+                                onClicked: launcher.webcamRotation = (launcher.webcamRotation + 90) % 360
+                                Accessible.name: "Rotate camera"
+                            }
+                            ToolButton {
+                                Layout.preferredWidth: 36; Layout.preferredHeight: 36
+                                enabled: launcher.webcam
+                                icon.source: "qrc:/omarecord/assets/icons/lucide/flip-horizontal-2.svg"
+                                icon.color: theme.foreground
+                                onClicked: launcher.webcamFlipHorizontal = !launcher.webcamFlipHorizontal
+                                Accessible.name: "Flip camera"
+                            }
+                            Item { Layout.fillWidth: true }
+                        }
                     }
-                    ComboBox {
-                        Layout.preferredWidth: 112
-                        Layout.preferredHeight: 36
-                        enabled: launcher.webcam
-                        model: [{text:"720p",value:720},{text:"1080p",value:1080}]
-                        textRole: "text"
-                        valueRole: "value"
-                        currentIndex: launcher.webcamHeight === 720 ? 0 : 1
-                        onActivated: launcher.webcamHeight = currentValue
-                        Accessible.name: "Webcam capture resolution"
+                    Rectangle {
+                        Layout.preferredWidth: 320
+                        Layout.preferredHeight: 180
+                        visible: launcher.webcam
+                        radius: 10
+                        clip: true
+                        color: "#111111"
+                        border.width: 1
+                        border.color: Qt.alpha(theme.foreground, .18)
+                        VideoOutput {
+                            id: launcherCameraOutput
+                            anchors.centerIn: parent
+                            width: window.cameraQuarterTurn ? parent.height : parent.width
+                            height: window.cameraQuarterTurn ? parent.width : parent.height
+                            fillMode: VideoOutput.PreserveAspectCrop
+                            rotation: launcher.webcamRotation
+                            transform: Scale {
+                                origin.x: launcherCameraOutput.width / 2
+                                origin.y: launcherCameraOutput.height / 2
+                                xScale: launcher.webcamFlipHorizontal ? -1 : 1
+                            }
+                        }
                     }
                     Item { Layout.fillWidth: true }
                 }

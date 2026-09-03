@@ -212,6 +212,36 @@ private slots:
         QCOMPARE(flip->property("xScale").toDouble(), -1.0);
     }
 
+    void newProjectUsesCapturedCameraOrientation()
+    {
+        const QString bundle = m_temporary.filePath(QStringLiteral("camera-default.omarecord"));
+        QVERIFY(QDir().mkpath(bundle));
+        QVERIFY(QFile::copy(QDir(m_bundle).filePath(QStringLiteral("screen.mp4")),
+                            QDir(bundle).filePath(QStringLiteral("screen.mp4"))));
+        QVERIFY(QFile::copy(QDir(m_bundle).filePath(QStringLiteral("input.jsonl")),
+                            QDir(bundle).filePath(QStringLiteral("input.jsonl"))));
+        QVERIFY(QFile::copy(QDir(m_bundle).filePath(QStringLiteral("screen.mp4")),
+                            QDir(bundle).filePath(QStringLiteral("camera.mp4"))));
+        QFile capture(QDir(bundle).filePath(QStringLiteral("capture.json")));
+        QVERIFY(capture.open(QIODevice::WriteOnly));
+        capture.write(QJsonDocument(QJsonObject{
+            {QStringLiteral("first_frame_us"), 1000000},
+            {QStringLiteral("stopped_us"), 3000000},
+            {QStringLiteral("camera"), QJsonObject{
+                {QStringLiteral("first_frame_us"), 1000000},
+                {QStringLiteral("rotation"), 270},
+                {QStringLiteral("flipHorizontal"), true}
+            }}
+        }).toJson());
+        capture.close();
+
+        Editor editor(bundle);
+        QVERIFY2(editor.isValid(), qPrintable(editor.errorString()));
+        const QVariantMap camera = editor.projectMap().value(QStringLiteral("camera")).toMap();
+        QCOMPARE(camera.value(QStringLiteral("rotation")).toInt(), 270);
+        QVERIFY(camera.value(QStringLiteral("flipHorizontal")).toBool());
+    }
+
     void exportThroughEditorApi()
     {
         Editor editor(m_bundle);

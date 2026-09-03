@@ -194,6 +194,16 @@ bool Exporter::run(const ExportOptions &options, QString *error)
     } else {
         project = Project::defaults(bundle.dirName(), media.duration);
         project.camera.enabled = QFileInfo(cameraPath).isFile();
+        QFile captureFile(bundle.filePath(QStringLiteral("capture.json")));
+        if (captureFile.open(QIODevice::ReadOnly)) {
+            const QJsonObject camera = QJsonDocument::fromJson(captureFile.readAll())
+                                           .object().value(QStringLiteral("camera")).toObject();
+            const int rotation = camera.value(QStringLiteral("rotation")).toInt(0);
+            if (rotation == 0 || rotation == 90 || rotation == 180 || rotation == 270)
+                project.camera.rotation = rotation;
+            project.camera.flipHorizontal = camera
+                .value(QStringLiteral("flipHorizontal")).toBool(false);
+        }
         QString inputError;
         const auto input = InputLog::loadBundle(bundle.absolutePath(), media.duration, &inputError);
         if (!inputError.isEmpty()) { if (error) *error = inputError; return false; }

@@ -12,6 +12,8 @@ struct RecordingPreferences {
     bool webcamEnabled = false;
     QString webcamDevice = QStringLiteral("/dev/video2");
     int webcamHeight = 1080;
+    int webcamRotation = 0;
+    bool webcamFlipHorizontal = false;
     QJsonObject webcam{
         {QStringLiteral("enabled"), false},
         {QStringLiteral("position"), QStringLiteral("bottom-right")},

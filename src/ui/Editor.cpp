@@ -231,6 +231,11 @@ bool Editor::loadBundle()
         if (name.endsWith(QLatin1String(".omarecord"))) name.chop(10);
         m_project = Project::defaults(name, m_sourceDuration);
         m_project.camera.enabled = m_hasCamera;
+        const int rotation = cameraCapture.value(QStringLiteral("rotation")).toInt(0);
+        if (rotation == 0 || rotation == 90 || rotation == 180 || rotation == 270)
+            m_project.camera.rotation = rotation;
+        m_project.camera.flipHorizontal = cameraCapture
+            .value(QStringLiteral("flipHorizontal")).toBool(false);
     }
     if (m_project.clips.isEmpty()) m_project.clips = {Clip{QStringLiteral("c1"), 0.0, m_sourceDuration, 1.0}};
     m_project.audio.desktop = m_project.audio.desktop && m_hasDesktopAudio;

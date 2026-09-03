@@ -69,7 +69,8 @@ static int usage(const QString &error = {})
 
 static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplication &app)
 {
-    const QString path = qEnvironmentVariable("OMARECORD_SCREENSHOT");
+    QString path = qEnvironmentVariable("OMARECORD_SCREENSHOT_LIVE");
+    if (path.isEmpty()) path = qEnvironmentVariable("OMARECORD_SCREENSHOT");
     if (path.isEmpty() || engine.rootObjects().isEmpty()) return;
 
     auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
@@ -217,6 +218,8 @@ static int recordCommand(const QStringList &arguments)
     if (!explicitWebcam) options.webcam = preferences.webcamEnabled;
     options.webcamDevice = preferences.webcamDevice;
     options.webcamHeight = preferences.webcamHeight;
+    options.webcamRotation = preferences.webcamRotation;
+    options.webcamFlipHorizontal = preferences.webcamFlipHorizontal;
     int modeCount = 0;
     for (int i = 0; i < arguments.size(); ++i) {
         const QString arg = arguments[i];
@@ -373,8 +376,9 @@ int main(int argc, char **argv)
     }
     const bool exporting = argc > 1 && QByteArray(argv[1]) == "export";
     const bool recordBar = argc > 1 && QByteArray(argv[1]) == "__record-bar";
+    const bool hiddenRecordBar = recordBar && argc > 2 && QByteArray(argv[2]) == "--hidden";
     const bool graphical = argc == 1 || recordBar || (argc > 1 && QByteArray(argv[1]) == "edit");
-    if (recordBar) LayerShellQt::Shell::useLayerShell();
+    if (recordBar && !hiddenRecordBar) LayerShellQt::Shell::useLayerShell();
     if (graphical) {
         QQuickStyle::setStyle(QStringLiteral("Material"));
         qputenv("QT_QUICK_CONTROLS_MATERIAL_VARIANT", "Dense");
@@ -421,7 +425,7 @@ int main(int argc, char **argv)
     if (command == QLatin1String("__record-daemon")) return Recorder::daemonMain(args.mid(2));
     if (command == QLatin1String("__record-bar")) {
         Theme theme;
-        RecordingBar recordingBar;
+        RecordingBar recordingBar(hiddenRecordBar);
         QQmlApplicationEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
         engine.rootContext()->setContextProperty(QStringLiteral("recordingBar"), &recordingBar);
@@ -430,6 +434,7 @@ int main(int argc, char **argv)
         if (engine.rootObjects().isEmpty()) return 2;
         auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
         if (!window) return 2;
+        if (hiddenRecordBar) return app.exec();
         QScreen *screen = recordBarScreen(recordingBar.recordedMonitor());
         if (screen) window->setScreen(screen);
         auto *layerWindow = LayerShellQt::Window::get(window);

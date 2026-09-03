@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Concurrent Gui Quick QuickControls2 Multimedia OpenGL Svg Test)
+find_package(Qt6 6.8 REQUIRED COMPONENTS Core Concurrent Gui Quick QuickControls2 Multimedia OpenGL Svg Test)
 find_package(LayerShellQt REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBEVDEV REQUIRED IMPORTED_TARGET libevdev)
@@ -26,6 +26,7 @@ add_library(omarecord_core STATIC
     src/core/RecordingMetadata.cpp
     src/core/RecordingPreferences.cpp
     src/record/CursorSampler.cpp
+    src/record/CameraCapture.cpp
     src/record/EvdevListener.cpp
     src/record/RegionPicker.cpp
     src/record/Recorder.cpp
