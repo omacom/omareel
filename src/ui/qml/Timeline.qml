@@ -42,7 +42,7 @@ FocusScope {
                 verticalAlignment: Text.AlignVCenter
                 text: modelData
                 color: theme.textFaint
-                font.pixelSize: 11
+                font.pixelSize: theme.font.caption
                 font.weight: Font.Medium
                 font.capitalization: Font.AllUppercase
                 font.letterSpacing: .6
@@ -136,8 +136,8 @@ FocusScope {
                             sourceComponent: Text {
                                 text: editor.formatTime(tickDelegate.tickTime)
                                 color: theme.textFaint
-                                font.pixelSize: 11
-                                font.family: theme.monoFamily
+                                font.pixelSize: theme.font.caption
+                                font.family: theme.fontFamily
                             }
                         }
                     }
@@ -160,9 +160,9 @@ FocusScope {
                 y: 32
                 width: parent.width
                 height: 48
-                color: theme.surfaceRaised
+                color: theme.normalFill
                 border.width: 1
-                border.color: theme.hairline
+                border.color: theme.normalBorder
             }
             ClipTrack {
                 x: 0
@@ -177,9 +177,9 @@ FocusScope {
                 y: 88
                 width: parent.width
                 height: 48
-                color: theme.surfaceRaised
+                color: theme.normalFill
                 border.width: 1
-                border.color: theme.hairline
+                border.color: theme.normalBorder
             }
             ZoomTrack {
                 x: 0
@@ -195,9 +195,9 @@ FocusScope {
                 y: 144
                 width: parent.width
                 height: 48
-                color: theme.surfaceRaised
+                color: theme.normalFill
                 border.width: 1
-                border.color: theme.hairline
+                border.color: theme.normalBorder
             }
             Rectangle {
                 visible: editor.hasCamera
@@ -205,15 +205,15 @@ FocusScope {
                 y: 148
                 width: Math.max(20, editor.duration * root.pixelsPerSecond)
                 height: 40
-                radius: 6
-                color: theme.hairline
+                radius: theme.radius
+                color: theme.normalFill
                 border.width: 1
-                border.color: theme.hairlineStrong
+                border.color: theme.normalBorder
                 Label {
                     anchors.centerIn: parent
                     text: "Camera"
                     color: theme.textMuted
-                    font.pixelSize: 12
+                    font.pixelSize: theme.font.body
                     font.weight: Font.Medium
                 }
             }
@@ -253,7 +253,7 @@ FocusScope {
             background: null
             contentItem: Rectangle {
                 implicitHeight: 6
-                radius: 3
+                radius: theme.radius
                 color: theme.textFaint
             }
             Behavior on opacity { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }

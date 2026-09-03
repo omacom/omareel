@@ -95,17 +95,19 @@ Rectangle {
                 Accessible.name: editor.playing ? "Pause" : "Play"
                 onClicked: editor.playPause()
                 background: Rectangle {
-                    radius: 20
-                    color: parent.down ? Qt.darker(theme.accent, 1.10)
-                         : parent.hovered ? Qt.lighter(theme.accent, 1.06) : theme.accent
+                    radius: theme.radius
+                    color: parent.down ? theme.pressedFill
+                         : parent.hovered ? theme.hoverFill : theme.selectedFill
+                    border.width: 1
+                    border.color: parent.hovered ? theme.hoverBorder : theme.normalBorder
                     Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
                     Rectangle {
                         anchors.fill: parent
                         anchors.margins: -3
-                        radius: width / 2
+                        radius: theme.radius
                         color: "transparent"
                         border.width: 2
-                        border.color: theme.accent
+                        border.color: theme.hoverBorder
                         visible: parent.parent.visualFocus
                     }
                 }

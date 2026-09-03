@@ -4,7 +4,7 @@ import QtQuick.Layouts
 
 ColumnLayout {
     id: root
-    spacing: 16
+    spacing: theme.space.panelGap
     property var selected: {
         for (let i=0;i<editor.zooms.length;i++) if (editor.zooms[i].id === editor.selectedZoomId) return editor.zooms[i]
         return null
@@ -34,7 +34,7 @@ ColumnLayout {
             text: "Select a zoom on the timeline or press Z to add one"
             wrapMode: Text.WordWrap
             color: theme.textMuted
-            font.pixelSize: 11
+            font.pixelSize: theme.font.bodySmall
         }
     }
     ColumnLayout {
@@ -95,7 +95,7 @@ ColumnLayout {
         text: root.motionCaptions[Math.max(0, springPreset.currentIndex)]
         wrapMode: Text.WordWrap
         color: theme.textMuted
-        font.pixelSize: 11
+        font.pixelSize: theme.font.bodySmall
     }
     PanelSlider { Layout.fillWidth: true; label: "Edge snapping"; path: "zoomStyle.snapToEdgesRatio"; from: 0; to: 0.5; value: editor.project.zoomStyle.snapToEdgesRatio; stepSize: 0.01; decimals: 2 }
     Label {
@@ -103,7 +103,7 @@ ColumnLayout {
         text: "How close to the frame edge the zoom may look. 0 keeps the camera centered on the target; higher lets it slide to the very edge"
         wrapMode: Text.WordWrap
         color: theme.textMuted
-        font.pixelSize: 11
+        font.pixelSize: theme.font.bodySmall
     }
     EditorSwitch { Layout.preferredHeight: 32; text: "Cut instead of glide"; checked: editor.project.zoomStyle.instantAnimation; onToggled: editor.setProjectValue("zoomStyle.instantAnimation", checked) }
     Label {
@@ -111,7 +111,7 @@ ColumnLayout {
         text: "Jump straight to the zoom at its start/end instead of animating"
         wrapMode: Text.WordWrap
         color: theme.textMuted
-        font.pixelSize: 11
+        font.pixelSize: theme.font.bodySmall
     }
     PanelSlider { Layout.fillWidth: true; label: "Motion blur"; path: "zoomStyle.motionBlur"; from: 0; to: 1; value: editor.project.zoomStyle.motionBlur; stepSize: .05; decimals: 2 }
     EditorButton { Layout.fillWidth: true; text: "Regenerate zooms"; onClicked: editor.regenerateZooms() }

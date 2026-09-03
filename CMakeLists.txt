@@ -12,6 +12,7 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBEVDEV REQUIRED IMPORTED_TARGET libevdev)
 
 qt_standard_project_setup()
+qt_policy(SET QTP0004 NEW)
 
 add_library(omarecord_core STATIC
     src/core/Project.cpp
@@ -39,6 +40,26 @@ target_link_libraries(omarecord_core
 )
 
 add_library(omarecord_render STATIC)
+qt_add_qml_module(omarecord_ui STATIC
+    URI Omarecord.Ui
+    VERSION 1.0
+    RESOURCE_PREFIX /qt/qml
+    OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/Omarecord/Ui
+    QML_FILES
+        src/ui/qml/ui/OmButton.qml
+        src/ui/qml/ui/OmButtonGroup.qml
+        src/ui/qml/ui/OmToggle.qml
+        src/ui/qml/ui/OmSlider.qml
+        src/ui/qml/ui/OmSectionHeader.qml
+        src/ui/qml/ui/OmHero.qml
+        src/ui/qml/ui/OmSeparator.qml
+        src/ui/qml/ui/OmDropdown.qml
+        src/ui/qml/ui/OmTextField.qml
+        src/ui/qml/ui/OmPopupCard.qml
+        src/ui/qml/ui/OmListRow.qml
+        src/ui/qml/ui/OmConfirm.qml
+)
+target_link_libraries(omarecord_ui PUBLIC Qt6::Quick Qt6::QuickControls2)
 set_source_files_properties(
     src/ui/qml/Composition.qml
     src/ui/qml/Background.qml
@@ -158,7 +179,7 @@ qt_add_resources(omarecord_render "omarecord_assets"
         assets/sounds/click.wav
 )
 target_include_directories(omarecord_render PUBLIC src src/render)
-target_link_libraries(omarecord_render PUBLIC omarecord_core Qt6::Concurrent Qt6::Quick Qt6::QuickControls2 Qt6::Multimedia Qt6::OpenGL)
+target_link_libraries(omarecord_render PUBLIC omarecord_core omarecord_ui Qt6::Concurrent Qt6::Quick Qt6::QuickControls2 Qt6::Multimedia Qt6::OpenGL)
 
 qt_add_executable(omarecord src/main.cpp)
 target_link_libraries(omarecord PRIVATE omarecord_render Qt6::Quick Qt6::Multimedia LayerShellQt::Interface)

@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls.Material
 import QtQuick.Layouts
 
 ApplicationWindow {
@@ -11,13 +10,9 @@ ApplicationWindow {
     minimumWidth: 1200
     minimumHeight: 760
     font.family: theme.fontFamily
-    font.pixelSize: 13
+    font.pixelSize: theme.font.body
     color: theme.surface
     title: editor.bundleName + " — omarecord"
-    Material.theme: theme.dark ? Material.Dark : Material.Light
-    Material.accent: theme.accent
-    Material.background: theme.surface
-    Material.foreground: theme.foreground
     property real timelineScale: 1
     property bool cropMode: false
     readonly property bool singleKeyShortcutsBlocked: activeFocusItem !== null

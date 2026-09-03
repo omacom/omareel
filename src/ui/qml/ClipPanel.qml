@@ -4,7 +4,7 @@ import QtQuick.Layouts
 
 ColumnLayout {
     id: root
-    spacing: 16
+    spacing: theme.space.panelGap
     property var selected: {
         for (let i = 0; i < editor.clips.length; ++i)
             if (editor.clips[i].id === editor.selectedClipId) return editor.clips[i]
@@ -15,7 +15,7 @@ ColumnLayout {
         Layout.fillWidth: true
         text: "Select a clip on the timeline"
         color: theme.textMuted
-        font.pixelSize: 11
+        font.pixelSize: theme.font.bodySmall
         wrapMode: Text.WordWrap
     }
     ColumnLayout {

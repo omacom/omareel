@@ -1,22 +1,18 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls.Material
 import QtQuick.Layouts
 import QtMultimedia
+import Omarecord.Ui
 
 ApplicationWindow {
     id: window
     visible: false
-    width: recordingBar.webcam ? 408 : 236
+    width: recordingBar.webcam ? 448 : 276
     height: recordingBar.webcam ? 120 : 40
     font.family: theme.fontFamily
-    font.pixelSize: 13
+    font.pixelSize: theme.font.body
     color: "transparent"
     flags: Qt.FramelessWindowHint | Qt.Tool
-    Material.theme: theme.dark ? Material.Dark : Material.Light
-    Material.accent: theme.accent
-    Material.background: theme.surface
-    Material.foreground: theme.foreground
 
     RowLayout {
         anchors.fill: parent
@@ -30,7 +26,7 @@ ApplicationWindow {
             clip: true
             color: theme.surface
             border.width: 2
-            border.color: theme.hairlineStrong
+            border.color: theme.normalBorder
 
             VideoOutput {
                 id: cameraOutput
@@ -54,19 +50,16 @@ ApplicationWindow {
                 text: recordingBar.cameraError
                 wrapMode: Text.WordWrap
                 horizontalAlignment: Text.AlignHCenter
-                color: "white"
-                font.pixelSize: 10
+                color: theme.foreground
+                font.pixelSize: theme.font.caption
             }
         }
 
-        Rectangle {
+        OmPopupCard {
             Layout.fillWidth: true
             Layout.preferredHeight: 40
             Layout.alignment: Qt.AlignVCenter
-            radius: 20
-            color: Qt.alpha(theme.surface, .92)
-            border.width: 1
-            border.color: theme.hairlineStrong
+            padding: 0
 
             RowLayout {
                 anchors.fill: parent
@@ -91,11 +84,11 @@ ApplicationWindow {
                     text: recordingBar.elapsed
                     color: theme.foreground
                     font.family: theme.monoFamily
-                    font.pixelSize: 12
+                    font.pixelSize: theme.font.body
                     font.weight: Font.DemiBold
                 }
 
-                ToolButton {
+                IconToolButton {
                     visible: recordingBar.webcam
                     Layout.preferredWidth: 24
                     Layout.preferredHeight: 24
@@ -107,7 +100,7 @@ ApplicationWindow {
                     Accessible.name: "Rotate camera"
                 }
 
-                ToolButton {
+                IconToolButton {
                     visible: recordingBar.webcam
                     Layout.preferredWidth: 24
                     Layout.preferredHeight: 24
@@ -119,39 +112,30 @@ ApplicationWindow {
                     Accessible.name: "Flip camera"
                 }
 
-                Button {
+                OmButton {
                     Layout.preferredWidth: 58
                     Layout.preferredHeight: 28
                     focusPolicy: Qt.NoFocus
                     hoverEnabled: true
-                    font.pixelSize: 11
+                    font.pixelSize: theme.font.bodySmall
                     font.weight: Font.DemiBold
                     topInset: 0; bottomInset: 0
                     onClicked: recordingBar.stop()
-                    contentItem: Label {
-                        text: "Stop"
-                        color: theme.accentForeground
-                        font: parent.font
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                    }
-                    background: Rectangle {
-                        radius: 14
-                        color: parent.down ? Qt.darker(theme.accent, 1.15)
-                                           : parent.hovered ? Qt.lighter(theme.accent, 1.08) : theme.accent
-                    }
+                    text: "Stop"
+                    bordered: true
+                    active: true
                 }
 
-                Button {
+                OmButton {
                     id: cancelButton
                     Layout.fillWidth: true
                     Layout.preferredHeight: 28
-                    text: armed ? "Discard?" : "Cancel"
-                    flat: true
+                    text: armed ? "Discard?" : "Discard"
                     focusPolicy: Qt.NoFocus
-                    font.pixelSize: 10
+                    font.pixelSize: theme.font.caption
                     property bool armed: false
-                    topInset: 0; bottomInset: 0
+                    bordered: true
+                    destructive: armed
                     onClicked: {
                         if (armed) recordingBar.cancel()
                         else {

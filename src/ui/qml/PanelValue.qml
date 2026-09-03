@@ -1,8 +1,8 @@
-import QtQuick.Controls
+import QtQuick
 
-Label {
-    color: theme.textFaint
-    font.family: theme.monoFamily
-    font.pixelSize: 11
-    lineHeight: 1.35
+Text {
+    color: theme.textMuted
+    font.family: theme.fontFamily
+    font.pixelSize: theme.font.caption
+    horizontalAlignment: Text.AlignRight
 }

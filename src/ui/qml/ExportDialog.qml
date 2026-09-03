@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
+import Omarecord.Ui
 
 Dialog {
     id: root
@@ -32,27 +33,14 @@ Dialog {
         {label:"Studio",value:"studio",caption:"Maximum detail for further editing."}
     ]
 
-    component SegmentRow: RowLayout {
+    component SegmentRow: OmButtonGroup {
         id: segment
         required property var choices
         required property var selectedValue
         signal chosen(var value)
-        spacing: 4
-        Repeater {
-            model: segment.choices
-            delegate: EditorButton {
-                required property var modelData
-                Layout.fillWidth: true
-                Layout.preferredHeight: 30
-                checkable: true
-                checked: segment.selectedValue === modelData.value
-                selected: checked
-                text: modelData.label
-                font.pixelSize: 11
-                font.weight: checked ? Font.DemiBold : Font.Normal
-                onClicked: segment.chosen(modelData.value)
-            }
-        }
+        options: choices
+        value: selectedValue
+        onChanged: value => segment.chosen(value)
     }
 
     function selectFormat(value) {
@@ -89,18 +77,13 @@ Dialog {
         selectFormat(editor.project.export.format || "mp4")
     }
 
-    background: Rectangle {
-        radius: 14
-        color: theme.surfaceRaised
-        border.width: 1
-        border.color: theme.hairlineStrong
-    }
-    Overlay.modal: Rectangle { color: Qt.alpha(theme.surface, .55) }
+    background: OmPopupCard { }
+    Overlay.modal: Rectangle { color: theme.menuScrim }
     contentItem: ColumnLayout {
         spacing: 12
         RowLayout {
             Layout.fillWidth: true
-            Label { text: "Export"; font.pixelSize: 17; font.weight: Font.DemiBold; color: theme.foreground }
+            Label { text: "Export"; font.pixelSize: theme.font.title; font.weight: Font.DemiBold; color: theme.foreground }
             Item { Layout.fillWidth: true }
             IconToolButton {
                 enabled: !editor.exporting
@@ -112,7 +95,7 @@ Dialog {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 154
-            radius: 10
+            radius: theme.radius
             color: theme.surface
             clip: true
             Image {
@@ -164,13 +147,13 @@ Dialog {
             Layout.fillWidth: true
             text: root.qualityCaption()
             color: theme.textMuted
-            font.pixelSize: 11
+            font.pixelSize: theme.font.bodySmall
         }
         Label {
             Layout.fillWidth: true
             text: "Estimated size  ·  " + root.estimatedMegabytes().toFixed(root.estimatedMegabytes() < 10 ? 1 : 0) + " MB"
             color: theme.textMuted
-            font.pixelSize: 11
+            font.pixelSize: theme.font.bodySmall
         }
         RowLayout {
             Layout.fillWidth: true
@@ -185,15 +168,21 @@ Dialog {
                 text: root.outputPath
                 elide: Text.ElideMiddle
                 color: theme.textMuted
-                font.pixelSize: 11
+                font.pixelSize: theme.font.bodySmall
             }
             EditorButton { text: "Choose…"; enabled: !editor.exporting; onClicked: outputDialog.open() }
         }
 
         ProgressBar {
+            id: progress
             Layout.fillWidth: true
             visible: editor.exporting || root.successPath.length > 0
             value: editor.exportProgress
+            background: Rectangle { implicitHeight: 4; color: theme.selectedFill; radius: theme.rounded ? 2 : 0 }
+            contentItem: Item {
+                implicitHeight: 4
+                Rectangle { width: progress.visualPosition * parent.width; height: parent.height; color: theme.foreground; radius: theme.rounded ? 2 : 0 }
+            }
         }
         RowLayout {
             Layout.fillWidth: true
@@ -203,7 +192,7 @@ Dialog {
             Label {
                 text: editor.exportFps.toFixed(1) + " fps  ·  ETA " + root.formatEta(editor.exportEtaSeconds)
                 color: theme.textMuted
-                font.pixelSize: 11
+                font.pixelSize: theme.font.bodySmall
             }
         }
         Label {
@@ -212,7 +201,7 @@ Dialog {
             text: editor.exportError
             color: theme.record
             wrapMode: Text.WordWrap
-            font.pixelSize: 11
+            font.pixelSize: theme.font.bodySmall
         }
         Label {
             Layout.fillWidth: true
@@ -220,7 +209,7 @@ Dialog {
             text: "Saved to " + root.successPath
             elide: Text.ElideMiddle
             color: theme.accent
-            font.pixelSize: 11
+            font.pixelSize: theme.font.bodySmall
         }
         RowLayout {
             Layout.fillWidth: true

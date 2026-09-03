@@ -35,10 +35,10 @@ FocusScope {
         anchors.centerIn: parent
         width: Math.min(parent.width, parent.height * editor.outputWidth / editor.outputHeight)
         height: width * editor.outputHeight / editor.outputWidth
-        color: theme.surfaceRaised
-        border.color: theme.hairline
+        color: theme.normalFill
+        border.color: theme.normalBorder
         border.width: 1
-        radius: 10
+        radius: theme.radius
         clip: true
         Item {
             id: scaled
@@ -96,12 +96,12 @@ FocusScope {
                 y: scaled.zoomOriginY + editor.zoom.scale * (scaled.frameY + targetY * scaled.videoHeight - scaled.zoomOriginY) - height / 2
                 width: 18 / scaled.scale
                 height: width
-                radius: width / 2
+                radius: theme.radius
             color: theme.accentSoft
                 border.width: 2 / scaled.scale
                 border.color: theme.accent
                 z: 20
-                Rectangle { anchors.centerIn: parent; width: 4 / scaled.scale; height: width; radius: width / 2; color: theme.accent }
+                Rectangle { anchors.centerIn: parent; width: 4 / scaled.scale; height: width; radius: theme.radius; color: theme.accent }
             }
             Rectangle {
                 id: cropRect
@@ -118,7 +118,7 @@ FocusScope {
                     model: [{x:0,y:0,corner:0},{x:1,y:0,corner:1},{x:0,y:1,corner:2},{x:1,y:1,corner:3}]
                     delegate: Rectangle {
                         required property var modelData
-                        width: cropRect.handleSize; height: width; radius: width / 2
+                        width: cropRect.handleSize; height: width; radius: theme.radius
                         x: modelData.x * cropRect.width - width / 2
                         y: modelData.y * cropRect.height - height / 2
                         color: theme.accent; border.color: theme.accentForeground
@@ -153,10 +153,10 @@ FocusScope {
             anchors.top: previewFrame.top
             anchors.topMargin: 14
             visible: editor.pickingZoomTarget
-            color: theme.surfaceRaised
-            border.width: 1
-            border.color: theme.hairlineStrong
-            radius: 10
+            color: theme.popupBackground
+            border.width: 2
+            border.color: theme.popupBorder
+            radius: theme.radius
             width: pickHint.implicitWidth + 20
             height: 28
             z: 40
@@ -165,7 +165,7 @@ FocusScope {
                 anchors.centerIn: parent
                 text: "Click where the zoom should center"
                 color: theme.foreground
-                font.pixelSize: 12
+                font.pixelSize: theme.font.body
                 font.weight: Font.Medium
             }
         }
@@ -178,6 +178,6 @@ FocusScope {
         text: root.formatTenths(editor.position) + " / " + root.formatTenths(editor.duration)
         color: theme.textMuted
         font.family: theme.monoFamily
-        font.pixelSize: 12
+        font.pixelSize: theme.font.body
     }
 }

@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import Omarecord.Ui
 
 Rectangle {
     id: root
@@ -26,14 +27,15 @@ Rectangle {
         hoverEnabled: true
         contentItem: Label {
             text: menuItem.text
-            color: menuItem.enabled ? theme.foreground : theme.textFaint
-            font.pixelSize: 12
+            color: menuItem.highlighted ? theme.menuSelectedText
+                                        : menuItem.enabled ? theme.menuText : theme.textFaint
+            font.pixelSize: theme.font.body
             font.weight: Font.Medium
             verticalAlignment: Text.AlignVCenter
         }
         background: Rectangle {
-            radius: 6
-            color: menuItem.highlighted ? theme.hairline : "transparent"
+            radius: theme.radius
+            color: menuItem.highlighted ? theme.menuSelectedBackground : "transparent"
         }
     }
 
@@ -54,7 +56,7 @@ Rectangle {
         Label {
             text: "omarecord"
             font.weight: Font.DemiBold
-            font.pixelSize: 17
+            font.pixelSize: theme.font.title
             color: theme.foreground
         }
         Rectangle {
@@ -64,14 +66,14 @@ Rectangle {
             Layout.rightMargin: 4
             color: theme.hairlineStrong
         }
-        TextField {
+        OmTextField {
             id: projectName
             Layout.preferredWidth: Math.max(160, Math.min(300, contentWidth + 24))
             Layout.preferredHeight: 32
             text: editor.bundleName
             selectByMouse: true
             hoverEnabled: true
-            font.pixelSize: 17
+            font.pixelSize: theme.font.title
             font.weight: Font.DemiBold
             leftPadding: 8
             rightPadding: 8
@@ -79,23 +81,6 @@ Rectangle {
             bottomPadding: 0
             color: theme.foreground
             focusPolicy: Qt.StrongFocus
-            background: Item {
-                Rectangle {
-                    anchors.fill: parent
-                    radius: 6
-                    color: projectName.activeFocus ? theme.hairline : "transparent"
-                    border.width: projectName.activeFocus ? 1 : 0
-                    border.color: theme.hairlineStrong
-                }
-                Rectangle {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    height: 1
-                    color: theme.hairlineStrong
-                    visible: projectName.hovered && !projectName.activeFocus
-                }
-            }
             onEditingFinished: root.commitProjectName()
             onAccepted: {
                 root.commitProjectName()
@@ -112,7 +97,7 @@ Rectangle {
         Label {
             text: editor.dirty ? "Unsaved changes" : "Saved · " + root.savedTime
             color: theme.textMuted
-            font.pixelSize: 11
+            font.pixelSize: theme.font.bodySmall
         }
 
         Item { Layout.fillWidth: true }
@@ -172,10 +157,10 @@ Rectangle {
         width: 188
         padding: 4
         background: Rectangle {
-            radius: 10
-            color: theme.surfaceRaised
-            border.width: 1
-            border.color: theme.hairlineStrong
+            radius: theme.radius
+            color: theme.menuBackground
+            border.width: 2
+            border.color: theme.popupBorder
         }
         BarMenuItem { text: "Save current…"; onTriggered: savePresetDialog.open() }
         MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: theme.hairline } }
@@ -205,16 +190,11 @@ Rectangle {
         padding: 24
         standardButtons: Dialog.NoButton
         Overlay.modal: Rectangle { color: Qt.alpha(theme.surface, .55) }
-        background: Rectangle {
-            radius: 14
-            color: theme.surfaceRaised
-            border.width: 1
-            border.color: theme.hairlineStrong
-        }
+        background: OmPopupCard { }
         contentItem: ColumnLayout {
             spacing: 16
-            Label { text: "Save preset"; font.pixelSize: 17; font.weight: Font.DemiBold; color: theme.foreground }
-            TextField { id: presetName; Layout.fillWidth: true; placeholderText: "Preset name"; selectByMouse: true }
+            Label { text: "Save preset"; font.pixelSize: theme.font.title; font.weight: Font.DemiBold; color: theme.foreground }
+            OmTextField { id: presetName; Layout.fillWidth: true; placeholderText: "Preset name"; selectByMouse: true }
             RowLayout {
                 Layout.fillWidth: true
                 Item { Layout.fillWidth: true }
@@ -239,15 +219,10 @@ Rectangle {
         padding: 24
         standardButtons: Dialog.NoButton
         Overlay.modal: Rectangle { color: Qt.alpha(theme.surface, .55) }
-        background: Rectangle {
-            radius: 14
-            color: theme.surfaceRaised
-            border.width: 1
-            border.color: theme.hairlineStrong
-        }
+        background: OmPopupCard { }
         contentItem: ColumnLayout {
             spacing: 16
-            Label { text: "Delete preset"; font.pixelSize: 17; font.weight: Font.DemiBold; color: theme.foreground }
+            Label { text: "Delete preset"; font.pixelSize: theme.font.title; font.weight: Font.DemiBold; color: theme.foreground }
             EditorComboBox { id: deletePresetName; Layout.fillWidth: true; model: editor.presetNames }
             RowLayout {
                 Layout.fillWidth: true

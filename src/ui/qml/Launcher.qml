@@ -1,10 +1,10 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls.Material
 import QtQuick.Dialogs
 import QtQuick.Effects
 import QtQuick.Layouts
 import QtMultimedia
+import Omarecord.Ui
 
 ApplicationWindow {
     id: window
@@ -16,11 +16,7 @@ ApplicationWindow {
     title: "omarecord"
     color: theme.surface
     font.family: theme.fontFamily
-    font.pixelSize: 13
-    Material.theme: theme.dark ? Material.Dark : Material.Light
-    Material.accent: theme.accent
-    Material.background: theme.surface
-    Material.foreground: theme.foreground
+    font.pixelSize: theme.font.body
 
     readonly property string iconRoot: "qrc:/omarecord/assets/icons/" + "luc" + "ide/"
     readonly property bool cameraQuarterTurn: launcher.webcamRotation === 90
@@ -30,6 +26,8 @@ ApplicationWindow {
     property string pendingDeleteName: ""
     property string pendingRenamePath: ""
     property string errorMessage: ""
+    property bool screenshotRecording: false
+    readonly property bool showingRecording: launcher.recording || screenshotRecording
 
     Component.onCompleted: Qt.callLater(function() { window.motionReady = true })
 
@@ -42,6 +40,10 @@ ApplicationWindow {
         if (view === "webcam-menu")
             webcamMenu.popup(webcamChip, webcamChip.width - webcamMenu.width,
                              webcamChip.height + 8)
+        else if (view === "webcam-on")
+            launcher.webcam = true
+        else if (view === "recording")
+            window.screenshotRecording = true
         else if (view === "settings")
             settingsPopover.open()
     }
@@ -51,7 +53,7 @@ ApplicationWindow {
         required property Item control
         property color fill: "transparent"
         property color stroke: "transparent"
-        property real cornerRadius: 6
+        property real cornerRadius: theme.radius
         Rectangle {
             anchors.fill: parent
             radius: focusBackground.cornerRadius
@@ -70,10 +72,10 @@ ApplicationWindow {
         Rectangle {
             anchors.fill: parent
             anchors.margins: -3
-            radius: focusBackground.cornerRadius + 3
+            radius: theme.radius
             color: "transparent"
             border.width: 2
-            border.color: theme.accent
+            border.color: theme.hoverBorder
             visible: focusBackground.control.visualFocus
         }
     }
@@ -99,10 +101,10 @@ ApplicationWindow {
         ToolTip.text: tip
         background: FocusBackground {
             control: ghost
-            cornerRadius: 6
-            fill: ghost.down ? theme.hairlineStrong
-                             : ghost.hovered ? theme.hairline : "transparent"
-            stroke: ghost.hovered ? theme.hairlineStrong : "transparent"
+            cornerRadius: theme.radius
+            fill: ghost.down ? theme.pressedFill
+                             : ghost.hovered ? theme.hoverFill : "transparent"
+            stroke: ghost.hovered ? theme.hoverBorder : "transparent"
         }
     }
 
@@ -115,7 +117,7 @@ ApplicationWindow {
         rightPadding: 12
         hoverEnabled: true
         focusPolicy: Qt.TabFocus
-        font.pixelSize: 12
+        font.pixelSize: theme.font.body
         font.weight: Font.Medium
         contentItem: Label {
             text: quiet.text
@@ -126,11 +128,12 @@ ApplicationWindow {
         }
         background: FocusBackground {
             control: quiet
-            cornerRadius: 6
-            fill: quiet.down ? theme.hairlineStrong
-                             : quiet.hovered ? theme.hairline : "transparent"
-            stroke: quiet.highlighted ? Qt.alpha(theme.accent, .40)
-                                      : quiet.hovered ? theme.hairlineStrong : "transparent"
+            cornerRadius: theme.radius
+            fill: quiet.highlighted ? theme.selectedFill
+                : quiet.down ? theme.pressedFill
+                : quiet.hovered ? theme.hoverFill : theme.normalFill
+            stroke: quiet.highlighted ? "transparent"
+                                      : quiet.hovered ? theme.hoverBorder : theme.normalBorder
         }
     }
 
@@ -170,7 +173,7 @@ ApplicationWindow {
                 icon.width: 16
                 icon.height: 16
                 icon.source: window.iconRoot + chip.iconFile
-                icon.color: chip.selected ? theme.accent : theme.textMuted
+                icon.color: chip.selected ? theme.foreground : theme.textMuted
                 background: null
             }
             Label {
@@ -178,7 +181,7 @@ ApplicationWindow {
                 Layout.alignment: Qt.AlignVCenter
                 text: chip.text
                 elide: Text.ElideRight
-                font.pixelSize: 12
+                font.pixelSize: theme.font.body
                 font.weight: Font.Medium
                 color: chip.enabled
                        ? (chip.selected ? theme.foreground : theme.textMuted)
@@ -220,17 +223,19 @@ ApplicationWindow {
         }
         background: FocusBackground {
             control: chip
-            cornerRadius: 6
-            fill: chip.selected ? theme.accentSoft
-                                : chip.hovered ? theme.hairline : "transparent"
-            stroke: chip.selected ? Qt.alpha(theme.accent, .40) : theme.hairlineStrong
+            cornerRadius: theme.radius
+            fill: chip.down ? theme.pressedFill
+                : chip.selected ? theme.selectedFill
+                : chip.hovered ? theme.hoverFill : theme.normalFill
+            stroke: chip.selected ? "transparent"
+                : chip.hovered ? theme.hoverBorder : theme.normalBorder
         }
     }
 
     component StyledMenuItem: MenuItem {
         id: menuItem
-        implicitHeight: 32
-        height: 32
+        implicitHeight: theme.space.popupRowHeight
+        height: theme.space.popupRowHeight
         leftPadding: 32
         rightPadding: 10
         topPadding: 0
@@ -253,15 +258,16 @@ ApplicationWindow {
         }
         contentItem: Label {
             text: menuItem.text
-            color: menuItem.enabled ? theme.foreground : theme.textMuted
-            font.pixelSize: 12
+            color: menuItem.checked ? theme.menuSelectedText
+                                    : menuItem.enabled ? theme.menuText : theme.textMuted
+            font.pixelSize: theme.font.body
             font.weight: Font.Medium
             elide: Text.ElideRight
             verticalAlignment: Text.AlignVCenter
         }
         background: Rectangle {
-            radius: 6
-            color: menuItem.highlighted ? theme.hairline : "transparent"
+            radius: theme.radius
+            color: menuItem.highlighted || menuItem.checked ? theme.menuSelectedBackground : "transparent"
             Behavior on color {
                 enabled: window.motionReady
                 ColorAnimation { duration: 120; easing.type: Easing.OutCubic }
@@ -311,7 +317,7 @@ ApplicationWindow {
             spacing: 12
             Label {
                 text: "omarecord"
-                font.pixelSize: 24
+                font.pixelSize: theme.font.heading
                 font.weight: Font.DemiBold
                 color: theme.foreground
                 lineHeight: 1.35
@@ -324,8 +330,10 @@ ApplicationWindow {
                 Layout.alignment: Qt.AlignVCenter
             }
             Label {
-                text: "Screen recording for Omarchy"
-                font.pixelSize: 11
+                text: "SCREEN RECORDING · " + theme.themeName.toUpperCase()
+                font.pixelSize: theme.font.caption
+                font.bold: true
+                font.letterSpacing: 1.2
                 color: theme.textMuted
                 lineHeight: 1.35
                 Layout.alignment: Qt.AlignVCenter
@@ -355,7 +363,7 @@ ApplicationWindow {
             RowLayout {
                 anchors.fill: parent
                 spacing: 0
-                visible: !launcher.recording
+                visible: !window.showingRecording
                 Button {
                     id: recordButton
                     Layout.preferredWidth: Math.min(272, 223 + Math.max(0, window.width - 720))
@@ -421,7 +429,7 @@ ApplicationWindow {
                             spacing: 2
                             Label {
                                 text: "Record"
-                                font.pixelSize: 17
+                                font.pixelSize: theme.font.title
                                 font.weight: Font.DemiBold
                                 color: theme.foreground
                                 lineHeight: 1.35
@@ -435,23 +443,23 @@ ApplicationWindow {
                                     Layout.minimumWidth: 0
                                     text: "Area · Window · Screen"
                                     elide: Text.ElideRight
-                                    font.pixelSize: 11
+                                    font.pixelSize: theme.font.bodySmall
                                     color: theme.textMuted
                                     lineHeight: 1.35
                                 }
                                 Rectangle {
                                     Layout.preferredWidth: shortcutLabel.implicitWidth + 6
                                     Layout.preferredHeight: 20
-                                    radius: 4
+                                    radius: theme.radius
                                     color: "transparent"
                                     border.width: 1
-                                    border.color: theme.hairlineStrong
+                                    border.color: theme.normalBorder
                                     Label {
                                         id: shortcutLabel
                                         anchors.centerIn: parent
                                         text: "Ctrl R"
                                         font.family: theme.monoFamily
-                                        font.pixelSize: 11
+                                        font.pixelSize: theme.font.bodySmall
                                         color: theme.textMuted
                                     }
                                 }
@@ -584,15 +592,15 @@ ApplicationWindow {
 
             RowLayout {
                 anchors.fill: parent
-                visible: launcher.recording
+                visible: window.showingRecording
                 spacing: 12
                 Rectangle {
                     Layout.preferredWidth: 12
                     Layout.preferredHeight: 12
-                    radius: 6
+                    radius: width / 2
                     color: theme.record
                     SequentialAnimation on opacity {
-                        running: launcher.recording
+                        running: window.showingRecording
                         loops: Animation.Infinite
                         NumberAnimation { from: 1; to: .35; duration: 700; easing.type: Easing.InOutSine }
                         NumberAnimation { from: .35; to: 1; duration: 700; easing.type: Easing.InOutSine }
@@ -602,14 +610,14 @@ ApplicationWindow {
                     spacing: 5
                     Label {
                         text: "Recording ·"
-                        font.pixelSize: 17
+                        font.pixelSize: theme.font.title
                         font.weight: Font.DemiBold
                         color: theme.foreground
                     }
                     Label {
-                        text: launcher.recordingElapsed
+                        text: window.screenshotRecording ? "00:12" : launcher.recordingElapsed
                         font.family: theme.monoFamily
-                        font.pixelSize: 17
+                        font.pixelSize: theme.font.title
                         font.weight: Font.DemiBold
                         color: theme.foreground
                     }
@@ -650,14 +658,16 @@ ApplicationWindow {
             spacing: 8
             Label {
                 text: "Recent"
-                font.pixelSize: 17
+                font.pixelSize: theme.font.title
                 font.weight: Font.DemiBold
                 color: theme.foreground
                 lineHeight: 1.35
             }
             Label {
                 text: launcher.recentBundles.length
-                font.pixelSize: 11
+                font.pixelSize: theme.font.caption
+                font.bold: true
+                font.letterSpacing: 1.2
                 color: theme.textFaint
                 lineHeight: 1.35
             }
@@ -715,7 +725,7 @@ ApplicationWindow {
                     background: null
                     contentItem: Rectangle {
                         implicitWidth: 6
-                        radius: 3
+                        radius: theme.radius
                         color: theme.textFaint
                     }
                     Behavior on opacity {
@@ -738,7 +748,7 @@ ApplicationWindow {
                             height: width * 9 / 16
                             Rectangle {
                                 anchors.fill: parent
-                                radius: 10
+                                radius: theme.radius
                                 color: theme.surfaceRaised
                                 clip: true
                                 Image {
@@ -767,11 +777,11 @@ ApplicationWindow {
                             }
                             Rectangle {
                                 anchors.fill: parent
-                                radius: 10
+                                radius: theme.radius
                                 color: "transparent"
                                 border.width: 1
                                 border.color: recentMouse.containsMouse || recentGrid.currentIndex === recentDelegate.index
-                                              ? Qt.alpha(theme.accent, .60) : theme.hairline
+                                              ? theme.hoverBorder : theme.normalBorder
                                 Behavior on border.color {
                                     enabled: window.motionReady
                                     ColorAnimation { duration: 120; easing.type: Easing.OutCubic }
@@ -783,14 +793,14 @@ ApplicationWindow {
                                 anchors.margins: 8
                                 width: durationLabel.implicitWidth + 12
                                 height: durationLabel.implicitHeight + 8
-                                radius: 4
+                                radius: theme.radius
                                 color: Qt.alpha(theme.surface, .80)
                                 Label {
                                     id: durationLabel
                                     anchors.centerIn: parent
                                     text: recentDelegate.modelData.durationText
                                     font.family: theme.monoFamily
-                                    font.pixelSize: 11
+                                    font.pixelSize: theme.font.bodySmall
                                     color: theme.foreground
                                 }
                             }
@@ -798,7 +808,7 @@ ApplicationWindow {
                                 anchors.centerIn: parent
                                 width: 36
                                 height: 36
-                                radius: 18
+                                radius: theme.radius
                                 color: Qt.alpha(theme.surface, .60)
                                 opacity: recentMouse.containsMouse ? 1 : 0
                                 Behavior on opacity {
@@ -842,7 +852,7 @@ ApplicationWindow {
                             height: 16
                             text: recentDelegate.modelData.titleText
                             elide: Text.ElideRight
-                            font.pixelSize: 12
+                            font.pixelSize: theme.font.body
                             font.weight: Font.Medium
                             color: theme.foreground
                             verticalAlignment: Text.AlignVCenter
@@ -853,7 +863,7 @@ ApplicationWindow {
                             height: 15
                             text: recentDelegate.modelData.detailText
                             elide: Text.ElideRight
-                            font.pixelSize: 11
+                            font.pixelSize: theme.font.caption
                             color: theme.textMuted
                             verticalAlignment: Text.AlignVCenter
                         }
@@ -863,10 +873,10 @@ ApplicationWindow {
                         width: 176
                         padding: 4
                         background: Rectangle {
-                            radius: 10
-                            color: theme.surfaceRaised
-                            border.width: 1
-                            border.color: theme.hairlineStrong
+                            radius: theme.radius
+                            color: theme.menuBackground
+                            border.width: 2
+                            border.color: theme.popupBorder
                         }
                         StyledMenuItem {
                             text: "Open"
@@ -917,14 +927,14 @@ ApplicationWindow {
                 }
                 Label {
                     text: "No recordings yet"
-                    font.pixelSize: 12
+                    font.pixelSize: theme.font.body
                     font.weight: Font.Medium
                     color: theme.foreground
                     Layout.alignment: Qt.AlignHCenter
                 }
                 Label {
                     text: "Your recordings appear here after you stop."
-                    font.pixelSize: 11
+                    font.pixelSize: theme.font.bodySmall
                     color: theme.textMuted
                     Layout.alignment: Qt.AlignHCenter
                 }
@@ -937,10 +947,10 @@ ApplicationWindow {
         width: 280
         padding: 4
         background: Rectangle {
-            radius: 10
-            color: theme.surfaceRaised
-            border.width: 1
-            border.color: theme.hairlineStrong
+            radius: theme.radius
+            color: theme.menuBackground
+            border.width: 2
+            border.color: theme.popupBorder
         }
         Instantiator {
             model: launcher.audioDevices
@@ -964,10 +974,10 @@ ApplicationWindow {
         width: 300
         padding: 4
         background: Rectangle {
-            radius: 10
-            color: theme.surfaceRaised
-            border.width: 1
-            border.color: theme.hairlineStrong
+            radius: theme.radius
+            color: theme.menuBackground
+            border.width: 2
+            border.color: theme.popupBorder
         }
         Instantiator {
             model: launcher.webcamDevices
@@ -990,7 +1000,7 @@ ApplicationWindow {
             hoverEnabled: false
             contentItem: RowLayout {
                 spacing: 4
-                Label { text: "Rotate"; font.pixelSize: 12; color: theme.textMuted; Layout.fillWidth: true }
+                Label { text: "Rotate"; font.pixelSize: theme.font.body; color: theme.textMuted; Layout.fillWidth: true }
                 Repeater {
                     model: [0, 90, 180, 270]
                     delegate: Button {
@@ -1002,7 +1012,7 @@ ApplicationWindow {
                         padding: 0
                         text: modelData + "°"
                         font.family: theme.monoFamily
-                        font.pixelSize: 10
+                        font.pixelSize: theme.font.caption
                         onClicked: launcher.webcamRotation = modelData
                         contentItem: Label {
                             text: parent.text
@@ -1012,11 +1022,11 @@ ApplicationWindow {
                             verticalAlignment: Text.AlignVCenter
                         }
                         background: Rectangle {
-                            radius: 4
-                            color: launcher.webcamRotation === modelData ? theme.accentSoft : "transparent"
+                            radius: theme.radius
+                            color: launcher.webcamRotation === modelData ? theme.selectedFill : theme.normalFill
                             border.width: 1
                             border.color: launcher.webcamRotation === modelData
-                                          ? Qt.alpha(theme.accent, .40) : theme.hairlineStrong
+                                          ? theme.selectedBorder : theme.normalBorder
                         }
                     }
                 }
@@ -1027,8 +1037,8 @@ ApplicationWindow {
             implicitHeight: 36
             hoverEnabled: false
             contentItem: RowLayout {
-                Label { text: "Flip horizontal"; font.pixelSize: 12; color: theme.textMuted; Layout.fillWidth: true }
-                Switch {
+                Label { text: "Flip horizontal"; font.pixelSize: theme.font.body; color: theme.textMuted; Layout.fillWidth: true }
+                OmToggle {
                     Layout.preferredWidth: 42
                     Layout.preferredHeight: 28
                     checked: launcher.webcamFlipHorizontal
@@ -1042,7 +1052,7 @@ ApplicationWindow {
             hoverEnabled: false
             contentItem: RowLayout {
                 spacing: 4
-                Label { text: "Capture size"; font.pixelSize: 12; color: theme.textMuted; Layout.fillWidth: true }
+                Label { text: "Capture size"; font.pixelSize: theme.font.body; color: theme.textMuted; Layout.fillWidth: true }
                 Repeater {
                     model: [720, 1080]
                     delegate: Button {
@@ -1054,7 +1064,7 @@ ApplicationWindow {
                         padding: 0
                         text: modelData + "p"
                         font.family: theme.monoFamily
-                        font.pixelSize: 10
+                        font.pixelSize: theme.font.caption
                         onClicked: launcher.webcamHeight = modelData
                         contentItem: Label {
                             text: parent.text
@@ -1064,11 +1074,11 @@ ApplicationWindow {
                             verticalAlignment: Text.AlignVCenter
                         }
                         background: Rectangle {
-                            radius: 4
-                            color: launcher.webcamHeight === modelData ? theme.accentSoft : "transparent"
+                            radius: theme.radius
+                            color: launcher.webcamHeight === modelData ? theme.selectedFill : theme.normalFill
                             border.width: 1
                             border.color: launcher.webcamHeight === modelData
-                                          ? Qt.alpha(theme.accent, .40) : theme.hairlineStrong
+                                          ? theme.selectedBorder : theme.normalBorder
                         }
                     }
                 }
@@ -1087,45 +1097,40 @@ ApplicationWindow {
         modal: false
         focus: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-        background: Rectangle {
-            radius: 10
-            color: theme.surfaceRaised
-            border.width: 1
-            border.color: theme.hairlineStrong
-        }
+        background: OmPopupCard { }
         contentItem: ColumnLayout {
             spacing: 8
             Label {
                 text: "Capture settings"
-                font.pixelSize: 17
+                font.pixelSize: theme.font.title
                 font.weight: Font.DemiBold
                 color: theme.foreground
             }
             Label {
                 Layout.fillWidth: true
                 text: "Defaults for new recordings"
-                font.pixelSize: 11
+                font.pixelSize: theme.font.bodySmall
                 color: theme.textMuted
             }
             Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: theme.hairline }
-            Switch {
+            OmToggle {
                 Layout.fillWidth: true
                 text: "System audio"
-                font.pixelSize: 12
+                font.pixelSize: theme.font.body
                 checked: launcher.systemAudio
                 onToggled: launcher.systemAudio = checked
             }
-            Switch {
+            OmToggle {
                 Layout.fillWidth: true
                 text: "Microphone"
-                font.pixelSize: 12
+                font.pixelSize: theme.font.body
                 checked: launcher.microphone
                 onToggled: launcher.microphone = checked
             }
-            Switch {
+            OmToggle {
                 Layout.fillWidth: true
                 text: "Webcam"
-                font.pixelSize: 12
+                font.pixelSize: theme.font.body
                 enabled: launcher.webcam || launcher.webcamDevices.length > 0
                 checked: launcher.webcam
                 onToggled: launcher.webcam = checked
@@ -1144,15 +1149,10 @@ ApplicationWindow {
         padding: 20
         title: "Rename recording"
         standardButtons: Dialog.NoButton
-        background: Rectangle {
-            radius: 14
-            color: theme.surfaceRaised
-            border.width: 1
-            border.color: theme.hairlineStrong
-        }
+        background: OmPopupCard { }
         contentItem: ColumnLayout {
             spacing: 16
-            TextField {
+            OmTextField {
                 id: renameField
                 Layout.fillWidth: true
                 placeholderText: "Recording name"
@@ -1192,19 +1192,14 @@ ApplicationWindow {
         padding: 20
         title: "Delete recording?"
         standardButtons: Dialog.NoButton
-        background: Rectangle {
-            radius: 14
-            color: theme.surfaceRaised
-            border.width: 1
-            border.color: theme.hairlineStrong
-        }
+        background: OmPopupCard { }
         contentItem: ColumnLayout {
             spacing: 16
             Label {
                 Layout.fillWidth: true
                 text: "“" + window.pendingDeleteName + "” will be permanently deleted."
                 wrapMode: Text.WordWrap
-                font.pixelSize: 13
+                font.pixelSize: theme.font.subtitle
                 color: theme.textMuted
             }
             RowLayout {
@@ -1229,7 +1224,7 @@ ApplicationWindow {
         anchors.bottomMargin: 18
         width: Math.min(460, errorLabel.implicitWidth + 32)
         height: 38
-        radius: 6
+        radius: theme.radius
         visible: window.errorMessage !== ""
         color: theme.foreground
         z: 40
@@ -1239,7 +1234,7 @@ ApplicationWindow {
             width: parent.width - 24
             text: window.errorMessage
             color: theme.surface
-            font.pixelSize: 12
+            font.pixelSize: theme.font.body
             elide: Text.ElideRight
             horizontalAlignment: Text.AlignHCenter
         }

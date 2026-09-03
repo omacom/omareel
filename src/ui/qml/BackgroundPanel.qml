@@ -7,7 +7,7 @@ ColumnLayout {
     id: root
     objectName: "backgroundPanel"
     clip: true
-    spacing: 16
+    spacing: theme.space.panelGap
     property bool showAllGradients: false
     readonly property var background: editor.project.background
     readonly property var plainColours: [
@@ -77,13 +77,13 @@ ColumnLayout {
                     && root.gradientMatches(modelData)
                 Rectangle {
                     anchors.fill: parent
-                    radius: 10; color: selected ? theme.accentSoft : "transparent"
-                    border.width: selected ? 2 : 0; border.color: theme.accent
+                    radius: theme.radius; color: selected ? theme.selectedFill : "transparent"
+                    border.width: selected ? 1 : 0; border.color: theme.selectedBorder
                 }
                 Rectangle {
                     anchors.fill: parent
                     anchors.margins: 3
-                    radius: 8
+                    radius: theme.radius
                     gradient: Gradient {
                         GradientStop { position: 0; color: modelData[0] }
                         GradientStop { position: 1; color: modelData[modelData.length - 1] }
@@ -116,7 +116,7 @@ ColumnLayout {
         from: 0; to: 360; value: root.background.gradient.angle; stepSize: 1
     }
 
-    Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; Layout.topMargin: 3; Layout.bottomMargin: 3; color: theme.hairline }
+    Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; Layout.topMargin: 3; Layout.bottomMargin: 3; color: theme.separator }
     PanelHeading { text: "Wallpapers" }
     Repeater {
         model: editor.wallpaperGroups
@@ -131,7 +131,7 @@ ColumnLayout {
             Label {
                 text: modelData.label + (modelData.current ? "  ·  Current" : "")
                 color: modelData.current ? theme.accent : theme.textMuted
-                font.pixelSize: 11
+                font.pixelSize: theme.font.bodySmall
                 font.weight: modelData.current ? Font.DemiBold : Font.Normal
             }
             ListView {
@@ -162,14 +162,14 @@ ColumnLayout {
                         && wallpaper.url === root.background.resolvedImage
                     Rectangle {
                         anchors.centerIn: parent
-                        width: 82; height: 54; radius: 10
-                        color: selected ? theme.accentSoft : "transparent"
-                        border.width: selected ? 2 : 0
-                        border.color: theme.accent
+                        width: 82; height: 54; radius: theme.radius
+                        color: selected ? theme.selectedFill : "transparent"
+                        border.width: selected ? 1 : 0
+                        border.color: theme.selectedBorder
                     }
                     Rectangle {
                         anchors.centerIn: parent
-                        width: 76; height: 48; radius: 8
+                        width: 76; height: 48; radius: theme.radius
                         color: theme.surface
                         clip: true
                         Image {
@@ -202,7 +202,7 @@ ColumnLayout {
         }
     }
 
-    Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; Layout.topMargin: 3; Layout.bottomMargin: 3; color: theme.hairline }
+    Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; Layout.topMargin: 3; Layout.bottomMargin: 3; color: theme.separator }
     PanelHeading { text: "Plain color" }
     GridLayout {
         id: colourGrid
@@ -228,19 +228,19 @@ ColumnLayout {
                     anchors.centerIn: parent
                     width: 38
                     height: 38
-                    radius: 10
-                    color: selected ? theme.accentSoft : "transparent"
-                    border.width: selected ? 2 : 0
-                    border.color: theme.accent
+                    radius: theme.radius
+                    color: selected ? theme.selectedFill : "transparent"
+                    border.width: selected ? 1 : 0
+                    border.color: theme.selectedBorder
                 }
                 Rectangle {
                     anchors.centerIn: parent
                     width: 32
                     height: 32
-                    radius: 8
+                    radius: theme.radius
                     color: swatch
                     border.width: 1
-                    border.color: theme.hairlineStrong
+                    border.color: theme.normalBorder
                     ToolButton {
                         anchors.fill: parent
                         visible: custom

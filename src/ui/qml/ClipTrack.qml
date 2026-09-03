@@ -24,12 +24,13 @@ Item {
             x: root.outputStart(index) * root.pixelsPerSecond
             width: gestureActive ? gestureWidth : Math.max(20, (modelData.out-modelData.in)/modelData.speed * root.pixelsPerSecond)
             height: root.height
-            radius: 6
-            color: clipBlock.selected ? Qt.alpha(theme.accent, .20) : theme.accentSoft
-            border.width: clipBlock.selected ? 1.5 : 1
-            border.color: clipBlock.selected ? theme.accent
-                        : clipHover.hovered ? Qt.alpha(theme.accent, .72)
-                        : Qt.alpha(theme.accent, .40)
+            radius: theme.radius
+            color: clipBlock.selected ? theme.selectedFill
+                : clipHover.hovered ? theme.hoverFill : theme.normalFill
+            border.width: clipBlock.selected ? theme.selectedBorderWidth
+                : clipHover.hovered ? theme.hoverBorderWidth : theme.normalBorderWidth
+            border.color: clipBlock.selected ? theme.selectedBorder
+                : clipHover.hovered ? theme.hoverBorder : theme.normalBorder
             Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
             Behavior on border.color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
             clip: true
@@ -59,7 +60,7 @@ Item {
                 elide: Text.ElideRight
                 text: clipBlock.width < 68 ? "" : "Clip · " + Number(modelData.speed).toFixed(modelData.speed % 1 ? 2 : 0) + "×"
                 font.weight: Font.Medium
-                font.pixelSize: 12
+                font.pixelSize: theme.font.body
                 color: theme.foreground
                 padding: 3
                 MouseArea {
@@ -76,24 +77,25 @@ Item {
                 width: 120
                 padding: 4
                 background: Rectangle {
-                    radius: 10
-                    color: theme.surfaceRaised
-                    border.width: 1
-                    border.color: theme.hairlineStrong
+                    radius: theme.radius
+                    color: theme.menuBackground
+                    border.width: 2
+                    border.color: theme.popupBorder
                 }
                 Repeater {
                     model: [0.5,0.75,1,1.2,1.4,1.6,1.8,2,3,4,8,16,24]
                     delegate: MenuItem {
                         required property real modelData
-                        height: 32
+                        height: theme.space.popupRowHeight
                         text: modelData + "×"
+                        contentItem: Text { text: parent.text; color: parent.highlighted ? theme.menuSelectedText : theme.menuText; font.family: theme.fontFamily; font.pixelSize: theme.font.body; verticalAlignment: Text.AlignVCenter }
                         onTriggered: editor.setClipSpeed(clipBlock.modelData.id, modelData)
-                        background: Rectangle { radius: 6; color: parent.highlighted ? theme.hairline : "transparent" }
+                        background: Rectangle { radius: theme.radius; color: parent.highlighted ? theme.menuSelectedBackground : "transparent" }
                     }
                 }
             }
             Rectangle {
-                width: 8; height: parent.height; color: clipBlock.border.color; radius: 4
+                width: 8; height: parent.height; color: clipBlock.border.color; radius: theme.radius
                 opacity: clipBlock.selected || clipHover.hovered ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: 120 } }
                 MouseArea {
@@ -122,7 +124,7 @@ Item {
                 }
             }
             Rectangle {
-                anchors.right: parent.right; width: 8; height: parent.height; color: clipBlock.border.color; radius: 4
+                anchors.right: parent.right; width: 8; height: parent.height; color: clipBlock.border.color; radius: theme.radius
                 opacity: clipBlock.selected || clipHover.hovered ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: 120 } }
                 MouseArea {

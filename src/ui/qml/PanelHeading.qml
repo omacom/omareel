@@ -1,8 +1,3 @@
-import QtQuick.Controls
+import Omarecord.Ui
 
-Label {
-    color: theme.foreground
-    font.weight: Font.DemiBold
-    font.pixelSize: 13
-    lineHeight: 1.35
-}
+OmSectionHeader { }

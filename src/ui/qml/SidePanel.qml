@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import Omarecord.Ui
 
 Rectangle {
     id: root
@@ -82,12 +83,13 @@ Rectangle {
                         background: Item {
                             Rectangle {
                                 anchors.fill: parent
-                                radius: 10
-                                color: railButton.checked ? theme.accentSoft
-                                     : railButton.down ? theme.hairlineStrong
-                                     : railButton.hovered ? theme.hairline : "transparent"
-                                border.width: railButton.hovered && !railButton.checked ? 1 : 0
-                                border.color: theme.hairlineStrong
+                                radius: theme.radius
+                                color: railButton.checked ? theme.selectedFill
+                                     : railButton.down ? theme.pressedFill
+                                     : railButton.hovered ? theme.hoverFill : "transparent"
+                                border.width: railButton.checked ? theme.selectedBorderWidth
+                                    : railButton.hovered ? theme.hoverBorderWidth : 0
+                                border.color: railButton.checked ? theme.selectedBorder : theme.hoverBorder
                                 Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
                             }
                             Rectangle {
@@ -95,17 +97,17 @@ Rectangle {
                                 anchors.verticalCenter: parent.verticalCenter
                                 width: 2
                                 height: 24
-                                radius: 1
-                                color: theme.accent
+                                radius: 0
+                                color: theme.foreground
                                 visible: railButton.checked
                             }
                             Rectangle {
                                 anchors.fill: parent
                                 anchors.margins: -3
-                                radius: 13
+                                radius: theme.radius
                                 color: "transparent"
                                 border.width: 2
-                                border.color: theme.accent
+                                border.color: theme.hoverBorder
                                 visible: railButton.visualFocus
                             }
                         }
@@ -122,17 +124,17 @@ Rectangle {
                             anchors.verticalCenter: parent.verticalCenter
                             width: tooltipLabel.implicitWidth + 18
                             height: 28
-                            radius: 7
-                            color: theme.surfaceRaised
+                            radius: theme.radius
+                            color: theme.tooltipBackground
                             border.width: 1
-                            border.color: theme.hairlineStrong
+                            border.color: theme.tooltipBorder
                             z: 1000
                             Label {
                                 id: tooltipLabel
                                 anchors.centerIn: parent
                                 text: modelData.name
                                 color: theme.foreground
-                                font.pixelSize: 11
+                                font.pixelSize: theme.font.bodySmall
                                 font.weight: Font.DemiBold
                             }
                         }
@@ -160,29 +162,21 @@ Rectangle {
 
                 ColumnLayout {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 84
-                    Layout.minimumHeight: 84
-                    Layout.maximumHeight: 84
-                    Layout.leftMargin: 20
-                    Layout.rightMargin: 20
-                    spacing: 2
-                    Item { Layout.preferredHeight: 13 }
-                    Label {
+                    Layout.preferredHeight: 88
+                    Layout.minimumHeight: 88
+                    Layout.maximumHeight: 88
+                    Layout.leftMargin: theme.space.panelPadding
+                    Layout.rightMargin: theme.space.panelPadding
+                    spacing: theme.space.sm
+                    Item { Layout.preferredHeight: theme.space.lg }
+                    OmHero {
                         Layout.fillWidth: true
-                        text: root.sections[root.section].name
-                        color: theme.foreground
-                        font.weight: Font.DemiBold
-                        font.pixelSize: 17
-                    }
-                    Label {
-                        Layout.fillWidth: true
-                        text: root.sections[root.section].caption
-                        color: theme.textMuted
-                        font.pixelSize: 11
-                        elide: Text.ElideRight
+                        iconSource: "qrc:/omarecord/assets/icons/lucide/" + root.sections[root.section].icon
+                        title: root.sections[root.section].name
+                        meta: root.sections[root.section].caption + " · " + theme.themeName
                     }
                     Item { Layout.fillHeight: true }
-                    Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: theme.hairline }
+                    OmSeparator { Layout.fillWidth: true }
                 }
                 ScrollView {
                     id: scroller
@@ -194,13 +188,13 @@ Rectangle {
                     ScrollBar.vertical.width: 6
                     Item {
                         width: scroller.availableWidth
-                        implicitHeight: panelLoader.item ? panelLoader.item.implicitHeight + 40 : 0
+                        implicitHeight: panelLoader.item ? panelLoader.item.implicitHeight + theme.space.panelPadding * 2 : 0
                         height: implicitHeight
                         Loader {
                             id: panelLoader
-                            x: 20
-                            y: 20
-                            width: parent.width - 40
+                            x: theme.space.panelPadding
+                            y: theme.space.panelPadding
+                            width: parent.width - theme.space.panelPadding * 2
                             height: item ? item.implicitHeight : 0
                             sourceComponent: root.section === 0 ? backgroundPanel
                                 : root.section === 1 ? shapePanel

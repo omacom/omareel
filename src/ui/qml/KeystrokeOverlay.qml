@@ -66,7 +66,7 @@ Item {
                                 text: "+"
                                 color: Qt.alpha(root.textColor, .65)
                                 font.family: "monospace"
-                                font.pixelSize: 13 * root.settings.size * root.ref
+                                font.pixelSize: theme.font.subtitle * root.settings.size * root.ref
                                 anchors.verticalCenter: parent.verticalCenter
                             }
                         }

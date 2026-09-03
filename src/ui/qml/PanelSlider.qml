@@ -11,7 +11,7 @@ ColumnLayout {
     required property real value
     property real stepSize: 0
     property int decimals: 0
-    spacing: 4
+    spacing: theme.space.sm
     RowLayout {
         Layout.fillWidth: true
         PanelLabel { text: root.label }

@@ -29,6 +29,7 @@
 #include <QScreen>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QQmlError>
 #include <QStandardPaths>
 #include <QTextStream>
 #include <QTimer>
@@ -61,31 +62,32 @@ static QString availableFamily(const QStringList &families, const QStringList &c
 
 static ResolvedFonts resolveFonts()
 {
-    const QStringList families = QFontDatabase::families();
-    QProcess settings;
-    settings.start(QStringLiteral("gsettings"),
-                   {QStringLiteral("get"), QStringLiteral("org.gnome.desktop.interface"),
-                    QStringLiteral("font-name")});
-    QString desktopFamily;
-    if (settings.waitForFinished(1500) && settings.exitCode() == 0) {
-        QString value = QString::fromUtf8(settings.readAllStandardOutput()).trimmed();
-        if ((value.startsWith(QLatin1Char('\'')) && value.endsWith(QLatin1Char('\'')))
-            || (value.startsWith(QLatin1Char('"')) && value.endsWith(QLatin1Char('"'))))
-            value = value.mid(1, value.size() - 2);
-        const QRegularExpression sizeSuffix(QStringLiteral(R"(\s+\d+(?:\.\d+)?$)"));
-        value.remove(sizeSuffix);
-        desktopFamily = availableFamily(families, {value.trimmed()});
+    QProcess match;
+    match.start(QStringLiteral("fc-match"),
+                {QStringLiteral("-f"), QStringLiteral("%{family[0]}"), QStringLiteral("monospace")});
+    QString family;
+    if (match.waitForFinished(1500) && match.exitCode() == 0)
+        family = QString::fromUtf8(match.readAllStandardOutput()).trimmed();
+    if (family.isEmpty()) family = QFontDatabase::systemFont(QFontDatabase::FixedFont).family();
+    qInfo().noquote() << "omarecord: fontconfig monospace ->" << family;
+    return {family, family};
+}
+
+static int shellFontBaseSize()
+{
+    QFile file(QDir(OmarchyPaths::stateRoot()).filePath(QStringLiteral("theme/shell.toml")));
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return 12;
+    bool inFont = false;
+    const QRegularExpression section(QStringLiteral(R"(^\s*\[([^]]+)\])"));
+    const QRegularExpression base(QStringLiteral(R"(^\s*base-size\s*=\s*(\d+))"));
+    while (!file.atEnd()) {
+        const QString line = QString::fromUtf8(file.readLine());
+        const auto sectionMatch = section.match(line);
+        if (sectionMatch.hasMatch()) { inFont = sectionMatch.captured(1) == QLatin1String("font"); continue; }
+        const auto baseMatch = base.match(line);
+        if (inFont && baseMatch.hasMatch()) return qMax(1, baseMatch.captured(1).toInt());
     }
-    QString ui = desktopFamily;
-    if (ui.isEmpty()) ui = availableFamily(families,
-                                            {QStringLiteral("Inter"), QStringLiteral("Noto Sans")});
-    if (ui.isEmpty()) ui = QFontDatabase::systemFont(QFontDatabase::GeneralFont).family();
-    QString mono = availableFamily(families,
-                                   {QStringLiteral("Adwaita Mono"),
-                                    QStringLiteral("JetBrainsMono Nerd Font")});
-    if (mono.isEmpty()) mono = QFontDatabase::systemFont(QFontDatabase::FixedFont).family();
-    qInfo().noquote() << "omarecord: UI font" << ui << "; mono font" << mono;
-    return {ui, mono};
+    return 12;
 }
 
 static int usage(const QString &error = {})
@@ -180,6 +182,14 @@ static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplicat
         const bool saved = !image.isNull() && image.save(path);
         if (!saved) QTextStream(stderr) << "omarecord: could not save UI screenshot to " << path << '\n';
         app.exit(saved ? 0 : 2);
+    });
+}
+
+static void reportQmlWarnings(QQmlApplicationEngine &engine)
+{
+    QObject::connect(&engine, &QQmlApplicationEngine::warnings, [](const QList<QQmlError> &warnings) {
+        for (const QQmlError &warning : warnings)
+            QTextStream(stderr) << warning.toString() << '\n';
     });
 }
 
@@ -435,8 +445,7 @@ int main(int argc, char **argv)
     const bool graphical = argc == 1 || recordBar || (argc > 1 && QByteArray(argv[1]) == "edit");
     if (recordBar && !hiddenRecordBar) LayerShellQt::Shell::useLayerShell();
     if (graphical) {
-        QQuickStyle::setStyle(QStringLiteral("Material"));
-        qputenv("QT_QUICK_CONTROLS_MATERIAL_VARIANT", "Dense");
+        QQuickStyle::setStyle(QStringLiteral("Basic"));
     }
     // Screenshot mode must be independent of compositor capture and GPU backend quirks.
     // It still exercises the real QML window and QQuickWindow::grabWindow().
@@ -465,14 +474,18 @@ int main(int argc, char **argv)
     app.setOrganizationName(QStringLiteral("omarecord"));
     const ResolvedFonts resolvedFonts = resolveFonts();
     QFont applicationFont(resolvedFonts.ui);
-    applicationFont.setPixelSize(13);
+    applicationFont.setPixelSize(shellFontBaseSize());
     QGuiApplication::setFont(applicationFont);
     Theme::setFontFamilies(resolvedFonts.ui, resolvedFonts.mono);
+    if (graphical)
+        QTextStream(stderr) << "omarecord: application font " << resolvedFonts.ui
+                            << " at " << applicationFont.pixelSize() << " px\n";
     const QStringList args = app.arguments();
     if (args.size() < 2) {
         Theme theme;
         Launcher launcher;
         QQmlApplicationEngine engine;
+        reportQmlWarnings(engine);
         engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
         engine.rootContext()->setContextProperty(QStringLiteral("launcher"), &launcher);
         QObject::connect(&launcher, &Launcher::quitRequested, &app, &QCoreApplication::quit);
@@ -487,6 +500,7 @@ int main(int argc, char **argv)
         Theme theme;
         RecordingBar recordingBar(hiddenRecordBar);
         QQmlApplicationEngine engine;
+        reportQmlWarnings(engine);
         engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
         engine.rootContext()->setContextProperty(QStringLiteral("recordingBar"), &recordingBar);
         QObject::connect(&recordingBar, &RecordingBar::finished, &app, &QCoreApplication::quit);
@@ -507,6 +521,7 @@ int main(int argc, char **argv)
         layerWindow->setActivateOnShow(false);
         if (screen) layerWindow->setScreen(screen);
         window->show();
+        configureDebugScreenshot(engine, app);
         return app.exec();
     }
     if (command == QLatin1String("record")) return recordCommand(args.mid(2));
@@ -524,6 +539,7 @@ int main(int argc, char **argv)
         }
         Theme theme;
         QQmlApplicationEngine engine;
+        reportQmlWarnings(engine);
         engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
         engine.rootContext()->setContextProperty(QStringLiteral("editor"), &editor);
         engine.rootContext()->setContextProperty(QStringLiteral("comp"), &editor);

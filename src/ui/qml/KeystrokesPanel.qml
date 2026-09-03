@@ -4,7 +4,7 @@ import QtQuick.Layouts
 
 ColumnLayout {
     id: root
-    spacing: 16
+    spacing: theme.space.panelGap
     readonly property var settings: editor.project.keystrokes
     readonly property var positions: [
         {label:"Top left", value:"top-left"},
@@ -39,7 +39,7 @@ ColumnLayout {
         text: "Hide unmodified letters and digits while keeping shortcuts and editing keys."
         wrapMode: Text.WordWrap
         color: theme.textMuted
-        font.pixelSize: 11
+        font.pixelSize: theme.font.bodySmall
     }
     PanelLabel { text: "Position" }
     EditorComboBox {

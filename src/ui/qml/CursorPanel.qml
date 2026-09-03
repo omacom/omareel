@@ -6,7 +6,7 @@ import QtQuick.Layouts
 ColumnLayout {
     id: root
     objectName: "cursorPanel"
-    spacing: 16
+    spacing: theme.space.panelGap
     readonly property var cursor: editor.project.cursor
     readonly property var clickEffects: [{label:"None",value:"none"},{label:"Circle",value:"circle"}]
     readonly property var cursorStyles: [
@@ -49,12 +49,12 @@ ColumnLayout {
                 required property var modelData
                 Layout.fillWidth: true
                 Layout.preferredHeight: 72
-                radius: 8
+                radius: theme.radius
                 color: root.cursor.style === modelData.value
-                    ? theme.accentSoft : theme.hairline
-                border.width: root.cursor.style === modelData.value ? 2 : 1
+                    ? theme.selectedFill : theme.normalFill
+                border.width: 1
                 border.color: root.cursor.style === modelData.value
-                    ? theme.accent : theme.hairlineStrong
+                    ? theme.selectedBorder : theme.normalBorder
                 Column {
                     anchors.centerIn: parent
                     spacing: 5
@@ -82,7 +82,7 @@ ColumnLayout {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: modelData.label
                         color: theme.foreground
-                        font.pixelSize: 11
+                        font.pixelSize: theme.font.bodySmall
                         font.weight: root.cursor.style === modelData.value ? Font.DemiBold : Font.Normal
                     }
                 }
@@ -99,10 +99,10 @@ ColumnLayout {
     Rectangle {
         Layout.fillWidth: true
         Layout.preferredHeight: 30
-        radius: 6
-        color: "transparent"
+        radius: theme.radius
+        color: theme.normalFill
         border.width: 1
-        border.color: theme.hairlineStrong
+        border.color: theme.normalBorder
         RowLayout {
             anchors.fill: parent
             spacing: 0
@@ -118,7 +118,7 @@ ColumnLayout {
                     text: modelData.label
                     checked: root.isMotion(modelData.mass, modelData.stiffness, modelData.damping)
                     selected: checked
-                    font.pixelSize: 11
+                    font.pixelSize: theme.font.bodySmall
                     font.weight: checked ? Font.DemiBold : Font.Normal
                     onClicked: root.setMotion(modelData.mass, modelData.stiffness, modelData.damping)
                 }
@@ -130,7 +130,7 @@ ColumnLayout {
         text: "Natural stays close to raw movement; Smooth uses a softer spring."
         wrapMode: Text.WordWrap
         color: theme.textMuted
-        font.pixelSize: 11
+        font.pixelSize: theme.font.bodySmall
     }
 
     PanelLabel { text: "Click effect" }
@@ -154,7 +154,7 @@ ColumnLayout {
     RowLayout {
         Layout.fillWidth: true
         PanelLabel { text: "Ring color"; Layout.fillWidth: true }
-        Rectangle { width: 44; height: 28; radius: 6; color: root.cursor.ringColor; border.color: theme.hairlineStrong; MouseArea { anchors.fill: parent; onClicked: ringDialog.open() } }
+        Rectangle { width: 44; height: 28; radius: theme.radius; color: root.cursor.ringColor; border.color: theme.normalBorder; MouseArea { anchors.fill: parent; onClicked: ringDialog.open() } }
     }
     EditorSwitch {
         id: idleSwitch
