@@ -4,15 +4,18 @@ import QtQuick.Layouts
 
 ColumnLayout {
     id: root
-    spacing: 12
+    spacing: 16
     property var selected: {
         for (let i = 0; i < editor.clips.length; ++i)
             if (editor.clips[i].id === editor.selectedClipId) return editor.clips[i]
         return null
     }
-    PanelHeading {
+    Label {
+        visible: root.selected === null
         Layout.fillWidth: true
-        text: root.selected ? "Selected clip" : "Select a clip on the timeline"
+        text: "Select a clip on the timeline"
+        color: theme.textMuted
+        font.pixelSize: 11
         wrapMode: Text.WordWrap
     }
     ColumnLayout {
@@ -20,17 +23,16 @@ ColumnLayout {
         Layout.fillWidth: true
         spacing: 10
         PanelLabel { text: "Speed" }
-        ComboBox {
+        EditorComboBox {
             Layout.fillWidth: true
             Layout.preferredHeight: 32
             model: [0.5, 0.75, 1, 1.2, 1.4, 1.6, 1.8, 2, 3, 4, 8, 16, 24]
             currentIndex: root.selected ? model.indexOf(root.selected.speed) : -1
             textRole: ""
             displayText: currentIndex >= 0 ? model[currentIndex] + "×" : ""
-            delegate: ItemDelegate { required property var modelData; width: parent.width; text: modelData + "×" }
             onActivated: editor.setClipSpeed(editor.selectedClipId, model[currentIndex])
         }
-        Button { Layout.fillWidth: true; text: "Remove trims"; onClicked: editor.resetClipTrims(editor.selectedClipId) }
-        Button { Layout.fillWidth: true; text: "Delete clip"; enabled: editor.clips.length > 1; onClicked: editor.removeClip(editor.selectedClipId) }
+        EditorButton { Layout.fillWidth: true; text: "Remove trims"; onClicked: editor.resetClipTrims(editor.selectedClipId) }
+        EditorButton { Layout.fillWidth: true; text: "Delete clip"; destructive: true; enabled: editor.clips.length > 1; onClicked: editor.removeClip(editor.selectedClipId) }
     }
 }

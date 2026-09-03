@@ -7,8 +7,16 @@ FocusScope {
     function grabPreview(callback) {
         previewFrame.grabToImage(callback, Qt.size(640, 360))
     }
+    function formatTenths(seconds) {
+        const tenths = Math.max(0, Math.round(seconds * 10))
+        const minutes = Math.floor(tenths / 600)
+        const remainder = tenths % 600
+        const whole = Math.floor(remainder / 10)
+        return String(minutes).padStart(2, "0") + ":"
+             + String(whole).padStart(2, "0") + "." + (remainder % 10)
+    }
     clip: true
-    Rectangle { anchors.fill: parent; color: theme.darkBackground }
+    Rectangle { anchors.fill: parent; color: theme.surface }
     MouseArea {
         anchors.fill: parent
         onPressed: root.forceActiveFocus()
@@ -20,17 +28,17 @@ FocusScope {
         anchors.leftMargin: 24
         anchors.rightMargin: 24
         anchors.topMargin: 24
-        anchors.bottomMargin: 46
+        anchors.bottomMargin: 44
 
         Rectangle {
         id: previewFrame
         anchors.centerIn: parent
         width: Math.min(parent.width, parent.height * editor.outputWidth / editor.outputHeight)
         height: width * editor.outputHeight / editor.outputWidth
-        color: theme.darkBackground
-        border.color: Qt.alpha(theme.foreground, .06)
+        color: theme.surfaceRaised
+        border.color: theme.hairline
         border.width: 1
-        radius: 8
+        radius: 10
         clip: true
         Item {
             id: scaled
@@ -89,7 +97,7 @@ FocusScope {
                 width: 18 / scaled.scale
                 height: width
                 radius: width / 2
-                color: Qt.alpha(theme.accent, .22)
+            color: theme.accentSoft
                 border.width: 2 / scaled.scale
                 border.color: theme.accent
                 z: 20
@@ -145,10 +153,12 @@ FocusScope {
             anchors.top: previewFrame.top
             anchors.topMargin: 14
             visible: editor.pickingZoomTarget
-            color: Qt.alpha(theme.darkBackground, .88)
-            radius: 7
-            width: pickHint.implicitWidth + 24
-            height: 34
+            color: theme.surfaceRaised
+            border.width: 1
+            border.color: theme.hairlineStrong
+            radius: 10
+            width: pickHint.implicitWidth + 20
+            height: 28
             z: 40
             Label {
                 id: pickHint
@@ -156,7 +166,7 @@ FocusScope {
                 text: "Click where the zoom should center"
                 color: theme.foreground
                 font.pixelSize: 12
-                font.weight: Font.DemiBold
+                font.weight: Font.Medium
             }
         }
         }
@@ -165,9 +175,9 @@ FocusScope {
         anchors.right: previewArea.right
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 12
-        text: editor.formatTime(editor.position) + "  /  " + editor.formatTime(editor.duration)
-        color: Qt.alpha(theme.foreground, .58)
-        font.family: "monospace"
-        font.pixelSize: 11
+        text: root.formatTenths(editor.position) + " / " + root.formatTenths(editor.duration)
+        color: theme.textMuted
+        font.family: theme.monoFamily
+        font.pixelSize: 12
     }
 }

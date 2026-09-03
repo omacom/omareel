@@ -42,9 +42,9 @@ Item {
         width: Math.abs(selectionArea.currentX - selectionArea.originX)
         y: 1
         height: parent.height - 2
-        radius: 5
-        color: Qt.alpha(theme.accent, .18)
-        border.width: 2
+        radius: 6
+        color: theme.accentSoft
+        border.width: 1
         border.color: theme.accent
         z: 100
     }
@@ -66,9 +66,13 @@ Item {
             width: gestureActive ? gestureWidth : Math.max(18, (outputEnd-outputStart) * root.pixelsPerSecond)
             height: root.height
             radius: 6
-            color: selected ? Qt.alpha(theme.accent, .72) : Qt.alpha(theme.accent, .48)
-            border.width: selected ? 2 : 1
-            border.color: selected || zoomHover.hovered ? Qt.lighter(theme.accent, 1.25) : theme.accent
+            color: selected ? Qt.alpha(theme.zoomAccent, .30) : Qt.alpha(theme.zoomAccent, .22)
+            border.width: selected ? 1.5 : 1
+            border.color: selected ? theme.zoomAccent
+                        : zoomHover.hovered ? Qt.alpha(theme.zoomAccent, .76)
+                        : Qt.alpha(theme.zoomAccent, .50)
+            Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
+            Behavior on border.color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
             HoverHandler { id: zoomHover }
             Label {
                 anchors.centerIn: parent
@@ -76,9 +80,9 @@ Item {
                 elide: Text.ElideRight
                 horizontalAlignment: Text.AlignHCenter
                 text: "Zoom " + Number(modelData.level).toFixed(1) + "× · " + (typeof modelData.target === "object" ? "Manual" : "Auto")
-                color: theme.accentForeground
-                font.pixelSize: 11
-                font.weight: Font.DemiBold
+                color: theme.foreground
+                font.pixelSize: 12
+                font.weight: Font.Medium
             }
             MouseArea {
                 objectName: "zoomBody-" + modelData.id
@@ -107,9 +111,9 @@ Item {
                 onCanceled: editor.endCoalescedEdit()
             }
             Rectangle {
-                width: 6; height: parent.height; radius: 3; color: Qt.lighter(theme.accent, 1.2)
-                opacity: zoomBlock.selected ? 1 : 0
-                Behavior on opacity { NumberAnimation { duration: 100 } }
+                width: 8; height: parent.height; radius: 4; color: zoomBlock.border.color
+                opacity: zoomBlock.selected || zoomHover.hovered ? 1 : 0
+                Behavior on opacity { NumberAnimation { duration: 120 } }
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.SizeHorCursor
                     property real pressTrackX
@@ -138,9 +142,9 @@ Item {
                 }
             }
             Rectangle {
-                anchors.right: parent.right; width: 6; height: parent.height; radius: 3; color: Qt.lighter(theme.accent, 1.2)
-                opacity: zoomBlock.selected ? 1 : 0
-                Behavior on opacity { NumberAnimation { duration: 100 } }
+                anchors.right: parent.right; width: 8; height: parent.height; radius: 4; color: zoomBlock.border.color
+                opacity: zoomBlock.selected || zoomHover.hovered ? 1 : 0
+                Behavior on opacity { NumberAnimation { duration: 120 } }
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.SizeHorCursor
                     property real pressTrackX

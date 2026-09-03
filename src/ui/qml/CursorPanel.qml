@@ -6,7 +6,7 @@ import QtQuick.Layouts
 ColumnLayout {
     id: root
     objectName: "cursorPanel"
-    spacing: 12
+    spacing: 16
     readonly property var cursor: editor.project.cursor
     readonly property var clickEffects: [{label:"None",value:"none"},{label:"Circle",value:"circle"}]
     readonly property var cursorStyles: [
@@ -34,7 +34,7 @@ ColumnLayout {
             && Math.abs(root.cursor.spring.damping-damping) < .001
     }
 
-    Switch { Layout.preferredHeight: 32; text: "Show cursor"; checked: root.cursor.visible; onToggled: editor.setProjectValue("cursor.visible", checked) }
+    EditorSwitch { Layout.preferredHeight: 32; text: "Show cursor"; checked: root.cursor.visible; onToggled: editor.setProjectValue("cursor.visible", checked) }
     PanelSlider { Layout.fillWidth: true; label: "Size"; path: "cursor.size"; from: 0.5; to: 3; value: root.cursor.size; stepSize: 0.05; decimals: 2 }
 
     PanelHeading { text: "Style"; topPadding: 4 }
@@ -51,10 +51,10 @@ ColumnLayout {
                 Layout.preferredHeight: 72
                 radius: 8
                 color: root.cursor.style === modelData.value
-                    ? Qt.alpha(theme.accent, .16) : Qt.alpha(theme.foreground, .035)
+                    ? theme.accentSoft : theme.hairline
                 border.width: root.cursor.style === modelData.value ? 2 : 1
                 border.color: root.cursor.style === modelData.value
-                    ? theme.accent : Qt.alpha(theme.foreground, .13)
+                    ? theme.accent : theme.hairlineStrong
                 Column {
                     anchors.centerIn: parent
                     spacing: 5
@@ -75,7 +75,7 @@ ColumnLayout {
                             width: 26; height: 26; radius: 13
                             color: Qt.alpha(theme.accent, .68)
                             border.width: 1
-                            border.color: Qt.alpha(theme.foreground, .45)
+                            border.color: theme.hairlineStrong
                         }
                     }
                     Label {
@@ -98,11 +98,11 @@ ColumnLayout {
     PanelHeading { text: "Motion"; topPadding: 4 }
     Rectangle {
         Layout.fillWidth: true
-        Layout.preferredHeight: 34
-        radius: 7
-        color: Qt.alpha(theme.foreground, .055)
+        Layout.preferredHeight: 30
+        radius: 6
+        color: "transparent"
         border.width: 1
-        border.color: Qt.alpha(theme.foreground, .12)
+        border.color: theme.hairlineStrong
         RowLayout {
             anchors.fill: parent
             spacing: 0
@@ -111,23 +111,16 @@ ColumnLayout {
                     {label:"Natural", mass:1, stiffness:900, damping:60},
                     {label:"Smooth", mass:3, stiffness:470, damping:70}
                 ]
-                delegate: Button {
+                delegate: EditorButton {
                     required property var modelData
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    flat: true
                     text: modelData.label
                     checked: root.isMotion(modelData.mass, modelData.stiffness, modelData.damping)
+                    selected: checked
                     font.pixelSize: 11
                     font.weight: checked ? Font.DemiBold : Font.Normal
                     onClicked: root.setMotion(modelData.mass, modelData.stiffness, modelData.damping)
-                    background: Rectangle {
-                        radius: 6
-                        color: parent.checked ? Qt.alpha(theme.accent, .22)
-                            : parent.hovered ? Qt.alpha(theme.foreground, .06) : "transparent"
-                        border.width: parent.checked ? 1 : 0
-                        border.color: theme.accent
-                    }
                 }
             }
         }
@@ -136,12 +129,12 @@ ColumnLayout {
         Layout.fillWidth: true
         text: "Natural stays close to raw movement; Smooth uses a softer spring."
         wrapMode: Text.WordWrap
-        color: Qt.alpha(theme.foreground, .58)
+        color: theme.textMuted
         font.pixelSize: 11
     }
 
     PanelLabel { text: "Click effect" }
-    ComboBox {
+    EditorComboBox {
         Layout.fillWidth: true
         Layout.preferredHeight: 32
         model: root.clickEffects
@@ -150,7 +143,7 @@ ColumnLayout {
         onActivated: editor.setProjectValue("cursor.clickEffect", model[currentIndex].value)
     }
     PanelLabel { text: "Click sound" }
-    ComboBox {
+    EditorComboBox {
         Layout.fillWidth: true
         Layout.preferredHeight: 32
         model: [{label:"None",value:"none"},{label:"Soft",value:"soft"}]
@@ -161,9 +154,9 @@ ColumnLayout {
     RowLayout {
         Layout.fillWidth: true
         PanelLabel { text: "Ring color"; Layout.fillWidth: true }
-        Rectangle { width: 44; height: 28; radius: 5; color: root.cursor.ringColor; border.color: Qt.alpha(theme.foreground, .4); MouseArea { anchors.fill: parent; onClicked: ringDialog.open() } }
+        Rectangle { width: 44; height: 28; radius: 6; color: root.cursor.ringColor; border.color: theme.hairlineStrong; MouseArea { anchors.fill: parent; onClicked: ringDialog.open() } }
     }
-    Switch {
+    EditorSwitch {
         id: idleSwitch
         Layout.preferredHeight: 32
         text: "Hide when idle"

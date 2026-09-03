@@ -18,7 +18,7 @@ ColumnLayout {
         Item { Layout.fillWidth: true }
         PanelValue { text: Number(root.value).toFixed(root.decimals) }
     }
-    Slider {
+    EditorSlider {
         Layout.fillWidth: true
         Layout.preferredHeight: 28
         from: root.from; to: root.to; value: root.value; stepSize: root.stepSize

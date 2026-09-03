@@ -15,7 +15,7 @@ Item {
         id: shadowShape
         anchors.fill: parent
         radius: root.unframed ? 0 : root.settings.radius * root.ref
-        color: "#000000"
+        color: Qt.rgba(0, 0, 0, 1)
         layer.enabled: true
         antialiasing: true
     }
@@ -24,7 +24,7 @@ Item {
         source: shadowShape
         visible: root.settings.shadow.enabled && !root.unframed
         shadowEnabled: true
-        shadowColor: "#000000"
+        shadowColor: Qt.rgba(0, 0, 0, 1)
         shadowOpacity: root.settings.shadow.intensity
         shadowBlur: Math.min(1, root.settings.shadow.blur / 64)
         shadowHorizontalOffset: Math.cos(root.settings.shadow.angle * Math.PI / 180) * root.settings.shadow.distance * root.ref

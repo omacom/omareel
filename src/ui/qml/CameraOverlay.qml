@@ -42,7 +42,7 @@ Item {
         height: root.quarterTurn ? parent.width : parent.height
         radius: root.settings.shape === "round" ? width / 2
               : root.settings.shape === "rounded" ? root.settings.radius * root.ref : 0
-        color: "#000000"
+        color: Qt.rgba(0, 0, 0, 1)
         layer.enabled: true
         antialiasing: true
     }
@@ -51,7 +51,7 @@ Item {
         source: shadowShape
         visible: root.settings.shadow.enabled && !root.softwareRendering
         shadowEnabled: true
-        shadowColor: "#000000"
+        shadowColor: Qt.rgba(0, 0, 0, 1)
         shadowOpacity: root.settings.shadow.intensity
         shadowBlur: Math.min(1, root.settings.shadow.blur / 64)
         shadowVerticalOffset: root.settings.shadow.distance * root.ref

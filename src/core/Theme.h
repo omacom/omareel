@@ -23,6 +23,7 @@ class Theme : public QObject
     Q_PROPERTY(QColor textMuted READ textMuted NOTIFY changed)
     Q_PROPERTY(QColor textFaint READ textFaint NOTIFY changed)
     Q_PROPERTY(QColor accentSoft READ accentSoft NOTIFY changed)
+    Q_PROPERTY(QColor zoomAccent READ zoomAccent NOTIFY changed)
     Q_PROPERTY(QColor record READ record NOTIFY changed)
     Q_PROPERTY(QString fontFamily READ fontFamily CONSTANT)
     Q_PROPERTY(QString monoFamily READ monoFamily CONSTANT)
@@ -43,6 +44,7 @@ public:
     QColor textMuted() const;
     QColor textFaint() const;
     QColor accentSoft() const;
+    QColor zoomAccent() const;
     QColor record() const { return m_record; }
     QString fontFamily() const { return m_fontFamily; }
     QString monoFamily() const { return m_monoFamily; }

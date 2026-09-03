@@ -9,7 +9,7 @@ Dialog {
     width: 420
     anchors.centerIn: parent
     modal: true
-    padding: 18
+    padding: 24
     standardButtons: Dialog.NoButton
     closePolicy: editor.exporting ? Popup.NoAutoClose : Popup.CloseOnEscape
     property string format: "mp4"
@@ -40,24 +40,17 @@ Dialog {
         spacing: 4
         Repeater {
             model: segment.choices
-            delegate: Button {
+            delegate: EditorButton {
                 required property var modelData
                 Layout.fillWidth: true
-                Layout.preferredHeight: 34
+                Layout.preferredHeight: 30
                 checkable: true
                 checked: segment.selectedValue === modelData.value
+                selected: checked
                 text: modelData.label
                 font.pixelSize: 11
                 font.weight: checked ? Font.DemiBold : Font.Normal
-                topInset: 0; bottomInset: 0
                 onClicked: segment.chosen(modelData.value)
-                background: Rectangle {
-                    radius: 7
-                    color: parent.checked ? Qt.alpha(theme.accent, .18)
-                                          : parent.hovered ? Qt.alpha(theme.foreground, .06) : "transparent"
-                    border.width: parent.checked ? 2 : 1
-                    border.color: parent.checked ? theme.accent : Qt.alpha(theme.foreground, .13)
-                }
             }
         }
     }
@@ -98,15 +91,16 @@ Dialog {
 
     background: Rectangle {
         radius: 14
-        color: theme.lighterBackground
+        color: theme.surfaceRaised
         border.width: 1
-        border.color: Qt.alpha(theme.foreground, .14)
+        border.color: theme.hairlineStrong
     }
+    Overlay.modal: Rectangle { color: Qt.alpha(theme.surface, .55) }
     contentItem: ColumnLayout {
-        spacing: 10
+        spacing: 12
         RowLayout {
             Layout.fillWidth: true
-            Label { text: "Export"; font.pixelSize: 18; font.weight: Font.DemiBold }
+            Label { text: "Export"; font.pixelSize: 17; font.weight: Font.DemiBold; color: theme.foreground }
             Item { Layout.fillWidth: true }
             IconToolButton {
                 enabled: !editor.exporting
@@ -119,7 +113,7 @@ Dialog {
             Layout.fillWidth: true
             Layout.preferredHeight: 154
             radius: 10
-            color: theme.darkBackground
+            color: theme.surface
             clip: true
             Image {
                 anchors.fill: parent
@@ -131,7 +125,7 @@ Dialog {
                 anchors.centerIn: parent
                 visible: root.previewUrl.toString() === ""
                 text: "Current frame"
-                color: Qt.alpha(theme.foreground, .45)
+                color: theme.textFaint
             }
         }
 
@@ -169,13 +163,13 @@ Dialog {
         Label {
             Layout.fillWidth: true
             text: root.qualityCaption()
-            color: Qt.alpha(theme.foreground, .58)
-            font.pixelSize: 10
+            color: theme.textMuted
+            font.pixelSize: 11
         }
         Label {
             Layout.fillWidth: true
             text: "Estimated size  ·  " + root.estimatedMegabytes().toFixed(root.estimatedMegabytes() < 10 ? 1 : 0) + " MB"
-            color: Qt.alpha(theme.foreground, .72)
+            color: theme.textMuted
             font.pixelSize: 11
         }
         RowLayout {
@@ -190,10 +184,10 @@ Dialog {
                 Layout.fillWidth: true
                 text: root.outputPath
                 elide: Text.ElideMiddle
-                color: Qt.alpha(theme.foreground, .64)
-                font.pixelSize: 10
+                color: theme.textMuted
+                font.pixelSize: 11
             }
-            Button { text: "Choose…"; enabled: !editor.exporting; onClicked: outputDialog.open() }
+            EditorButton { text: "Choose…"; enabled: !editor.exporting; onClicked: outputDialog.open() }
         }
 
         ProgressBar {
@@ -208,15 +202,15 @@ Dialog {
             Item { Layout.fillWidth: true }
             Label {
                 text: editor.exportFps.toFixed(1) + " fps  ·  ETA " + root.formatEta(editor.exportEtaSeconds)
-                color: Qt.alpha(theme.foreground, .58)
-                font.pixelSize: 10
+                color: theme.textMuted
+                font.pixelSize: 11
             }
         }
         Label {
             Layout.fillWidth: true
             visible: editor.exportError.length > 0 && !editor.exporting
             text: editor.exportError
-            color: "#ff7676"
+            color: theme.record
             wrapMode: Text.WordWrap
             font.pixelSize: 11
         }
@@ -231,45 +225,27 @@ Dialog {
         RowLayout {
             Layout.fillWidth: true
             visible: root.successPath.length > 0
-            Button { text: "Open folder"; icon.source: "qrc:/omarecord/assets/icons/lucide/folder-open.svg"; icon.color: theme.foreground; onClicked: editor.openContainingFolder(root.successPath) }
-            Button { text: "Copy path"; onClicked: editor.copyPath(root.successPath) }
+            EditorButton { text: "Open folder"; icon.source: "qrc:/omarecord/assets/icons/lucide/folder-open.svg"; onClicked: editor.openContainingFolder(root.successPath) }
+            EditorButton { text: "Copy path"; onClicked: editor.copyPath(root.successPath) }
             Item { Layout.fillWidth: true }
         }
         RowLayout {
             Layout.fillWidth: true
             visible: root.successPath.length === 0
-            Button {
+            Item { Layout.fillWidth: true }
+            EditorButton {
                 visible: editor.exporting
                 text: "Cancel"
-                Layout.fillWidth: true
                 onClicked: editor.cancelExport()
             }
-            Button {
+            EditorButton {
                 visible: !editor.exporting
-                Layout.fillWidth: true
-                Layout.preferredHeight: 42
+                Layout.preferredWidth: 112
+                Layout.preferredHeight: 36
+                primary: true
                 text: "Export"
                 icon.source: "qrc:/omarecord/assets/icons/lucide/download.svg"
-                icon.color: theme.accentForeground
-                icon.width: 18; icon.height: 18
                 font.weight: Font.DemiBold
-                contentItem: RowLayout {
-                    spacing: 7
-                    Item { Layout.fillWidth: true }
-                    ToolButton {
-                        enabled: false; opacity: 1; background: null
-                        icon.source: "qrc:/omarecord/assets/icons/lucide/download.svg"
-                        icon.color: theme.accentForeground
-                        icon.width: 18; icon.height: 18
-                    }
-                    Label { text: "Export"; color: theme.accentForeground; font.weight: Font.DemiBold }
-                    Item { Layout.fillWidth: true }
-                }
-                background: Rectangle {
-                    radius: 8
-                    color: parent.pressed ? Qt.darker(theme.accent, 1.12)
-                                          : parent.hovered ? Qt.lighter(theme.accent, 1.08) : theme.accent
-                }
                 onClicked: editor.exportTo(root.outputPath, {
                     fps: root.fpsValue, height: root.heightValue, quality: root.qualityValue
                 })

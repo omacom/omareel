@@ -5,14 +5,44 @@ import QtQuick.Layouts
 Rectangle {
     id: root
     height: 48
-    color: theme.lighterBackground
-    border.color: Qt.alpha(theme.foreground, .06)
+    color: theme.surface
     signal showExport()
     signal restoreEditorFocus()
+    property string savedTime: Qt.formatTime(new Date(), "HH:mm")
+
     onRestoreEditorFocus: window.restoreEditorFocus()
     function commitProjectName() {
         if (projectName.text !== editor.bundleName)
             editor.setProjectValue("name", projectName.text)
+    }
+
+    component BarMenuItem: MenuItem {
+        id: menuItem
+        implicitHeight: 32
+        leftPadding: 10
+        rightPadding: 10
+        topPadding: 0
+        bottomPadding: 0
+        hoverEnabled: true
+        contentItem: Label {
+            text: menuItem.text
+            color: menuItem.enabled ? theme.foreground : theme.textFaint
+            font.pixelSize: 12
+            font.weight: Font.Medium
+            verticalAlignment: Text.AlignVCenter
+        }
+        background: Rectangle {
+            radius: 6
+            color: menuItem.highlighted ? theme.hairline : "transparent"
+        }
+    }
+
+    Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: 1
+        color: theme.hairline
     }
 
     RowLayout {
@@ -20,28 +50,51 @@ Rectangle {
         anchors.leftMargin: 16
         anchors.rightMargin: 12
         spacing: 8
+
         Label {
             text: "omarecord"
             font.weight: Font.DemiBold
-            font.pixelSize: 16
-            color: theme.accent
+            font.pixelSize: 17
+            color: theme.foreground
+        }
+        Rectangle {
+            Layout.preferredWidth: 1
+            Layout.preferredHeight: 16
+            Layout.leftMargin: 4
+            Layout.rightMargin: 4
+            color: theme.hairlineStrong
         }
         TextField {
             id: projectName
-            Layout.preferredWidth: 270
+            Layout.preferredWidth: Math.max(160, Math.min(300, contentWidth + 24))
             Layout.preferredHeight: 32
             text: editor.bundleName
             selectByMouse: true
-            font.pixelSize: 13
-            leftPadding: 10
-            rightPadding: 10
+            hoverEnabled: true
+            font.pixelSize: 17
+            font.weight: Font.DemiBold
+            leftPadding: 8
+            rightPadding: 8
+            topPadding: 0
+            bottomPadding: 0
             color: theme.foreground
             focusPolicy: Qt.StrongFocus
-            background: Rectangle {
-                radius: 6
-                color: projectName.activeFocus ? Qt.alpha(theme.darkBackground, .32) : "transparent"
-                border.width: 1
-                border.color: projectName.activeFocus ? theme.accent : Qt.alpha(theme.foreground, .09)
+            background: Item {
+                Rectangle {
+                    anchors.fill: parent
+                    radius: 6
+                    color: projectName.activeFocus ? theme.hairline : "transparent"
+                    border.width: projectName.activeFocus ? 1 : 0
+                    border.color: theme.hairlineStrong
+                }
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    height: 1
+                    color: theme.hairlineStrong
+                    visible: projectName.hovered && !projectName.activeFocus
+                }
             }
             onEditingFinished: root.commitProjectName()
             onAccepted: {
@@ -56,10 +109,15 @@ Rectangle {
                 event.accepted = true
             }
         }
+        Label {
+            text: editor.dirty ? "Unsaved changes" : "Saved · " + root.savedTime
+            color: theme.textMuted
+            font.pixelSize: 11
+        }
+
         Item { Layout.fillWidth: true }
+
         IconToolButton {
-            Layout.preferredWidth: 32
-            Layout.preferredHeight: 32
             enabled: editor.canUndo
             icon.source: "qrc:/omarecord/assets/icons/lucide/undo-2.svg"
             Accessible.name: "Undo"
@@ -68,8 +126,6 @@ Rectangle {
             onClicked: editor.undo()
         }
         IconToolButton {
-            Layout.preferredWidth: 32
-            Layout.preferredHeight: 32
             enabled: editor.canRedo
             icon.source: "qrc:/omarecord/assets/icons/lucide/redo-2.svg"
             Accessible.name: "Redo"
@@ -78,56 +134,33 @@ Rectangle {
             onClicked: editor.redo()
         }
         IconToolButton {
-            Layout.preferredWidth: 32
-            Layout.preferredHeight: 32
             enabled: editor.dirty
             icon.source: "qrc:/omarecord/assets/icons/lucide/save.svg"
             Accessible.name: "Save project"
             ToolTip.visible: hovered
-            ToolTip.delay: 300
             ToolTip.text: "Save project (Ctrl+S)"
             onClicked: { root.commitProjectName(); editor.saveNow() }
         }
-        Label {
-            text: editor.dirty ? "Unsaved changes" : "Saved"
-            color: editor.dirty ? theme.accent : Qt.alpha(theme.foreground, .52)
-            font.pixelSize: 10
-            font.weight: editor.dirty ? Font.DemiBold : Font.Normal
+        Rectangle {
+            Layout.preferredWidth: 1
+            Layout.preferredHeight: 20
+            Layout.leftMargin: 4
+            Layout.rightMargin: 4
+            color: theme.hairlineStrong
         }
-        Button {
+        EditorButton {
             id: presetButton
-            Layout.preferredWidth: 104
-            Layout.preferredHeight: 32
-            text: "Presets  ▾"
-            icon.source: "qrc:/omarecord/assets/icons/lucide/layers.svg"
-            icon.color: theme.foreground
-            icon.width: 16; icon.height: 16
-            font.pixelSize: 12
-            focusPolicy: Qt.TabFocus
-            topInset: 0; bottomInset: 0
+            Layout.preferredWidth: 92
+            text: "Presets"
+            icon.source: "qrc:/omarecord/assets/icons/lucide/chevron-down.svg"
             onClicked: presetsMenu.open()
-            background: Rectangle {
-                radius: 6
-                color: parent.hovered ? Qt.alpha(theme.foreground, .06) : "transparent"
-                border.color: parent.hovered ? Qt.alpha(theme.foreground, .22) : Qt.alpha(theme.foreground, .13)
-            }
         }
-        Button {
-            Layout.preferredWidth: 96
-            Layout.preferredHeight: 32
+        EditorButton {
+            Layout.preferredWidth: 104
+            Layout.preferredHeight: 36
+            primary: true
             text: "Export"
             icon.source: "qrc:/omarecord/assets/icons/lucide/download.svg"
-            icon.color: theme.accentForeground
-            icon.width: 16; icon.height: 16
-            font.pixelSize: 12
-            font.weight: Font.DemiBold
-            focusPolicy: Qt.TabFocus
-            topInset: 0; bottomInset: 0
-            palette.buttonText: theme.accentForeground
-            background: Rectangle {
-                radius: 6
-                color: parent.pressed ? Qt.darker(theme.accent, 1.12) : parent.hovered ? Qt.lighter(theme.accent, 1.08) : theme.accent
-            }
             onClicked: root.showExport()
         }
     }
@@ -135,36 +168,102 @@ Rectangle {
     Menu {
         id: presetsMenu
         parent: presetButton
-        y: presetButton.height
-        MenuItem { text: "Save current…"; onTriggered: savePresetDialog.open() }
-        MenuSeparator { }
+        y: presetButton.height + 4
+        width: 188
+        padding: 4
+        background: Rectangle {
+            radius: 10
+            color: theme.surfaceRaised
+            border.width: 1
+            border.color: theme.hairlineStrong
+        }
+        BarMenuItem { text: "Save current…"; onTriggered: savePresetDialog.open() }
+        MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: theme.hairline } }
         Repeater {
             model: editor.presetNames
-            delegate: MenuItem {
+            delegate: BarMenuItem {
                 required property string modelData
                 text: modelData
                 onTriggered: editor.loadPreset(modelData)
             }
         }
-        MenuSeparator { }
-        MenuItem { text: "Delete preset…"; enabled: editor.presetNames.length > 0; onTriggered: deletePresetDialog.open() }
+        MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: theme.hairline } }
+        BarMenuItem {
+            text: "Delete preset…"
+            enabled: editor.presetNames.length > 0
+            onTriggered: deletePresetDialog.open()
+        }
     }
+
     Dialog {
         id: savePresetDialog
-        title: "Save preset"
-        modal: true
+        parent: Overlay.overlay
         anchors.centerIn: parent
-        standardButtons: Dialog.Save | Dialog.Cancel
-        TextField { id: presetName; width: 260; placeholderText: "Preset name" }
-        onAccepted: editor.savePreset(presetName.text)
+        width: 380
+        modal: true
+        focus: true
+        padding: 24
+        standardButtons: Dialog.NoButton
+        Overlay.modal: Rectangle { color: Qt.alpha(theme.surface, .55) }
+        background: Rectangle {
+            radius: 14
+            color: theme.surfaceRaised
+            border.width: 1
+            border.color: theme.hairlineStrong
+        }
+        contentItem: ColumnLayout {
+            spacing: 16
+            Label { text: "Save preset"; font.pixelSize: 17; font.weight: Font.DemiBold; color: theme.foreground }
+            TextField { id: presetName; Layout.fillWidth: true; placeholderText: "Preset name"; selectByMouse: true }
+            RowLayout {
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+                EditorButton { text: "Cancel"; onClicked: savePresetDialog.close() }
+                EditorButton {
+                    text: "Save"
+                    primary: true
+                    enabled: presetName.text.trim().length > 0
+                    onClicked: { editor.savePreset(presetName.text); savePresetDialog.close() }
+                }
+            }
+        }
     }
+
     Dialog {
         id: deletePresetDialog
-        title: "Delete preset"
-        modal: true
+        parent: Overlay.overlay
         anchors.centerIn: parent
-        standardButtons: Dialog.Ok | Dialog.Cancel
-        ComboBox { id: deletePresetName; width: 260; model: editor.presetNames }
-        onAccepted: editor.deletePreset(deletePresetName.currentText)
+        width: 380
+        modal: true
+        focus: true
+        padding: 24
+        standardButtons: Dialog.NoButton
+        Overlay.modal: Rectangle { color: Qt.alpha(theme.surface, .55) }
+        background: Rectangle {
+            radius: 14
+            color: theme.surfaceRaised
+            border.width: 1
+            border.color: theme.hairlineStrong
+        }
+        contentItem: ColumnLayout {
+            spacing: 16
+            Label { text: "Delete preset"; font.pixelSize: 17; font.weight: Font.DemiBold; color: theme.foreground }
+            EditorComboBox { id: deletePresetName; Layout.fillWidth: true; model: editor.presetNames }
+            RowLayout {
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+                EditorButton { text: "Cancel"; onClicked: deletePresetDialog.close() }
+                EditorButton {
+                    text: "Delete"
+                    destructive: true
+                    onClicked: { editor.deletePreset(deletePresetName.currentText); deletePresetDialog.close() }
+                }
+            }
+        }
+    }
+
+    Connections {
+        target: editor
+        function onAutosaved(path) { root.savedTime = Qt.formatTime(new Date(), "HH:mm") }
     }
 }

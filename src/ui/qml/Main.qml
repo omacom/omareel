@@ -8,15 +8,15 @@ ApplicationWindow {
     visible: true
     width: 1440
     height: 900
-    minimumWidth: 1100
-    minimumHeight: 700
+    minimumWidth: 1200
+    minimumHeight: 760
     font.family: theme.fontFamily
     font.pixelSize: 13
-    color: theme.background
+    color: theme.surface
     title: editor.bundleName + " — omarecord"
     Material.theme: theme.dark ? Material.Dark : Material.Light
     Material.accent: theme.accent
-    Material.background: theme.background
+    Material.background: theme.surface
     Material.foreground: theme.foreground
     property real timelineScale: 1
     property bool cropMode: false
@@ -82,16 +82,16 @@ ApplicationWindow {
             }
             SidePanel {
                 id: sidePanel
-                Layout.preferredWidth: 320
-                Layout.minimumWidth: 320
-                Layout.maximumWidth: 320
+                Layout.preferredWidth: 376
+                Layout.minimumWidth: 376
+                Layout.maximumWidth: 376
                 Layout.fillHeight: true
             }
         }
         Timeline {
             id: timeline
             Layout.fillWidth: true
-            Layout.preferredHeight: 168
+            Layout.preferredHeight: implicitHeight
             scaleFactor: window.timelineScale
             onScaleFactorRequested: value => window.timelineScale = value
         }

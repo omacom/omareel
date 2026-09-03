@@ -8,7 +8,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        color: root.settings.color || "#1a1b26"
+        color: root.settings.color || Qt.rgba(26/255, 27/255, 38/255, 1)
         visible: root.settings.type !== "none" && (root.settings.type === "color" || !backgroundImage.visible)
     }
     Canvas {

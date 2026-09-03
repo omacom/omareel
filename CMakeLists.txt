@@ -56,6 +56,10 @@ set_source_files_properties(
     src/ui/qml/PanelHeading.qml
     src/ui/qml/PanelValue.qml
     src/ui/qml/IconToolButton.qml
+    src/ui/qml/EditorButton.qml
+    src/ui/qml/EditorSlider.qml
+    src/ui/qml/EditorSwitch.qml
+    src/ui/qml/EditorComboBox.qml
     src/ui/qml/BackgroundPanel.qml
     src/ui/qml/ShapePanel.qml
     src/ui/qml/CursorPanel.qml
@@ -77,7 +81,7 @@ set_source_files_properties(src/ui/qml/Background.qml PROPERTIES QT_RESOURCE_ALI
 set_source_files_properties(src/ui/qml/RoundedFrame.qml PROPERTIES QT_RESOURCE_ALIAS "RoundedFrame.qml")
 set_source_files_properties(src/ui/qml/CursorOverlay.qml PROPERTIES QT_RESOURCE_ALIAS "CursorOverlay.qml")
 set_source_files_properties(src/ui/qml/CameraOverlay.qml PROPERTIES QT_RESOURCE_ALIAS "CameraOverlay.qml")
-foreach(qml_name IN ITEMS Main TopBar PreviewPane BottomBar SidePanel PanelSlider PanelLabel PanelHeading PanelValue IconToolButton BackgroundPanel ShapePanel CursorPanel ZoomPanel AudioPanel ClipPanel CameraPanel KeystrokesPanel ExportDialog Timeline ClipTrack ZoomTrack Launcher RecordingBar)
+foreach(qml_name IN ITEMS Main TopBar PreviewPane BottomBar SidePanel PanelSlider PanelLabel PanelHeading PanelValue IconToolButton EditorButton EditorSlider EditorSwitch EditorComboBox BackgroundPanel ShapePanel CursorPanel ZoomPanel AudioPanel ClipPanel CameraPanel KeystrokesPanel ExportDialog Timeline ClipTrack ZoomTrack Launcher RecordingBar)
     set_source_files_properties(src/ui/qml/${qml_name}.qml PROPERTIES QT_RESOURCE_ALIAS "${qml_name}.qml")
 endforeach()
 qt_add_qml_module(omarecord_render
@@ -110,6 +114,10 @@ qt_add_qml_module(omarecord_render
         src/ui/qml/PanelHeading.qml
         src/ui/qml/PanelValue.qml
         src/ui/qml/IconToolButton.qml
+        src/ui/qml/EditorButton.qml
+        src/ui/qml/EditorSlider.qml
+        src/ui/qml/EditorSwitch.qml
+        src/ui/qml/EditorComboBox.qml
         src/ui/qml/BackgroundPanel.qml
         src/ui/qml/ShapePanel.qml
         src/ui/qml/CursorPanel.qml
@@ -133,6 +141,7 @@ qt_add_resources(omarecord_render "omarecord_assets"
         assets/icons/lucide/undo-2.svg assets/icons/lucide/redo-2.svg
         assets/icons/lucide/palette.svg assets/icons/lucide/square.svg
         assets/icons/lucide/mouse-pointer-2.svg assets/icons/lucide/zoom-in.svg
+        assets/icons/lucide/zoom-out.svg
         assets/icons/lucide/film.svg assets/icons/lucide/camera.svg assets/icons/lucide/volume-2.svg
         assets/icons/lucide/play.svg assets/icons/lucide/pause.svg
         assets/icons/lucide/skip-back.svg assets/icons/lucide/skip-forward.svg

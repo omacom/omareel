@@ -83,6 +83,15 @@ QColor Theme::accentSoft() const
     return withAlpha(m_accent, qRound(255 * .14));
 }
 
+QColor Theme::zoomAccent() const
+{
+    QColor result = m_accent.toHsl();
+    const double hue = result.hslHueF() < 0.0 ? 0.0 : result.hslHueF();
+    result.setHslF(std::fmod(hue + 40.0 / 360.0, 1.0),
+                   result.hslSaturationF(), result.lightnessF(), 1.0);
+    return result.toRgb();
+}
+
 QColor Theme::accentForeground() const
 {
     return relativeLuminance(m_accent) > 0.179

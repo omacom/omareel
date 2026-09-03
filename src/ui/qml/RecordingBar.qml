@@ -15,7 +15,7 @@ ApplicationWindow {
     flags: Qt.FramelessWindowHint | Qt.Tool
     Material.theme: theme.dark ? Material.Dark : Material.Light
     Material.accent: theme.accent
-    Material.background: theme.background
+    Material.background: theme.surface
     Material.foreground: theme.foreground
 
     RowLayout {
@@ -28,9 +28,9 @@ ApplicationWindow {
             visible: recordingBar.webcam
             radius: 60
             clip: true
-            color: "#111111"
+            color: theme.surface
             border.width: 2
-            border.color: Qt.alpha(theme.foreground, .22)
+            border.color: theme.hairlineStrong
 
             VideoOutput {
                 id: cameraOutput
@@ -64,9 +64,9 @@ ApplicationWindow {
             Layout.preferredHeight: 40
             Layout.alignment: Qt.AlignVCenter
             radius: 20
-            color: Qt.alpha(theme.background, .92)
+            color: Qt.alpha(theme.surface, .92)
             border.width: 1
-            border.color: Qt.alpha(theme.foreground, .15)
+            border.color: theme.hairlineStrong
 
             RowLayout {
                 anchors.fill: parent
@@ -78,7 +78,7 @@ ApplicationWindow {
                     width: 9
                     height: 9
                     radius: 5
-                    color: "#ef4444"
+                    color: theme.record
                     SequentialAnimation on opacity {
                         loops: Animation.Infinite
                         NumberAnimation { from: 1; to: .35; duration: 700; easing.type: Easing.InOutSine }
@@ -90,7 +90,7 @@ ApplicationWindow {
                     Layout.preferredWidth: 44
                     text: recordingBar.elapsed
                     color: theme.foreground
-                    font.family: "monospace"
+                    font.family: theme.monoFamily
                     font.pixelSize: 12
                     font.weight: Font.DemiBold
                 }

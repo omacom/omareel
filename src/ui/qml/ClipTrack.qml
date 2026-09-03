@@ -25,9 +25,13 @@ Item {
             width: gestureActive ? gestureWidth : Math.max(20, (modelData.out-modelData.in)/modelData.speed * root.pixelsPerSecond)
             height: root.height
             radius: 6
-            color: Qt.alpha(theme.accent, .35)
-            border.width: 1
-            border.color: clipBlock.selected || clipHover.hovered ? Qt.lighter(theme.accent, 1.22) : theme.accent
+            color: clipBlock.selected ? Qt.alpha(theme.accent, .20) : theme.accentSoft
+            border.width: clipBlock.selected ? 1.5 : 1
+            border.color: clipBlock.selected ? theme.accent
+                        : clipHover.hovered ? Qt.alpha(theme.accent, .72)
+                        : Qt.alpha(theme.accent, .40)
+            Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
+            Behavior on border.color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
             clip: true
             HoverHandler { id: clipHover }
             Repeater {
@@ -40,7 +44,7 @@ Item {
                     width: Math.max(1, clipBlock.width / Math.max(1, editor.waveform.length) - 1)
                     height: Math.max(1, modelData * (clipBlock.height - 14))
                     y: (clipBlock.height - height) / 2
-                    color: Qt.alpha(theme.foreground, .45)
+                    color: theme.textMuted
                 }
             }
             MouseArea {
@@ -54,9 +58,9 @@ Item {
                 horizontalAlignment: Text.AlignHCenter
                 elide: Text.ElideRight
                 text: clipBlock.width < 68 ? "" : "Clip · " + Number(modelData.speed).toFixed(modelData.speed % 1 ? 2 : 0) + "×"
-                font.weight: Font.DemiBold
-                font.pixelSize: 11
-                color: theme.accentForeground
+                font.weight: Font.Medium
+                font.pixelSize: 12
+                color: theme.foreground
                 padding: 3
                 MouseArea {
                     anchors.fill: parent
@@ -69,15 +73,29 @@ Item {
             }
             Menu {
                 id: speedMenu
+                width: 120
+                padding: 4
+                background: Rectangle {
+                    radius: 10
+                    color: theme.surfaceRaised
+                    border.width: 1
+                    border.color: theme.hairlineStrong
+                }
                 Repeater {
                     model: [0.5,0.75,1,1.2,1.4,1.6,1.8,2,3,4,8,16,24]
-                    delegate: MenuItem { required property real modelData; text: modelData + "×"; onTriggered: editor.setClipSpeed(clipBlock.modelData.id, modelData) }
+                    delegate: MenuItem {
+                        required property real modelData
+                        height: 32
+                        text: modelData + "×"
+                        onTriggered: editor.setClipSpeed(clipBlock.modelData.id, modelData)
+                        background: Rectangle { radius: 6; color: parent.highlighted ? theme.hairline : "transparent" }
+                    }
                 }
             }
             Rectangle {
-                width: 6; height: parent.height; color: theme.accent; radius: 3
+                width: 8; height: parent.height; color: clipBlock.border.color; radius: 4
                 opacity: clipBlock.selected || clipHover.hovered ? 1 : 0
-                Behavior on opacity { NumberAnimation { duration: 100 } }
+                Behavior on opacity { NumberAnimation { duration: 120 } }
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.SizeHorCursor
                     enabled: clipBlock.selected
@@ -104,9 +122,9 @@ Item {
                 }
             }
             Rectangle {
-                anchors.right: parent.right; width: 6; height: parent.height; color: theme.accent; radius: 3
+                anchors.right: parent.right; width: 8; height: parent.height; color: clipBlock.border.color; radius: 4
                 opacity: clipBlock.selected || clipHover.hovered ? 1 : 0
-                Behavior on opacity { NumberAnimation { duration: 100 } }
+                Behavior on opacity { NumberAnimation { duration: 120 } }
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.SizeHorCursor
                     enabled: clipBlock.selected

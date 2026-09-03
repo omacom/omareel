@@ -11,7 +11,7 @@ ToolButton {
     bottomInset: 0
     focusPolicy: Qt.TabFocus
     hoverEnabled: true
-    property color toolIconColor: enabled ? theme.foreground : theme.textFaint
+    property color toolIconColor: enabled ? theme.textMuted : theme.textFaint
     property color hoverColor: theme.hairline
     icon.width: 20
     icon.height: 20
@@ -20,7 +20,10 @@ ToolButton {
         Rectangle {
             anchors.fill: parent
             radius: 6
-            color: control.hovered ? control.hoverColor : "transparent"
+            color: control.down ? theme.hairlineStrong
+                                : control.hovered ? control.hoverColor : "transparent"
+            border.width: control.hovered ? 1 : 0
+            border.color: theme.hairlineStrong
             Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
         }
         Rectangle {

@@ -1,8 +1,8 @@
 import QtQuick.Controls
 
 Label {
-    color: theme.textMuted
+    color: theme.textFaint
     font.family: theme.monoFamily
-    font.pixelSize: 12
+    font.pixelSize: 11
     lineHeight: 1.35
 }

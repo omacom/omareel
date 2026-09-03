@@ -4,7 +4,7 @@ import QtQuick.Layouts
 
 ColumnLayout {
     id: root
-    spacing: 12
+    spacing: 16
     readonly property var settings: editor.project.keystrokes
     readonly property var positions: [
         {label:"Top left", value:"top-left"},
@@ -20,14 +20,14 @@ ColumnLayout {
         return 4
     }
 
-    Switch {
+    EditorSwitch {
         Layout.fillWidth: true
         Layout.preferredHeight: 32
         text: "Show keystrokes"
         checked: root.settings.enabled
         onToggled: editor.setProjectValue("keystrokes.enabled", checked)
     }
-    Switch {
+    EditorSwitch {
         Layout.fillWidth: true
         Layout.preferredHeight: 32
         text: "Shortcuts only"
@@ -38,11 +38,11 @@ ColumnLayout {
         Layout.fillWidth: true
         text: "Hide unmodified letters and digits while keeping shortcuts and editing keys."
         wrapMode: Text.WordWrap
-        color: Qt.alpha(theme.foreground, .58)
+        color: theme.textMuted
         font.pixelSize: 11
     }
     PanelLabel { text: "Position" }
-    ComboBox {
+    EditorComboBox {
         Layout.fillWidth: true
         Layout.preferredHeight: 32
         model: root.positions
