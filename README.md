@@ -12,9 +12,11 @@ cursor-following zooms. Finished projects export to MP4 or GIF.
 - Region, window, or focused-monitor recording through `gpu-screen-recorder` at 60 fps by default.
 - Optional desktop and microphone audio in a single compatible audio track.
 - Non-destructive clip trimming, splitting, speed changes, and timeline zoom editing.
+- Rubber-band multi-selection for zoom blocks, with grouped movement and deletion.
 - Omarchy wallpaper and live accent-color integration.
 - Synthetic cursor smoothing, click rings, idle hiding, and cursor-following auto zooms.
 - Aspect presets, padding, rounded corners, inset borders, and configurable shadows.
+- Camera rotation, horizontal flip, independent shadow/border styling, and 720p/1080p capture.
 - Hardware-accelerated MP4 export with CPU fallback, plus GIF export.
 - Self-contained `.omarecord` project bundles that preserve the source and editor state.
 
@@ -128,3 +130,8 @@ and UI debug screenshot flags, see [docs/USAGE.md](docs/USAGE.md).
 ```
 
 The frozen engineering contract is in [docs/SPEC.md](docs/SPEC.md).
+
+## Credits
+
+Interface icons are from Lucide, used under the ISC license. See
+[`LICENSES/lucide.txt`](LICENSES/lucide.txt).

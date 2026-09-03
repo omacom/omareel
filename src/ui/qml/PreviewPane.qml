@@ -4,6 +4,9 @@ import QtQuick.Controls
 FocusScope {
     id: root
     required property bool cropMode
+    function grabPreview(callback) {
+        previewFrame.grabToImage(callback, Qt.size(640, 360))
+    }
     clip: true
     Rectangle { anchors.fill: parent; color: theme.darkBackground }
     MouseArea {

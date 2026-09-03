@@ -69,8 +69,10 @@ struct Camera {
     QString shape = QStringLiteral("round");
     double radius = 16.0;
     QString crop = QStringLiteral("original");
-    bool mirror = true;
-    bool shadow = true;
+    bool flipHorizontal = false;
+    int rotation = 0;
+    Shadow shadow{false, 0.55, 18.0, 18.0, 90.0};
+    Inset inset{false, 2.0, QColor(Qt::white), 0.7};
     double scaleDuringZoom = 0.7;
     QPointF offset{0.02, 0.02};
 };

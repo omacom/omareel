@@ -61,7 +61,7 @@ Rectangle {
             Layout.preferredWidth: 32
             Layout.preferredHeight: 32
             enabled: editor.canUndo
-            icon.source: "qrc:/omarecord/assets/icons/undo.svg"
+            icon.source: "qrc:/omarecord/assets/icons/lucide/undo-2.svg"
             Accessible.name: "Undo"
             ToolTip.visible: hovered
             ToolTip.text: "Undo"
@@ -71,17 +71,37 @@ Rectangle {
             Layout.preferredWidth: 32
             Layout.preferredHeight: 32
             enabled: editor.canRedo
-            icon.source: "qrc:/omarecord/assets/icons/redo.svg"
+            icon.source: "qrc:/omarecord/assets/icons/lucide/redo-2.svg"
             Accessible.name: "Redo"
             ToolTip.visible: hovered
             ToolTip.text: "Redo"
             onClicked: editor.redo()
         }
+        IconToolButton {
+            Layout.preferredWidth: 32
+            Layout.preferredHeight: 32
+            enabled: editor.dirty
+            icon.source: "qrc:/omarecord/assets/icons/lucide/save.svg"
+            Accessible.name: "Save project"
+            ToolTip.visible: hovered
+            ToolTip.delay: 300
+            ToolTip.text: "Save project (Ctrl+S)"
+            onClicked: { root.commitProjectName(); editor.saveNow() }
+        }
+        Label {
+            text: editor.dirty ? "Unsaved changes" : "Saved"
+            color: editor.dirty ? theme.accent : Qt.alpha(theme.foreground, .52)
+            font.pixelSize: 10
+            font.weight: editor.dirty ? Font.DemiBold : Font.Normal
+        }
         Button {
             id: presetButton
-            Layout.preferredWidth: 92
+            Layout.preferredWidth: 104
             Layout.preferredHeight: 32
             text: "Presets  ▾"
+            icon.source: "qrc:/omarecord/assets/icons/lucide/layers.svg"
+            icon.color: theme.foreground
+            icon.width: 16; icon.height: 16
             font.pixelSize: 12
             focusPolicy: Qt.TabFocus
             topInset: 0; bottomInset: 0
@@ -93,20 +113,17 @@ Rectangle {
             }
         }
         Button {
-            Layout.preferredWidth: 80
+            Layout.preferredWidth: 96
             Layout.preferredHeight: 32
             text: "Export"
+            icon.source: "qrc:/omarecord/assets/icons/lucide/download.svg"
+            icon.color: theme.accentForeground
+            icon.width: 16; icon.height: 16
             font.pixelSize: 12
             font.weight: Font.DemiBold
             focusPolicy: Qt.TabFocus
             topInset: 0; bottomInset: 0
-            contentItem: Label {
-                text: parent.text
-                color: theme.accentForeground
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-                font: parent.font
-            }
+            palette.buttonText: theme.accentForeground
             background: Rectangle {
                 radius: 6
                 color: parent.pressed ? Qt.darker(theme.accent, 1.12) : parent.hovered ? Qt.lighter(theme.accent, 1.08) : theme.accent

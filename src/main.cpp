@@ -51,7 +51,8 @@ static int usage(const QString &error = {})
               "  record [--region|--fullscreen|--window] [options]\n"
               "      Toggle recording (region is the default). Options: --fps N, --dir PATH,\n"
               "      --with-desktop-audio, --with-microphone-audio, --no-audio,\n"
-              "      --with-webcam, --webcam-device PATH, --no-webcam, --no-open, --no-bar,\n"
+              "      --with-webcam, --webcam-device PATH, --webcam-height 720|1080,\n"
+              "      --no-webcam, --no-open, --no-bar,\n"
               "      --stop, --cancel.\n"
               "  edit <bundle.omarecord>\n"
               "      Open a recording bundle in the editor.\n"
@@ -108,6 +109,14 @@ static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplicat
     if (qEnvironmentVariable("OMARECORD_SCREENSHOT_PICK_ZOOM") == QLatin1String("1"))
         if (QObject *editor = engine.rootContext()->contextProperty(QStringLiteral("editor")).value<QObject *>())
             editor->setProperty("pickingZoomTarget", true);
+
+    const QString screenshotView = qEnvironmentVariable("OMARECORD_SCREENSHOT_VIEW");
+    if (!screenshotView.isEmpty()) {
+        QTimer::singleShot(250, window, [window, screenshotView] {
+            QMetaObject::invokeMethod(window, "prepareScreenshot",
+                                      Q_ARG(QVariant, QVariant(screenshotView)));
+        });
+    }
 
     QTimer::singleShot(3000, &app, [&app, window, path] {
         QDir().mkpath(QFileInfo(path).absolutePath());
@@ -207,6 +216,7 @@ static int recordCommand(const QStringList &arguments)
         || arguments.contains(QStringLiteral("--no-webcam"));
     if (!explicitWebcam) options.webcam = preferences.webcamEnabled;
     options.webcamDevice = preferences.webcamDevice;
+    options.webcamHeight = preferences.webcamHeight;
     int modeCount = 0;
     for (int i = 0; i < arguments.size(); ++i) {
         const QString arg = arguments[i];
@@ -224,6 +234,11 @@ static int recordCommand(const QStringList &arguments)
         else if (arg == QLatin1String("--webcam-device")) {
             if (++i >= arguments.size()) return usage(QStringLiteral("--webcam-device requires a value"));
             options.webcamDevice = arguments[i];
+            options.webcam = true;
+        }
+        else if (arg == QLatin1String("--webcam-height")) {
+            if (++i >= arguments.size()) return usage(QStringLiteral("--webcam-height requires a value"));
+            options.webcamHeight = arguments[i].toInt();
             options.webcam = true;
         }
         else if (arg == QLatin1String("--no-audio")) {
@@ -252,6 +267,8 @@ static int recordCommand(const QStringList &arguments)
     if (options.fps <= 0 || options.fps > 240) return usage(QStringLiteral("fps must be between 1 and 240"));
     if (options.webcam && !options.webcamDevice.startsWith(QLatin1String("/dev/video")))
         return usage(QStringLiteral("webcam device must be a /dev/video device"));
+    if (options.webcamHeight != 720 && options.webcamHeight != 1080)
+        return usage(QStringLiteral("webcam height must be 720 or 1080"));
     if (qEnvironmentVariable("OMARECORD_NO_BAR") == QLatin1String("1")) options.noBar = true;
     QString message;
     const int result = Recorder::startDetached(options, &message);

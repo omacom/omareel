@@ -56,7 +56,6 @@ Item {
         id: cameraOverlay
         visible: comp.cameraAvailable && comp.project.camera.enabled
         settings: comp.project.camera
-        frameShadow: comp.project.frame.shadow
         zoomScale: comp.zoom.scale
         outputWidth: composition.width
         outputHeight: composition.height

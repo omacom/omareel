@@ -9,6 +9,7 @@
 #include "render/PreviewSink.h"
 
 #include <QAudioOutput>
+#include <QClipboard>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -406,6 +407,12 @@ void Editor::setProjectValue(const QString &path, const QVariant &value, bool co
 void Editor::restore(const QJsonObject &json)
 {
     m_project = Project::fromJson(json);
+    QStringList retained;
+    for (const QString &id : std::as_const(m_selectedZoomIds))
+        if (zoomIndex(id) >= 0) retained << id;
+    m_selectedZoomIds = retained;
+    if (zoomIndex(m_selectedZoomId) < 0)
+        m_selectedZoomId = retained.isEmpty() ? QString() : retained.first();
     changed();
     emit selectionChanged();
 }
@@ -661,6 +668,7 @@ QString Editor::addZoomAt(double outputTime, double length)
     m_project.zooms << zoom;
     std::sort(m_project.zooms.begin(), m_project.zooms.end(), [](const auto &a, const auto &b) { return a.start < b.start; });
     m_selectedZoomId = zoom.id;
+    m_selectedZoomIds = {zoom.id};
     changed();
     emit selectionChanged();
     return zoom.id;
@@ -740,7 +748,9 @@ bool Editor::removeZoom(const QString &id)
     if (index < 0) return false;
     snapshot();
     m_project.zooms.removeAt(index);
+    m_selectedZoomIds.removeAll(id);
     m_selectedZoomId = m_project.zooms.isEmpty() ? QString() : m_project.zooms[std::min(index, int(m_project.zooms.size()) - 1)].id;
+    if (!m_selectedZoomId.isEmpty()) m_selectedZoomIds = {m_selectedZoomId};
     changed();
     emit selectionChanged();
     return true;
@@ -753,6 +763,7 @@ void Editor::regenerateZooms()
     for (const auto &click : m_input.clickDowns(true)) clicks << click.time;
     m_project.zooms = ZoomTimeline::generate(clicks, m_sourceDuration);
     m_selectedZoomId = m_project.zooms.isEmpty() ? QString() : m_project.zooms.first().id;
+    m_selectedZoomIds = m_selectedZoomId.isEmpty() ? QStringList{} : QStringList{m_selectedZoomId};
     changed();
     emit selectionChanged();
 }
@@ -763,6 +774,7 @@ void Editor::setSelectedClipId(const QString &id)
         setPickingZoomTarget(false);
         m_selectedClipId = id;
         m_selectedZoomId.clear();
+        m_selectedZoomIds.clear();
         emit selectionChanged();
     }
 }
@@ -772,9 +784,87 @@ void Editor::setSelectedZoomId(const QString &id)
     if (id != m_selectedZoomId || !m_selectedClipId.isEmpty()) {
         setPickingZoomTarget(false);
         m_selectedZoomId = id;
+        m_selectedZoomIds = id.isEmpty() ? QStringList{} : QStringList{id};
         m_selectedClipId.clear();
         emit selectionChanged();
     }
+}
+
+void Editor::setSelectedZoomIds(const QStringList &ids)
+{
+    QStringList valid;
+    for (const QString &id : ids)
+        if (zoomIndex(id) >= 0 && !valid.contains(id)) valid << id;
+    const QString primary = valid.isEmpty() ? QString() : valid.first();
+    if (valid == m_selectedZoomIds && primary == m_selectedZoomId
+        && (valid.isEmpty() || m_selectedClipId.isEmpty())) return;
+    setPickingZoomTarget(false);
+    m_selectedZoomIds = valid;
+    m_selectedZoomId = primary;
+    if (!valid.isEmpty()) m_selectedClipId.clear();
+    emit selectionChanged();
+}
+
+void Editor::selectZoomsInOutputRange(double outputStart, double outputEnd)
+{
+    if (outputStart > outputEnd) std::swap(outputStart, outputEnd);
+    QStringList ids;
+    for (const ZoomSegment &zoom : std::as_const(m_project.zooms)) {
+        const double start = sourceToOutput(zoom.start);
+        const double end = sourceToOutput(zoom.end);
+        if (start >= 0.0 && end >= 0.0 && end >= outputStart && start <= outputEnd)
+            ids << zoom.id;
+    }
+    setSelectedZoomIds(ids);
+}
+
+bool Editor::moveSelectedZooms(const QString &anchorId, double sourceStart)
+{
+    const int anchor = zoomIndex(anchorId);
+    if (anchor < 0) return false;
+    if (!m_selectedZoomIds.contains(anchorId)) setSelectedZoomId(anchorId);
+    QSet<QString> selected(m_selectedZoomIds.begin(), m_selectedZoomIds.end());
+    const double requested = sourceStart - m_project.zooms[anchor].start;
+    double minimum = -m_sourceDuration;
+    double maximum = m_sourceDuration;
+    for (const ZoomSegment &zoom : std::as_const(m_project.zooms)) {
+        if (!selected.contains(zoom.id)) continue;
+        minimum = std::max(minimum, -zoom.start);
+        maximum = std::min(maximum, m_sourceDuration - zoom.end);
+        for (const ZoomSegment &other : std::as_const(m_project.zooms)) {
+            if (selected.contains(other.id)) continue;
+            if (other.end <= zoom.start)
+                minimum = std::max(minimum, other.end - zoom.start);
+            else if (other.start >= zoom.end)
+                maximum = std::min(maximum, other.start - zoom.end);
+        }
+    }
+    const double delta = std::clamp(requested, minimum, maximum);
+    if (qFuzzyIsNull(delta)) return true;
+    snapshot(m_coalesceKey.isEmpty() ? QStringLiteral("move-selection") : m_coalesceKey);
+    for (ZoomSegment &zoom : m_project.zooms) {
+        if (!selected.contains(zoom.id)) continue;
+        zoom.start += delta;
+        zoom.end += delta;
+    }
+    changed();
+    return true;
+}
+
+int Editor::removeSelectedZooms()
+{
+    if (m_selectedZoomIds.isEmpty()) return 0;
+    const QSet<QString> selected(m_selectedZoomIds.begin(), m_selectedZoomIds.end());
+    const int before = m_project.zooms.size();
+    snapshot();
+    m_project.zooms.erase(std::remove_if(m_project.zooms.begin(), m_project.zooms.end(),
+        [&selected](const ZoomSegment &zoom) { return selected.contains(zoom.id); }),
+        m_project.zooms.end());
+    m_selectedZoomId.clear();
+    m_selectedZoomIds.clear();
+    changed();
+    emit selectionChanged();
+    return before - m_project.zooms.size();
 }
 void Editor::setPickingZoomTarget(bool value)
 {
@@ -867,32 +957,40 @@ void Editor::deletePreset(const QString &rawName)
     emit presetsChanged();
 }
 
-QVariantList Editor::wallpapers() const
+QVariantList Editor::wallpaperGroups() const
 {
     if (m_wallpapersCacheValid) return m_wallpapersCache;
     QVariantList result;
-    for (const QString &path : OmarchyPaths::themeBackgrounds()) {
-        const QFileInfo file(path);
-        const QString thumbnail = OmarchyPaths::wallpaperThumbnailPath(path);
-        const bool ready = QFileInfo(thumbnail).isFile();
-        result << QVariantMap{{QStringLiteral("name"), file.completeBaseName()},
-                             {QStringLiteral("path"), file.absoluteFilePath()},
-                             {QStringLiteral("url"), QUrl::fromLocalFile(file.absoluteFilePath()).toString()},
-                             {QStringLiteral("thumbnailUrl"), QUrl::fromLocalFile(ready ? thumbnail : path).toString()}};
-        if (!ready && !m_pendingThumbnails.contains(thumbnail)) {
-            m_pendingThumbnails.insert(thumbnail);
-            const QPointer<Editor> self(const_cast<Editor *>(this));
-            (void) QtConcurrent::run([self, path, thumbnail] {
-                OmarchyPaths::generateWallpaperThumbnail(path, thumbnail);
-                if (!self) return;
-                QMetaObject::invokeMethod(self, [self, thumbnail] {
+    for (const QVariant &groupValue : OmarchyPaths::themeBackgroundGroups()) {
+        QVariantMap group = groupValue.toMap();
+        QVariantList wallpapers;
+        for (const QVariant &pathValue : group.value(QStringLiteral("paths")).toList()) {
+            const QString path = pathValue.toString();
+            const QFileInfo file(path);
+            const QString thumbnail = OmarchyPaths::wallpaperThumbnailPath(path);
+            const bool ready = QFileInfo(thumbnail).isFile();
+            wallpapers << QVariantMap{{QStringLiteral("name"), file.completeBaseName()},
+                {QStringLiteral("path"), file.absoluteFilePath()},
+                {QStringLiteral("url"), QUrl::fromLocalFile(file.absoluteFilePath()).toString()},
+                {QStringLiteral("thumbnailUrl"), QUrl::fromLocalFile(ready ? thumbnail : path).toString()}};
+            if (!ready && !m_pendingThumbnails.contains(thumbnail)) {
+                m_pendingThumbnails.insert(thumbnail);
+                const QPointer<Editor> self(const_cast<Editor *>(this));
+                (void) QtConcurrent::run([self, path, thumbnail] {
+                    OmarchyPaths::generateWallpaperThumbnail(path, thumbnail);
                     if (!self) return;
-                    self->m_pendingThumbnails.remove(thumbnail);
-                    self->m_wallpapersCacheValid = false;
-                    emit self->wallpapersChanged();
-                }, Qt::QueuedConnection);
-            });
+                    QMetaObject::invokeMethod(self, [self, thumbnail] {
+                        if (!self) return;
+                        self->m_pendingThumbnails.remove(thumbnail);
+                        self->m_wallpapersCacheValid = false;
+                        emit self->wallpapersChanged();
+                    }, Qt::QueuedConnection);
+                });
+            }
         }
+        group.remove(QStringLiteral("paths"));
+        group.insert(QStringLiteral("wallpapers"), wallpapers);
+        result << group;
     }
     m_wallpapersCache = result;
     m_wallpapersCacheValid = true;
@@ -933,21 +1031,32 @@ void Editor::exportTo(const QString &pathValue, const QVariantMap &settings)
     }
     m_exporting = true;
     m_exportProgress = 0.0;
+    m_exportFps = 0.0;
+    m_exportEtaSeconds = 0;
+    m_exportedPath.clear();
+    m_exportTimer.start();
     m_exportError.clear();
     emit exportingChanged(); emit exportProgressChanged(); emit exportErrorChanged();
     m_exporter = new Exporter(this);
     connect(m_exporter, &Exporter::progress, this, [this](int frame, int total) {
         m_exportProgress = total > 0 ? frame / double(total) : 0.0;
+        const double elapsed = m_exportTimer.elapsed() / 1000.0;
+        m_exportFps = elapsed > 0.0 ? frame / elapsed : 0.0;
+        m_exportEtaSeconds = m_exportFps > 0.0
+            ? std::max(0, qRound((total - frame) / m_exportFps)) : 0;
         emit exportProgressChanged();
     });
     connect(m_exporter, &Exporter::finished, this, [this](const QString &result) {
         m_exporting = false; m_exportProgress = 1.0;
+        m_exportEtaSeconds = 0;
+        m_exportedPath = result;
         emit exportingChanged(); emit exportProgressChanged(); emit exportFinished(result);
         m_exporter->deleteLater();
         m_exporter = nullptr;
     });
     connect(m_exporter, &Exporter::failed, this, [this](const QString &error) {
         m_exporting = false; m_exportError = error;
+        m_exportEtaSeconds = 0;
         emit exportingChanged(); emit exportErrorChanged();
         m_exporter->deleteLater();
         m_exporter = nullptr;
@@ -970,4 +1079,16 @@ QString Editor::formatTime(double seconds) const
 {
     const int total = std::max(0, qRound(seconds));
     return QStringLiteral("%1:%2").arg(total / 60, 2, 10, QLatin1Char('0')).arg(total % 60, 2, 10, QLatin1Char('0'));
+}
+
+void Editor::openContainingFolder(const QString &path) const
+{
+    const QFileInfo file(path);
+    const QString directory = file.isDir() ? file.absoluteFilePath() : file.absolutePath();
+    if (!directory.isEmpty()) QProcess::startDetached(QStringLiteral("xdg-open"), {directory});
+}
+
+void Editor::copyPath(const QString &path) const
+{
+    if (QGuiApplication::clipboard()) QGuiApplication::clipboard()->setText(path);
 }

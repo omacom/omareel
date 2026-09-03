@@ -1,109 +1,147 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 
 ColumnLayout {
     id: root
     spacing: 12
-    PanelHeading {
+    readonly property var camera: editor.project.camera
+
+    component ChoiceButton: Button {
+        checkable: true
         Layout.fillWidth: true
-        text: editor.cameraStatus
-        wrapMode: Text.WordWrap
+        Layout.preferredHeight: 34
+        font.pixelSize: 11
+        topInset: 0
+        bottomInset: 0
+        background: Rectangle {
+            radius: 7
+            color: parent.checked ? Qt.alpha(theme.accent, .18)
+                                  : parent.hovered ? Qt.alpha(theme.foreground, .06) : "transparent"
+            border.width: parent.checked ? 2 : 1
+            border.color: parent.checked ? theme.accent : Qt.alpha(theme.foreground, .14)
+        }
     }
+
+    PanelHeading { Layout.fillWidth: true; text: editor.cameraStatus; wrapMode: Text.WordWrap }
     Switch {
         Layout.preferredHeight: 32
         text: "Enable webcam overlay"
         enabled: editor.hasCamera
-        checked: editor.hasCamera && editor.project.camera.enabled
+        checked: editor.hasCamera && root.camera.enabled
         onToggled: editor.setProjectValue("camera.enabled", checked)
     }
     ColumnLayout {
         Layout.fillWidth: true
         spacing: 12
-        enabled: editor.hasCamera && editor.project.camera.enabled
+        enabled: editor.hasCamera && root.camera.enabled
         opacity: enabled ? 1 : .42
 
         PanelLabel { text: "Position" }
         GridLayout {
-            Layout.fillWidth: true
-            columns: 2
-            columnSpacing: 6
-            rowSpacing: 6
+            Layout.fillWidth: true; columns: 2; columnSpacing: 6; rowSpacing: 6
             Repeater {
                 model: [
-                    {value: "top-left", text: "Top left"},
-                    {value: "top-right", text: "Top right"},
-                    {value: "bottom-left", text: "Bottom left"},
-                    {value: "bottom-right", text: "Bottom right"}
+                    {value:"top-left", text:"Top left"}, {value:"top-right", text:"Top right"},
+                    {value:"bottom-left", text:"Bottom left"}, {value:"bottom-right", text:"Bottom right"}
                 ]
-                delegate: Button {
+                delegate: ChoiceButton {
                     required property var modelData
-                    Layout.fillWidth: true
                     text: modelData.text
-                    checkable: true
-                    checked: editor.project.camera.position === modelData.value
+                    checked: root.camera.position === modelData.value
                     onClicked: editor.setProjectValue("camera.position", modelData.value)
                 }
             }
         }
-        PanelSlider { Layout.fillWidth: true; label: "Size"; path: "camera.size"; from: .1; to: .5; value: editor.project.camera.size; stepSize: .01; decimals: 2 }
+        PanelSlider { Layout.fillWidth: true; label: "Size"; path: "camera.size"; from: .1; to: .5; value: root.camera.size; stepSize: .01; decimals: 2 }
 
         PanelLabel { text: "Shape" }
         RowLayout {
-            Layout.fillWidth: true
-            spacing: 4
+            Layout.fillWidth: true; spacing: 5
             Repeater {
                 model: [{value:"round", text:"Round"}, {value:"rounded", text:"Rounded"}, {value:"square", text:"Square"}]
-                delegate: Button {
+                delegate: ChoiceButton {
                     required property var modelData
-                    Layout.fillWidth: true
                     text: modelData.text
-                    checkable: true
-                    checked: editor.project.camera.shape === modelData.value
+                    checked: root.camera.shape === modelData.value
                     onClicked: editor.setProjectValue("camera.shape", modelData.value)
                 }
             }
         }
-        PanelSlider {
-            visible: editor.project.camera.shape === "rounded"
-            Layout.fillWidth: true
-            label: "Corner radius"
-            path: "camera.radius"
-            from: 0; to: 80
-            value: editor.project.camera.radius
-            stepSize: 1
-        }
+        PanelSlider { visible: root.camera.shape === "rounded"; Layout.fillWidth: true; label: "Corner radius"; path: "camera.radius"; from: 0; to: 80; value: root.camera.radius; stepSize: 1 }
 
         PanelLabel { text: "Crop" }
         RowLayout {
-            Layout.fillWidth: true
-            spacing: 4
-            Button {
-                Layout.fillWidth: true
+            Layout.fillWidth: true; spacing: 5
+            ChoiceButton {
                 text: "Square"
-                checkable: true
-                checked: editor.project.camera.shape === "round" || editor.project.camera.crop === "square"
+                checked: root.camera.shape === "round" || root.camera.crop === "square"
                 onClicked: editor.setProjectValue("camera.crop", "square")
             }
-            Button {
-                Layout.fillWidth: true
+            ChoiceButton {
                 text: "Original"
-                checkable: true
-                enabled: editor.project.camera.shape !== "round"
-                checked: editor.project.camera.shape !== "round" && editor.project.camera.crop === "original"
+                enabled: root.camera.shape !== "round"
+                checked: root.camera.shape !== "round" && root.camera.crop === "original"
                 onClicked: editor.setProjectValue("camera.crop", "original")
             }
         }
-        Switch { Layout.preferredHeight: 32; text: "Mirror"; checked: editor.project.camera.mirror; onToggled: editor.setProjectValue("camera.mirror", checked) }
-        Switch { Layout.preferredHeight: 32; text: "Shadow"; checked: editor.project.camera.shadow; onToggled: editor.setProjectValue("camera.shadow", checked) }
-        PanelSlider {
+
+        RowLayout {
             Layout.fillWidth: true
-            label: "Shrink while zoomed"
-            path: "camera.scaleDuringZoom"
-            from: .4; to: 1
-            value: editor.project.camera.scaleDuringZoom
-            stepSize: .01
-            decimals: 2
+            PanelLabel { text: "Rotation"; Layout.fillWidth: true }
+            ToolButton {
+                enabled: false; opacity: 1; background: null
+                icon.source: "qrc:/omarecord/assets/icons/lucide/rotate-cw.svg"
+                icon.color: theme.foreground
+                icon.width: 15; icon.height: 15
+            }
         }
+        RowLayout {
+            Layout.fillWidth: true; spacing: 5
+            Repeater {
+                model: [0, 90, 180, 270]
+                delegate: ChoiceButton {
+                    required property int modelData
+                    text: modelData + "°"
+                    checked: root.camera.rotation === modelData
+                    onClicked: editor.setProjectValue("camera.rotation", modelData)
+                }
+            }
+        }
+        Switch {
+            Layout.preferredHeight: 32
+            text: "Flip horizontal"
+            checked: root.camera.flipHorizontal
+            onToggled: editor.setProjectValue("camera.flipHorizontal", checked)
+        }
+
+        Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Qt.alpha(theme.foreground, .10) }
+        PanelHeading { text: "Camera shadow" }
+        Switch { Layout.preferredHeight: 32; text: "Shadow"; checked: root.camera.shadow.enabled; onToggled: editor.setProjectValue("camera.shadow.enabled", checked) }
+        PanelSlider { Layout.fillWidth: true; label: "Intensity"; path: "camera.shadow.intensity"; from: 0; to: 1; value: root.camera.shadow.intensity; stepSize: .01; decimals: 2 }
+        PanelSlider { Layout.fillWidth: true; label: "Blur"; path: "camera.shadow.blur"; from: 0; to: 64; value: root.camera.shadow.blur; stepSize: 1 }
+        PanelSlider { Layout.fillWidth: true; label: "Distance"; path: "camera.shadow.distance"; from: 0; to: 80; value: root.camera.shadow.distance; stepSize: 1 }
+
+        Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Qt.alpha(theme.foreground, .10) }
+        PanelHeading { text: "Inset border" }
+        Switch { Layout.preferredHeight: 32; text: "Border"; checked: root.camera.inset.enabled; onToggled: editor.setProjectValue("camera.inset.enabled", checked) }
+        PanelSlider { Layout.fillWidth: true; label: "Width"; path: "camera.inset.width"; from: 0; to: 16; value: root.camera.inset.width; stepSize: 1 }
+        PanelSlider { Layout.fillWidth: true; label: "Opacity"; path: "camera.inset.alpha"; from: 0; to: 1; value: root.camera.inset.alpha; stepSize: .01; decimals: 2 }
+        RowLayout {
+            Layout.fillWidth: true
+            PanelLabel { text: "Colour"; Layout.fillWidth: true }
+            Rectangle {
+                width: 44; height: 28; radius: 7; color: root.camera.inset.color
+                border.width: 2; border.color: root.camera.inset.enabled ? theme.accent : Qt.alpha(theme.foreground, .32)
+                MouseArea { anchors.fill: parent; onClicked: insetColourDialog.open() }
+            }
+        }
+        PanelSlider { Layout.fillWidth: true; label: "Shrink while zoomed"; path: "camera.scaleDuringZoom"; from: .4; to: 1; value: root.camera.scaleDuringZoom; stepSize: .01; decimals: 2 }
+    }
+    ColorDialog {
+        id: insetColourDialog
+        selectedColor: root.camera.inset.color
+        onAccepted: editor.setProjectValue("camera.inset.color", selectedColor)
     }
 }

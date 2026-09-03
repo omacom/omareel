@@ -24,7 +24,11 @@ ColumnLayout {
         }
         return -1
     }
-    PanelHeading { text: selected ? "Selected zoom" : "Select a zoom on the timeline"; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+    PanelHeading {
+        text: editor.selectedZoomIds.length > 1 ? editor.selectedZoomIds.length + " zooms selected"
+             : selected ? "Selected zoom" : "Select a zoom on the timeline"
+        wrapMode: Text.WordWrap; Layout.fillWidth: true
+    }
     ColumnLayout {
         visible: root.selected !== null
         Layout.fillWidth: true
@@ -54,7 +58,11 @@ ColumnLayout {
             onActivated: currentIndex === 0 ? editor.setZoomTarget(editor.selectedZoomId, "auto") : editor.setPickingZoomTarget(true)
         }
         Button { Layout.fillWidth: true; text: editor.pickingZoomTarget ? "Click the preview…" : "Pick point on preview"; highlighted: editor.pickingZoomTarget; onClicked: editor.setPickingZoomTarget(!editor.pickingZoomTarget) }
-        Button { Layout.fillWidth: true; text: "Remove zoom"; onClicked: editor.removeZoom(editor.selectedZoomId) }
+        Button {
+            Layout.fillWidth: true
+            text: editor.selectedZoomIds.length > 1 ? "Remove selected zooms" : "Remove zoom"
+            onClicked: editor.removeSelectedZooms()
+        }
     }
     Rectangle { Layout.fillWidth: true; height: 1; color: Qt.alpha(theme.foreground, .10) }
     PanelHeading { text: "Motion" }

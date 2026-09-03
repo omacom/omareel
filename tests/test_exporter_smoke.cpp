@@ -73,7 +73,7 @@ private slots:
         project.background.color = QColor(QStringLiteral("#101020"));
         project.cursor.visible = false;
         project.camera.enabled = true;
-        project.camera.shadow = false;
+        project.camera.shadow.enabled = false;
         QString projectError;
         QVERIFY2(project.save(QDir(bundle).filePath(QStringLiteral("project.json")), &projectError),
                  qPrintable(projectError));

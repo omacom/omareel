@@ -4,6 +4,7 @@ import QtQuick.Controls
 FocusScope {
     id: root
     required property real scaleFactor
+    signal scaleFactorRequested(real value)
     property real labelWidth: 76
     property real basePixels: Math.max(55, (width-labelWidth-24) / Math.max(1, editor.duration))
     property real pixelsPerSecond: basePixels * scaleFactor
@@ -19,12 +20,39 @@ FocusScope {
     }
     Flickable {
         id: flick
+        objectName: "timelineFlickable"
         x: root.labelWidth; y: 0
         width: parent.width - x; height: parent.height
         contentWidth: Math.max(width, editor.duration * root.pixelsPerSecond + 40)
         contentHeight: height
         clip: true
+        interactive: false
         boundsBehavior: Flickable.StopAtBounds
+        WheelHandler {
+            target: null
+            onWheel: event => {
+                if (event.modifiers & Qt.ControlModifier) {
+                    const pointerX = event.position.x
+                    const timeAtPointer = (flick.contentX + pointerX) / root.pixelsPerSecond
+                    const delta = event.angleDelta.y !== 0 ? event.angleDelta.y : event.pixelDelta.y
+                    const next = Math.max(1, Math.min(5, root.scaleFactor * Math.pow(1.12, delta / 120)))
+                    root.scaleFactorRequested(next)
+                    Qt.callLater(function() {
+                        flick.contentX = Math.max(0, Math.min(flick.contentWidth - flick.width,
+                            timeAtPointer * root.pixelsPerSecond - pointerX))
+                    })
+                } else {
+                    const pixel = Math.abs(event.pixelDelta.x) > Math.abs(event.pixelDelta.y)
+                        ? event.pixelDelta.x : event.pixelDelta.y
+                    const angle = Math.abs(event.angleDelta.x) > Math.abs(event.angleDelta.y)
+                        ? event.angleDelta.x : event.angleDelta.y
+                    const amount = pixel !== 0 ? pixel : angle / 120 * 72
+                    flick.contentX = Math.max(0, Math.min(flick.contentWidth - flick.width,
+                        flick.contentX - amount))
+                }
+                event.accepted = true
+            }
+        }
         readonly property int firstVisibleTick: Math.max(0, Math.floor(contentX * root.ticksPerSecond / root.pixelsPerSecond) - 1)
         readonly property int visibleTickCount: Math.ceil(width * root.ticksPerSecond / root.pixelsPerSecond) + 4
         Item {
@@ -53,7 +81,16 @@ FocusScope {
                         }
                     }
                 }
-                MouseArea { anchors.fill: parent; onPressed: root.forceActiveFocus(); onClicked: editor.seek(mouse.x / root.pixelsPerSecond) }
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    preventStealing: true
+                    function seekAt(px) {
+                        editor.seek(Math.max(0, Math.min(editor.duration, px / root.pixelsPerSecond)))
+                    }
+                    onPressed: mouse => { root.forceActiveFocus(); seekAt(mouse.x) }
+                    onPositionChanged: mouse => { if (pressed) seekAt(mouse.x) }
+                }
             }
             Rectangle { x: 0; y: 40; width: parent.width; height: 56; color: Qt.lighter(theme.background, 1.08); border.color: Qt.alpha(theme.foreground, .05) }
             ClipTrack { x: 0; y: 46; width: parent.width; height: 44; pixelsPerSecond: root.pixelsPerSecond; focusTarget: root }
@@ -69,11 +106,20 @@ FocusScope {
                 MouseArea {
                     x: -8; width: 18; y: -8; height: parent.height + 16
                     cursorShape: Qt.SizeHorCursor
-                    onPressed: root.forceActiveFocus()
-                    onPositionChanged: if (pressed) editor.seek(Math.max(0, Math.min(editor.duration, mapToItem(content, mouse.x, mouse.y).x / root.pixelsPerSecond)))
+                    preventStealing: true
+                    onPressed: mouse => {
+                        root.forceActiveFocus()
+                        editor.seek(Math.max(0, Math.min(editor.duration,
+                            mapToItem(content, mouse.x, mouse.y).x / root.pixelsPerSecond)))
+                    }
+                    onPositionChanged: mouse => { if (pressed) editor.seek(Math.max(0, Math.min(editor.duration, mapToItem(content, mouse.x, mouse.y).x / root.pixelsPerSecond))) }
                 }
             }
         }
-        ScrollBar.horizontal: ScrollBar { }
+        ScrollBar.horizontal: ScrollBar {
+            policy: flick.contentWidth > flick.width ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+            interactive: true
+            height: 12
+        }
     }
 }

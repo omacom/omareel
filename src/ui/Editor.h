@@ -5,6 +5,7 @@
 #include "core/Project.h"
 
 #include <QFutureWatcher>
+#include <QElapsedTimer>
 #include <QJsonObject>
 #include <QMediaPlayer>
 #include <QObject>
@@ -51,13 +52,17 @@ class Editor : public QObject
     Q_PROPERTY(bool dirty READ dirty NOTIFY dirtyChanged)
     Q_PROPERTY(QString selectedClipId READ selectedClipId WRITE setSelectedClipId NOTIFY selectionChanged)
     Q_PROPERTY(QString selectedZoomId READ selectedZoomId WRITE setSelectedZoomId NOTIFY selectionChanged)
+    Q_PROPERTY(QStringList selectedZoomIds READ selectedZoomIds WRITE setSelectedZoomIds NOTIFY selectionChanged)
     Q_PROPERTY(bool pickingZoomTarget READ pickingZoomTarget WRITE setPickingZoomTarget NOTIFY pickingZoomTargetChanged)
     Q_PROPERTY(QStringList presetNames READ presetNames NOTIFY presetsChanged)
-    Q_PROPERTY(QVariantList wallpapers READ wallpapers NOTIFY wallpapersChanged)
+    Q_PROPERTY(QVariantList wallpaperGroups READ wallpaperGroups NOTIFY wallpapersChanged)
     Q_PROPERTY(QVariantList gradients READ gradients CONSTANT)
     Q_PROPERTY(double exportProgress READ exportProgress NOTIFY exportProgressChanged)
     Q_PROPERTY(bool exporting READ exporting NOTIFY exportingChanged)
     Q_PROPERTY(QString exportError READ exportError NOTIFY exportErrorChanged)
+    Q_PROPERTY(double exportFps READ exportFps NOTIFY exportProgressChanged)
+    Q_PROPERTY(int exportEtaSeconds READ exportEtaSeconds NOTIFY exportProgressChanged)
+    Q_PROPERTY(QString exportedPath READ exportedPath NOTIFY exportFinished)
 
     // Composition.qml contract; Editor is registered as both "editor" and "comp".
     Q_PROPERTY(int outputWidth READ outputWidth NOTIFY outputSizeChanged)
@@ -100,13 +105,17 @@ public:
     bool dirty() const { return m_dirty; }
     QString selectedClipId() const { return m_selectedClipId; }
     QString selectedZoomId() const { return m_selectedZoomId; }
+    QStringList selectedZoomIds() const { return m_selectedZoomIds; }
     bool pickingZoomTarget() const { return m_pickingZoomTarget; }
     QStringList presetNames() const;
-    QVariantList wallpapers() const;
+    QVariantList wallpaperGroups() const;
     QVariantList gradients() const { return m_gradients; }
     double exportProgress() const { return m_exportProgress; }
     bool exporting() const { return m_exporting; }
     QString exportError() const { return m_exportError; }
+    double exportFps() const { return m_exportFps; }
+    int exportEtaSeconds() const { return m_exportEtaSeconds; }
+    QString exportedPath() const { return m_exportedPath; }
     int outputWidth() const;
     int outputHeight() const;
     double sourcePosition() const;
@@ -120,6 +129,7 @@ public:
 
     void setSelectedClipId(const QString &id);
     void setSelectedZoomId(const QString &id);
+    void setSelectedZoomIds(const QStringList &ids);
     void setPickingZoomTarget(bool value);
 
     Q_INVOKABLE void attachFrameSource(QObject *source);
@@ -151,6 +161,9 @@ public:
     Q_INVOKABLE bool setZoomTarget(const QString &id, const QVariant &target);
     Q_INVOKABLE bool setZoomTargetFromPreview(double x, double y);
     Q_INVOKABLE bool removeZoom(const QString &id);
+    Q_INVOKABLE void selectZoomsInOutputRange(double outputStart, double outputEnd);
+    Q_INVOKABLE bool moveSelectedZooms(const QString &anchorId, double sourceStart);
+    Q_INVOKABLE int removeSelectedZooms();
     Q_INVOKABLE void regenerateZooms();
     Q_INVOKABLE void savePreset(const QString &name);
     Q_INVOKABLE void loadPreset(const QString &name);
@@ -159,6 +172,8 @@ public:
     Q_INVOKABLE void cancelExport();
     Q_INVOKABLE QString defaultExportPath(const QString &format) const;
     Q_INVOKABLE QString formatTime(double seconds) const;
+    Q_INVOKABLE void openContainingFolder(const QString &path) const;
+    Q_INVOKABLE void copyPath(const QString &path) const;
     Q_INVOKABLE void refreshOmarchyTheme();
 
 signals:
@@ -241,6 +256,7 @@ private:
     bool m_dirty = false;
     QString m_selectedClipId;
     QString m_selectedZoomId;
+    QStringList m_selectedZoomIds;
     bool m_pickingZoomTarget = false;
     int m_motionGeneration = 0;
     int m_runningMotionGeneration = 0;
@@ -258,6 +274,10 @@ private:
     double m_exportProgress = 0.0;
     bool m_exporting = false;
     QString m_exportError;
+    double m_exportFps = 0.0;
+    int m_exportEtaSeconds = 0;
+    QString m_exportedPath;
+    QElapsedTimer m_exportTimer;
 };
 
 } // namespace OmaRecord

@@ -15,6 +15,7 @@ struct RecordOptions {
     QString microphoneDevice = QStringLiteral("default_input");
     bool webcam = false;
     QString webcamDevice = QStringLiteral("/dev/video2");
+    int webcamHeight = 1080;
     bool noOpen = false;
     bool noBar = false;
 };

@@ -124,11 +124,21 @@ qt_add_resources(omarecord_render "omarecord_assets"
     FILES
         assets/cursors/arrow.svg assets/cursors/pointer.svg
         assets/gradients.json
-        assets/icons/background.svg assets/icons/shape.svg assets/icons/cursor.svg
-        assets/icons/zoom.svg assets/icons/audio.svg assets/icons/camera.svg assets/icons/undo.svg assets/icons/redo.svg
-        assets/icons/scissors.svg assets/icons/play.svg assets/icons/pause.svg
-        assets/icons/skip-back.svg assets/icons/skip-forward.svg
-        assets/icons/monitor.svg assets/icons/region.svg assets/icons/window.svg assets/icons/film.svg
+        assets/icons/lucide/undo-2.svg assets/icons/lucide/redo-2.svg
+        assets/icons/lucide/palette.svg assets/icons/lucide/square.svg
+        assets/icons/lucide/mouse-pointer-2.svg assets/icons/lucide/zoom-in.svg
+        assets/icons/lucide/film.svg assets/icons/lucide/camera.svg assets/icons/lucide/volume-2.svg
+        assets/icons/lucide/play.svg assets/icons/lucide/pause.svg
+        assets/icons/lucide/skip-back.svg assets/icons/lucide/skip-forward.svg
+        assets/icons/lucide/scissors.svg assets/icons/lucide/crop.svg assets/icons/lucide/image.svg
+        assets/icons/lucide/monitor.svg assets/icons/lucide/app-window.svg assets/icons/lucide/scan.svg
+        assets/icons/lucide/save.svg assets/icons/lucide/download.svg assets/icons/lucide/x.svg
+        assets/icons/lucide/check.svg assets/icons/lucide/plus.svg assets/icons/lucide/chevron-down.svg
+        assets/icons/lucide/folder-open.svg assets/icons/lucide/settings-2.svg
+        assets/icons/lucide/video.svg assets/icons/lucide/mic.svg assets/icons/lucide/mic-off.svg
+        assets/icons/lucide/rotate-cw.svg assets/icons/lucide/flip-horizontal-2.svg
+        assets/icons/lucide/circle.svg assets/icons/lucide/square-dashed.svg
+        assets/icons/lucide/layers.svg
 )
 target_include_directories(omarecord_render PUBLIC src src/render)
 target_link_libraries(omarecord_render PUBLIC omarecord_core Qt6::Concurrent Qt6::Quick Qt6::QuickControls2 Qt6::Multimedia Qt6::OpenGL)

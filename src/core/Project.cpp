@@ -146,8 +146,28 @@ Project Project::fromJson(const QJsonObject &root)
     const QString cameraCrop = camera.value("crop").toString("original");
     if (cameraCrop == QLatin1String("square") || cameraCrop == QLatin1String("original"))
         p.camera.crop = cameraCrop;
-    p.camera.mirror = camera.value("mirror").toBool(true);
-    p.camera.shadow = camera.value("shadow").toBool(true);
+    p.camera.flipHorizontal = camera.contains("flipHorizontal")
+        ? camera.value("flipHorizontal").toBool(false)
+        : camera.value("mirror").toBool(false);
+    const int cameraRotation = camera.value("rotation").toInt(0);
+    if (cameraRotation == 0 || cameraRotation == 90 || cameraRotation == 180
+        || cameraRotation == 270)
+        p.camera.rotation = cameraRotation;
+    const QJsonValue cameraShadowValue = camera.value("shadow");
+    if (cameraShadowValue.isObject()) {
+        const QJsonObject cameraShadow = cameraShadowValue.toObject();
+        p.camera.shadow.enabled = cameraShadow.value("enabled").toBool(false);
+        p.camera.shadow.intensity = cameraShadow.value("intensity").toDouble(0.55);
+        p.camera.shadow.blur = cameraShadow.value("blur").toDouble(18.0);
+        p.camera.shadow.distance = cameraShadow.value("distance").toDouble(18.0);
+    } else {
+        p.camera.shadow.enabled = cameraShadowValue.toBool(false);
+    }
+    const QJsonObject cameraInset = camera.value("inset").toObject();
+    p.camera.inset.enabled = cameraInset.value("enabled").toBool(false);
+    p.camera.inset.width = cameraInset.value("width").toDouble(2.0);
+    p.camera.inset.color = parseColor(cameraInset.value("color"), Qt::white);
+    p.camera.inset.alpha = cameraInset.value("alpha").toDouble(0.7);
     p.camera.scaleDuringZoom = camera.value("scaleDuringZoom").toDouble(0.7);
     const auto cameraOffset = camera.value("offset").toObject();
     p.camera.offset = QPointF(cameraOffset.value("x").toDouble(0.02),
@@ -202,7 +222,14 @@ QJsonObject Project::toJson() const
         {"audio", QJsonObject{{"desktop", audio.desktop}, {"mic", audio.mic}, {"volume", audio.volume}}},
         {"camera", QJsonObject{{"enabled", camera.enabled}, {"position", camera.position},
             {"size", camera.size}, {"shape", camera.shape}, {"radius", camera.radius},
-            {"crop", camera.crop}, {"mirror", camera.mirror}, {"shadow", camera.shadow},
+            {"crop", camera.crop}, {"flipHorizontal", camera.flipHorizontal},
+            {"rotation", camera.rotation},
+            {"shadow", QJsonObject{{"enabled", camera.shadow.enabled},
+                {"intensity", camera.shadow.intensity}, {"blur", camera.shadow.blur},
+                {"distance", camera.shadow.distance}}},
+            {"inset", QJsonObject{{"enabled", camera.inset.enabled},
+                {"width", camera.inset.width}, {"color", camera.inset.color.name(QColor::HexRgb)},
+                {"alpha", camera.inset.alpha}}},
             {"scaleDuringZoom", camera.scaleDuringZoom}, {"offset", QJsonObject{{"x", camera.offset.x()},
                 {"y", camera.offset.y()}}}}},
         {"export", QJsonObject{{"format", exportSettings.format}, {"fps", exportSettings.fps}, {"height", exportSettings.height},

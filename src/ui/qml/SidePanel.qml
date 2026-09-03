@@ -8,11 +8,24 @@ Rectangle {
     color: theme.lighterBackground
     border.color: Qt.alpha(theme.foreground, .06)
     property int section: 0
+    property string forcedTooltip: ""
+    function setBackgroundExpanded(value) {
+        root.section = 0
+        Qt.callLater(function() {
+            if (panelLoader.item) panelLoader.item.showAllGradients = value
+        })
+    }
+    function scrollInspectorToBottom() {
+        Qt.callLater(function() {
+            scroller.contentItem.contentY = Math.max(0,
+                scroller.contentItem.contentHeight - scroller.availableHeight)
+        })
+    }
     readonly property var sections: [
-        {name:"Background", icon:"background.svg"}, {name:"Shape", icon:"shape.svg"},
-        {name:"Cursor", icon:"cursor.svg"}, {name:"Zoom", icon:"zoom.svg"},
+        {name:"Background", icon:"palette.svg"}, {name:"Shape", icon:"square.svg"},
+        {name:"Cursor", icon:"mouse-pointer-2.svg"}, {name:"Zoom", icon:"zoom-in.svg"},
         {name:"Clip", icon:"film.svg"}, {name:"Camera", icon:"camera.svg"},
-        {name:"Audio", icon:"audio.svg"}
+        {name:"Audio", icon:"volume-2.svg"}
     ]
     RowLayout {
         anchors.fill: parent
@@ -33,17 +46,57 @@ Rectangle {
                         id: railButton
                         required property var modelData
                         required property int index
+                        property bool tooltipReady: false
+                        objectName: "railButton-" + modelData.name
                         anchors.horizontalCenter: parent.horizontalCenter
-                        icon.source: "qrc:/omarecord/assets/icons/" + modelData.icon
+                        icon.source: "qrc:/omarecord/assets/icons/lucide/" + modelData.icon
                         toolIconColor: checked ? theme.accentForeground : theme.foreground
                         checked: root.section === index
                         checkable: true
                         Accessible.name: modelData.name
-                        ToolTip.visible: hovered
-                        ToolTip.text: modelData.name
                         onClicked: root.section = index
+                        onHoveredChanged: {
+                            if (hovered) tooltipDelay.restart()
+                            else {
+                                tooltipDelay.stop()
+                                tooltipReady = false
+                            }
+                        }
                         hoverColor: checked ? theme.accent : Qt.alpha(theme.foreground, .07)
-                        background: Rectangle { radius: 7; color: railButton.checked ? theme.accent : railButton.hovered ? railButton.hoverColor : "transparent" }
+                        background: Rectangle {
+                            radius: 8
+                            color: railButton.checked ? Qt.alpha(theme.accent, .22)
+                                : railButton.hovered ? railButton.hoverColor : "transparent"
+                            border.width: railButton.checked ? 2 : 0
+                            border.color: theme.accent
+                        }
+                        Timer {
+                            id: tooltipDelay
+                            interval: 300
+                            onTriggered: railButton.tooltipReady = true
+                        }
+                        Rectangle {
+                            visible: root.forcedTooltip === modelData.name
+                                || (railButton.hovered && railButton.tooltipReady)
+                            anchors.right: parent.left
+                            anchors.rightMargin: 8
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: tooltipLabel.implicitWidth + 18
+                            height: 28
+                            radius: 7
+                            color: Qt.alpha(theme.darkBackground, .96)
+                            border.width: 1
+                            border.color: Qt.alpha(theme.foreground, .13)
+                            z: 1000
+                            Label {
+                                id: tooltipLabel
+                                anchors.centerIn: parent
+                                text: modelData.name
+                                color: theme.foreground
+                                font.pixelSize: 11
+                                font.weight: Font.DemiBold
+                            }
+                        }
                     }
                 }
             }
@@ -69,6 +122,7 @@ Rectangle {
                 contentWidth: availableWidth
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                 Loader {
+                    id: panelLoader
                     x: 16
                     width: scroller.availableWidth - 32
                     height: item ? item.implicitHeight : 0

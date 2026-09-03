@@ -6,10 +6,47 @@ Item {
     required property real pixelsPerSecond
     required property Item focusTarget
     MouseArea {
+        id: selectionArea
+        objectName: "zoomSelectionArea"
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton
-        onPressed: root.focusTarget.forceActiveFocus()
+        preventStealing: true
+        property real originX: 0
+        property real currentX: 0
+        property bool selecting: false
+        onPressed: mouse => {
+            root.focusTarget.forceActiveFocus()
+            originX = mouse.x
+            currentX = mouse.x
+            selecting = false
+        }
+        onPositionChanged: mouse => {
+            if (!pressed) return
+            currentX = Math.max(0, Math.min(width, mouse.x))
+            selecting = Math.abs(currentX - originX) >= 2
+        }
+        onReleased: {
+            if (selecting)
+                editor.selectZoomsInOutputRange(Math.min(originX, currentX) / root.pixelsPerSecond,
+                                                Math.max(originX, currentX) / root.pixelsPerSecond)
+            else
+                editor.selectedZoomIds = []
+            selecting = false
+        }
+        onCanceled: selecting = false
         onDoubleClicked: editor.addZoomAt(mouse.x / root.pixelsPerSecond, 2)
+    }
+    Rectangle {
+        visible: selectionArea.selecting
+        x: Math.min(selectionArea.originX, selectionArea.currentX)
+        width: Math.abs(selectionArea.currentX - selectionArea.originX)
+        y: 1
+        height: parent.height - 2
+        radius: 5
+        color: Qt.alpha(theme.accent, .18)
+        border.width: 2
+        border.color: theme.accent
+        z: 100
     }
     Repeater {
         model: editor.zooms
@@ -23,14 +60,15 @@ Item {
             property bool gestureActive: false
             property real gestureX: 0
             property real gestureWidth: 0
+            readonly property bool selected: editor.selectedZoomIds.indexOf(modelData.id) >= 0
             visible: outputStart >= 0 && outputEnd >= 0
             x: gestureActive ? gestureX : Math.max(0, outputStart) * root.pixelsPerSecond
             width: gestureActive ? gestureWidth : Math.max(18, (outputEnd-outputStart) * root.pixelsPerSecond)
             height: root.height
             radius: 6
-            color: Qt.alpha(theme.accent, .62)
-            border.width: 1
-            border.color: editor.selectedZoomId === modelData.id || zoomHover.hovered ? Qt.lighter(theme.accent, 1.25) : theme.accent
+            color: selected ? Qt.alpha(theme.accent, .72) : Qt.alpha(theme.accent, .48)
+            border.width: selected ? 2 : 1
+            border.color: selected || zoomHover.hovered ? Qt.lighter(theme.accent, 1.25) : theme.accent
             HoverHandler { id: zoomHover }
             Label {
                 anchors.centerIn: parent
@@ -49,52 +87,47 @@ Item {
                 cursorShape: Qt.OpenHandCursor
                 property real pressTrackX
                 property real pressBlockX
-                onPressed: {
+                onPressed: mouse => {
                     root.focusTarget.forceActiveFocus()
-                    editor.selectedZoomId = modelData.id
+                    if (editor.selectedZoomIds.indexOf(modelData.id) < 0)
+                        editor.selectedZoomId = modelData.id
                     pressTrackX = mapToItem(root, mouse.x, mouse.y).x
                     pressBlockX = zoomBlock.x
-                    zoomBlock.gestureX = zoomBlock.x
-                    zoomBlock.gestureWidth = zoomBlock.width
-                    zoomBlock.gestureActive = true
-                    editor.beginCoalescedEdit("move-" + modelData.id)
+                    editor.beginCoalescedEdit("move-selection")
                 }
-                onPositionChanged: if (pressed) {
+                onPositionChanged: mouse => { if (pressed) {
                     const trackX = mapToItem(root, mouse.x, mouse.y).x
-                    zoomBlock.gestureX = Math.max(0, Math.min(editor.duration * root.pixelsPerSecond - zoomBlock.gestureWidth,
+                    const nextX = Math.max(0, Math.min(editor.duration * root.pixelsPerSecond - zoomBlock.width,
                         pressBlockX + trackX - pressTrackX))
-                }
+                    editor.moveSelectedZooms(modelData.id, editor.outputToSource(nextX / root.pixelsPerSecond))
+                } }
                 onReleased: {
-                    const facade = editor
-                    const start = editor.outputToSource(zoomBlock.gestureX / root.pixelsPerSecond)
-                    zoomBlock.gestureActive = false
-                    facade.moveZoom(modelData.id, start)
-                    facade.endCoalescedEdit()
+                    editor.endCoalescedEdit()
                 }
-                onCanceled: { zoomBlock.gestureActive = false; editor.endCoalescedEdit() }
+                onCanceled: editor.endCoalescedEdit()
             }
             Rectangle {
                 width: 6; height: parent.height; radius: 3; color: Qt.lighter(theme.accent, 1.2)
-                opacity: editor.selectedZoomId === modelData.id ? 1 : 0
+                opacity: zoomBlock.selected ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: 100 } }
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.SizeHorCursor
                     property real pressTrackX
                     property real pressBlockX
                     property real pressRight
-                    onPressed: {
+                    onPressed: mouse => {
                         root.focusTarget.forceActiveFocus(); editor.selectedZoomId = modelData.id
                         pressTrackX = mapToItem(root, mouse.x, mouse.y).x
                         pressBlockX = zoomBlock.x; pressRight = zoomBlock.x + zoomBlock.width
                         zoomBlock.gestureX = zoomBlock.x; zoomBlock.gestureWidth = zoomBlock.width
                         zoomBlock.gestureActive = true; editor.beginCoalescedEdit("resize-" + modelData.id)
                     }
-                    onPositionChanged: if (pressed) {
+                    onPositionChanged: mouse => { if (pressed) {
                         const trackX = mapToItem(root, mouse.x, mouse.y).x
                         const nextX = Math.max(0, Math.min(pressRight - root.pixelsPerSecond,
                             pressBlockX + trackX - pressTrackX))
                         zoomBlock.gestureX = nextX; zoomBlock.gestureWidth = pressRight - nextX
-                    }
+                    } }
                     onReleased: {
                         const facade = editor
                         const start = editor.outputToSource(zoomBlock.gestureX / root.pixelsPerSecond)
@@ -106,24 +139,24 @@ Item {
             }
             Rectangle {
                 anchors.right: parent.right; width: 6; height: parent.height; radius: 3; color: Qt.lighter(theme.accent, 1.2)
-                opacity: editor.selectedZoomId === modelData.id ? 1 : 0
+                opacity: zoomBlock.selected ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: 100 } }
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.SizeHorCursor
                     property real pressTrackX
                     property real pressWidth
-                    onPressed: {
+                    onPressed: mouse => {
                         root.focusTarget.forceActiveFocus(); editor.selectedZoomId = modelData.id
                         pressTrackX = mapToItem(root, mouse.x, mouse.y).x; pressWidth = zoomBlock.width
                         zoomBlock.gestureX = zoomBlock.x; zoomBlock.gestureWidth = zoomBlock.width
                         zoomBlock.gestureActive = true; editor.beginCoalescedEdit("resize-" + modelData.id)
                     }
-                    onPositionChanged: if (pressed) {
+                    onPositionChanged: mouse => { if (pressed) {
                         const trackX = mapToItem(root, mouse.x, mouse.y).x
                         zoomBlock.gestureWidth = Math.max(root.pixelsPerSecond,
                             Math.min(editor.duration * root.pixelsPerSecond - zoomBlock.gestureX,
                                 pressWidth + trackX - pressTrackX))
-                    }
+                    } }
                     onReleased: {
                         const facade = editor
                         const end = editor.outputToSource((zoomBlock.gestureX + zoomBlock.gestureWidth) / root.pixelsPerSecond)

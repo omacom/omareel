@@ -38,6 +38,8 @@ is the default when no capture mode is given. `--window` selects a window-aligne
   also present.
 - `--no-audio` records no audio and overrides the saved preferences.
 - `--fps N` sets capture rate from 1 through 240; the default is 60.
+- `--webcam-height 720|1080` sets webcam capture resolution; the saved launcher preference
+  defaults to 1080p.
 - `--dir PATH` changes the bundle directory; the default is the `omarecord` directory under
   the user's XDG Videos directory.
 - `--no-open` does not open the editor after the recording is finalized.
@@ -91,7 +93,7 @@ auto-generated zoom summary.
 | `Shift+Left`, `Shift+Right` | Back/forward one second |
 | `S` | Split at playhead |
 | `Z` | Add a two-second zoom |
-| `Delete` | Remove selected zoom or clip |
+| `Delete` | Remove all selected zooms, or the selected clip |
 | `Ctrl+Z`, `Ctrl+Shift+Z` | Undo/redo |
 | `Ctrl+S` | Save |
 | `Ctrl+E` | Export |
@@ -112,6 +114,8 @@ clip, style, cursor, and zoom edits are stored in `project.json`.
 - `OMARECORD_SCREENSHOT_PANEL=background|shape|cursor|zoom|clip|camera|audio` selects an editor inspector
   before the debug capture.
 - `OMARECORD_SCREENSHOT_SIZE=1440x900` sets the debug-capture window dimensions.
+- `OMARECORD_SCREENSHOT_VIEW=export|aspect|background-expanded|rail-tooltip|camera-proof` opens a transient
+  editor surface before capture.
 - `OMARECORD_RECENTS_DIR=/path` overrides the launcher recordings directory (useful for UI testing).
 
 Example:

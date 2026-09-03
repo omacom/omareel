@@ -21,6 +21,31 @@ ApplicationWindow {
     readonly property bool singleKeyShortcutsBlocked: activeFocusItem !== null
         && !previewPane.activeFocus && !timeline.activeFocus
     function restoreEditorFocus() { previewPane.forceActiveFocus() }
+    function openExport() {
+        topBar.commitProjectName()
+        previewPane.grabPreview(function(result) {
+            exportDialog.previewGrab = result
+            exportDialog.previewUrl = result.url
+            exportDialog.open()
+        })
+    }
+    function prepareScreenshot(view) {
+        if (view === "export") {
+            editor.seek(2)
+            Qt.callLater(window.openExport)
+        }
+        else if (view === "aspect") bottomBar.openAspectMenu()
+        else if (view === "background-expanded") sidePanel.setBackgroundExpanded(true)
+        else if (view === "rail-tooltip") {
+            sidePanel.section = 5
+            sidePanel.forcedTooltip = "Camera"
+            editor.seek(2)
+        } else if (view === "camera-proof") {
+            sidePanel.section = 5
+            editor.seek(2)
+            sidePanel.scrollInspectorToBottom()
+        }
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -28,7 +53,7 @@ ApplicationWindow {
         TopBar {
             id: topBar
             Layout.fillWidth: true
-            onShowExport: exportDialog.open()
+            onShowExport: window.openExport()
         }
         RowLayout {
             Layout.fillWidth: true
@@ -45,6 +70,7 @@ ApplicationWindow {
                     cropMode: window.cropMode
                 }
                 BottomBar {
+                    id: bottomBar
                     Layout.fillWidth: true
                     timelineScale: window.timelineScale
                     cropMode: window.cropMode
@@ -53,6 +79,7 @@ ApplicationWindow {
                 }
             }
             SidePanel {
+                id: sidePanel
                 Layout.preferredWidth: 320
                 Layout.minimumWidth: 320
                 Layout.maximumWidth: 320
@@ -64,6 +91,7 @@ ApplicationWindow {
             Layout.fillWidth: true
             Layout.preferredHeight: 168
             scaleFactor: window.timelineScale
+            onScaleFactorRequested: value => window.timelineScale = value
         }
     }
 
@@ -76,10 +104,10 @@ ApplicationWindow {
     Shortcut { sequence: "Shift+Right"; enabled: !window.singleKeyShortcutsBlocked; onActivated: editor.seek(editor.position + 1) }
     Shortcut { sequence: "S"; enabled: !window.singleKeyShortcutsBlocked; onActivated: editor.splitAtPlayhead() }
     Shortcut { sequence: "Z"; enabled: !window.singleKeyShortcutsBlocked; onActivated: editor.addZoomAt(editor.position) }
-    Shortcut { sequence: "Delete"; enabled: !window.singleKeyShortcutsBlocked; onActivated: editor.selectedZoomId ? editor.removeZoom(editor.selectedZoomId) : editor.removeClip(editor.selectedClipId) }
+    Shortcut { sequence: "Delete"; enabled: !window.singleKeyShortcutsBlocked; onActivated: editor.selectedZoomIds.length ? editor.removeSelectedZooms() : editor.removeClip(editor.selectedClipId) }
     Shortcut { sequence: "Ctrl+Z"; onActivated: editor.undo() }
     Shortcut { sequence: "Ctrl+Shift+Z"; onActivated: editor.redo() }
     Shortcut { sequence: "Ctrl+S"; onActivated: { topBar.commitProjectName(); editor.saveNow() } }
-    Shortcut { sequence: "Ctrl+E"; onActivated: { topBar.commitProjectName(); exportDialog.open() } }
+    Shortcut { sequence: "Ctrl+E"; onActivated: window.openExport() }
     Shortcut { sequence: "Escape"; enabled: editor.pickingZoomTarget; onActivated: editor.setPickingZoomTarget(false) }
 }

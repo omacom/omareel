@@ -49,13 +49,15 @@ ApplicationWindow {
                 font.weight: Font.DemiBold
             }
 
-            Image {
+            ToolButton {
                 visible: recordingBar.webcam
                 Layout.preferredWidth: 16
                 Layout.preferredHeight: 16
-                sourceSize.width: 32
-                sourceSize.height: 32
-                source: "qrc:/omarecord/assets/icons/camera.svg"
+                icon.source: "qrc:/omarecord/assets/icons/lucide/camera.svg"
+                icon.color: theme.foreground
+                icon.width: 16; icon.height: 16
+                enabled: false
+                background: null
                 opacity: .82
             }
 

@@ -2,9 +2,12 @@
 
 #include <QCryptographicHash>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QImage>
 #include <QImageReader>
+#include <QMap>
+#include <QSet>
 #include <QStandardPaths>
 
 using namespace OmaRecord;
@@ -19,12 +22,65 @@ QString OmarchyPaths::stateRoot()
 
 QStringList OmarchyPaths::themeBackgrounds()
 {
-    const QDir directory(QDir(stateRoot()).filePath(QStringLiteral("theme/backgrounds")));
     QStringList result;
-    for (const QFileInfo &file : directory.entryInfoList(
-             {QStringLiteral("*.png"), QStringLiteral("*.jpg"), QStringLiteral("*.jpeg"),
-              QStringLiteral("*.webp")}, QDir::Files, QDir::Name))
-        result << file.canonicalFilePath();
+    for (const QVariant &groupValue : themeBackgroundGroups()) {
+        const QVariantList files = groupValue.toMap().value(QStringLiteral("paths")).toList();
+        for (const QVariant &file : files) result << file.toString();
+    }
+    return result;
+}
+
+QString OmarchyPaths::currentThemeName()
+{
+    QFile file(QDir(stateRoot()).filePath(QStringLiteral("theme.name")));
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return {};
+    return QString::fromUtf8(file.readAll()).trimmed();
+}
+
+QVariantList OmarchyPaths::themeBackgroundGroups()
+{
+    const QStringList filters{QStringLiteral("*.png"), QStringLiteral("*.jpg"),
+                              QStringLiteral("*.jpeg"), QStringLiteral("*.webp")};
+    const QStringList roots{
+        QDir::home().filePath(QStringLiteral(".config/omarchy/themes")),
+        QDir::home().filePath(QStringLiteral(".local/share/omarchy/themes")),
+        QStringLiteral("/usr/share/omarchy/themes")
+    };
+    QMap<QString, QStringList> grouped;
+    QSet<QString> seen;
+    for (const QString &rootPath : roots) {
+        const QDir root(rootPath);
+        for (const QFileInfo &theme : root.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot,
+                                                        QDir::Name)) {
+            const QDir backgrounds(QDir(theme.absoluteFilePath()).filePath(QStringLiteral("backgrounds")));
+            for (const QFileInfo &file : backgrounds.entryInfoList(filters, QDir::Files, QDir::Name)) {
+                const QString path = file.canonicalFilePath();
+                if (path.isEmpty() || seen.contains(path)) continue;
+                seen.insert(path);
+                grouped[theme.fileName()] << path;
+            }
+        }
+    }
+
+    const QString currentName = currentThemeName();
+    const QString currentPath = currentBackground();
+    if (!currentPath.isEmpty() && !seen.contains(currentPath))
+        grouped[currentName.isEmpty() ? QStringLiteral("Current") : currentName].prepend(currentPath);
+
+    QStringList names = grouped.keys();
+    if (!currentName.isEmpty() && names.removeOne(currentName)) names.prepend(currentName);
+    QVariantList result;
+    for (const QString &name : names) {
+        QVariantList paths;
+        for (const QString &path : grouped.value(name)) paths << path;
+        QString label = name;
+        label.replace(QLatin1Char('-'), QLatin1Char(' '));
+        if (!label.isEmpty()) label[0] = label[0].toUpper();
+        result << QVariantMap{{QStringLiteral("name"), name},
+                              {QStringLiteral("label"), label},
+                              {QStringLiteral("current"), name == currentName},
+                              {QStringLiteral("paths"), paths}};
+    }
     return result;
 }
 
@@ -35,7 +91,12 @@ QString OmarchyPaths::currentBackground()
         const QString target = link.symLinkTarget();
         if (QFileInfo(target).isFile()) return QFileInfo(target).canonicalFilePath();
     }
-    const QStringList backgrounds = themeBackgrounds();
+    const QDir directory(QDir(stateRoot()).filePath(QStringLiteral("theme/backgrounds")));
+    QStringList backgrounds;
+    for (const QFileInfo &file : directory.entryInfoList(
+             {QStringLiteral("*.png"), QStringLiteral("*.jpg"), QStringLiteral("*.jpeg"),
+              QStringLiteral("*.webp")}, QDir::Files, QDir::Name))
+        backgrounds << file.canonicalFilePath();
     return backgrounds.isEmpty() ? QString() : backgrounds.first();
 }
 

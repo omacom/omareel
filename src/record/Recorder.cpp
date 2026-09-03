@@ -186,7 +186,8 @@ int Recorder::startDetached(const RecordOptions &options, QString *message)
                                            << QStringLiteral("--microphone-device")
                                            << options.microphoneDevice;
     if (options.webcam) arguments << QStringLiteral("--webcam")
-                                 << QStringLiteral("--webcam-device") << options.webcamDevice;
+                                 << QStringLiteral("--webcam-device") << options.webcamDevice
+                                 << QStringLiteral("--webcam-height") << QString::number(options.webcamHeight);
     if (options.noOpen) arguments << QStringLiteral("--no-open");
     if (options.noBar) arguments << QStringLiteral("--no-bar");
     QProcess daemon;
@@ -476,6 +477,8 @@ int Recorder::daemonMain(const QStringList &arguments)
     options.webcam = arguments.contains(QStringLiteral("--webcam"));
     options.webcamDevice = valueAfter(arguments, QStringLiteral("--webcam-device"));
     if (options.webcamDevice.isEmpty()) options.webcamDevice = QStringLiteral("/dev/video2");
+    options.webcamHeight = valueAfter(arguments, QStringLiteral("--webcam-height")).toInt();
+    if (options.webcamHeight != 720) options.webcamHeight = 1080;
     CaptureRegion region;
     const QString mode = valueAfter(arguments, QStringLiteral("--mode"));
     region.mode = mode == QLatin1String("fullscreen") ? CaptureMode::Fullscreen
@@ -552,13 +555,15 @@ int Recorder::daemonMain(const QStringList &arguments)
     qint64 fallbackFirstFrameUs = 0;
     bool cameraFallback = false;
     bool cameraAvailable = options.webcam;
+    const QString cameraSize = options.webcamHeight == 720
+        ? QStringLiteral("1280x720") : QStringLiteral("1920x1080");
     const auto startCameraFallback = [&] {
         QFile::remove(cameraVideo);
         QFile::remove(cameraVideo + QStringLiteral(".ts"));
         cameraFallback = true;
         const QStringList ffmpegArgs{QStringLiteral("-y"), QStringLiteral("-v"), QStringLiteral("error"),
             QStringLiteral("-f"), QStringLiteral("v4l2"), QStringLiteral("-framerate"), QStringLiteral("30"),
-            QStringLiteral("-video_size"), QStringLiteral("1280x720"), QStringLiteral("-i"), options.webcamDevice,
+            QStringLiteral("-video_size"), cameraSize, QStringLiteral("-i"), options.webcamDevice,
             QStringLiteral("-an"), QStringLiteral("-c:v"), QStringLiteral("libx264"),
             QStringLiteral("-preset"), QStringLiteral("veryfast"), QStringLiteral("-progress"),
             QStringLiteral("pipe:1"), QStringLiteral("-nostats"), cameraVideo};
@@ -567,9 +572,7 @@ int Recorder::daemonMain(const QStringList &arguments)
     };
     if (cameraAvailable) {
         const QStringList cameraGsr{QStringLiteral("__record-gsr"), QStringLiteral("-w"),
-            // Cap the webcam at 1080p: it only ever fills a corner bubble, and 4K webcams
-            // (this box has one) would double the encode load for no visible gain.
-            options.webcamDevice, QStringLiteral("-s"), QStringLiteral("1920x1080"),
+            options.webcamDevice, QStringLiteral("-s"), cameraSize,
             QStringLiteral("-f"), QStringLiteral("30"), QStringLiteral("-fm"),
             QStringLiteral("cfr"), QStringLiteral("-k"), QStringLiteral("auto"),
             QStringLiteral("-cursor"), QStringLiteral("no"),
@@ -737,6 +740,7 @@ int Recorder::daemonMain(const QStringList &arguments)
                 ? rate[0].toDouble() / rate[1].toDouble() : 30.0;
             capture.insert(QStringLiteral("camera"), QJsonObject{
                 {QStringLiteral("device"), options.webcamDevice},
+                {QStringLiteral("requestedHeight"), options.webcamHeight},
                 {QStringLiteral("width"), stream.value(QStringLiteral("width")).toInt()},
                 {QStringLiteral("height"), stream.value(QStringLiteral("height")).toInt()},
                 {QStringLiteral("fps"), fps},

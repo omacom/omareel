@@ -2,11 +2,14 @@
 
 #include <QString>
 #include <QStringList>
+#include <QVariantList>
 
 namespace OmaRecord::OmarchyPaths {
 
 QString stateRoot();
 QStringList themeBackgrounds();
+QVariantList themeBackgroundGroups();
+QString currentThemeName();
 QString currentBackground();
 QString recordingsDirectory();
 QString wallpaperThumbnailPath(const QString &wallpaperPath);

@@ -39,6 +39,7 @@ Launcher::Launcher(QObject *parent): QObject(parent)
     m_microphoneDevice = preferences.microphoneDevice;
     m_webcam = preferences.webcamEnabled;
     m_webcamDevice = preferences.webcamDevice;
+    m_webcamHeight = preferences.webcamHeight;
     refreshAudioDevices();
     refreshWebcamDevices();
     refresh();
@@ -55,6 +56,7 @@ void Launcher::saveRecordingPreferences()
     preferences.microphoneDevice = m_microphoneDevice;
     preferences.webcamEnabled = m_webcam;
     preferences.webcamDevice = m_webcamDevice;
+    preferences.webcamHeight = m_webcamHeight;
     QString error;
     if (!preferences.save(&error)) emit errorOccurred(error);
 }
@@ -95,6 +97,15 @@ void Launcher::setWebcamDevice(const QString &value)
 {
     if (value.isEmpty() || m_webcamDevice == value) return;
     m_webcamDevice = value;
+    saveRecordingPreferences();
+    emit recordingPreferencesChanged();
+}
+
+void Launcher::setWebcamHeight(int value)
+{
+    value = value == 720 ? 720 : 1080;
+    if (m_webcamHeight == value) return;
+    m_webcamHeight = value;
     saveRecordingPreferences();
     emit recordingPreferencesChanged();
 }
@@ -273,7 +284,8 @@ void Launcher::record(const QString &mode)
                                     << QStringLiteral("--microphone-device") << m_microphoneDevice;
     }
     if (m_webcam) arguments << QStringLiteral("--with-webcam")
-                            << QStringLiteral("--webcam-device") << m_webcamDevice;
+                            << QStringLiteral("--webcam-device") << m_webcamDevice
+                            << QStringLiteral("--webcam-height") << QString::number(m_webcamHeight);
     if (!QProcess::startDetached(QCoreApplication::applicationFilePath(), arguments)) {
         emit errorOccurred(QStringLiteral("Could not start recording"));
         return;

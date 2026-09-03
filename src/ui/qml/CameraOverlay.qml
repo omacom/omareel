@@ -5,7 +5,6 @@ import Omarecord
 Item {
     id: root
     required property var settings
-    required property var frameShadow
     required property real zoomScale
     required property int outputWidth
     required property int outputHeight
@@ -14,7 +13,9 @@ Item {
     property bool softwareRendering: false
     property real ref: outputHeight / 1080
     readonly property bool squareCrop: settings.shape === "round" || settings.crop === "square"
-    readonly property real aspect: squareCrop ? 1 : sourceWidth / Math.max(1, sourceHeight)
+    readonly property bool quarterTurn: settings.rotation === 90 || settings.rotation === 270
+    readonly property real sourceAspect: sourceWidth / Math.max(1, sourceHeight)
+    readonly property real aspect: squareCrop ? 1 : (quarterTurn ? 1 / sourceAspect : sourceAspect)
     readonly property real zoomProgress: Math.max(0, Math.min(1, (zoomScale - 1.05) / 0.1))
     readonly property real zoomMultiplier: 1 - (1 - settings.scaleDuringZoom) * zoomProgress
     width: outputHeight * settings.size * zoomMultiplier * aspect
@@ -36,7 +37,9 @@ Item {
 
     Rectangle {
         id: shadowShape
-        anchors.fill: parent
+        anchors.centerIn: parent
+        width: root.quarterTurn ? parent.height : parent.width
+        height: root.quarterTurn ? parent.width : parent.height
         radius: root.settings.shape === "round" ? width / 2
               : root.settings.shape === "rounded" ? root.settings.radius * root.ref : 0
         color: "#000000"
@@ -46,35 +49,50 @@ Item {
     MultiEffect {
         anchors.fill: shadowShape
         source: shadowShape
-        visible: root.settings.shadow && !root.softwareRendering
+        visible: root.settings.shadow.enabled && !root.softwareRendering
         shadowEnabled: true
         shadowColor: "#000000"
-        shadowOpacity: root.frameShadow.intensity
-        shadowBlur: Math.min(1, root.frameShadow.blur / 64)
-        shadowHorizontalOffset: Math.cos(root.frameShadow.angle * Math.PI / 180)
-                                * root.frameShadow.distance * root.ref
-        shadowVerticalOffset: Math.sin(root.frameShadow.angle * Math.PI / 180)
-                              * root.frameShadow.distance * root.ref
+        shadowOpacity: root.settings.shadow.intensity
+        shadowBlur: Math.min(1, root.settings.shadow.blur / 64)
+        shadowVerticalOffset: root.settings.shadow.distance * root.ref
         autoPaddingEnabled: true
     }
     Rectangle {
         anchors.fill: parent
-        x: Math.cos(root.frameShadow.angle * Math.PI / 180) * root.frameShadow.distance * root.ref
-        y: Math.sin(root.frameShadow.angle * Math.PI / 180) * root.frameShadow.distance * root.ref
+        y: root.settings.shadow.distance * root.ref
         radius: shadowShape.radius
         color: "black"
-        opacity: root.softwareRendering && root.settings.shadow ? root.frameShadow.intensity * .45 : 0
+        opacity: root.softwareRendering && root.settings.shadow.enabled
+            ? root.settings.shadow.intensity * .45 : 0
     }
     FrameSource {
         id: cameraVideo
+        z: 2
         objectName: "cameraFrameSource"
         anchors.fill: parent
         cropRect: root.sourceCrop()
         cornerRadiusRatio: root.settings.shape === "round" ? .5
             : root.settings.shape === "rounded"
-              ? root.settings.radius * root.ref / Math.max(1, Math.min(root.width, root.height)) : 0
-        scale: root.settings.mirror ? -1 : 1
-        transformOrigin: Item.Center
+              ? root.settings.radius * root.ref / Math.max(1, Math.min(width, height)) : 0
+        rotation: root.settings.rotation
+        transform: Scale {
+            objectName: "cameraFlipTransform"
+            origin.x: cameraVideo.width / 2
+            origin.y: cameraVideo.height / 2
+            xScale: root.settings.flipHorizontal ? -1 : 1
+        }
+    }
+    Rectangle {
+        z: 3
+        anchors.fill: parent
+        radius: shadowShape.radius
+        color: "transparent"
+        border.width: root.settings.inset.enabled ? root.settings.inset.width * root.ref : 0
+        border.color: Qt.rgba(Qt.color(root.settings.inset.color).r,
+                              Qt.color(root.settings.inset.color).g,
+                              Qt.color(root.settings.inset.color).b,
+                              root.settings.inset.alpha)
+        antialiasing: true
     }
     readonly property alias cameraFrameSource: cameraVideo
 }

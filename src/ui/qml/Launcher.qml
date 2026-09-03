@@ -20,8 +20,8 @@ ApplicationWindow {
 
     readonly property var recordModes: [
         { mode: "fullscreen", label: "Full screen", shortcut: "Ctrl+1", icon: "monitor.svg" },
-        { mode: "region", label: "Region", shortcut: "Ctrl+2", icon: "region.svg" },
-        { mode: "window", label: "Window", shortcut: "Ctrl+3", icon: "window.svg" }
+        { mode: "region", label: "Region", shortcut: "Ctrl+2", icon: "scan.svg" },
+        { mode: "window", label: "Window", shortcut: "Ctrl+3", icon: "app-window.svg" }
     ]
 
     ColumnLayout {
@@ -105,6 +105,17 @@ ApplicationWindow {
                         onModelChanged: currentIndex = indexOfValue(launcher.webcamDevice)
                         onActivated: launcher.webcamDevice = currentValue
                     }
+                    ComboBox {
+                        Layout.preferredWidth: 112
+                        Layout.preferredHeight: 36
+                        enabled: launcher.webcam
+                        model: [{text:"720p",value:720},{text:"1080p",value:1080}]
+                        textRole: "text"
+                        valueRole: "value"
+                        currentIndex: launcher.webcamHeight === 720 ? 0 : 1
+                        onActivated: launcher.webcamHeight = currentValue
+                        Accessible.name: "Webcam capture resolution"
+                    }
                     Item { Layout.fillWidth: true }
                 }
                 RowLayout {
@@ -131,11 +142,15 @@ ApplicationWindow {
                                     radius: 12
                                     color: Qt.alpha(theme.accent, .16)
                                 }
-                                Image {
+                                ToolButton {
                                     anchors.centerIn: parent
                                     width: 24; height: 24
-                                    sourceSize.width: 48; sourceSize.height: 48
-                                    source: "qrc:/omarecord/assets/icons/" + modelData.icon
+                                    icon.width: 24; icon.height: 24
+                                    icon.color: theme.accent
+                                    icon.source: "qrc:/omarecord/assets/icons/lucide/" + modelData.icon
+                                    enabled: false
+                                    opacity: 1
+                                    background: null
                                 }
                             }
                             ColumnLayout {
@@ -341,11 +356,14 @@ ApplicationWindow {
                 anchors.centerIn: parent
                 visible: launcher.recentBundles.length === 0
                 spacing: 6
-                Image {
+                ToolButton {
                     Layout.alignment: Qt.AlignHCenter
                     Layout.preferredWidth: 30; Layout.preferredHeight: 30
-                    sourceSize.width: 60; sourceSize.height: 60
-                    source: "qrc:/omarecord/assets/icons/film.svg"
+                    icon.width: 30; icon.height: 30
+                    icon.color: theme.foreground
+                    icon.source: "qrc:/omarecord/assets/icons/lucide/film.svg"
+                    enabled: false
+                    background: null
                     opacity: .45
                 }
                 Label { text: "No recordings yet"; font.pixelSize: 14; font.weight: Font.DemiBold; Layout.alignment: Qt.AlignHCenter }

@@ -137,6 +137,81 @@ private slots:
         QVERIFY(qAbs(moved.value(QStringLiteral("start")).toDouble() - (originalStart + 0.4)) < 0.06);
     }
 
+    void zoomTrackRubberBandSelectsAndDeletesTwo()
+    {
+        QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));
+        Editor editor(m_bundle);
+        QVERIFY(editor.isValid());
+        while (!editor.zooms().isEmpty())
+            QVERIFY(editor.removeZoom(editor.zooms().first().toMap().value(QStringLiteral("id")).toString()));
+        QVERIFY(!editor.addZoomAt(0.2, 1.0).isEmpty());
+        QVERIFY(!editor.addZoomAt(1.0, 1.0).isEmpty());
+        const int originalCount = editor.zooms().size();
+
+        Theme theme;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("editor"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import QtQuick
+            import QtQuick.Window
+            import Omarecord
+            Window {
+                width: 600; height: 80; visible: true
+                Item { id: focusItem; anchors.fill: parent }
+                ZoomTrack { anchors.fill: parent; pixelsPerSecond: 200; focusTarget: focusItem }
+            })", QUrl());
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        std::unique_ptr<QObject> object(component.create());
+        auto *window = qobject_cast<QQuickWindow *>(object.get());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        auto *selectionArea = window->findChild<QQuickItem *>(QStringLiteral("zoomSelectionArea"));
+        QTRY_VERIFY(selectionArea);
+        const QPoint start = selectionArea->mapToScene(QPointF(2, selectionArea->height() / 2)).toPoint();
+        const QPoint finish = selectionArea->mapToScene(QPointF(420, selectionArea->height() / 2)).toPoint();
+        QTest::mousePress(window, Qt::LeftButton, Qt::NoModifier, start);
+        QTest::mouseMove(window, finish, 20);
+        QTest::mouseRelease(window, Qt::LeftButton, Qt::NoModifier, finish);
+
+        QCOMPARE(editor.selectedZoomIds().size(), 2);
+        QCOMPARE(editor.removeSelectedZooms(), 2);
+        QCOMPARE(editor.zooms().size(), originalCount - 2);
+    }
+
+    void cameraOverlayAppliesRotationAndHorizontalFlip()
+    {
+        QQmlEngine engine;
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import QtQuick
+            import Omarecord
+            CameraOverlay {
+                settings: ({
+                    enabled: true, position: "bottom-right", size: .25,
+                    shape: "rounded", radius: 16, crop: "original",
+                    rotation: 90, flipHorizontal: true, scaleDuringZoom: .7,
+                    offset: {x: .02, y: .02},
+                    shadow: {enabled: false, intensity: .55, blur: 18, distance: 18},
+                    inset: {enabled: false, width: 2, color: "white", alpha: .7}
+                })
+                zoomScale: 1
+                outputWidth: 1280; outputHeight: 720
+                sourceWidth: 1920; sourceHeight: 1080
+            })", QUrl());
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        std::unique_ptr<QObject> overlay(component.create());
+        QVERIFY(overlay);
+        auto *source = overlay->findChild<QQuickItem *>(QStringLiteral("cameraFrameSource"));
+        QVERIFY(source);
+        QCOMPARE(source->rotation(), 90.0);
+        QVERIFY(source->width() < source->height());
+        QObject *flip = overlay->findChild<QObject *>(QStringLiteral("cameraFlipTransform"));
+        QVERIFY(flip);
+        QCOMPARE(flip->property("xScale").toDouble(), -1.0);
+    }
+
     void exportThroughEditorApi()
     {
         Editor editor(m_bundle);
