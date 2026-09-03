@@ -9,6 +9,7 @@
 #include <QCoreApplication>
 #include <QCameraDevice>
 #include <QDateTime>
+#include <QDesktopServices>
 #include <QDir>
 #include <QFileInfo>
 #include <QLocale>
@@ -147,6 +148,13 @@ QVariant Launcher::webcamCameraDevice() const
     return {};
 }
 
+bool Launcher::webcamPreviewAvailable() const
+{
+    if (!qEnvironmentVariableIsEmpty("OMARECORD_SCREENSHOT")
+        && qEnvironmentVariableIsEmpty("OMARECORD_SCREENSHOT_LIVE")) return false;
+    return webcamCameraDevice().isValid();
+}
+
 void Launcher::refreshAudioDevices()
 {
     QProcess process;
@@ -199,7 +207,6 @@ void Launcher::refreshWebcamDevices()
         selectedFound = selectedFound || device.toMap().value(QStringLiteral("value")) == m_webcamDevice;
     if (!selectedFound && !devices.isEmpty()) m_webcamDevice = devices.first().toMap().value(QStringLiteral("value")).toString();
     m_webcamDevices = devices;
-    if (m_webcamDevices.isEmpty()) m_webcam = false;
     emit webcamDevicesChanged();
 }
 
@@ -294,14 +301,46 @@ void Launcher::openBundle(const QString &pathValue)
     emit quitRequested();
 }
 
-void Launcher::record(const QString &mode)
+void Launcher::showBundleInFolder(const QString &pathValue)
+{
+    const QUrl url(pathValue);
+    const QString path = url.isLocalFile() ? url.toLocalFile() : pathValue;
+    const QFileInfo bundle(path);
+    if (!bundle.isDir()) {
+        emit errorOccurred(QStringLiteral("Recording bundle no longer exists"));
+        return;
+    }
+    if (!QDesktopServices::openUrl(QUrl::fromLocalFile(bundle.absolutePath())))
+        emit errorOccurred(QStringLiteral("Could not open the recordings folder"));
+}
+
+void Launcher::deleteBundle(const QString &pathValue)
+{
+    const QUrl url(pathValue);
+    const QFileInfo bundle(url.isLocalFile() ? url.toLocalFile() : pathValue);
+    const QDir recordingsRoot(OmarchyPaths::recordingsDirectory());
+    const QString rootPath = QFileInfo(recordingsRoot.absolutePath()).canonicalFilePath();
+    const QString bundlePath = bundle.canonicalFilePath();
+    if (!bundle.isDir() || bundle.suffix() != QLatin1String("omarecord")
+        || rootPath.isEmpty() || bundlePath.isEmpty()
+        || QFileInfo(bundlePath).absolutePath() != rootPath) {
+        emit errorOccurred(QStringLiteral("Could not delete that recording bundle"));
+        return;
+    }
+    if (!QDir(bundlePath).removeRecursively()) {
+        emit errorOccurred(QStringLiteral("Could not delete the recording bundle"));
+        return;
+    }
+    refresh();
+}
+
+void Launcher::record()
 {
     if (m_recording || m_startingRecording) return;
     m_startingRecording = true;
     emit recordingStarting();
-    QTimer::singleShot(150, this, [this, mode] {
-        const QString option = QStringLiteral("--") + mode;
-        QStringList arguments{QStringLiteral("record"), option};
+    QTimer::singleShot(150, this, [this] {
+        QStringList arguments{QStringLiteral("record")};
         if (!m_systemAudio && !m_microphone) arguments << QStringLiteral("--no-audio");
         else {
             if (m_systemAudio) arguments << QStringLiteral("--with-desktop-audio");

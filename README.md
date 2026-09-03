@@ -40,21 +40,22 @@ On Omarchy, the installer adds any missing runtime/build packages with `omarchy-
 
 ## Usage
 
-Run `omarecord` to open the launcher, or bind the recording toggle in Omarchy's Lua keybinding
-configuration:
+Run `omarecord` to open the launcher, or bind the smart recording toggle:
 
 ```lua
-o.bind("SUPER + ALT + R", "Record with omarecord", "omarecord record --region")
+o.bind("SUPER + ALT + R", "Record with omarecord", "omarecord record")
 ```
 
-For focused-monitor capture instead:
+The default command uses one gesture: drag to select an area, click a window to snap to it, or
+click the desktop to record the whole screen. Explicit modes remain available for dedicated
+keybinds. For focused-monitor capture:
 
 ```lua
 o.bind("SUPER + ALT + R", "Record with omarecord", "omarecord record --fullscreen")
 ```
 
 The same command stops an active recording, finalizes its bundle, and opens it in the editor.
-`omarecord record` with no mode flag defaults to region selection. Useful commands include:
+Useful commands include:
 
 ```sh
 omarecord record --region --with-desktop-audio

@@ -27,6 +27,15 @@ private slots:
                     QStringLiteral("screen\nregion\nDP-3|3840-by-2160\n"))
                     .isEmpty());
     }
+
+    void detectsBareClicksByArea()
+    {
+        QVERIFY(RegionPicker::isClickSelection(1, 19));
+        QVERIFY(RegionPicker::isClickSelection(3, 6));
+        QVERIFY(!RegionPicker::isClickSelection(4, 5));
+        QVERIFY(!RegionPicker::isClickSelection(100, 100));
+        QVERIFY(!RegionPicker::isClickSelection(0, 10));
+    }
 };
 
 QTEST_APPLESS_MAIN(RegionPickerTest)

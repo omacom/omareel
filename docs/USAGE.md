@@ -27,9 +27,10 @@ clicks, and zooms non-destructively.
 
 ### `record`
 
-`--region` opens Omarchy's smart region picker when available and otherwise uses `slurp`. This
-is the default when no capture mode is given. `--window` selects a window-aligned region and
-`--fullscreen` records the focused monitor. Only one mode may be supplied.
+With no capture mode, `omarecord record` uses one smart gesture: drag to select an area, click
+a window to snap to it, or click the desktop to record the whole screen. The explicit
+`--region`, `--window`, and `--fullscreen` modes remain available for dedicated keybinds. Only
+one mode may be supplied.
 
 - With no audio flag, capture uses the saved launcher preferences (system audio and microphone
   both default on).

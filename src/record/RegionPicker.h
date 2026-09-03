@@ -23,6 +23,7 @@ class RegionPicker
 {
 public:
     static QStringList parseCaptureOptions(const QString &output);
+    static bool isClickSelection(double width, double height);
     static bool pick(CaptureMode mode, CaptureRegion *region, QString *error = nullptr);
 };
 

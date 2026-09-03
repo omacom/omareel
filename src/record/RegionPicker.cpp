@@ -59,6 +59,11 @@ QStringList RegionPicker::parseCaptureOptions(const QString &output)
     return result;
 }
 
+bool RegionPicker::isClickSelection(double width, double height)
+{
+    return width > 0.0 && height > 0.0 && width * height < 20.0;
+}
+
 static QStringList captureOptions()
 {
     QProcess process;
@@ -144,6 +149,23 @@ static QString windowRectangles(QString *error)
     return lines;
 }
 
+static bool snapToWindow(const QString &rectangles, double pointX, double pointY,
+                         double *x, double *y, double *w, double *h)
+{
+    for (const QString &line : rectangles.split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
+        double rectX, rectY, rectWidth, rectHeight;
+        if (!parseRect(line, &rectX, &rectY, &rectWidth, &rectHeight)) continue;
+        if (pointX < rectX || pointX >= rectX + rectWidth
+            || pointY < rectY || pointY >= rectY + rectHeight) continue;
+        *x = rectX;
+        *y = rectY;
+        *w = rectWidth;
+        *h = rectHeight;
+        return true;
+    }
+    return false;
+}
+
 bool RegionPicker::pick(CaptureMode mode, CaptureRegion *region, QString *error)
 {
     const auto values = monitors(error);
@@ -167,16 +189,18 @@ bool RegionPicker::pick(CaptureMode mode, CaptureRegion *region, QString *error)
         arguments = {QStringLiteral("smart"), QStringLiteral("--match-monitor")};
     } else {
         program = QStringLiteral("slurp");
-        arguments = {QStringLiteral("-o"), QStringLiteral("-f"), QStringLiteral("%x,%y %wx%h")};
+        arguments = {QStringLiteral("-f"), QStringLiteral("%x,%y %wx%h")};
+        const QString rectangles = windowRectangles(error);
+        standardInput = rectangles.toUtf8();
         if (mode == CaptureMode::Window) {
             arguments.prepend(QStringLiteral("-r"));
-            standardInput = windowRectangles(error).toUtf8();
         }
     }
     QProcess picker;
     picker.start(program, arguments);
     if (!picker.waitForStarted(2000)) { if (error) *error = picker.errorString(); return false; }
-    if (!standardInput.isEmpty()) { picker.write(standardInput); picker.closeWriteChannel(); }
+    if (!standardInput.isEmpty()) picker.write(standardInput);
+    picker.closeWriteChannel();
     if (!picker.waitForFinished(-1) || picker.exitCode() != 0) {
         if (error) *error = QStringLiteral("Selection cancelled");
         return false;
@@ -201,8 +225,28 @@ bool RegionPicker::pick(CaptureMode mode, CaptureRegion *region, QString *error)
         return false;
     }
     const Monitor *monitor = monitorFor(values, x, y, w, h);
-    *region = CaptureRegion{monitor->name, x, y, w, h, monitor->scale,
-                            int(std::lround(w * monitor->scale)),
-                            int(std::lround(h * monitor->scale)), mode};
+    CaptureMode selectedMode = mode;
+    if (mode == CaptureMode::Region && RegionPicker::isClickSelection(w, h)) {
+        if (snapToWindow(QString::fromUtf8(standardInput), x, y, &x, &y, &w, &h)) {
+            selectedMode = CaptureMode::Window;
+        } else {
+            x = monitor->x;
+            y = monitor->y;
+            w = monitor->logicalWidth;
+            h = monitor->logicalHeight;
+            selectedMode = CaptureMode::Fullscreen;
+        }
+    }
+    if (selectedMode == CaptureMode::Fullscreen) {
+        const Monitor *selected = capturableMonitor(values, monitor, error);
+        *region = CaptureRegion{selected->name, selected->x, selected->y,
+                                selected->logicalWidth, selected->logicalHeight,
+                                selected->scale, selected->physicalWidth,
+                                selected->physicalHeight, selectedMode};
+    } else {
+        *region = CaptureRegion{monitor->name, x, y, w, h, monitor->scale,
+                                int(std::lround(w * monitor->scale)),
+                                int(std::lround(h * monitor->scale)), selectedMode};
+    }
     return true;
 }

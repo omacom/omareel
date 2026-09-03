@@ -24,6 +24,7 @@ class Launcher : public QObject
     Q_PROPERTY(int webcamRotation READ webcamRotation WRITE setWebcamRotation NOTIFY recordingPreferencesChanged)
     Q_PROPERTY(bool webcamFlipHorizontal READ webcamFlipHorizontal WRITE setWebcamFlipHorizontal NOTIFY recordingPreferencesChanged)
     Q_PROPERTY(QVariant webcamCameraDevice READ webcamCameraDevice NOTIFY recordingPreferencesChanged)
+    Q_PROPERTY(bool webcamPreviewAvailable READ webcamPreviewAvailable NOTIFY webcamDevicesChanged)
     Q_PROPERTY(QVariantList webcamDevices READ webcamDevices NOTIFY webcamDevicesChanged)
 public:
     explicit Launcher(QObject *parent = nullptr);
@@ -40,6 +41,7 @@ public:
     int webcamRotation() const { return m_webcamRotation; }
     bool webcamFlipHorizontal() const { return m_webcamFlipHorizontal; }
     QVariant webcamCameraDevice() const;
+    bool webcamPreviewAvailable() const;
     QVariantList webcamDevices() const { return m_webcamDevices; }
 
     void setSystemAudio(bool value);
@@ -53,7 +55,9 @@ public:
 
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void openBundle(const QString &path);
-    Q_INVOKABLE void record(const QString &mode);
+    Q_INVOKABLE void showBundleInFolder(const QString &path);
+    Q_INVOKABLE void deleteBundle(const QString &path);
+    Q_INVOKABLE void record();
     Q_INVOKABLE void stopRecording();
     Q_INVOKABLE void cancelRecording();
 
