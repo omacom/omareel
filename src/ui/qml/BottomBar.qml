@@ -10,14 +10,22 @@ Rectangle {
     property real timelineScale: 1
     property bool cropMode: false
     readonly property var aspects: [
-        {label:"Auto", caption:"Source proportions", value:"auto"},
-        {label:"Wide 16:9", caption:"Landscape video and social", value:"16:9"},
-        {label:"Vertical 9:16", caption:"Stories and short video", value:"9:16"},
-        {label:"Square 1:1", caption:"Square feed posts", value:"1:1"},
-        {label:"Portrait 4:5", caption:"Portrait feed posts", value:"4:5"},
-        {label:"Classic 4:3", caption:"Classic landscape", value:"4:3"},
-        {label:"Tall 3:4", caption:"Classic portrait", value:"3:4"}
+        {text:"Auto — source aspect", value:"auto"},
+        {text:"Wide 16:9 — YouTube, X, LinkedIn", value:"16:9"},
+        {text:"Vertical 9:16 — Stories, Reels, TikTok, Shorts", value:"9:16"},
+        {text:"Square 1:1 — Feed posts", value:"1:1"},
+        {text:"Portrait 4:5 — Instagram feed", value:"4:5"},
+        {text:"Classic 4:3", value:"4:3"},
+        {text:"Tall 3:4", value:"3:4"}
     ]
+    function aspectTitle(text) {
+        const separator = text.indexOf(" — ")
+        return separator < 0 ? text : text.substring(0, separator)
+    }
+    function aspectCaption(text) {
+        const separator = text.indexOf(" — ")
+        return separator < 0 ? "" : text.substring(separator + 3)
+    }
     function aspectIndex(value) {
         for (let i = 0; i < aspects.length; ++i)
             if (aspects[i].value === value) return i
@@ -42,11 +50,11 @@ Rectangle {
                     Layout.preferredWidth: 220
                     Layout.preferredHeight: 32
                     model: root.aspects
-                    textRole: "label"
+                    textRole: "text"
                     font.pixelSize: 12
                     focusPolicy: Qt.TabFocus
                     currentIndex: root.aspectIndex(editor.project.aspect)
-                    displayText: root.aspects[currentIndex].label
+                    displayText: root.aspectTitle(root.aspects[currentIndex].text)
                     onActivated: editor.setProjectValue("aspect", model[currentIndex].value)
                     delegate: ItemDelegate {
                         required property var modelData
@@ -55,8 +63,13 @@ Rectangle {
                         contentItem: Column {
                             leftPadding: 8
                             anchors.verticalCenter: parent.verticalCenter
-                            Label { text: modelData.label; color: theme.foreground; font.pixelSize: 12; font.weight: Font.DemiBold }
-                            Label { text: modelData.caption; color: Qt.alpha(theme.foreground, .52); font.pixelSize: 10 }
+                            Label { text: root.aspectTitle(modelData.text); color: theme.foreground; font.pixelSize: 12; font.weight: Font.DemiBold }
+                            Label {
+                                visible: text.length > 0
+                                text: root.aspectCaption(modelData.text)
+                                color: Qt.alpha(theme.foreground, .52)
+                                font.pixelSize: 10
+                            }
                         }
                         background: Rectangle {
                             radius: 6

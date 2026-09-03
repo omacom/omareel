@@ -6,6 +6,7 @@ import QtQuick.Layouts
 ColumnLayout {
     id: root
     objectName: "backgroundPanel"
+    clip: true
     spacing: 13
     property bool showAllGradients: false
     readonly property var background: editor.project.background
@@ -59,26 +60,31 @@ ColumnLayout {
 
     PanelHeading { text: "Gradients" }
     GridLayout {
+        id: gradientGrid
         Layout.fillWidth: true
         columns: 5
         columnSpacing: 9
         rowSpacing: 9
+        readonly property real cellWidth: Math.max(1,
+            (root.width - columnSpacing * (columns - 1)) / columns)
         Repeater {
             model: root.visibleGradients()
             delegate: Item {
                 required property var modelData
-                Layout.preferredWidth: 44
+                Layout.preferredWidth: gradientGrid.cellWidth
+                Layout.minimumWidth: gradientGrid.cellWidth
+                Layout.maximumWidth: gradientGrid.cellWidth
                 Layout.preferredHeight: 44
                 readonly property bool selected: root.background.type === "gradient"
                     && root.gradientMatches(modelData)
                 Rectangle {
-                    anchors.centerIn: parent
-                    width: parent.width + 4; height: parent.height + 4
+                    anchors.fill: parent
                     radius: 11; color: selected ? Qt.alpha(theme.accent, .12) : "transparent"
                     border.width: selected ? 2 : 0; border.color: theme.accent
                 }
                 Rectangle {
                     anchors.fill: parent
+                    anchors.margins: 3
                     radius: 9
                     gradient: Gradient {
                         GradientStop { position: 0; color: modelData[0] }
@@ -122,6 +128,8 @@ ColumnLayout {
             required property var modelData
             required property int index
             Layout.fillWidth: true
+            Layout.minimumWidth: 0
+            Layout.maximumWidth: root.width
             spacing: 5
             Label {
                 text: modelData.label + (modelData.current ? "  ·  Current" : "")
@@ -130,12 +138,22 @@ ColumnLayout {
                 font.weight: modelData.current ? Font.DemiBold : Font.Normal
             }
             ListView {
+                id: wallpaperList
                 Layout.fillWidth: true
-                Layout.preferredHeight: 58
+                Layout.minimumWidth: 0
+                Layout.maximumWidth: themeRow.width
+                Layout.preferredHeight: 68
                 orientation: ListView.Horizontal
                 spacing: 8
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.horizontal: ScrollBar {
+                    policy: wallpaperList.contentWidth > wallpaperList.width
+                        ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+                    active: true
+                    interactive: true
+                    height: 8
+                }
                 model: themeRow.modelData.wallpapers.length + (themeRow.index === 0 ? 1 : 0)
                 delegate: Item {
                     required property int index
