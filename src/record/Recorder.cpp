@@ -559,41 +559,8 @@ int Recorder::daemonMain(const QStringList &arguments)
     QFile debugLog(QStringLiteral("/tmp/omarecord.log"));
     if (qEnvironmentVariable("OMARECORD_DEBUG") == QLatin1String("1"))
         (void)debugLog.open(QIODevice::WriteOnly | QIODevice::Append);
-    QStringList recorderArguments{QStringLiteral("__record-gsr")};
-    recorderArguments << gsr;
-    recorder.start(QCoreApplication::applicationFilePath(), recorderArguments);
-
-    QProcess cameraRecorder;
-    cameraRecorder.setProcessChannelMode(QProcess::MergedChannels);
-    QByteArray cameraOutput;
-    bool cameraFallback = false;
     bool cameraAvailable = false;
     QString cameraBackend;
-    const QString cameraSize = options.webcamHeight == 720
-        ? QStringLiteral("1280x720") : QStringLiteral("1920x1080");
-    const auto startCameraFallback = [&] {
-        QFile::remove(cameraVideo);
-        QFile::remove(cameraVideo + QStringLiteral(".ts"));
-        cameraFallback = true;
-        const QStringList fallbackArguments{QStringLiteral("__record-gsr"), QStringLiteral("-w"),
-            options.webcamDevice, QStringLiteral("-s"), cameraSize,
-            QStringLiteral("-f"), QStringLiteral("30"), QStringLiteral("-fm"),
-            QStringLiteral("cfr"), QStringLiteral("-k"), QStringLiteral("auto"),
-            QStringLiteral("-cursor"), QStringLiteral("no"),
-            QStringLiteral("-write-first-frame-ts"), QStringLiteral("yes"),
-            QStringLiteral("-o"), cameraVideo};
-        cameraRecorder.start(QCoreApplication::applicationFilePath(), fallbackArguments);
-        cameraAvailable = cameraRecorder.waitForStarted(3000);
-        cameraBackend = cameraAvailable ? QStringLiteral("v4l2-fallback") : QString();
-    };
-    if (!recorder.waitForStarted(5000)) {
-        drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
-        QString reason = lastNonEmptyLine(recorderOutput);
-        if (reason.isEmpty()) reason = recorder.errorString();
-        return failRecorderStartup(reason, bundle, video, &cursorSampler, &evdevListener);
-    }
-
-    const qint64 recorderStartedUs = CursorSampler::monotonicUs();
     QJsonObject state{{"pid", daemonPid}, {"bundle", bundle}, {"started_us", startedUs},
                       {"monitor", region.monitorName}, {"no_open", options.noOpen},
                       {"webcam", options.webcam},
@@ -603,11 +570,9 @@ int Recorder::daemonMain(const QStringList &arguments)
                       {"camera_flip_horizontal", options.webcamFlipHorizontal},
                       {"camera_status", options.webcam ? QStringLiteral("starting")
                                                        : QStringLiteral("disabled")},
+                      {"camera_record", false},
                       {"camera_stop", false}};
     if (!writeJson(stateFilePath(), state, &error)) {
-        ::kill(pid_t(recorder.processId()), SIGINT);
-        recorder.waitForFinished(5000);
-        drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
         const QString reason = error.isEmpty()
             ? QStringLiteral("Could not write recorder state")
             : QStringLiteral("Could not write recorder state: %1").arg(error);
@@ -621,7 +586,7 @@ int Recorder::daemonMain(const QStringList &arguments)
     if (options.webcam) {
         QElapsedTimer cameraTimer;
         cameraTimer.start();
-        while (cameraTimer.elapsed() < 6000) {
+        while (cameraTimer.elapsed() < 2500) {
             const QString status = readState().value(QStringLiteral("camera_status")).toString();
             if (status == QLatin1String("ready")) {
                 cameraAvailable = true;
@@ -640,14 +605,42 @@ int Recorder::daemonMain(const QStringList &arguments)
                 if (status == QLatin1String("failed") || status == QLatin1String("stopped")) break;
                 QThread::msleep(20);
             }
-            startCameraFallback();
             updateRecordingState(QJsonObject{
-                {QStringLiteral("camera_status"), cameraAvailable
-                    ? QStringLiteral("fallback") : QStringLiteral("unavailable")},
-                {QStringLiteral("camera_backend"), cameraBackend},
-                {QStringLiteral("camera_stop"), false}
+                {QStringLiteral("camera_status"), QStringLiteral("unavailable")},
+                {QStringLiteral("webcam"), false}
             });
+            QFile::remove(cameraVideo);
+            QFile::remove(cameraVideo + QStringLiteral(".ts"));
+            runOptionalDetached(QStringLiteral("omarchy-notification-send"),
+                                {QStringLiteral("-u"), QStringLiteral("critical"),
+                                 QStringLiteral("Camera unavailable"),
+                                 QStringLiteral("Recording will continue without the camera")});
         }
+    }
+
+    QStringList recorderArguments{QStringLiteral("__record-gsr")};
+    recorderArguments << gsr;
+    recorder.start(QCoreApplication::applicationFilePath(), recorderArguments);
+    if (!recorder.waitForStarted(5000)) {
+        if (cameraAvailable) updateRecordingState(QJsonObject{{QStringLiteral("camera_stop"), true}});
+        drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
+        QString reason = lastNonEmptyLine(recorderOutput);
+        if (reason.isEmpty()) reason = recorder.errorString();
+        return failRecorderStartup(reason, bundle, video, &cursorSampler, &evdevListener);
+    }
+    const qint64 recorderStartedUs = CursorSampler::monotonicUs();
+    updateRecordingState(QJsonObject{{QStringLiteral("started_us"), recorderStartedUs}});
+    if (cameraAvailable) {
+        QElapsedTimer firstFrameTimer;
+        firstFrameTimer.start();
+        while (firstFrameTimer.elapsed() < 2500 && recorder.state() != QProcess::NotRunning
+               && !stopRequested) {
+            if (firstFrameTimestamp(video + QStringLiteral(".ts")) > 0) break;
+            recorder.waitForFinished(0);
+            drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
+            QThread::msleep(10);
+        }
+        updateRecordingState(QJsonObject{{QStringLiteral("camera_record"), true}});
     }
     runOptionalDetached(QStringLiteral("omarchy-notification-send"),
                         {QStringLiteral("-t"), QStringLiteral("3000"),
@@ -659,49 +652,27 @@ int Recorder::daemonMain(const QStringList &arguments)
            && CursorSampler::monotonicUs() - recorderStartedUs < 2000000) {
         recorder.waitForFinished(0);
         drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
-        if (cameraAvailable && cameraFallback) {
-            cameraRecorder.waitForFinished(0);
-            drainRecorderOutput(&cameraRecorder, &cameraOutput, &debugLog);
-            if (cameraRecorder.state() == QProcess::NotRunning) {
-                cameraAvailable = false;
-            }
-        }
         QThread::msleep(40);
     }
     drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
     while (!stopRequested && recorder.state() != QProcess::NotRunning) {
         recorder.waitForFinished(0);
         drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
-        if (cameraAvailable && cameraFallback) {
-            cameraRecorder.waitForFinished(0);
-            drainRecorderOutput(&cameraRecorder, &cameraOutput, &debugLog);
-            if (cameraRecorder.state() == QProcess::NotRunning) cameraAvailable = false;
-        }
         QThread::msleep(40);
     }
     const bool unexpectedExit = !stopRequested && recorder.state() == QProcess::NotRunning;
     bool forcedStop = false;
-    if (cameraAvailable && !cameraFallback)
+    if (cameraAvailable)
         updateRecordingState(QJsonObject{{QStringLiteral("camera_stop"), true}});
     if (recorder.state() != QProcess::NotRunning) {
         ::kill(pid_t(recorder.processId()), SIGINT);
-        if (cameraFallback && cameraRecorder.state() != QProcess::NotRunning)
-            ::kill(pid_t(cameraRecorder.processId()), SIGINT);
         if (!recorder.waitForFinished(5000)) {
             forcedStop = true;
             recorder.kill();
             recorder.waitForFinished(1000);
         }
     }
-    if (cameraFallback && cameraRecorder.state() != QProcess::NotRunning) {
-        ::kill(pid_t(cameraRecorder.processId()), SIGINT);
-        if (!cameraRecorder.waitForFinished(5000)) {
-            cameraRecorder.kill();
-            cameraRecorder.waitForFinished(1000);
-        }
-    }
-    if (cameraFallback) drainRecorderOutput(&cameraRecorder, &cameraOutput, &debugLog);
-    if (cameraAvailable && !cameraFallback) {
+    if (cameraAvailable) {
         QElapsedTimer cameraStopTimer;
         cameraStopTimer.start();
         while (cameraStopTimer.elapsed() < 5000) {

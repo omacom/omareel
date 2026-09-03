@@ -29,6 +29,7 @@ class CompositionState : public QObject
     Q_PROPERTY(int sourceWidth MEMBER sourceWidth NOTIFY changed)
     Q_PROPERTY(int sourceHeight MEMBER sourceHeight NOTIFY changed)
     Q_PROPERTY(bool cameraAvailable MEMBER cameraAvailable NOTIFY changed)
+    Q_PROPERTY(bool cameraVisible MEMBER cameraVisible NOTIFY changed)
     Q_PROPERTY(int cameraSourceWidth MEMBER cameraSourceWidth NOTIFY changed)
     Q_PROPERTY(int cameraSourceHeight MEMBER cameraSourceHeight NOTIFY changed)
     Q_PROPERTY(double time MEMBER time NOTIFY changed)
@@ -36,6 +37,7 @@ class CompositionState : public QObject
     Q_PROPERTY(QVariantMap zoom MEMBER zoom NOTIFY changed)
     Q_PROPERTY(QVariantMap cursor MEMBER cursor NOTIFY changed)
     Q_PROPERTY(QVariantList ripples MEMBER ripples NOTIFY changed)
+    Q_PROPERTY(QVariantList keystrokePills MEMBER keystrokePills NOTIFY changed)
     Q_PROPERTY(bool softwareRendering MEMBER softwareRendering CONSTANT)
 public:
     using QObject::QObject;
@@ -44,6 +46,7 @@ public:
     int sourceWidth = 0;
     int sourceHeight = 0;
     bool cameraAvailable = false;
+    bool cameraVisible = true;
     int cameraSourceWidth = 0;
     int cameraSourceHeight = 0;
     double time = 0.0;
@@ -51,6 +54,7 @@ public:
     QVariantMap zoom;
     QVariantMap cursor;
     QVariantList ripples;
+    QVariantList keystrokePills;
     bool softwareRendering = false;
     void notifyChanged() { emit changed(); }
 signals:

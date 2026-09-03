@@ -58,7 +58,7 @@ RecordingBar::RecordingBar(bool hidden, QObject *parent): QObject(parent),
         });
     }
     connect(&m_timer, &QTimer::timeout, this, &RecordingBar::poll);
-    m_timer.start(500);
+    m_timer.start(50);
     poll();
 }
 
@@ -72,6 +72,11 @@ void RecordingBar::poll()
         return;
     }
     const QJsonObject state = Recorder::recordingState();
+    if (m_cameraCapture && state.value(QStringLiteral("camera_record")).toBool(false)
+        && !m_cameraRecordRequested) {
+        m_cameraRecordRequested = true;
+        m_cameraCapture->beginRecording();
+    }
     if (m_cameraCapture && state.value(QStringLiteral("camera_stop")).toBool(false)
         && !m_cameraStopRequested) {
         m_cameraStopRequested = true;

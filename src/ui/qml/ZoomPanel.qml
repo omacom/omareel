@@ -104,5 +104,6 @@ ColumnLayout {
         color: Qt.alpha(theme.foreground, .58)
         font.pixelSize: 11
     }
+    PanelSlider { Layout.fillWidth: true; label: "Motion blur"; path: "zoomStyle.motionBlur"; from: 0; to: 1; value: editor.project.zoomStyle.motionBlur; stepSize: .05; decimals: 2 }
     Button { Layout.fillWidth: true; text: "Regenerate zooms"; onClicked: editor.regenerateZooms() }
 }

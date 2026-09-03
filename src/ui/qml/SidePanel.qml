@@ -25,7 +25,7 @@ Rectangle {
         {name:"Background", icon:"palette.svg"}, {name:"Shape", icon:"square.svg"},
         {name:"Cursor", icon:"mouse-pointer-2.svg"}, {name:"Zoom", icon:"zoom-in.svg"},
         {name:"Clip", icon:"film.svg"}, {name:"Camera", icon:"camera.svg"},
-        {name:"Audio", icon:"volume-2.svg"}
+        {name:"Keystrokes", icon:"keyboard.svg"}, {name:"Audio", icon:"volume-2.svg"}
     ]
     RowLayout {
         anchors.fill: parent
@@ -131,7 +131,8 @@ Rectangle {
                         : root.section === 2 ? cursorPanel
                         : root.section === 3 ? zoomPanel
                         : root.section === 4 ? clipPanel
-                        : root.section === 5 ? cameraPanel : audioPanel
+                        : root.section === 5 ? cameraPanel
+                        : root.section === 6 ? keystrokesPanel : audioPanel
                 }
             }
         }
@@ -142,6 +143,7 @@ Rectangle {
     Component { id: zoomPanel; ZoomPanel { } }
     Component { id: clipPanel; ClipPanel { } }
     Component { id: cameraPanel; CameraPanel { } }
+    Component { id: keystrokesPanel; KeystrokesPanel { } }
     Component { id: audioPanel; AudioPanel { } }
     Connections {
         target: editor

@@ -4,6 +4,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QSaveFile>
+#include <algorithm>
 
 using namespace OmaRecord;
 
@@ -85,6 +86,7 @@ Project Project::fromJson(const QJsonObject &root)
     p.zoomStyle.spring = springFromJson(zs.value("spring").toObject(), p.zoomStyle.spring);
     p.zoomStyle.snapToEdgesRatio = zs.value("snapToEdgesRatio").toDouble(0.25);
     p.zoomStyle.instantAnimation = zs.value("instantAnimation").toBool(false);
+    p.zoomStyle.motionBlur = std::clamp(zs.value("motionBlur").toDouble(0.0), 0.0, 1.0);
 
     const auto bg = root.value("background").toObject();
     p.background.type = bg.value("type").toString(p.background.type);
@@ -127,8 +129,25 @@ Project Project::fromJson(const QJsonObject &root)
     p.cursor.clickShrink = c.value("clickShrink").toDouble(0.8);
     p.cursor.rotateOnXMovementRatio = c.value("rotateOnXMovementRatio").toDouble(0.5);
     p.cursor.hideWhenIdleMs = c.value("hideWhenIdleMs").isNull() ? -1 : c.value("hideWhenIdleMs").toInt(-1);
-    p.cursor.style = c.value("style").toString("macos");
+    p.cursor.style = c.value("style").toString("light-arrow");
+    const QStringList cursorStyles{QStringLiteral("light-arrow"), QStringLiteral("dark-arrow"),
+                                   QStringLiteral("dot"), QStringLiteral("hand")};
+    if (!cursorStyles.contains(p.cursor.style)) p.cursor.style = QStringLiteral("light-arrow");
     p.cursor.ringColor = parseColor(c.value("ringColor"), p.cursor.ringColor);
+    p.cursor.clickSound = c.value("clickSound").toString("none");
+    if (p.cursor.clickSound != QLatin1String("soft")) p.cursor.clickSound = QStringLiteral("none");
+
+    const auto keystrokes = root.value("keystrokes").toObject();
+    p.keystrokes.enabled = keystrokes.value("enabled").toBool(false);
+    p.keystrokes.position = keystrokes.value("position").toString("bottom-center");
+    const QStringList keystrokePositions{QStringLiteral("top-left"), QStringLiteral("top-center"),
+        QStringLiteral("top-right"), QStringLiteral("bottom-left"),
+        QStringLiteral("bottom-center"), QStringLiteral("bottom-right")};
+    if (!keystrokePositions.contains(p.keystrokes.position))
+        p.keystrokes.position = QStringLiteral("bottom-center");
+    p.keystrokes.size = std::clamp(keystrokes.value("size").toDouble(1.0), 0.5, 2.0);
+    p.keystrokes.showOnlyShortcuts = keystrokes.value("showOnlyShortcuts").toBool(true);
+    p.keystrokes.holdMs = std::clamp(keystrokes.value("holdMs").toInt(900), 100, 5000);
 
     const auto a = root.value("audio").toObject();
     p.audio.desktop = a.value("desktop").toBool(true);
@@ -212,13 +231,17 @@ QJsonObject Project::toJson() const
         {"spring", springToJson(cursor.spring)}, {"clickEffect", cursor.clickEffect}, {"clickShrink", cursor.clickShrink},
         {"rotateOnXMovementRatio", cursor.rotateOnXMovementRatio},
         {"hideWhenIdleMs", cursor.hideWhenIdleMs < 0 ? QJsonValue(QJsonValue::Null) : QJsonValue(cursor.hideWhenIdleMs)},
-        {"style", cursor.style}, {"ringColor", cursor.ringColor.name(QColor::HexRgb)}};
+        {"style", cursor.style}, {"ringColor", cursor.ringColor.name(QColor::HexRgb)},
+        {"clickSound", cursor.clickSound}};
     return {{"version", version}, {"name", name},
         {"aspect", aspect == QLatin1String("auto") ? QJsonValue(QJsonValue::Null) : QJsonValue(aspect)},
         {"crop", QJsonObject{{"x", crop.x()}, {"y", crop.y()}, {"w", crop.width()}, {"h", crop.height()}}},
         {"clips", clipArray}, {"zooms", zoomArray},
-        {"zoomStyle", QJsonObject{{"spring", springToJson(zoomStyle.spring)}, {"snapToEdgesRatio", zoomStyle.snapToEdgesRatio}, {"instantAnimation", zoomStyle.instantAnimation}}},
+        {"zoomStyle", QJsonObject{{"spring", springToJson(zoomStyle.spring)}, {"snapToEdgesRatio", zoomStyle.snapToEdgesRatio}, {"instantAnimation", zoomStyle.instantAnimation}, {"motionBlur", zoomStyle.motionBlur}}},
         {"background", bg}, {"frame", frameJson}, {"cursor", cursorJson},
+        {"keystrokes", QJsonObject{{"enabled", keystrokes.enabled},
+            {"position", keystrokes.position}, {"size", keystrokes.size},
+            {"showOnlyShortcuts", keystrokes.showOnlyShortcuts}, {"holdMs", keystrokes.holdMs}}},
         {"audio", QJsonObject{{"desktop", audio.desktop}, {"mic", audio.mic}, {"volume", audio.volume}}},
         {"camera", QJsonObject{{"enabled", camera.enabled}, {"position", camera.position},
             {"size", camera.size}, {"shape", camera.shape}, {"radius", camera.radius},

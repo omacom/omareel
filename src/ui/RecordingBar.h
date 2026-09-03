@@ -53,6 +53,7 @@ private:
     QString m_cameraError;
     std::unique_ptr<CameraCapture> m_cameraCapture;
     bool m_cameraStopRequested = false;
+    bool m_cameraRecordRequested = false;
     bool m_cameraFailed = false;
     QTimer m_timer;
 };

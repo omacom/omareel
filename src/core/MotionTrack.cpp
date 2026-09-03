@@ -114,6 +114,7 @@ MotionTrack MotionTrack::build(double duration, int sourceWidth, int sourceHeigh
             integrate(cursorRotation, rotationTarget, project.cursor.spring, 1.0 / SampleRate);
         }
         track.m_samples << MotionSample{zoomScale.x, zoomX.x, zoomY.x,
+                                        std::hypot(zoomX.velocity, zoomY.velocity),
                                         cursorX.x, cursorY.x, cursorScale.x,
                                         cursorOpacity.x, cursorRotation.x};
     }
@@ -137,6 +138,7 @@ MotionSample MotionTrack::sample(double time) const
     return {mix(m_samples[a].zoomScale, m_samples[b].zoomScale),
             mix(m_samples[a].zoomCx, m_samples[b].zoomCx),
             mix(m_samples[a].zoomCy, m_samples[b].zoomCy),
+            mix(m_samples[a].zoomCenterVelocity, m_samples[b].zoomCenterVelocity),
             mix(m_samples[a].cursorX, m_samples[b].cursorX),
             mix(m_samples[a].cursorY, m_samples[b].cursorY),
             mix(m_samples[a].cursorScale, m_samples[b].cursorScale),

@@ -18,6 +18,7 @@ add_library(omarecord_core STATIC
     src/core/InputLog.cpp
     src/core/CursorPath.cpp
     src/core/MotionTrack.cpp
+    src/core/KeystrokeTrack.cpp
     src/core/ZoomTimeline.cpp
     src/core/ClipTimeline.cpp
     src/core/CameraTimeline.cpp
@@ -44,6 +45,7 @@ set_source_files_properties(
     src/ui/qml/RoundedFrame.qml
     src/ui/qml/CursorOverlay.qml
     src/ui/qml/CameraOverlay.qml
+    src/ui/qml/KeystrokeOverlay.qml
     src/ui/qml/Main.qml
     src/ui/qml/TopBar.qml
     src/ui/qml/PreviewPane.qml
@@ -61,6 +63,7 @@ set_source_files_properties(
     src/ui/qml/AudioPanel.qml
     src/ui/qml/ClipPanel.qml
     src/ui/qml/CameraPanel.qml
+    src/ui/qml/KeystrokesPanel.qml
     src/ui/qml/ExportDialog.qml
     src/ui/qml/Timeline.qml
     src/ui/qml/ClipTrack.qml
@@ -74,7 +77,7 @@ set_source_files_properties(src/ui/qml/Background.qml PROPERTIES QT_RESOURCE_ALI
 set_source_files_properties(src/ui/qml/RoundedFrame.qml PROPERTIES QT_RESOURCE_ALIAS "RoundedFrame.qml")
 set_source_files_properties(src/ui/qml/CursorOverlay.qml PROPERTIES QT_RESOURCE_ALIAS "CursorOverlay.qml")
 set_source_files_properties(src/ui/qml/CameraOverlay.qml PROPERTIES QT_RESOURCE_ALIAS "CameraOverlay.qml")
-foreach(qml_name IN ITEMS Main TopBar PreviewPane BottomBar SidePanel PanelSlider PanelLabel PanelHeading PanelValue IconToolButton BackgroundPanel ShapePanel CursorPanel ZoomPanel AudioPanel ClipPanel CameraPanel ExportDialog Timeline ClipTrack ZoomTrack Launcher RecordingBar)
+foreach(qml_name IN ITEMS Main TopBar PreviewPane BottomBar SidePanel PanelSlider PanelLabel PanelHeading PanelValue IconToolButton BackgroundPanel ShapePanel CursorPanel ZoomPanel AudioPanel ClipPanel CameraPanel KeystrokesPanel ExportDialog Timeline ClipTrack ZoomTrack Launcher RecordingBar)
     set_source_files_properties(src/ui/qml/${qml_name}.qml PROPERTIES QT_RESOURCE_ALIAS "${qml_name}.qml")
 endforeach()
 qt_add_qml_module(omarecord_render
@@ -96,6 +99,7 @@ qt_add_qml_module(omarecord_render
         src/ui/qml/RoundedFrame.qml
         src/ui/qml/CursorOverlay.qml
         src/ui/qml/CameraOverlay.qml
+        src/ui/qml/KeystrokeOverlay.qml
         src/ui/qml/Main.qml
         src/ui/qml/TopBar.qml
         src/ui/qml/PreviewPane.qml
@@ -113,6 +117,7 @@ qt_add_qml_module(omarecord_render
         src/ui/qml/AudioPanel.qml
         src/ui/qml/ClipPanel.qml
         src/ui/qml/CameraPanel.qml
+        src/ui/qml/KeystrokesPanel.qml
         src/ui/qml/ExportDialog.qml
         src/ui/qml/Timeline.qml
         src/ui/qml/ClipTrack.qml
@@ -123,7 +128,7 @@ qt_add_qml_module(omarecord_render
 qt_add_resources(omarecord_render "omarecord_assets"
     PREFIX "/omarecord"
     FILES
-        assets/cursors/arrow.svg assets/cursors/pointer.svg
+        assets/cursors/arrow.svg assets/cursors/arrow-dark.svg assets/cursors/pointer.svg
         assets/gradients.json
         assets/icons/lucide/undo-2.svg assets/icons/lucide/redo-2.svg
         assets/icons/lucide/palette.svg assets/icons/lucide/square.svg
@@ -140,6 +145,8 @@ qt_add_resources(omarecord_render "omarecord_assets"
         assets/icons/lucide/rotate-cw.svg assets/icons/lucide/flip-horizontal-2.svg
         assets/icons/lucide/circle.svg assets/icons/lucide/square-dashed.svg
         assets/icons/lucide/layers.svg
+        assets/icons/lucide/keyboard.svg
+        assets/sounds/click.wav
 )
 target_include_directories(omarecord_render PUBLIC src src/render)
 target_link_libraries(omarecord_render PUBLIC omarecord_core Qt6::Concurrent Qt6::Quick Qt6::QuickControls2 Qt6::Multimedia Qt6::OpenGL)
@@ -150,7 +157,7 @@ target_compile_definitions(omarecord PRIVATE OMARECORD_VERSION="${PROJECT_VERSIO
 
 include(CTest)
 if(BUILD_TESTING)
-    foreach(test_name IN ITEMS zoomtimeline cursorpath cliptimeline cameratimeline project inputlog regionpicker omarchypaths recorder)
+    foreach(test_name IN ITEMS zoomtimeline cursorpath cliptimeline cameratimeline keystroketrack project inputlog regionpicker omarchypaths recorder)
         qt_add_executable(test_${test_name} tests/test_${test_name}.cpp)
         target_link_libraries(test_${test_name} PRIVATE omarecord_core Qt6::Test)
         add_test(NAME ${test_name} COMMAND test_${test_name})

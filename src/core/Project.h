@@ -44,13 +44,22 @@ struct Cursor {
     double clickShrink = 0.8;
     double rotateOnXMovementRatio = 0.5;
     int hideWhenIdleMs = -1;
-    QString style = QStringLiteral("macos");
+    QString style = QStringLiteral("light-arrow");
     QColor ringColor = QColor(QStringLiteral("#7aa2f7"));
+    QString clickSound = QStringLiteral("none");
 };
 struct ZoomStyle {
     Spring spring{2.25, 200.0, 40.0};
     double snapToEdgesRatio = 0.25;
     bool instantAnimation = false;
+    double motionBlur = 0.0;
+};
+struct Keystrokes {
+    bool enabled = false;
+    QString position = QStringLiteral("bottom-center");
+    double size = 1.0;
+    bool showOnlyShortcuts = true;
+    int holdMs = 900;
 };
 struct Clip { QString id; double in = 0.0; double out = 0.0; double speed = 1.0; };
 struct ZoomSegment {
@@ -108,6 +117,7 @@ public:
     Background background;
     Frame frame;
     Cursor cursor;
+    Keystrokes keystrokes;
     Audio audio;
     Camera camera;
     ExportSettings exportSettings;

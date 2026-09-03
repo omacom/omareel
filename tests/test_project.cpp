@@ -21,6 +21,14 @@ private slots:
         QCOMPARE(original.zoomStyle.spring.mass, 2.25);
         QCOMPARE(original.cursor.spring.stiffness, 470.0);
         QCOMPARE(original.cursor.clickShrink, 0.8);
+        QCOMPARE(original.cursor.style, QStringLiteral("light-arrow"));
+        QCOMPARE(original.cursor.clickSound, QStringLiteral("none"));
+        QCOMPARE(original.zoomStyle.motionBlur, 0.0);
+        QCOMPARE(original.keystrokes.enabled, false);
+        QCOMPARE(original.keystrokes.position, QStringLiteral("bottom-center"));
+        QCOMPARE(original.keystrokes.size, 1.0);
+        QCOMPARE(original.keystrokes.showOnlyShortcuts, true);
+        QCOMPARE(original.keystrokes.holdMs, 900);
         QCOMPARE(original.exportSettings.height, 1080);
         QCOMPARE(original.exportSettings.quality, QStringLiteral("social"));
         QCOMPARE(original.exportSettings.gif.height, 480);

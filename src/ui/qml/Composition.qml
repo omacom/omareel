@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Effects
 import Omarecord
 
 Item {
@@ -23,6 +24,13 @@ Item {
     Item {
         id: stage
         anchors.fill: parent
+        layer.enabled: !comp.softwareRendering && comp.project.zoomStyle.motionBlur > 0
+            && comp.zoom.velocity > 0.01
+        layer.effect: MultiEffect {
+            blurEnabled: true
+            blurMax: 32
+            blur: Math.min(1, comp.zoom.velocity * .32) * comp.project.zoomStyle.motionBlur
+        }
         transform: Scale {
             origin.x: frame.x + comp.zoom.cx * frame.width
             origin.y: frame.y + comp.zoom.cy * frame.height
@@ -54,7 +62,7 @@ Item {
     }
     CameraOverlay {
         id: cameraOverlay
-        visible: comp.cameraAvailable && comp.project.camera.enabled
+        visible: comp.cameraAvailable && comp.cameraVisible && comp.project.camera.enabled
         settings: comp.project.camera
         zoomScale: comp.zoom.scale
         outputWidth: composition.width
@@ -62,5 +70,12 @@ Item {
         sourceWidth: comp.cameraSourceWidth
         sourceHeight: comp.cameraSourceHeight
         softwareRendering: comp.softwareRendering
+    }
+    KeystrokeOverlay {
+        visible: comp.project.keystrokes.enabled && comp.keystrokePills.length > 0
+        pills: comp.keystrokePills
+        settings: comp.project.keystrokes
+        colors: comp.project.renderTheme
+        ref: composition.ref
     }
 }

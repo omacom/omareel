@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/InputLog.h"
+#include "core/KeystrokeTrack.h"
 #include "core/MotionTrack.h"
 #include "core/Project.h"
 
@@ -71,8 +72,10 @@ class Editor : public QObject
     Q_PROPERTY(QVariantMap zoom READ previewZoom NOTIFY compositionChanged)
     Q_PROPERTY(QVariantMap cursor READ previewCursor NOTIFY compositionChanged)
     Q_PROPERTY(QVariantList ripples READ previewRipples NOTIFY compositionChanged)
+    Q_PROPERTY(QVariantList keystrokePills READ previewKeystrokePills NOTIFY compositionChanged)
     Q_PROPERTY(bool softwareRendering READ softwareRendering CONSTANT)
     Q_PROPERTY(bool cameraAvailable READ hasCamera CONSTANT)
+    Q_PROPERTY(bool cameraVisible READ cameraVisible NOTIFY compositionChanged)
     Q_PROPERTY(int cameraSourceWidth READ cameraSourceWidth CONSTANT)
     Q_PROPERTY(int cameraSourceHeight READ cameraSourceHeight CONSTANT)
     Q_PROPERTY(QString cameraStatus READ cameraStatus CONSTANT)
@@ -122,10 +125,12 @@ public:
     QVariantMap previewZoom() const;
     QVariantMap previewCursor() const;
     QVariantList previewRipples() const;
+    QVariantList previewKeystrokePills() const;
     bool softwareRendering() const;
     int cameraSourceWidth() const { return m_cameraSourceWidth; }
     int cameraSourceHeight() const { return m_cameraSourceHeight; }
     QString cameraStatus() const;
+    bool cameraVisible() const;
 
     void setSelectedClipId(const QString &id);
     void setSelectedZoomId(const QString &id);
@@ -220,6 +225,7 @@ private:
     QString m_cameraVideoPath;
     Project m_project;
     InputLog m_input;
+    KeystrokeTrack m_keystrokeTrack;
     double m_sourceDuration = 0.0;
     int m_sourceWidth = 0;
     int m_sourceHeight = 0;

@@ -9,6 +9,7 @@ struct MotionSample {
     double zoomScale = 1.0;
     double zoomCx = 0.5;
     double zoomCy = 0.5;
+    double zoomCenterVelocity = 0.0;
     double cursorX = 0.5;
     double cursorY = 0.5;
     double cursorScale = 1.0;

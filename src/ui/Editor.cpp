@@ -4,6 +4,7 @@
 #include "core/CameraTimeline.h"
 #include "core/ZoomTimeline.h"
 #include "core/OmarchyPaths.h"
+#include "core/Theme.h"
 #include "render/Exporter.h"
 #include "render/FrameSource.h"
 #include "render/PreviewSink.h"
@@ -242,6 +243,7 @@ bool Editor::loadBundle()
     m_project.audio.mic = m_project.audio.mic && m_hasMicrophoneAudio;
     m_input = InputLog::loadBundle(m_bundlePath, m_sourceDuration, &m_error);
     if (!m_error.isEmpty()) return false;
+    m_keystrokeTrack = KeystrokeTrack::build(m_input.events(), m_project.keystrokes);
     if (!QFileInfo(m_projectPath).isFile()) {
         QVector<double> clicks;
         for (const auto &click : m_input.clickDowns(true)) clicks << click.time;
@@ -257,6 +259,10 @@ QVariantMap Editor::projectMap() const
 {
     if (m_projectMapCacheValid) return m_projectMapCache;
     QVariantMap result = m_project.toJson().toVariantMap();
+    Theme renderTheme;
+    result[QStringLiteral("renderTheme")] = QVariantMap{
+        {QStringLiteral("background"), renderTheme.background()},
+        {QStringLiteral("foreground"), renderTheme.foreground()}};
     QVariantMap background = result.value(QStringLiteral("background")).toMap();
     QString image;
     if (m_project.background.type == QLatin1String("image")) image = m_project.background.image;
@@ -301,7 +307,8 @@ double Editor::sourcePosition() const { return outputToSource(m_outputPosition);
 QVariantMap Editor::previewZoom() const
 {
     const MotionSample s = m_motion ? m_motion->sample(sourcePosition()) : MotionSample{};
-    return {{QStringLiteral("scale"), s.zoomScale}, {QStringLiteral("cx"), s.zoomCx}, {QStringLiteral("cy"), s.zoomCy}};
+    return {{QStringLiteral("scale"), s.zoomScale}, {QStringLiteral("cx"), s.zoomCx},
+        {QStringLiteral("cy"), s.zoomCy}, {QStringLiteral("velocity"), s.zoomCenterVelocity}};
 }
 
 QVariantMap Editor::previewCursor() const
@@ -320,6 +327,22 @@ QVariantList Editor::previewRipples() const
     for (const auto &r : m_motion->ripples(sourcePosition()))
         result << QVariantMap{{QStringLiteral("x"), r.x}, {QStringLiteral("y"), r.y}, {QStringLiteral("progress"), r.progress}};
     return result;
+}
+
+QVariantList Editor::previewKeystrokePills() const
+{
+    QVariantList result;
+    for (const KeystrokePill &pill : m_keystrokeTrack.sample(sourcePosition()))
+        result << QVariantMap{{QStringLiteral("keys"), pill.keys},
+            {QStringLiteral("text"), pill.text}, {QStringLiteral("opacity"), pill.opacity}};
+    return result;
+}
+
+bool Editor::cameraVisible() const
+{
+    if (!m_hasCamera) return false;
+    const CameraTime mapped = mapCameraTime(sourcePosition(), m_cameraOffset, m_cameraDuration);
+    return !mapped.beforeStart;
 }
 
 void Editor::attachFrameSource(QObject *source)
@@ -378,6 +401,7 @@ void Editor::endCoalescedEdit()
 void Editor::changed(bool motion)
 {
     m_projectMapCacheValid = false;
+    m_keystrokeTrack = KeystrokeTrack::build(m_input.events(), m_project.keystrokes);
     if (m_audioOutput) {
         m_audioOutput->setVolume(std::clamp(m_project.audio.volume, 0.0, 1.0));
         m_audioOutput->setMuted(!m_project.audio.desktop && !m_project.audio.mic);

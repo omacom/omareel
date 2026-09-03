@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Replace a bundle's input.jsonl with a deterministic cursor/click path."""
+"""Replace a bundle's input.jsonl with deterministic pointer, click, and key events."""
 
 import argparse
 import json
@@ -32,6 +32,20 @@ def main() -> None:
         for kind, offset in (("d", 0.0), ("u", 0.12)):
             events.append({"t": first + round((t + offset) * 1_000_000), "k": kind,
                            "b": "left", "x": round(x, 3), "y": round(y, 3)})
+    keys = [
+        (3.20, "kd", 29, "KEY_LEFTCTRL", ["ctrl"]),
+        (3.24, "kd", 42, "KEY_LEFTSHIFT", ["ctrl", "shift"]),
+        (3.32, "kd", 25, "KEY_P", ["ctrl", "shift"]),
+        (3.42, "ku", 25, None, None),
+        (3.45, "ku", 42, None, None),
+        (3.48, "ku", 29, None, None),
+    ]
+    for t, kind, code, name, modifiers in keys:
+        event = {"t": first + round(t * 1_000_000), "k": kind, "code": code}
+        if name is not None:
+            event["name"] = name
+            event["mods"] = modifiers
+        events.append(event)
     events.sort(key=lambda event: event["t"])
     with (args.bundle / "input.jsonl").open("w") as output:
         for event in events:

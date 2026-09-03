@@ -89,7 +89,7 @@ static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplicat
         {QStringLiteral("background"), 0}, {QStringLiteral("shape"), 1},
         {QStringLiteral("cursor"), 2}, {QStringLiteral("zoom"), 3},
         {QStringLiteral("clip"), 4}, {QStringLiteral("camera"), 5},
-        {QStringLiteral("audio"), 6}
+        {QStringLiteral("keystrokes"), 6}, {QStringLiteral("audio"), 7}
     };
     const QString panel = qEnvironmentVariable("OMARECORD_SCREENSHOT_PANEL").toLower();
     if (panels.contains(panel)) {
@@ -110,6 +110,13 @@ static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplicat
     if (qEnvironmentVariable("OMARECORD_SCREENSHOT_PICK_ZOOM") == QLatin1String("1"))
         if (QObject *editor = engine.rootContext()->contextProperty(QStringLiteral("editor")).value<QObject *>())
             editor->setProperty("pickingZoomTarget", true);
+
+    bool screenshotTimeOk = false;
+    const double screenshotTime = qEnvironmentVariable("OMARECORD_SCREENSHOT_TIME")
+                                      .toDouble(&screenshotTimeOk);
+    if (screenshotTimeOk)
+        if (QObject *editor = engine.rootContext()->contextProperty(QStringLiteral("editor")).value<QObject *>())
+            QMetaObject::invokeMethod(editor, "seek", Q_ARG(double, screenshotTime));
 
     const QString screenshotView = qEnvironmentVariable("OMARECORD_SCREENSHOT_VIEW");
     if (!screenshotView.isEmpty()) {

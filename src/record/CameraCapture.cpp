@@ -201,26 +201,34 @@ void CameraCapture::stop()
     m_recorder->stop();
 }
 
+void CameraCapture::beginRecording()
+{
+    if (!m_running || m_stopping || m_recordingFrames) return;
+    m_recordingFrames = true;
+}
+
 void CameraCapture::handleFrame(const QVideoFrame &frame)
 {
     if (!frame.isValid()) return;
     const qint64 timestamp = monotonicUs();
     if (!m_ready) {
-        if (!m_timestamp.recordFrameArrival(timestamp, QDateTime::currentMSecsSinceEpoch() * 1000)) {
-            fail(QStringLiteral("Could not write camera timestamp"));
-            return;
-        }
         m_ready = true;
         m_startTimer->stop();
         emit readyChanged();
     }
     m_latestFrame = std::make_unique<QVideoFrame>(frame);
+    if (!m_recordingFrames) return;
+    if (m_timestamp.firstFrameUs() == 0
+        && !m_timestamp.recordFrameArrival(timestamp, QDateTime::currentMSecsSinceEpoch() * 1000)) {
+        fail(QStringLiteral("Could not write camera timestamp"));
+        return;
+    }
     if (!m_recordTimer->isActive()) m_recordTimer->start();
 }
 
 void CameraCapture::sendLatestFrame()
 {
-    if (!m_frameInput || !m_latestFrame || !m_inputReady || m_stopping) return;
+    if (!m_frameInput || !m_latestFrame || !m_inputReady || m_stopping || !m_recordingFrames) return;
     QVideoFrame recordedFrame(*m_latestFrame);
     const qint64 startTime = m_recordedFrameCount * 1000000 / 30;
     recordedFrame.setStartTime(startTime);

@@ -7,6 +7,9 @@ Item {
     required property var ripples
     required property var settings
     property real ref: 1
+    readonly property string style: root.settings.style || "light-arrow"
+    readonly property bool dotStyle: style === "dot"
+    readonly property bool handStyle: style === "hand"
 
     Repeater {
         model: root.ripples
@@ -28,18 +31,36 @@ Item {
     }
     Image {
         id: arrow
-        source: "qrc:/omarecord/assets/cursors/arrow.svg"
+        source: root.style === "dark-arrow"
+            ? "qrc:/omarecord/assets/cursors/arrow-dark.svg"
+            : root.handStyle ? "qrc:/omarecord/assets/cursors/pointer.svg"
+            : "qrc:/omarecord/assets/cursors/arrow.svg"
         sourceSize: Qt.size(Math.round(24 * root.settings.size * root.ref * 4),
                             Math.round(24 * root.settings.size * root.ref * 4))
         width: 24 * root.settings.size * root.ref
         height: width
-        x: root.cursor.x * root.width - (3 / 24) * width
-        y: root.cursor.y * root.height - (2 / 24) * height
-        visible: root.settings.visible
+        x: root.cursor.x * root.width - (root.handStyle ? 8 / 24 : 3 / 24) * width
+        y: root.cursor.y * root.height - (root.handStyle ? 1.5 / 24 : 2 / 24) * height
+        visible: root.settings.visible && !root.dotStyle
         opacity: root.cursor.opacity
         scale: root.cursor.scale
         rotation: root.cursor.rotation
         transformOrigin: Item.TopLeft
         smooth: true
+    }
+    Rectangle {
+        width: 28 * root.settings.size * root.ref
+        height: width
+        radius: width / 2
+        x: root.cursor.x * root.width - width / 2
+        y: root.cursor.y * root.height - height / 2
+        visible: root.settings.visible && root.dotStyle
+        color: Qt.alpha(root.settings.ringColor, .68)
+        border.width: 1.5 * root.ref
+        border.color: Qt.alpha("white", .45)
+        opacity: root.cursor.opacity
+        scale: root.cursor.scale
+        layer.enabled: true
+        layer.samples: 4
     }
 }

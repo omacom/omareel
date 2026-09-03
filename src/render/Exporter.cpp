@@ -5,9 +5,11 @@
 #include "core/ClipTimeline.h"
 #include "core/CameraTimeline.h"
 #include "core/InputLog.h"
+#include "core/KeystrokeTrack.h"
 #include "core/MotionTrack.h"
 #include "core/OmarchyPaths.h"
 #include "core/Project.h"
+#include "core/Theme.h"
 #include "core/ZoomTimeline.h"
 
 #include <QCoreApplication>
@@ -100,6 +102,10 @@ static double outputAspect(const QString &aspect, int sourceWidth, int sourceHei
 static QVariantMap projectMap(const Project &project)
 {
     QVariantMap map = project.toJson().toVariantMap();
+    Theme theme;
+    map[QStringLiteral("renderTheme")] = QVariantMap{
+        {QStringLiteral("background"), theme.background()},
+        {QStringLiteral("foreground"), theme.foreground()}};
     QVariantMap background = map.value(QStringLiteral("background")).toMap();
     QString image;
     if (project.background.type == QLatin1String("image")) image = project.background.image;
@@ -120,19 +126,68 @@ static QString atempo(double speed)
     return filters.join(',');
 }
 
-static QString audioFilter(const QVector<Clip> &clips, double volume)
+static QVector<double> clickOutputTimes(const InputLog &input, const QVector<Clip> &clips)
+{
+    QVector<double> result;
+    double outputStart = 0.0;
+    const QVector<InputEvent> clicks = input.clickDowns();
+    for (const Clip &clip : clips) {
+        for (const InputEvent &click : clicks) {
+            if (click.time < clip.in || click.time >= clip.out) continue;
+            result << outputStart + (click.time - clip.in) / clip.speed;
+            if (result.size() == 200) return result;
+        }
+        outputStart += (clip.out - clip.in) / clip.speed;
+    }
+    return result;
+}
+
+static QString audioFilter(const QVector<Clip> &clips, double volume,
+                           bool sourceAudio, int sourceInput,
+                           const QVector<double> &clicks, int clickInput,
+                           double outputDuration)
 {
     QString filter;
-    QStringList labels;
-    for (int i = 0; i < clips.size(); ++i) {
-        const auto &clip = clips[i];
-        const QString label = QStringLiteral("a%1").arg(i);
-        filter += QStringLiteral("[1:a]atrim=start=%1:end=%2,asetpts=PTS-STARTPTS,%3[%4];")
-            .arg(clip.in, 0, 'f', 6).arg(clip.out, 0, 'f', 6).arg(atempo(clip.speed), label);
-        labels << QStringLiteral("[%1]").arg(label);
+    QStringList mixLabels;
+    if (sourceAudio) {
+        QStringList clipLabels;
+        for (int i = 0; i < clips.size(); ++i) {
+            const auto &clip = clips[i];
+            const QString label = QStringLiteral("a%1").arg(i);
+            filter += QStringLiteral("[%1:a]atrim=start=%2:end=%3,asetpts=PTS-STARTPTS,%4[%5];")
+                .arg(sourceInput).arg(clip.in, 0, 'f', 6).arg(clip.out, 0, 'f', 6)
+                .arg(atempo(clip.speed), label);
+            clipLabels << QStringLiteral("[%1]").arg(label);
+        }
+        filter += clipLabels.join(QString())
+            + QStringLiteral("concat=n=%1:v=0:a=1,volume=%2[source];")
+                .arg(clips.size()).arg(volume, 0, 'g', 8);
+        mixLabels << QStringLiteral("[source]");
     }
-    filter += labels.join(QString()) + QStringLiteral("concat=n=%1:v=0:a=1,volume=%2[aout]")
-        .arg(clips.size()).arg(volume, 0, 'g', 8);
+    if (!clicks.isEmpty()) {
+        QStringList clickSources;
+        if (clicks.size() > 1) {
+            filter += QStringLiteral("[%1:a]asplit=%2").arg(clickInput).arg(clicks.size());
+            for (int i = 0; i < clicks.size(); ++i) {
+                const QString label = QStringLiteral("clicksrc%1").arg(i);
+                filter += QStringLiteral("[%1]").arg(label);
+                clickSources << QStringLiteral("[%1]").arg(label);
+            }
+            filter += QLatin1Char(';');
+        } else {
+            clickSources << QStringLiteral("[%1:a]").arg(clickInput);
+        }
+        for (int i = 0; i < clicks.size(); ++i) {
+            const QString label = QStringLiteral("click%1").arg(i);
+            const qint64 delayMs = std::max<qint64>(0, qRound64(clicks[i] * 1000.0));
+            filter += QStringLiteral("%1atrim=duration=0.03,asetpts=PTS-STARTPTS,volume=0.25,adelay=%2:all=1[%3];")
+                .arg(clickSources[i]).arg(delayMs).arg(label);
+            mixLabels << QStringLiteral("[%1]").arg(label);
+        }
+    }
+    filter += mixLabels.join(QString())
+        + QStringLiteral("amix=inputs=%1:normalize=0:duration=longest,apad=pad_dur=%2,atrim=duration=%2[aout]")
+            .arg(mixLabels.size()).arg(outputDuration, 0, 'f', 6);
     return filter;
 }
 
@@ -237,6 +292,7 @@ bool Exporter::run(const ExportOptions &options, QString *error)
     const bool cameraEnabled = project.camera.enabled && cameraMedia.width > 0;
     const MotionTrack motion = MotionTrack::build(media.duration, media.width, media.height,
                                                    input.events(), project, captureFps);
+    const KeystrokeTrack keystrokes = KeystrokeTrack::build(input.events(), project.keystrokes);
 
     const bool gif = options.outputPath.endsWith(QStringLiteral(".gif"), Qt::CaseInsensitive);
     const int fps = options.fps > 0 ? options.fps : (gif && options.gifFps > 0 ? options.gifFps
@@ -317,7 +373,8 @@ bool Exporter::run(const ExportOptions &options, QString *error)
     state.cameraSourceWidth = cameraMedia.width;
     state.cameraSourceHeight = cameraMedia.height;
     state.project = projectMap(project);
-    state.zoom = {{QStringLiteral("scale"), 1.0}, {QStringLiteral("cx"), 0.5}, {QStringLiteral("cy"), 0.5}};
+    state.zoom = {{QStringLiteral("scale"), 1.0}, {QStringLiteral("cx"), 0.5},
+        {QStringLiteral("cy"), 0.5}, {QStringLiteral("velocity"), 0.0}};
     state.cursor = {{QStringLiteral("x"), 0.5}, {QStringLiteral("y"), 0.5},
         {QStringLiteral("visible"), project.cursor.visible}, {QStringLiteral("scale"), 1.0},
         {QStringLiteral("opacity"), project.cursor.visible ? 1.0 : 0.0}, {QStringLiteral("rotation"), 0.0}};
@@ -341,6 +398,7 @@ bool Exporter::run(const ExportOptions &options, QString *error)
     QString runtime = qEnvironmentVariable("XDG_RUNTIME_DIR");
     if (runtime.isEmpty() || !QFileInfo(runtime).isWritable()) runtime = QDir::tempPath();
     QTemporaryFile rawFile(QDir(runtime).filePath(QStringLiteral("omarecord-export-XXXXXX.rgba")));
+    QTemporaryFile clickFile(QDir(runtime).filePath(QStringLiteral("omarecord-click-XXXXXX.wav")));
     QTemporaryFile encodedFile(QFileInfo(options.outputPath).absoluteDir().filePath(
         QStringLiteral(".omarecord-export-XXXXXX.mp4")));
     QString encodedPath = options.outputPath;
@@ -350,7 +408,10 @@ bool Exporter::run(const ExportOptions &options, QString *error)
         encodedFile.close();
     }
     QStringList encoderArgs;
-    bool useAudio = !gif && media.audio && (project.audio.desktop || project.audio.mic);
+    const bool useSourceAudio = !gif && media.audio && (project.audio.desktop || project.audio.mic);
+    const QVector<double> clickTimes = !gif && project.cursor.clickSound == QLatin1String("soft")
+        ? clickOutputTimes(input, project.clips) : QVector<double>{};
+    const bool useClicks = !clickTimes.isEmpty();
     if (gif) {
         if (!rawFile.open()) { if (error) *error = rawFile.errorString(); return false; }
     } else {
@@ -358,14 +419,40 @@ bool Exporter::run(const ExportOptions &options, QString *error)
             QStringLiteral("-f"), QStringLiteral("rawvideo"), QStringLiteral("-pix_fmt"), QStringLiteral("rgba"),
             QStringLiteral("-s:v"), QStringLiteral("%1x%2").arg(width).arg(height),
             QStringLiteral("-r"), QString::number(fps), QStringLiteral("-i"), QStringLiteral("-")};
-        if (!softwareRendering)
-            encoderArgs << QStringLiteral("-vf") << QStringLiteral("vflip");
-        if (useAudio) encoderArgs << QStringLiteral("-i") << videoPath
-                           << QStringLiteral("-filter_complex") << audioFilter(project.clips, project.audio.volume)
+        int nextInput = 1;
+        int sourceInput = -1;
+        int clickInput = -1;
+        if (useSourceAudio) {
+            sourceInput = nextInput++;
+            encoderArgs << QStringLiteral("-i") << videoPath;
+        }
+        if (useClicks) {
+            QFile resource(QStringLiteral(":/omarecord/assets/sounds/click.wav"));
+            if (!resource.open(QIODevice::ReadOnly) || !clickFile.open()) {
+                if (error) *error = QStringLiteral("Could not prepare the click sound");
+                return false;
+            }
+            const QByteArray sound = resource.readAll();
+            if (clickFile.write(sound) != sound.size() || !clickFile.flush()) {
+                if (error) *error = QStringLiteral("Could not prepare the click sound");
+                return false;
+            }
+            clickFile.close();
+            clickInput = nextInput++;
+            encoderArgs << QStringLiteral("-i") << clickFile.fileName();
+        }
+        if (useSourceAudio || useClicks)
+            encoderArgs << QStringLiteral("-filter_complex")
+                           << audioFilter(project.clips, project.audio.volume,
+                                          useSourceAudio, sourceInput, clickTimes,
+                                          clickInput, outputDuration)
                            << QStringLiteral("-map") << QStringLiteral("0:v:0")
                            << QStringLiteral("-map") << QStringLiteral("[aout]")
-                           << QStringLiteral("-c:a") << QStringLiteral("aac");
+                           << QStringLiteral("-c:a") << QStringLiteral("aac")
+                           << QStringLiteral("-b:a") << QStringLiteral("192k");
         else encoderArgs << QStringLiteral("-an");
+        if (!softwareRendering)
+            encoderArgs << QStringLiteral("-vf") << QStringLiteral("vflip");
         const QString quality = normalizedQuality(options.quality.isEmpty() ? project.exportSettings.quality : options.quality);
         const qint64 bitrate = qint64(std::floor(width * double(height) * fps * bitrateMultiplier(quality)));
         if (!qEnvironmentVariableIsSet("OMARECORD_DISABLE_NVENC") && nvencWorks()) {
@@ -400,7 +487,7 @@ bool Exporter::run(const ExportOptions &options, QString *error)
     if (!gif) {
         encodeThread = std::thread([&] {
             QProcess process;
-            process.start(QStringLiteral("ffmpeg"), encoderArgs, QIODevice::WriteOnly);
+            process.start(QStringLiteral("ffmpeg"), encoderArgs, QIODevice::ReadWrite);
             const bool started = process.waitForStarted(10000);
             {
                 std::lock_guard lock(encodeMutex);
@@ -668,7 +755,9 @@ bool Exporter::run(const ExportOptions &options, QString *error)
         const double sourceTime = timeline.sourceTime(outputTime);
         const MotionSample sample = motion.sample(sourceTime);
         state.time = sourceTime;
-        state.zoom = {{QStringLiteral("scale"), sample.zoomScale}, {QStringLiteral("cx"), sample.zoomCx}, {QStringLiteral("cy"), sample.zoomCy}};
+        state.zoom = {{QStringLiteral("scale"), sample.zoomScale}, {QStringLiteral("cx"), sample.zoomCx},
+            {QStringLiteral("cy"), sample.zoomCy},
+            {QStringLiteral("velocity"), sample.zoomCenterVelocity}};
         state.cursor = {{QStringLiteral("x"), sample.cursorX}, {QStringLiteral("y"), sample.cursorY},
             {QStringLiteral("visible"), project.cursor.visible}, {QStringLiteral("scale"), sample.cursorScale},
             {QStringLiteral("opacity"), sample.cursorOpacity}, {QStringLiteral("rotation"), sample.cursorRotation}};
@@ -678,6 +767,12 @@ bool Exporter::run(const ExportOptions &options, QString *error)
                 state.ripples << QVariantMap{{QStringLiteral("x"), ripple.x}, {QStringLiteral("y"), ripple.y},
                                              {QStringLiteral("progress"), ripple.progress}};
         }
+        state.keystrokePills.clear();
+        for (const KeystrokePill &pill : keystrokes.sample(sourceTime))
+            state.keystrokePills << QVariantMap{{QStringLiteral("keys"), pill.keys},
+                {QStringLiteral("text"), pill.text}, {QStringLiteral("opacity"), pill.opacity}};
+        const CameraTime cameraTime = mapCameraTime(sourceTime, cameraOffset, cameraMedia.duration);
+        state.cameraVisible = !cameraTime.beforeStart;
         state.notifyChanged();
         stageTimer.restart();
         frameSource->setImage(packet.image);

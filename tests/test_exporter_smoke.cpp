@@ -36,6 +36,11 @@ private slots:
         QVERIFY(QDir().mkpath(bundle));
         QVERIFY(QFile::copy(QDir(fixture).filePath(QStringLiteral("capture.json")), QDir(bundle).filePath(QStringLiteral("capture.json"))));
         QVERIFY(QFile::copy(QDir(fixture).filePath(QStringLiteral("input.jsonl")), QDir(bundle).filePath(QStringLiteral("input.jsonl"))));
+        QFile input(QDir(bundle).filePath(QStringLiteral("input.jsonl")));
+        QVERIFY(input.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text));
+        input.write("{\"t\":2100000,\"k\":\"kd\",\"code\":25,\"name\":\"KEY_P\",\"mods\":[\"ctrl\",\"shift\"]}\n");
+        input.write("{\"t\":2200000,\"k\":\"ku\",\"code\":25}\n");
+        input.close();
         QProcess makeVideo;
         makeVideo.start(QStringLiteral("ffmpeg"), {QStringLiteral("-y"), QStringLiteral("-v"), QStringLiteral("error"),
             QStringLiteral("-f"), QStringLiteral("lavfi"), QStringLiteral("-i"), QStringLiteral("testsrc2=size=640x360:rate=60"),
@@ -72,6 +77,8 @@ private slots:
         project.background.type = QStringLiteral("color");
         project.background.color = QColor(QStringLiteral("#101020"));
         project.cursor.visible = false;
+        project.cursor.clickSound = QStringLiteral("soft");
+        project.keystrokes.enabled = true;
         project.camera.enabled = true;
         project.camera.shadow.enabled = false;
         QString projectError;
@@ -94,18 +101,22 @@ private slots:
 
         QProcess inspect;
         inspect.start(QStringLiteral("ffprobe"), {QStringLiteral("-v"), QStringLiteral("error"),
-            QStringLiteral("-select_streams"), QStringLiteral("v:0"),
-            QStringLiteral("-show_entries"), QStringLiteral("stream=codec_name,width,height:format=duration"),
+            QStringLiteral("-show_entries"), QStringLiteral("stream=codec_type,codec_name,width,height:format=duration"),
             QStringLiteral("-of"), QStringLiteral("json"), output});
         QVERIFY(inspect.waitForFinished(15000));
         QCOMPARE(inspect.exitCode(), 0);
         const auto root = QJsonDocument::fromJson(inspect.readAllStandardOutput()).object();
-        const auto stream = root.value("streams").toArray().first().toObject();
+        const QJsonArray streams = root.value("streams").toArray();
+        const auto stream = streams.first().toObject();
         QCOMPARE(stream.value("codec_name").toString(), QStringLiteral("h264"));
         QCOMPARE(stream.value("width").toInt(), 640);
         QCOMPARE(stream.value("height").toInt(), 360);
         const double duration = root.value("format").toObject().value("duration").toString().toDouble();
         QVERIFY(duration > 1.9 && duration < 2.1);
+        bool hasAudio = false;
+        for (const QJsonValue &value : streams)
+            hasAudio = hasAudio || value.toObject().value(QStringLiteral("codec_type")) == QLatin1String("audio");
+        QVERIFY2(hasAudio, "A silent source with soft clicks must export an audio track");
 
         const QString stillPath = temporary.filePath(QStringLiteral("overlay.png"));
         QProcess still;
@@ -122,6 +133,22 @@ private slots:
             + std::abs(cameraPixel.green() - backgroundPixel.green())
             + std::abs(cameraPixel.blue() - backgroundPixel.blue());
         QVERIFY2(colorDistance > 60, "The exported camera overlay did not differ from the background");
+
+        const QString earlyStillPath = temporary.filePath(QStringLiteral("before-camera.png"));
+        QProcess earlyStill;
+        earlyStill.start(QStringLiteral("ffmpeg"), {QStringLiteral("-y"), QStringLiteral("-v"), QStringLiteral("error"),
+            QStringLiteral("-ss"), QStringLiteral("0.05"), QStringLiteral("-i"), output,
+            QStringLiteral("-frames:v"), QStringLiteral("1"), earlyStillPath});
+        QVERIFY(earlyStill.waitForFinished(15000));
+        QCOMPARE(earlyStill.exitCode(), 0);
+        const QImage earlyFrame(earlyStillPath);
+        QVERIFY(!earlyFrame.isNull());
+        const QColor earlyBackground = earlyFrame.pixelColor(4, 4);
+        const QColor earlyCameraArea = earlyFrame.pixelColor(582, 308);
+        const int earlyDistance = std::abs(earlyCameraArea.red() - earlyBackground.red())
+            + std::abs(earlyCameraArea.green() - earlyBackground.green())
+            + std::abs(earlyCameraArea.blue() - earlyBackground.blue());
+        QVERIFY2(earlyDistance < 35, "The camera overlay must stay hidden before its first frame");
 
         const QString cancelledOutput = temporary.filePath(QStringLiteral("cancelled.mp4"));
         QFile sentinel(cancelledOutput);

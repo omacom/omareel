@@ -50,6 +50,7 @@ public:
 
     Q_INVOKABLE void attachVideoOutput(QObject *output);
     Q_INVOKABLE void start();
+    Q_INVOKABLE void beginRecording();
     Q_INVOKABLE void stop();
 
 signals:
@@ -83,6 +84,7 @@ private:
     bool m_running = false;
     bool m_stopping = false;
     bool m_inputReady = false;
+    bool m_recordingFrames = false;
     qint64 m_recordedFrameCount = 0;
 };
 
