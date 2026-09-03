@@ -14,7 +14,8 @@ static qint64 barMonotonicUs()
     return qint64(value.tv_sec) * 1000000 + value.tv_nsec / 1000;
 }
 
-RecordingBar::RecordingBar(QObject *parent): QObject(parent), m_recordedMonitor(Recorder::recordedMonitor())
+RecordingBar::RecordingBar(QObject *parent): QObject(parent),
+    m_recordedMonitor(Recorder::recordedMonitor()), m_webcam(Recorder::recordingHasWebcam())
 {
     connect(&m_timer, &QTimer::timeout, this, &RecordingBar::poll);
     m_timer.start(500);

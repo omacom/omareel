@@ -6,7 +6,7 @@ import QtQuick.Layouts
 ApplicationWindow {
     id: window
     visible: false
-    width: 236
+    width: recordingBar.webcam ? 264 : 236
     height: 40
     color: "transparent"
     flags: Qt.FramelessWindowHint | Qt.Tool
@@ -47,6 +47,16 @@ ApplicationWindow {
                 font.family: "monospace"
                 font.pixelSize: 12
                 font.weight: Font.DemiBold
+            }
+
+            Image {
+                visible: recordingBar.webcam
+                Layout.preferredWidth: 16
+                Layout.preferredHeight: 16
+                sourceSize.width: 32
+                sourceSize.height: 32
+                source: "qrc:/omarecord/assets/icons/camera.svg"
+                opacity: .82
             }
 
             Button {

@@ -50,7 +50,7 @@ ApplicationWindow {
 
         Item {
             Layout.fillWidth: true
-            Layout.preferredHeight: launcher.recording ? 104 : 164
+            Layout.preferredHeight: launcher.recording ? 104 : 204
             Layout.minimumHeight: Layout.preferredHeight
             Layout.maximumHeight: Layout.preferredHeight
             ColumnLayout {
@@ -81,6 +81,29 @@ ApplicationWindow {
                         Component.onCompleted: currentIndex = indexOfValue(launcher.microphoneDevice)
                         onModelChanged: currentIndex = indexOfValue(launcher.microphoneDevice)
                         onActivated: launcher.microphoneDevice = currentValue
+                    }
+                    Item { Layout.fillWidth: true }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 40
+                    spacing: 18
+                    Switch {
+                        text: "Webcam"
+                        enabled: launcher.webcamDevices.length > 0
+                        checked: launcher.webcam
+                        onToggled: launcher.webcam = checked
+                    }
+                    ComboBox {
+                        Layout.preferredWidth: 330
+                        Layout.preferredHeight: 36
+                        enabled: launcher.webcam
+                        textRole: "text"
+                        valueRole: "value"
+                        model: launcher.webcamDevices
+                        Component.onCompleted: currentIndex = indexOfValue(launcher.webcamDevice)
+                        onModelChanged: currentIndex = indexOfValue(launcher.webcamDevice)
+                        onActivated: launcher.webcamDevice = currentValue
                     }
                     Item { Layout.fillWidth: true }
                 }

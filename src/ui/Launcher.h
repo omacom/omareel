@@ -17,6 +17,9 @@ class Launcher : public QObject
     Q_PROPERTY(bool microphone READ microphone WRITE setMicrophone NOTIFY recordingPreferencesChanged)
     Q_PROPERTY(QString microphoneDevice READ microphoneDevice WRITE setMicrophoneDevice NOTIFY recordingPreferencesChanged)
     Q_PROPERTY(QVariantList audioDevices READ audioDevices NOTIFY audioDevicesChanged)
+    Q_PROPERTY(bool webcam READ webcam WRITE setWebcam NOTIFY recordingPreferencesChanged)
+    Q_PROPERTY(QString webcamDevice READ webcamDevice WRITE setWebcamDevice NOTIFY recordingPreferencesChanged)
+    Q_PROPERTY(QVariantList webcamDevices READ webcamDevices NOTIFY webcamDevicesChanged)
 public:
     explicit Launcher(QObject *parent = nullptr);
     QVariantList recentBundles() const { return m_recentBundles; }
@@ -26,10 +29,15 @@ public:
     bool microphone() const { return m_microphone; }
     QString microphoneDevice() const { return m_microphoneDevice; }
     QVariantList audioDevices() const { return m_audioDevices; }
+    bool webcam() const { return m_webcam; }
+    QString webcamDevice() const { return m_webcamDevice; }
+    QVariantList webcamDevices() const { return m_webcamDevices; }
 
     void setSystemAudio(bool value);
     void setMicrophone(bool value);
     void setMicrophoneDevice(const QString &value);
+    void setWebcam(bool value);
+    void setWebcamDevice(const QString &value);
 
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void openBundle(const QString &path);
@@ -43,6 +51,7 @@ signals:
     void recordingElapsedChanged();
     void recordingPreferencesChanged();
     void audioDevicesChanged();
+    void webcamDevicesChanged();
     void quitRequested();
     void errorOccurred(const QString &message);
 
@@ -53,6 +62,7 @@ private:
     void refreshRecording();
     void saveRecordingPreferences();
     void refreshAudioDevices();
+    void refreshWebcamDevices();
     QVariantList m_recentBundles;
     bool m_recording = false;
     QString m_recordingElapsed = QStringLiteral("00:00");
@@ -61,6 +71,9 @@ private:
     bool m_microphone = true;
     QString m_microphoneDevice = QStringLiteral("default_input");
     QVariantList m_audioDevices;
+    bool m_webcam = false;
+    QString m_webcamDevice = QStringLiteral("/dev/video2");
+    QVariantList m_webcamDevices;
 };
 
 } // namespace OmaRecord

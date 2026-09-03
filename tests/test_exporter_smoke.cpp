@@ -1,9 +1,11 @@
 #include "render/Exporter.h"
+#include "core/Project.h"
 
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QImage>
 #include <QProcess>
 #include <QTemporaryDir>
 #include <QTimer>
@@ -42,6 +44,40 @@ private slots:
         QVERIFY(makeVideo.waitForFinished(30000));
         QCOMPARE(makeVideo.exitCode(), 0);
 
+        QProcess makeCamera;
+        makeCamera.start(QStringLiteral("ffmpeg"), {QStringLiteral("-y"), QStringLiteral("-v"), QStringLiteral("error"),
+            QStringLiteral("-f"), QStringLiteral("lavfi"), QStringLiteral("-i"), QStringLiteral("testsrc2=size=320x180:rate=30"),
+            QStringLiteral("-t"), QStringLiteral("2"), QStringLiteral("-c:v"), QStringLiteral("libx264"),
+            QDir(bundle).filePath(QStringLiteral("camera.mp4"))});
+        QVERIFY(makeCamera.waitForFinished(30000));
+        QCOMPARE(makeCamera.exitCode(), 0);
+        QFile cameraTimestamp(QDir(bundle).filePath(QStringLiteral("camera.mp4.ts")));
+        QVERIFY(cameraTimestamp.open(QIODevice::WriteOnly | QIODevice::Text));
+        const QByteArray timestampData("monotonic_microsec\trealtime_microsec\n1200000\t1200000\n");
+        QCOMPARE(cameraTimestamp.write(timestampData), qint64(timestampData.size()));
+        cameraTimestamp.close();
+        QFile captureFile(QDir(bundle).filePath(QStringLiteral("capture.json")));
+        QVERIFY(captureFile.open(QIODevice::ReadOnly));
+        QJsonObject capture = QJsonDocument::fromJson(captureFile.readAll()).object();
+        captureFile.close();
+        capture.insert(QStringLiteral("camera"), QJsonObject{
+            {QStringLiteral("device"), QStringLiteral("synthetic")},
+            {QStringLiteral("width"), 320}, {QStringLiteral("height"), 180},
+            {QStringLiteral("fps"), 30}, {QStringLiteral("first_frame_us"), 1200000},
+            {QStringLiteral("backend"), QStringLiteral("synthetic")}});
+        QVERIFY(captureFile.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        captureFile.write(QJsonDocument(capture).toJson(QJsonDocument::Indented));
+        captureFile.close();
+        Project project = Project::defaults(QStringLiteral("Camera smoke"), 2.0);
+        project.background.type = QStringLiteral("color");
+        project.background.color = QColor(QStringLiteral("#101020"));
+        project.cursor.visible = false;
+        project.camera.enabled = true;
+        project.camera.shadow = false;
+        QString projectError;
+        QVERIFY2(project.save(QDir(bundle).filePath(QStringLiteral("project.json")), &projectError),
+                 qPrintable(projectError));
+
         const QString output = temporary.filePath(QStringLiteral("out.mp4"));
         Exporter exporter;
         QString failure;
@@ -70,6 +106,22 @@ private slots:
         QCOMPARE(stream.value("height").toInt(), 360);
         const double duration = root.value("format").toObject().value("duration").toString().toDouble();
         QVERIFY(duration > 1.9 && duration < 2.1);
+
+        const QString stillPath = temporary.filePath(QStringLiteral("overlay.png"));
+        QProcess still;
+        still.start(QStringLiteral("ffmpeg"), {QStringLiteral("-y"), QStringLiteral("-v"), QStringLiteral("error"),
+            QStringLiteral("-ss"), QStringLiteral("0.8"), QStringLiteral("-i"), output,
+            QStringLiteral("-frames:v"), QStringLiteral("1"), stillPath});
+        QVERIFY(still.waitForFinished(15000));
+        QCOMPARE(still.exitCode(), 0);
+        const QImage exportedFrame(stillPath);
+        QVERIFY(!exportedFrame.isNull());
+        const QColor backgroundPixel = exportedFrame.pixelColor(4, 4);
+        const QColor cameraPixel = exportedFrame.pixelColor(582, 308);
+        const int colorDistance = std::abs(cameraPixel.red() - backgroundPixel.red())
+            + std::abs(cameraPixel.green() - backgroundPixel.green())
+            + std::abs(cameraPixel.blue() - backgroundPixel.blue());
+        QVERIFY2(colorDistance > 60, "The exported camera overlay did not differ from the background");
 
         const QString cancelledOutput = temporary.filePath(QStringLiteral("cancelled.mp4"));
         QFile sentinel(cancelledOutput);

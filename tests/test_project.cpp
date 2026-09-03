@@ -29,7 +29,10 @@ private slots:
         QCOMPARE(original.camera.size, 0.25);
         QCOMPARE(original.camera.shape, QStringLiteral("round"));
         QCOMPARE(original.camera.radius, 16.0);
+        QCOMPARE(original.camera.crop, QStringLiteral("original"));
         QCOMPARE(original.camera.mirror, true);
+        QCOMPARE(original.camera.shadow, true);
+        QCOMPARE(original.camera.scaleDuringZoom, 0.7);
         QCOMPARE(original.camera.offset, QPointF(0.02, 0.02));
         QVERIFY(allowedAspects().contains(QStringLiteral("3:4")));
         QCOMPARE(allowedClipSpeeds().last(), 24.0);

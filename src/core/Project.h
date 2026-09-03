@@ -68,7 +68,10 @@ struct Camera {
     double size = 0.25;
     QString shape = QStringLiteral("round");
     double radius = 16.0;
+    QString crop = QStringLiteral("original");
     bool mirror = true;
+    bool shadow = true;
+    double scaleDuringZoom = 0.7;
     QPointF offset{0.02, 0.02};
 };
 struct GifExport { int fps = 15; int height = 480; QString quality = QStringLiteral("studio"); bool loop = true; };

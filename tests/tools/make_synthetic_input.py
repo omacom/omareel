@@ -5,12 +5,15 @@ import argparse
 import json
 import math
 from pathlib import Path
+import subprocess
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("bundle", type=Path)
     parser.add_argument("--duration", type=float, default=8.0)
+    parser.add_argument("--camera", action="store_true")
+    parser.add_argument("--camera-offset", type=float, default=0.2)
     args = parser.parse_args()
     capture = json.loads((args.bundle / "capture.json").read_text())
     first = int(capture["first_frame_us"])
@@ -33,6 +36,21 @@ def main() -> None:
     with (args.bundle / "input.jsonl").open("w") as output:
         for event in events:
             output.write(json.dumps(event, separators=(",", ":")) + "\n")
+    if args.camera:
+        camera_first = first + round(args.camera_offset * 1_000_000)
+        subprocess.run([
+            "ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i",
+            "testsrc2=size=320x180:rate=30", "-t", "2", "-c:v", "libx264",
+            str(args.bundle / "camera.mp4"),
+        ], check=True)
+        (args.bundle / "camera.mp4.ts").write_text(
+            f"monotonic_microsec\trealtime_microsec\n{camera_first}\t{camera_first}\n"
+        )
+        capture["camera"] = {
+            "device": "synthetic", "width": 320, "height": 180, "fps": 30,
+            "first_frame_us": camera_first, "backend": "synthetic",
+        }
+        (args.bundle / "capture.json").write_text(json.dumps(capture, indent=2) + "\n")
 
 
 if __name__ == "__main__":

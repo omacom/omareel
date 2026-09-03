@@ -28,6 +28,9 @@ class CompositionState : public QObject
     Q_PROPERTY(int outputHeight MEMBER outputHeight NOTIFY changed)
     Q_PROPERTY(int sourceWidth MEMBER sourceWidth NOTIFY changed)
     Q_PROPERTY(int sourceHeight MEMBER sourceHeight NOTIFY changed)
+    Q_PROPERTY(bool cameraAvailable MEMBER cameraAvailable NOTIFY changed)
+    Q_PROPERTY(int cameraSourceWidth MEMBER cameraSourceWidth NOTIFY changed)
+    Q_PROPERTY(int cameraSourceHeight MEMBER cameraSourceHeight NOTIFY changed)
     Q_PROPERTY(double time MEMBER time NOTIFY changed)
     Q_PROPERTY(QVariantMap project MEMBER project NOTIFY changed)
     Q_PROPERTY(QVariantMap zoom MEMBER zoom NOTIFY changed)
@@ -40,6 +43,9 @@ public:
     int outputHeight = 0;
     int sourceWidth = 0;
     int sourceHeight = 0;
+    bool cameraAvailable = false;
+    int cameraSourceWidth = 0;
+    int cameraSourceHeight = 0;
     double time = 0.0;
     QVariantMap project;
     QVariantMap zoom;

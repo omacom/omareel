@@ -45,6 +45,7 @@ omarecord record [opts]         # toggle: start if not recording, else stop
     --region                    # slurp pick (default: omarchy-capture-region smart if available, else slurp)
     --window                    # slurp with window rects (hyprctl clients) snapping
     --with-desktop-audio --with-microphone-audio
+    --with-webcam [--webcam-device=/dev/videoN] --no-webcam
     --fps N (default 60)  --dir PATH (default $XDG_VIDEOS_DIR/omarecord)
     --no-open                   # don't launch editor after stop
     --stop                      # only stop; exit 1 if not recording
@@ -65,6 +66,8 @@ Also call `omarchy-shell -q omarchy.indicators refresh` if present (it watches g
 ```
 screen.mp4          raw capture (no cursor), cfr
 screen.mp4.ts       gsr first-frame timestamps (kept verbatim)
+camera.mp4          optional webcam capture, without audio
+camera.mp4.ts       webcam first-frame timestamps
 capture.json        { "version":1, "fps":60, "width":3840, "height":2160,
                       "region":{"x":1600,"y":0,"w":2400,"h":1350},   # logical
                       "scale":1.6, "monitor":"DP-3", "first_frame_us":182833061901,
@@ -82,6 +85,15 @@ thumb.jpg           first-frame thumbnail for launcher.
 
 `t` in input.jsonl is **raw monotonic us**; the reader subtracts `first_frame_us`.
 Move samples before the first frame or after stop are still stored (trimmed on load).
+
+### Webcam capture
+
+When enabled, the screen process is started first and a second capture process is launched
+immediately through the same recorder trampoline. The webcam command uses v4l2 capture at 30 fps,
+CFR, with its own first-frame timestamp file. If that process exits during startup, capture falls
+back to ffmpeg v4l2 at 1280x720 and records the first progress frame's monotonic timestamp.
+`capture.json.camera.backend` records `gpu-screen-recorder` or `ffmpeg-v4l2` for each bundle,
+along with the device, dimensions, frame rate, and first-frame timestamp.
 
 ## 3. Project model (`project.json`, version 1)
 
@@ -112,6 +124,9 @@ Move samples before the first frame or after stop are still stored (trimmed on l
              "clickEffect":"ripple",      // none | ripple | shrink | highlight
              "clickShrink":0.85,"hideWhenIdleMs":null,"style":"macos"},
   "audio": {"desktop":true,"mic":true,"volume":1.0},
+  "camera": {"enabled":false,"position":"bottom-right","size":0.25,
+             "shape":"round","radius":16,"crop":"original","mirror":true,
+             "shadow":true,"scaleDuringZoom":0.7,"offset":{"x":0.02,"y":0.02}},
   "export": {"format":"mp4","fps":60,"width":1920,"quality":"high","gif":{"fps":20,"width":960}}
 }
 ```

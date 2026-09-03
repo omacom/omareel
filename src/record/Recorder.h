@@ -13,6 +13,8 @@ struct RecordOptions {
     bool desktopAudio = false;
     bool microphoneAudio = false;
     QString microphoneDevice = QStringLiteral("default_input");
+    bool webcam = false;
+    QString webcamDevice = QStringLiteral("/dev/video2");
     bool noOpen = false;
     bool noBar = false;
 };
@@ -26,6 +28,7 @@ public:
     static bool isRecording();
     static qint64 recordingStartedUs();
     static QString recordedMonitor();
+    static bool recordingHasWebcam();
     static bool signalExisting(bool cancel, QString *error = nullptr);
     static GsrExitClassification classifyGsrExit(int exitCode, bool stopRequested,
                                                  qint64 fileSize, double probedDuration);

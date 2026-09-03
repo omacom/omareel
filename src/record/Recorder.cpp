@@ -119,6 +119,11 @@ QString Recorder::recordedMonitor()
     return readState().value(QStringLiteral("monitor")).toString();
 }
 
+bool Recorder::recordingHasWebcam()
+{
+    return readState().value(QStringLiteral("webcam")).toBool(false);
+}
+
 bool Recorder::signalExisting(bool cancel, QString *error)
 {
     const auto state = readState();
@@ -180,6 +185,8 @@ int Recorder::startDetached(const RecordOptions &options, QString *message)
     if (options.microphoneAudio) arguments << QStringLiteral("--microphone-audio")
                                            << QStringLiteral("--microphone-device")
                                            << options.microphoneDevice;
+    if (options.webcam) arguments << QStringLiteral("--webcam")
+                                 << QStringLiteral("--webcam-device") << options.webcamDevice;
     if (options.noOpen) arguments << QStringLiteral("--no-open");
     if (options.noBar) arguments << QStringLiteral("--no-bar");
     QProcess daemon;
@@ -298,6 +305,45 @@ static qint64 firstFrameTimestamp(const QString &path)
         if (ok) return value;
     }
     return 0;
+}
+
+static bool writeFirstFrameTimestamp(const QString &path, qint64 monotonicUs)
+{
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) return false;
+    const qint64 realtimeUs = QDateTime::currentMSecsSinceEpoch() * 1000;
+    file.write("monotonic_microsec\trealtime_microsec\n");
+    file.write(QByteArray::number(monotonicUs) + '\t' + QByteArray::number(realtimeUs) + '\n');
+    return file.commit();
+}
+
+static void drainCameraOutput(QProcess *process, QByteArray *tail, QByteArray *lines,
+                              qint64 *fallbackFirstFrameUs, const QString &timestampPath,
+                              QFile *debugLog)
+{
+    const QByteArray chunk = process->readAll();
+    if (chunk.isEmpty()) return;
+    if (debugLog && debugLog->isOpen()) {
+        debugLog->write(chunk);
+        debugLog->flush();
+    }
+    tail->append(chunk);
+    if (tail->size() > 4096) tail->remove(0, tail->size() - 4096);
+    if (!fallbackFirstFrameUs || *fallbackFirstFrameUs > 0) return;
+    lines->append(chunk);
+    qsizetype newline = -1;
+    while ((newline = lines->indexOf('\n')) >= 0) {
+        const QByteArray line = lines->left(newline).trimmed();
+        lines->remove(0, newline + 1);
+        if (!line.startsWith("frame=")) continue;
+        bool ok = false;
+        const int frame = line.mid(6).trimmed().toInt(&ok);
+        if (ok && frame > 0) {
+            *fallbackFirstFrameUs = CursorSampler::monotonicUs();
+            writeFirstFrameTimestamp(timestampPath, *fallbackFirstFrameUs);
+            break;
+        }
+    }
 }
 
 static QPointF cursorAt(const QVector<RawCursorSample> &samples, qint64 time)
@@ -427,6 +473,9 @@ int Recorder::daemonMain(const QStringList &arguments)
     if (options.microphoneDevice.isEmpty()) options.microphoneDevice = QStringLiteral("default_input");
     options.noOpen = arguments.contains(QStringLiteral("--no-open"));
     options.noBar = arguments.contains(QStringLiteral("--no-bar"));
+    options.webcam = arguments.contains(QStringLiteral("--webcam"));
+    options.webcamDevice = valueAfter(arguments, QStringLiteral("--webcam-device"));
+    if (options.webcamDevice.isEmpty()) options.webcamDevice = QStringLiteral("/dev/video2");
     CaptureRegion region;
     const QString mode = valueAfter(arguments, QStringLiteral("--mode"));
     region.mode = mode == QLatin1String("fullscreen") ? CaptureMode::Fullscreen
@@ -460,6 +509,7 @@ int Recorder::daemonMain(const QStringList &arguments)
     if (!evdevListener.start(&warning)) qWarning().noquote() << warning;
 
     const QString video = bundle + QStringLiteral("/screen.mp4");
+    const QString cameraVideo = bundle + QStringLiteral("/camera.mp4");
     QStringList gsr;
     if (region.mode == CaptureMode::Fullscreen) {
         gsr << QStringLiteral("-w") << region.monitorName << QStringLiteral("-s") << QStringLiteral("0x0");
@@ -494,17 +544,56 @@ int Recorder::daemonMain(const QStringList &arguments)
     QStringList recorderArguments{QStringLiteral("__record-gsr")};
     recorderArguments << gsr;
     recorder.start(QCoreApplication::applicationFilePath(), recorderArguments);
+
+    QProcess cameraRecorder;
+    cameraRecorder.setProcessChannelMode(QProcess::MergedChannels);
+    QByteArray cameraOutput;
+    QByteArray cameraLines;
+    qint64 fallbackFirstFrameUs = 0;
+    bool cameraFallback = false;
+    bool cameraAvailable = options.webcam;
+    const auto startCameraFallback = [&] {
+        QFile::remove(cameraVideo);
+        QFile::remove(cameraVideo + QStringLiteral(".ts"));
+        cameraFallback = true;
+        const QStringList ffmpegArgs{QStringLiteral("-y"), QStringLiteral("-v"), QStringLiteral("error"),
+            QStringLiteral("-f"), QStringLiteral("v4l2"), QStringLiteral("-framerate"), QStringLiteral("30"),
+            QStringLiteral("-video_size"), QStringLiteral("1280x720"), QStringLiteral("-i"), options.webcamDevice,
+            QStringLiteral("-an"), QStringLiteral("-c:v"), QStringLiteral("libx264"),
+            QStringLiteral("-preset"), QStringLiteral("veryfast"), QStringLiteral("-progress"),
+            QStringLiteral("pipe:1"), QStringLiteral("-nostats"), cameraVideo};
+        cameraRecorder.start(QStringLiteral("ffmpeg"), ffmpegArgs);
+        cameraAvailable = cameraRecorder.waitForStarted(1000);
+    };
+    if (cameraAvailable) {
+        const QStringList cameraGsr{QStringLiteral("__record-gsr"), QStringLiteral("-w"),
+            // Cap the webcam at 1080p: it only ever fills a corner bubble, and 4K webcams
+            // (this box has one) would double the encode load for no visible gain.
+            options.webcamDevice, QStringLiteral("-s"), QStringLiteral("1920x1080"),
+            QStringLiteral("-f"), QStringLiteral("30"), QStringLiteral("-fm"),
+            QStringLiteral("cfr"), QStringLiteral("-k"), QStringLiteral("auto"),
+            QStringLiteral("-cursor"), QStringLiteral("no"),
+            QStringLiteral("-write-first-frame-ts"), QStringLiteral("yes"),
+            QStringLiteral("-o"), cameraVideo};
+        cameraRecorder.start(QCoreApplication::applicationFilePath(), cameraGsr);
+    }
     if (!recorder.waitForStarted(5000)) {
+        if (cameraRecorder.state() != QProcess::NotRunning) cameraRecorder.kill();
         drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
         QString reason = lastNonEmptyLine(recorderOutput);
         if (reason.isEmpty()) reason = recorder.errorString();
         return failRecorderStartup(reason, bundle, video, &cursorSampler, &evdevListener);
     }
+
+    if (cameraAvailable && !cameraRecorder.waitForStarted(5000)) startCameraFallback();
     const qint64 recorderStartedUs = CursorSampler::monotonicUs();
     QJsonObject state{{"pid", daemonPid}, {"bundle", bundle}, {"started_us", startedUs},
-                      {"monitor", region.monitorName}, {"no_open", options.noOpen}};
+                      {"monitor", region.monitorName}, {"no_open", options.noOpen},
+                      {"webcam", cameraAvailable}};
     if (!writeJson(stateFilePath(), state, &error)) {
         ::kill(pid_t(recorder.processId()), SIGINT);
+        if (cameraRecorder.state() != QProcess::NotRunning)
+            ::kill(pid_t(cameraRecorder.processId()), SIGINT);
         recorder.waitForFinished(5000);
         drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
         const QString reason = error.isEmpty()
@@ -524,24 +613,56 @@ int Recorder::daemonMain(const QStringList &arguments)
            && CursorSampler::monotonicUs() - recorderStartedUs < 2000000) {
         recorder.waitForFinished(0);
         drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
+        if (cameraAvailable) {
+            cameraRecorder.waitForFinished(0);
+            if (cameraFallback)
+                drainCameraOutput(&cameraRecorder, &cameraOutput, &cameraLines,
+                                  &fallbackFirstFrameUs, cameraVideo + QStringLiteral(".ts"), &debugLog);
+            else drainRecorderOutput(&cameraRecorder, &cameraOutput, &debugLog);
+            if (!cameraFallback && cameraRecorder.state() == QProcess::NotRunning) {
+                startCameraFallback();
+            } else if (cameraFallback && cameraRecorder.state() == QProcess::NotRunning) {
+                cameraAvailable = false;
+            }
+        }
         QThread::msleep(40);
     }
     drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
     while (!stopRequested && recorder.state() != QProcess::NotRunning) {
         recorder.waitForFinished(0);
         drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
+        if (cameraAvailable) {
+            cameraRecorder.waitForFinished(0);
+            if (cameraFallback)
+                drainCameraOutput(&cameraRecorder, &cameraOutput, &cameraLines,
+                                  &fallbackFirstFrameUs, cameraVideo + QStringLiteral(".ts"), &debugLog);
+            else drainRecorderOutput(&cameraRecorder, &cameraOutput, &debugLog);
+        }
         QThread::msleep(40);
     }
     const bool unexpectedExit = !stopRequested && recorder.state() == QProcess::NotRunning;
     bool forcedStop = false;
     if (recorder.state() != QProcess::NotRunning) {
         ::kill(pid_t(recorder.processId()), SIGINT);
+        if (cameraRecorder.state() != QProcess::NotRunning)
+            ::kill(pid_t(cameraRecorder.processId()), SIGINT);
         if (!recorder.waitForFinished(5000)) {
             forcedStop = true;
             recorder.kill();
             recorder.waitForFinished(1000);
         }
     }
+    if (cameraRecorder.state() != QProcess::NotRunning) {
+        ::kill(pid_t(cameraRecorder.processId()), SIGINT);
+        if (!cameraRecorder.waitForFinished(5000)) {
+            cameraRecorder.kill();
+            cameraRecorder.waitForFinished(1000);
+        }
+    }
+    if (cameraFallback)
+        drainCameraOutput(&cameraRecorder, &cameraOutput, &cameraLines,
+                          &fallbackFirstFrameUs, cameraVideo + QStringLiteral(".ts"), &debugLog);
+    else drainRecorderOutput(&cameraRecorder, &cameraOutput, &debugLog);
     drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
     const QString recorderErrorLine = lastNonEmptyLine(recorderOutput);
     const bool recorderFailed = recorder.exitStatus() != QProcess::NormalExit || recorder.exitCode() != 0;
@@ -600,6 +721,33 @@ int Recorder::daemonMain(const QStringList &arguments)
         {"audio", QJsonObject{{"desktop", options.desktopAudio}, {"mic", options.microphoneAudio},
                                 {"microphoneDevice", options.microphoneDevice}}}
     };
+    if (cameraAvailable && QFileInfo(cameraVideo).size() > 0) {
+        const qint64 cameraFirstFrameUs = firstFrameTimestamp(cameraVideo + QStringLiteral(".ts"));
+        QProcess cameraProbe;
+        cameraProbe.start(QStringLiteral("ffprobe"), {QStringLiteral("-v"), QStringLiteral("error"),
+            QStringLiteral("-select_streams"), QStringLiteral("v:0"), QStringLiteral("-show_entries"),
+            QStringLiteral("stream=width,height,r_frame_rate"), QStringLiteral("-of"), QStringLiteral("json"),
+            cameraVideo});
+        if (cameraProbe.waitForFinished(10000) && cameraProbe.exitCode() == 0 && cameraFirstFrameUs > 0) {
+            const QJsonArray streams = QJsonDocument::fromJson(cameraProbe.readAllStandardOutput())
+                                           .object().value(QStringLiteral("streams")).toArray();
+            const QJsonObject stream = streams.isEmpty() ? QJsonObject{} : streams.first().toObject();
+            const QStringList rate = stream.value(QStringLiteral("r_frame_rate")).toString().split('/');
+            const double fps = rate.size() == 2 && rate[1].toDouble() != 0.0
+                ? rate[0].toDouble() / rate[1].toDouble() : 30.0;
+            capture.insert(QStringLiteral("camera"), QJsonObject{
+                {QStringLiteral("device"), options.webcamDevice},
+                {QStringLiteral("width"), stream.value(QStringLiteral("width")).toInt()},
+                {QStringLiteral("height"), stream.value(QStringLiteral("height")).toInt()},
+                {QStringLiteral("fps"), fps},
+                {QStringLiteral("first_frame_us"), cameraFirstFrameUs},
+                {QStringLiteral("backend"), cameraFallback ? QStringLiteral("ffmpeg-v4l2")
+                                                            : QStringLiteral("gpu-screen-recorder")}});
+        } else {
+            QFile::remove(cameraVideo);
+            QFile::remove(cameraVideo + QStringLiteral(".ts"));
+        }
+    }
     ok = writeJson(bundle + QStringLiteral("/capture.json"), capture, &error) && ok;
 
     QProcess ffmpeg;

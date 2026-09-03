@@ -3,6 +3,7 @@
 #include "FfmpegDecoder.h"
 #include "FrameSource.h"
 #include "core/ClipTimeline.h"
+#include "core/CameraTimeline.h"
 #include "core/InputLog.h"
 #include "core/MotionTrack.h"
 #include "core/OmarchyPaths.h"
@@ -48,13 +49,20 @@ QSize OmaRecord::paddedEvenSize(int width, int height)
     return {width + std::abs(width % 2), height + std::abs(height % 2)};
 }
 
-struct MediaInfo { int width = 0; int height = 0; double duration = 0.0; bool audio = false; };
+struct MediaInfo { int width = 0; int height = 0; double duration = 0.0; double fps = 30.0; bool audio = false; };
+
+static double rateValue(const QString &value)
+{
+    const QStringList parts = value.split('/');
+    return parts.size() == 2 && parts[1].toDouble() != 0.0
+        ? parts[0].toDouble() / parts[1].toDouble() : value.toDouble();
+}
 
 static MediaInfo probe(const QString &path, QString *error)
 {
     QProcess process;
     process.start(QStringLiteral("ffprobe"), {QStringLiteral("-v"), QStringLiteral("error"),
-        QStringLiteral("-show_entries"), QStringLiteral("stream=codec_type,width,height:format=duration"),
+        QStringLiteral("-show_entries"), QStringLiteral("stream=codec_type,width,height,r_frame_rate:format=duration"),
         QStringLiteral("-of"), QStringLiteral("json"), path});
     if (!process.waitForFinished(15000) || process.exitCode() != 0) {
         if (error) *error = QString::fromUtf8(process.readAllStandardError()).trimmed();
@@ -68,11 +76,13 @@ static MediaInfo probe(const QString &path, QString *error)
         if (stream.value("codec_type") == QLatin1String("video") && result.width == 0) {
             result.width = stream.value("width").toInt();
             result.height = stream.value("height").toInt();
+            result.fps = rateValue(stream.value("r_frame_rate").toString());
         } else if (stream.value("codec_type") == QLatin1String("audio")) result.audio = true;
     }
     if (result.width <= 0 || result.height <= 0 || result.duration <= 0.0) {
         if (error) *error = QStringLiteral("ffprobe returned invalid video metadata");
     }
+    if (result.fps <= 0.0) result.fps = 30.0;
     return result;
 }
 
@@ -172,6 +182,7 @@ bool Exporter::run(const ExportOptions &options, QString *error)
     qint64 encodeWriteNs = 0;
     const QDir bundle(options.bundlePath);
     const QString videoPath = bundle.filePath(QStringLiteral("screen.mp4"));
+    const QString cameraPath = bundle.filePath(QStringLiteral("camera.mp4"));
     const MediaInfo media = probe(videoPath, error);
     if (media.width <= 0) return false;
 
@@ -182,6 +193,7 @@ bool Exporter::run(const ExportOptions &options, QString *error)
         if (error && !error->isEmpty()) return false;
     } else {
         project = Project::defaults(bundle.dirName(), media.duration);
+        project.camera.enabled = QFileInfo(cameraPath).isFile();
         QString inputError;
         const auto input = InputLog::loadBundle(bundle.absolutePath(), media.duration, &inputError);
         if (!inputError.isEmpty()) { if (error) *error = inputError; return false; }
@@ -198,8 +210,21 @@ bool Exporter::run(const ExportOptions &options, QString *error)
     const auto input = InputLog::loadBundle(bundle.absolutePath(), media.duration, &inputError);
     if (!inputError.isEmpty()) { if (error) *error = inputError; return false; }
     double captureFps = 60.0;
+    double cameraOffset = 0.0;
+    QJsonObject captureRoot;
     QFile capture(bundle.filePath(QStringLiteral("capture.json")));
-    if (capture.open(QIODevice::ReadOnly)) captureFps = QJsonDocument::fromJson(capture.readAll()).object().value("fps").toDouble(60.0);
+    if (capture.open(QIODevice::ReadOnly)) {
+        captureRoot = QJsonDocument::fromJson(capture.readAll()).object();
+        captureFps = captureRoot.value("fps").toDouble(60.0);
+        const qint64 screenFirst = captureRoot.value(QStringLiteral("first_frame_us")).toVariant().toLongLong();
+        const qint64 cameraFirst = captureRoot.value(QStringLiteral("camera")).toObject()
+                                       .value(QStringLiteral("first_frame_us")).toVariant().toLongLong();
+        if (screenFirst > 0 && cameraFirst > 0)
+            cameraOffset = (cameraFirst - screenFirst) / 1000000.0;
+    }
+    QString cameraProbeError;
+    const MediaInfo cameraMedia = QFileInfo(cameraPath).isFile() ? probe(cameraPath, &cameraProbeError) : MediaInfo{};
+    const bool cameraEnabled = project.camera.enabled && cameraMedia.width > 0;
     const MotionTrack motion = MotionTrack::build(media.duration, media.width, media.height,
                                                    input.events(), project, captureFps);
 
@@ -227,6 +252,12 @@ bool Exporter::run(const ExportOptions &options, QString *error)
                                                    neededHeight / media.height), 0.01, 1.0);
     const int decodeWidth = std::min(media.width, std::max(2, qRound(media.width * decodeScale / 2.0) * 2));
     const int decodeHeight = std::min(media.height, std::max(2, qRound(media.height * decodeScale / 2.0) * 2));
+    const double cameraDecodeScale = cameraEnabled
+        ? std::clamp(height * project.camera.size * 1.5 / cameraMedia.height, 0.01, 1.0) : 1.0;
+    const int cameraDecodeWidth = cameraEnabled
+        ? std::min(cameraMedia.width, std::max(2, qRound(cameraMedia.width * cameraDecodeScale / 2.0) * 2)) : 0;
+    const int cameraDecodeHeight = cameraEnabled
+        ? std::min(cameraMedia.height, std::max(2, qRound(cameraMedia.height * cameraDecodeScale / 2.0) * 2)) : 0;
 
     const bool softwareRendering = QQuickWindow::graphicsApi() == QSGRendererInterface::Software
                                 || QGuiApplication::platformName() == QLatin1String("offscreen");
@@ -272,6 +303,9 @@ bool Exporter::run(const ExportOptions &options, QString *error)
     state.outputWidth = width; state.outputHeight = height;
     state.softwareRendering = softwareRendering;
     state.sourceWidth = media.width; state.sourceHeight = media.height;
+    state.cameraAvailable = cameraMedia.width > 0;
+    state.cameraSourceWidth = cameraMedia.width;
+    state.cameraSourceHeight = cameraMedia.height;
     state.project = projectMap(project);
     state.zoom = {{QStringLiteral("scale"), 1.0}, {QStringLiteral("cx"), 0.5}, {QStringLiteral("cy"), 0.5}};
     state.cursor = {{QStringLiteral("x"), 0.5}, {QStringLiteral("y"), 0.5},
@@ -291,6 +325,8 @@ bool Exporter::run(const ExportOptions &options, QString *error)
     rootItem->setSize(QSizeF(width, height));
     auto *frameSource = rootItem->findChild<FrameSource *>(QStringLiteral("videoFrameSource"));
     if (!frameSource) { if (error) *error = QStringLiteral("Composition has no FrameSource"); return false; }
+    auto *cameraFrameSource = rootItem->findChild<FrameSource *>(QStringLiteral("cameraFrameSource"));
+    if (!cameraFrameSource) { if (error) *error = QStringLiteral("Composition has no camera FrameSource"); return false; }
 
     QString runtime = qEnvironmentVariable("XDG_RUNTIME_DIR");
     if (runtime.isEmpty() || !QFileInfo(runtime).isWritable()) runtime = QDir::tempPath();
@@ -442,7 +478,7 @@ bool Exporter::run(const ExportOptions &options, QString *error)
         glExtra->glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     }
 
-    struct DecodedPacket { QImage image; QString error; };
+    struct DecodedPacket { QImage image; QImage cameraImage; QString error; };
     std::mutex decodeMutex;
     std::condition_variable decodeReady;
     std::condition_variable decodeSpace;
@@ -451,8 +487,26 @@ bool Exporter::run(const ExportOptions &options, QString *error)
     std::atomic_bool stopDecode{false};
     std::thread decodeThread([&] {
         FfmpegDecoder decoder;
+        FfmpegDecoder cameraDecoder;
         int activeClip = -1;
         QImage decoded;
+        QImage cameraDecoded;
+        int cameraFrame = -1;
+        bool cameraEof = false;
+        if (cameraEnabled) {
+            QString cameraError;
+            if (!cameraDecoder.start(cameraPath, 0.0, cameraMedia.duration, cameraMedia.fps,
+                                     cameraDecodeWidth, cameraDecodeHeight,
+                                     cameraDecodeWidth != cameraMedia.width
+                                         || cameraDecodeHeight != cameraMedia.height,
+                                     &cameraError)) {
+                std::lock_guard lock(decodeMutex);
+                decodeQueue.push_back({{}, {}, cameraError});
+                decodeDone = true;
+                decodeReady.notify_all();
+                return;
+            }
+        }
         for (int frame = 0; frame < totalFrames && !stopDecode && !m_cancelled; ++frame) {
             const double outputTime = frame / double(fps);
             double clipOutputStart = 0.0;
@@ -473,7 +527,7 @@ bool Exporter::run(const ExportOptions &options, QString *error)
                                    decodeWidth != media.width || decodeHeight != media.height,
                                    &decodeError)) {
                     std::lock_guard lock(decodeMutex);
-                    decodeQueue.push_back({{}, decodeError});
+                    decodeQueue.push_back({{}, {}, decodeError});
                     break;
                 }
                 activeClip = clipIndex;
@@ -482,18 +536,54 @@ bool Exporter::run(const ExportOptions &options, QString *error)
             if (decoder.readFrame(&next, &decodeError)) decoded = std::move(next);
             else if (decoded.isNull()) {
                 std::lock_guard lock(decodeMutex);
-                decodeQueue.push_back({{}, decodeError.isEmpty()
+                decodeQueue.push_back({{}, {}, decodeError.isEmpty()
                     ? QStringLiteral("Decoder ended before the first frame") : decodeError});
                 break;
+            }
+            if (cameraEnabled) {
+                const double screenSourceTime = timeline.sourceTime(outputTime);
+                const CameraTime mapped = mapCameraTime(screenSourceTime, cameraOffset,
+                                                        cameraMedia.duration);
+                const int wanted = std::max(0, int(std::floor(mapped.seconds * cameraMedia.fps + 1e-6)));
+                if (wanted < cameraFrame) {
+                    cameraDecoder.cancel();
+                    cameraFrame = -1;
+                    cameraEof = false;
+                    if (!cameraDecoder.start(cameraPath, 0.0, cameraMedia.duration, cameraMedia.fps,
+                                             cameraDecodeWidth, cameraDecodeHeight,
+                                             cameraDecodeWidth != cameraMedia.width
+                                                 || cameraDecodeHeight != cameraMedia.height,
+                                             &decodeError)) {
+                        std::lock_guard lock(decodeMutex);
+                        decodeQueue.push_back({{}, {}, decodeError});
+                        break;
+                    }
+                }
+                while (!cameraEof && cameraFrame < wanted) {
+                    QImage nextCamera;
+                    if (cameraDecoder.readFrame(&nextCamera, &decodeError)) {
+                        cameraDecoded = std::move(nextCamera);
+                        ++cameraFrame;
+                    } else {
+                        cameraEof = true;
+                        if (cameraDecoded.isNull()) {
+                            std::lock_guard lock(decodeMutex);
+                            decodeQueue.push_back({{}, {}, decodeError.isEmpty()
+                                ? QStringLiteral("Camera decoder ended before the first frame") : decodeError});
+                        }
+                    }
+                }
+                if (cameraDecoded.isNull()) break;
             }
             std::unique_lock lock(decodeMutex);
             decodeSpace.wait(lock, [&] { return decodeQueue.size() < 3 || stopDecode || m_cancelled; });
             if (stopDecode || m_cancelled) break;
-            decodeQueue.push_back({decoded, {}});
+            decodeQueue.push_back({decoded, cameraDecoded, {}});
             lock.unlock();
             decodeReady.notify_one();
         }
         decoder.cancel();
+        cameraDecoder.cancel();
         {
             std::lock_guard lock(decodeMutex);
             decodeDone = true;
@@ -581,6 +671,8 @@ bool Exporter::run(const ExportOptions &options, QString *error)
         state.notifyChanged();
         stageTimer.restart();
         frameSource->setImage(packet.image);
+        if (cameraEnabled && !packet.cameraImage.isNull())
+            cameraFrameSource->setImage(packet.cameraImage);
         QCoreApplication::processEvents();
         uploadNs += stageTimer.nsecsElapsed();
         QImage rendered;

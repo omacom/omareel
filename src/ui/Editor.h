@@ -67,6 +67,10 @@ class Editor : public QObject
     Q_PROPERTY(QVariantMap cursor READ previewCursor NOTIFY compositionChanged)
     Q_PROPERTY(QVariantList ripples READ previewRipples NOTIFY compositionChanged)
     Q_PROPERTY(bool softwareRendering READ softwareRendering CONSTANT)
+    Q_PROPERTY(bool cameraAvailable READ hasCamera CONSTANT)
+    Q_PROPERTY(int cameraSourceWidth READ cameraSourceWidth CONSTANT)
+    Q_PROPERTY(int cameraSourceHeight READ cameraSourceHeight CONSTANT)
+    Q_PROPERTY(QString cameraStatus READ cameraStatus CONSTANT)
 
 public:
     explicit Editor(const QString &bundlePath, QObject *parent = nullptr);
@@ -110,12 +114,16 @@ public:
     QVariantMap previewCursor() const;
     QVariantList previewRipples() const;
     bool softwareRendering() const;
+    int cameraSourceWidth() const { return m_cameraSourceWidth; }
+    int cameraSourceHeight() const { return m_cameraSourceHeight; }
+    QString cameraStatus() const;
 
     void setSelectedClipId(const QString &id);
     void setSelectedZoomId(const QString &id);
     void setPickingZoomTarget(bool value);
 
     Q_INVOKABLE void attachFrameSource(QObject *source);
+    Q_INVOKABLE void attachCameraFrameSource(QObject *source);
     Q_INVOKABLE void setProjectValue(const QString &path, const QVariant &value, bool coalesce = false);
     Q_INVOKABLE void beginCoalescedEdit(const QString &key);
     Q_INVOKABLE void endCoalescedEdit();
@@ -186,6 +194,7 @@ private:
     void applyMotionResult();
     void updatePreview();
     void handlePlayerPosition(qint64 milliseconds);
+    void syncCamera(double screenSourceTime, bool force = false);
     void startWaveformBuild();
     QString presetsDirectory() const;
     QJsonObject stylePreset() const;
@@ -193,6 +202,7 @@ private:
     QString m_bundlePath;
     QString m_projectPath;
     QString m_videoPath;
+    QString m_cameraVideoPath;
     Project m_project;
     InputLog m_input;
     double m_sourceDuration = 0.0;
@@ -203,16 +213,25 @@ private:
     bool m_hasDesktopAudio = false;
     bool m_hasMicrophoneAudio = false;
     bool m_hasCamera = false;
+    int m_cameraSourceWidth = 0;
+    int m_cameraSourceHeight = 0;
+    double m_cameraFps = 0.0;
+    double m_cameraDuration = 0.0;
+    double m_cameraOffset = 0.0;
     bool m_valid = false;
     QString m_error;
     QMediaPlayer m_player;
+    QMediaPlayer m_cameraPlayer;
     std::unique_ptr<QAudioOutput> m_audioOutput;
     std::unique_ptr<QVideoSink> m_videoSink;
     std::unique_ptr<PreviewSink> m_previewSink;
+    std::unique_ptr<QVideoSink> m_cameraVideoSink;
+    std::unique_ptr<PreviewSink> m_cameraPreviewSink;
     double m_outputPosition = 0.0;
     int m_activeClip = 0;
     bool m_internalSeek = false;
     bool m_warmingPreview = false;
+    bool m_warmingCameraPreview = false;
     QTimer m_autosaveTimer;
     QTimer m_motionTimer;
     QVector<QJsonObject> m_undo;

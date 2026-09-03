@@ -61,7 +61,10 @@ FocusScope {
             Composition {
                 id: composition
                 anchors.fill: parent
-                Component.onCompleted: editor.attachFrameSource(frameSource)
+                Component.onCompleted: {
+                    editor.attachFrameSource(frameSource)
+                    editor.attachCameraFrameSource(cameraFrameSource)
+                }
             }
             MouseArea {
                 anchors.fill: parent

@@ -143,7 +143,12 @@ Project Project::fromJson(const QJsonObject &root)
         || cameraShape == QLatin1String("square"))
         p.camera.shape = cameraShape;
     p.camera.radius = camera.value("radius").toDouble(16.0);
+    const QString cameraCrop = camera.value("crop").toString("original");
+    if (cameraCrop == QLatin1String("square") || cameraCrop == QLatin1String("original"))
+        p.camera.crop = cameraCrop;
     p.camera.mirror = camera.value("mirror").toBool(true);
+    p.camera.shadow = camera.value("shadow").toBool(true);
+    p.camera.scaleDuringZoom = camera.value("scaleDuringZoom").toDouble(0.7);
     const auto cameraOffset = camera.value("offset").toObject();
     p.camera.offset = QPointF(cameraOffset.value("x").toDouble(0.02),
                               cameraOffset.value("y").toDouble(0.02));
@@ -197,7 +202,8 @@ QJsonObject Project::toJson() const
         {"audio", QJsonObject{{"desktop", audio.desktop}, {"mic", audio.mic}, {"volume", audio.volume}}},
         {"camera", QJsonObject{{"enabled", camera.enabled}, {"position", camera.position},
             {"size", camera.size}, {"shape", camera.shape}, {"radius", camera.radius},
-            {"mirror", camera.mirror}, {"offset", QJsonObject{{"x", camera.offset.x()},
+            {"crop", camera.crop}, {"mirror", camera.mirror}, {"shadow", camera.shadow},
+            {"scaleDuringZoom", camera.scaleDuringZoom}, {"offset", QJsonObject{{"x", camera.offset.x()},
                 {"y", camera.offset.y()}}}}},
         {"export", QJsonObject{{"format", exportSettings.format}, {"fps", exportSettings.fps}, {"height", exportSettings.height},
             {"quality", exportSettings.quality}, {"gif", QJsonObject{{"fps", exportSettings.gif.fps}, {"height", exportSettings.gif.height},

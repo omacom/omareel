@@ -5,6 +5,7 @@ Item {
     id: composition
     // Preview-only access point. Exporter continues finding the same objectName.
     readonly property alias frameSource: frame.frameSource
+    readonly property alias cameraFrameSource: cameraOverlay.cameraFrameSource
     width: comp.outputWidth
     height: comp.outputHeight
     property real ref: height / 1080
@@ -50,5 +51,17 @@ Item {
             settings: comp.project.cursor
             ref: composition.ref
         }
+    }
+    CameraOverlay {
+        id: cameraOverlay
+        visible: comp.cameraAvailable && comp.project.camera.enabled
+        settings: comp.project.camera
+        frameShadow: comp.project.frame.shadow
+        zoomScale: comp.zoom.scale
+        outputWidth: composition.width
+        outputHeight: composition.height
+        sourceWidth: comp.cameraSourceWidth
+        sourceHeight: comp.cameraSourceHeight
+        softwareRendering: comp.softwareRendering
     }
 }

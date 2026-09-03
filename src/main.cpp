@@ -50,7 +50,8 @@ static int usage(const QString &error = {})
               "commands:\n"
               "  record [--region|--fullscreen|--window] [options]\n"
               "      Toggle recording (region is the default). Options: --fps N, --dir PATH,\n"
-              "      --with-desktop-audio, --with-microphone-audio, --no-audio, --no-open, --no-bar,\n"
+              "      --with-desktop-audio, --with-microphone-audio, --no-audio,\n"
+              "      --with-webcam, --webcam-device PATH, --no-webcam, --no-open, --no-bar,\n"
               "      --stop, --cancel.\n"
               "  edit <bundle.omarecord>\n"
               "      Open a recording bundle in the editor.\n"
@@ -188,6 +189,9 @@ static int recordCommand(const QStringList &arguments)
         QTextStream(stderr) << "omarecord: no recording is active\n";
         return 1;
     }
+    if (arguments.contains(QStringLiteral("--with-webcam"))
+        && arguments.contains(QStringLiteral("--no-webcam")))
+        return usage(QStringLiteral("--with-webcam cannot be combined with --no-webcam"));
     RecordOptions options;
     options.outputDirectory = OmarchyPaths::recordingsDirectory();
     const RecordingPreferences preferences = RecordingPreferences::load();
@@ -199,6 +203,10 @@ static int recordCommand(const QStringList &arguments)
         options.microphoneAudio = preferences.microphone;
     }
     options.microphoneDevice = preferences.microphoneDevice;
+    const bool explicitWebcam = arguments.contains(QStringLiteral("--with-webcam"))
+        || arguments.contains(QStringLiteral("--no-webcam"));
+    if (!explicitWebcam) options.webcam = preferences.webcamEnabled;
+    options.webcamDevice = preferences.webcamDevice;
     int modeCount = 0;
     for (int i = 0; i < arguments.size(); ++i) {
         const QString arg = arguments[i];
@@ -207,6 +215,17 @@ static int recordCommand(const QStringList &arguments)
         else if (arg == QLatin1String("--window")) { options.mode = CaptureMode::Window; ++modeCount; }
         else if (arg == QLatin1String("--with-desktop-audio")) options.desktopAudio = true;
         else if (arg == QLatin1String("--with-microphone-audio")) options.microphoneAudio = true;
+        else if (arg == QLatin1String("--with-webcam")) options.webcam = true;
+        else if (arg == QLatin1String("--no-webcam")) options.webcam = false;
+        else if (arg.startsWith(QLatin1String("--webcam-device="))) {
+            options.webcamDevice = arg.section(QLatin1Char('='), 1);
+            options.webcam = true;
+        }
+        else if (arg == QLatin1String("--webcam-device")) {
+            if (++i >= arguments.size()) return usage(QStringLiteral("--webcam-device requires a value"));
+            options.webcamDevice = arguments[i];
+            options.webcam = true;
+        }
         else if (arg == QLatin1String("--no-audio")) {
             options.desktopAudio = false;
             options.microphoneAudio = false;
@@ -231,6 +250,8 @@ static int recordCommand(const QStringList &arguments)
             || arguments.contains(QStringLiteral("--with-microphone-audio"))))
         return usage(QStringLiteral("--no-audio cannot be combined with audio enable flags"));
     if (options.fps <= 0 || options.fps > 240) return usage(QStringLiteral("fps must be between 1 and 240"));
+    if (options.webcam && !options.webcamDevice.startsWith(QLatin1String("/dev/video")))
+        return usage(QStringLiteral("webcam device must be a /dev/video device"));
     if (qEnvironmentVariable("OMARECORD_NO_BAR") == QLatin1String("1")) options.noBar = true;
     QString message;
     const int result = Recorder::startDetached(options, &message);

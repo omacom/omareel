@@ -50,14 +50,20 @@ private slots:
         QVERIFY(preferences.microphone);
         QCOMPARE(preferences.microphoneDevice, QStringLiteral("default_input"));
         QCOMPARE(preferences.webcam.value(QStringLiteral("enabled")).toBool(), false);
+        QVERIFY(!preferences.webcamEnabled);
+        QCOMPARE(preferences.webcamDevice, QStringLiteral("/dev/video2"));
         preferences.systemAudio = false;
         preferences.microphoneDevice = QStringLiteral("test_input");
+        preferences.webcamEnabled = true;
+        preferences.webcamDevice = QStringLiteral("/dev/video8");
         QString error;
         QVERIFY2(preferences.save(&error), qPrintable(error));
         const RecordingPreferences loaded = RecordingPreferences::load();
         QVERIFY(!loaded.systemAudio);
         QCOMPARE(loaded.microphoneDevice, QStringLiteral("test_input"));
         QCOMPARE(loaded.webcam.value(QStringLiteral("shape")).toString(), QStringLiteral("round"));
+        QVERIFY(loaded.webcamEnabled);
+        QCOMPARE(loaded.webcamDevice, QStringLiteral("/dev/video8"));
     }
 };
 

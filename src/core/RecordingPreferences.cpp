@@ -24,8 +24,12 @@ RecordingPreferences RecordingPreferences::load()
     preferences.microphone = root.value(QStringLiteral("microphone")).toBool(true);
     preferences.microphoneDevice = root.value(QStringLiteral("microphoneDevice"))
                                        .toString(QStringLiteral("default_input"));
-    if (root.value(QStringLiteral("webcam")).isObject())
+    if (root.value(QStringLiteral("webcam")).isObject()) {
         preferences.webcam = root.value(QStringLiteral("webcam")).toObject();
+        preferences.webcamEnabled = preferences.webcam.value(QStringLiteral("enabled")).toBool(false);
+        preferences.webcamDevice = preferences.webcam.value(QStringLiteral("device"))
+                                       .toString(QStringLiteral("/dev/video2"));
+    }
     return preferences;
 }
 
@@ -41,11 +45,14 @@ bool RecordingPreferences::save(QString *error) const
         if (error) *error = file.errorString();
         return false;
     }
+    QJsonObject savedWebcam = webcam;
+    savedWebcam.insert(QStringLiteral("enabled"), webcamEnabled);
+    savedWebcam.insert(QStringLiteral("device"), webcamDevice);
     const QJsonObject root{
         {QStringLiteral("systemAudio"), systemAudio},
         {QStringLiteral("microphone"), microphone},
         {QStringLiteral("microphoneDevice"), microphoneDevice},
-        {QStringLiteral("webcam"), webcam}
+        {QStringLiteral("webcam"), savedWebcam}
     };
     if (file.write(QJsonDocument(root).toJson(QJsonDocument::Indented)) < 0 || !file.commit()) {
         if (error) *error = file.errorString();

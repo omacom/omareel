@@ -1,6 +1,7 @@
 #include "Editor.h"
 
 #include "core/ClipTimeline.h"
+#include "core/CameraTimeline.h"
 #include "core/ZoomTimeline.h"
 #include "core/OmarchyPaths.h"
 #include "render/Exporter.h"
@@ -128,6 +129,7 @@ Editor::Editor(const QString &bundlePath, QObject *parent)
 {
     m_projectPath = QDir(m_bundlePath).filePath(QStringLiteral("project.json"));
     m_videoPath = QDir(m_bundlePath).filePath(QStringLiteral("screen.mp4"));
+    m_cameraVideoPath = QDir(m_bundlePath).filePath(QStringLiteral("camera.mp4"));
     m_autosaveTimer.setSingleShot(true);
     m_autosaveTimer.setInterval(500);
     m_motionTimer.setSingleShot(true);
@@ -159,6 +161,18 @@ Editor::Editor(const QString &bundlePath, QObject *parent)
     m_player.setSource(QUrl::fromLocalFile(m_videoPath));
     connect(&m_player, &QMediaPlayer::positionChanged, this, &Editor::handlePlayerPosition);
     connect(&m_player, &QMediaPlayer::playbackStateChanged, this, [this] { emit playingChanged(); });
+    if (m_hasCamera) {
+        m_cameraVideoSink = std::make_unique<QVideoSink>();
+        m_cameraPreviewSink = std::make_unique<PreviewSink>(m_cameraVideoSink.get(), this);
+        m_cameraPlayer.setVideoSink(m_cameraVideoSink.get());
+        connect(m_cameraVideoSink.get(), &QVideoSink::videoFrameChanged, this,
+                [this](const QVideoFrame &) {
+            if (!m_warmingCameraPreview) return;
+            m_warmingCameraPreview = false;
+            if (!playing()) m_cameraPlayer.pause();
+        });
+        m_cameraPlayer.setSource(QUrl::fromLocalFile(m_cameraVideoPath));
+    }
     m_valid = true;
     ++m_motionGeneration;
     rebuildMotion();
@@ -184,14 +198,30 @@ bool Editor::loadBundle()
     m_sourceDuration = info.duration;
     m_fps = info.fps > 0.0 ? info.fps : 60.0;
     m_hasAudio = info.audio;
+    QJsonObject captureRoot;
     QFile captureFile(QDir(m_bundlePath).filePath(QStringLiteral("capture.json")));
     if (captureFile.open(QIODevice::ReadOnly)) {
-        const QJsonObject audio = QJsonDocument::fromJson(captureFile.readAll()).object()
-                                      .value(QStringLiteral("audio")).toObject();
+        captureRoot = QJsonDocument::fromJson(captureFile.readAll()).object();
+        const QJsonObject audio = captureRoot.value(QStringLiteral("audio")).toObject();
         m_hasDesktopAudio = info.audio && audio.value(QStringLiteral("desktop")).toBool(false);
         m_hasMicrophoneAudio = info.audio && audio.value(QStringLiteral("mic")).toBool(false);
     }
-    m_hasCamera = QFileInfo(QDir(m_bundlePath).filePath(QStringLiteral("camera.mp4"))).isFile();
+    const QJsonObject cameraCapture = captureRoot.value(QStringLiteral("camera")).toObject();
+    if (QFileInfo(m_cameraVideoPath).isFile()) {
+        QString cameraError;
+        const MediaInfo camera = probe(m_cameraVideoPath, &cameraError);
+        if (camera.width > 0) {
+            m_hasCamera = true;
+            m_cameraSourceWidth = camera.width;
+            m_cameraSourceHeight = camera.height;
+            m_cameraFps = camera.fps;
+            m_cameraDuration = camera.duration;
+            const qint64 screenFirst = captureRoot.value(QStringLiteral("first_frame_us")).toVariant().toLongLong();
+            const qint64 cameraFirst = cameraCapture.value(QStringLiteral("first_frame_us")).toVariant().toLongLong();
+            if (screenFirst > 0 && cameraFirst > 0)
+                m_cameraOffset = (cameraFirst - screenFirst) / 1000000.0;
+        }
+    }
     if (QFileInfo(m_projectPath).isFile()) {
         m_project = Project::load(m_projectPath, &m_error);
         if (!m_error.isEmpty()) return false;
@@ -199,6 +229,7 @@ bool Editor::loadBundle()
         QString name = QFileInfo(m_bundlePath).completeBaseName();
         if (name.endsWith(QLatin1String(".omarecord"))) name.chop(10);
         m_project = Project::defaults(name, m_sourceDuration);
+        m_project.camera.enabled = m_hasCamera;
     }
     if (m_project.clips.isEmpty()) m_project.clips = {Clip{QStringLiteral("c1"), 0.0, m_sourceDuration, 1.0}};
     m_project.audio.desktop = m_project.audio.desktop && m_hasDesktopAudio;
@@ -292,6 +323,27 @@ void Editor::attachFrameSource(QObject *source)
         m_warmingPreview = true;
         m_player.play();
     }
+}
+
+void Editor::attachCameraFrameSource(QObject *source)
+{
+    if (m_cameraPreviewSink)
+        m_cameraPreviewSink->setFrameSource(qobject_cast<FrameSource *>(source));
+    syncCamera(sourcePosition(), true);
+    if (m_hasCamera && m_cameraPlayer.mediaStatus() != QMediaPlayer::InvalidMedia) {
+        m_warmingCameraPreview = true;
+        m_cameraPlayer.play();
+    }
+}
+
+QString Editor::cameraStatus() const
+{
+    if (!m_hasCamera) return QStringLiteral("No webcam in this bundle");
+    return QStringLiteral("Webcam: %1×%2 @%3, offset %4%5 s")
+        .arg(m_cameraSourceWidth).arg(m_cameraSourceHeight)
+        .arg(m_cameraFps, 0, 'f', qFuzzyCompare(m_cameraFps, qRound(m_cameraFps)) ? 0 : 2)
+        .arg(m_cameraOffset >= 0.0 ? QStringLiteral("+") : QString())
+        .arg(m_cameraOffset, 0, 'f', 2);
 }
 
 void Editor::snapshot(const QString &coalesceKey)
@@ -439,14 +491,24 @@ void Editor::seek(double outputTime)
     m_internalSeek = true;
     m_player.setPlaybackRate(clip.speed);
     m_player.setPosition(qRound64(std::clamp(source, clip.in, clip.out) * 1000.0));
+    syncCamera(source, true);
     m_internalSeek = false;
     emit positionChanged();
     updatePreview();
 }
 
 void Editor::playPause() { playing() ? pause() : play(); }
-void Editor::play() { if (m_outputPosition >= duration() - 0.0001) seek(0); m_player.play(); }
-void Editor::pause() { m_player.pause(); }
+void Editor::play()
+{
+    if (m_outputPosition >= duration() - 0.0001) seek(0);
+    m_player.play();
+    syncCamera(sourcePosition(), true);
+}
+void Editor::pause()
+{
+    m_player.pause();
+    m_cameraPlayer.pause();
+}
 
 void Editor::stepFrames(int frames)
 {
@@ -463,6 +525,7 @@ void Editor::handlePlayerPosition(qint64 milliseconds)
 {
     if (m_internalSeek || m_project.clips.isEmpty()) return;
     const double source = milliseconds / 1000.0;
+    syncCamera(source);
     const Clip &clip = m_project.clips[std::clamp(m_activeClip, 0, int(m_project.clips.size()) - 1)];
     if (playing() && source >= clip.out - 0.004) {
         if (m_activeClip + 1 < m_project.clips.size()) {
@@ -478,6 +541,21 @@ void Editor::handlePlayerPosition(qint64 milliseconds)
         emit positionChanged();
         updatePreview();
     }
+}
+
+void Editor::syncCamera(double screenSourceTime, bool force)
+{
+    if (!m_hasCamera) return;
+    const CameraTime mapped = mapCameraTime(screenSourceTime, m_cameraOffset, m_cameraDuration);
+    const qint64 target = qRound64(mapped.seconds * 1000.0);
+    m_cameraPlayer.setPlaybackRate(m_player.playbackRate());
+    if (force || std::abs(m_cameraPlayer.position() - target) > 80)
+        m_cameraPlayer.setPosition(target);
+    if (m_player.playbackState() == QMediaPlayer::PlayingState
+        && !mapped.beforeStart && !mapped.beyondEnd)
+        m_cameraPlayer.play();
+    else
+        m_cameraPlayer.pause();
 }
 
 void Editor::updatePreview() { emit compositionChanged(); }
@@ -752,7 +830,8 @@ QJsonObject Editor::stylePreset() const
     const auto json = m_project.toJson();
     return {{QStringLiteral("version"), 1}, {QStringLiteral("background"), json.value(QStringLiteral("background"))},
         {QStringLiteral("frame"), json.value(QStringLiteral("frame"))}, {QStringLiteral("cursor"), json.value(QStringLiteral("cursor"))},
-        {QStringLiteral("zoomStyle"), json.value(QStringLiteral("zoomStyle"))}, {QStringLiteral("audio"), json.value(QStringLiteral("audio"))},
+        {QStringLiteral("zoomStyle"), json.value(QStringLiteral("zoomStyle"))}, {QStringLiteral("camera"), json.value(QStringLiteral("camera"))},
+        {QStringLiteral("audio"), json.value(QStringLiteral("audio"))},
         {QStringLiteral("export"), json.value(QStringLiteral("export"))}};
 }
 
@@ -774,7 +853,8 @@ void Editor::loadPreset(const QString &rawName)
     const QJsonObject preset = QJsonDocument::fromJson(file.readAll()).object();
     QJsonObject project = m_project.toJson();
     for (const QString &key : {QStringLiteral("background"), QStringLiteral("frame"), QStringLiteral("cursor"),
-                               QStringLiteral("zoomStyle"), QStringLiteral("audio"), QStringLiteral("export")})
+                               QStringLiteral("zoomStyle"), QStringLiteral("camera"), QStringLiteral("audio"),
+                               QStringLiteral("export")})
         if (preset.contains(key)) project.insert(key, preset.value(key));
     snapshot();
     m_project = Project::fromJson(project);
