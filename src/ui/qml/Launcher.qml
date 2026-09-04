@@ -369,17 +369,12 @@ ApplicationWindow {
                             }
                         }
                     }
-                    Rectangle {
+                    Label {
                         visible: !launcher.webcamPreviewAvailable
                         anchors.centerIn: parent
-                        width: 96; height: 96; radius: 48
-                        color: theme.normalFill
-                        Label {
-                            anchors.centerIn: parent
-                            text: "Starting camera…"
-                            color: theme.textMuted
-                            font.pixelSize: theme.font.caption
-                        }
+                        text: "Starting camera…"
+                        color: theme.textMuted
+                        font.pixelSize: theme.font.caption
                     }
                 }
                 Item { Layout.preferredHeight: 8 }
