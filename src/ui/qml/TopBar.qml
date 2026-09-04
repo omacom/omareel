@@ -148,15 +148,15 @@ Rectangle {
         }
         EditorButton {
             id: presetButton
-            Layout.preferredWidth: 106
-            Layout.minimumWidth: 106
+            Layout.preferredWidth: implicitWidth
+            Layout.minimumWidth: implicitWidth
             text: "Presets"
             trailingIconSource: "qrc:/omareel/assets/icons/lucide/chevron-down.svg"
             onClicked: presetsMenu.open()
         }
         EditorButton {
-            Layout.preferredWidth: 104
-            Layout.minimumWidth: 104
+            Layout.preferredWidth: implicitWidth
+            Layout.minimumWidth: implicitWidth
             primary: true
             text: "Export"
             icon.source: "qrc:/omareel/assets/icons/lucide/download.svg"
