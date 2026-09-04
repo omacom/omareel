@@ -153,6 +153,10 @@ public:
     Q_INVOKABLE void undo();
     Q_INVOKABLE void redo();
     Q_INVOKABLE bool saveNow();
+    // Test hooks (no UI use).
+    QMediaPlayer::PlaybackState playerPlaybackStateForTests() const { return m_player.playbackState(); }
+    QMediaPlayer::MediaStatus playerMediaStatusForTests() const { return m_player.mediaStatus(); }
+    qint64 playerPositionMsForTests() const { return m_player.position(); }
     Q_INVOKABLE void playPause();
     Q_INVOKABLE void play();
     Q_INVOKABLE void pause();

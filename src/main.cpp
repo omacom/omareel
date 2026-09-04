@@ -13,6 +13,7 @@
 #include <LayerShellQt/window.h>
 
 #include <QGuiApplication>
+#include <algorithm>
 #include <QFont>
 #include <QFontDatabase>
 #include <QDir>
@@ -173,8 +174,20 @@ static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplicat
     const double screenshotTime = screenshotSeek.toDouble(&screenshotTimeOk);
     if (screenshotTimeOk) {
         if (QObject *editor = engine.rootContext()->contextProperty(QStringLiteral("editor")).value<QObject *>()) {
-            QTimer::singleShot(captureDelay - 400, editor, [editor, screenshotTime] {
-                QMetaObject::invokeMethod(editor, "pause");
+            // OMAREEL_SCREENSHOT_PLAY_TO_END=1 first plays the clip to its end (letting the player
+            // reach EndOfMedia) before seeking, so scrub-after-end rendering can be verified.
+            const bool playToEnd = qEnvironmentVariableIntValue("OMAREEL_SCREENSHOT_PLAY_TO_END") == 1;
+            if (playToEnd) {
+                QTimer::singleShot(400, editor, [editor] {
+                    const double duration = editor->property("duration").toDouble();
+                    QMetaObject::invokeMethod(editor, "seek", Q_ARG(double, std::max(0.0, duration - 1.5)));
+                    QMetaObject::invokeMethod(editor, "play");
+                });
+            }
+            // OMAREEL_SCREENSHOT_NO_PAUSE=1 seeks the way a playhead drag does (no pause first).
+            const bool noPause = qEnvironmentVariableIntValue("OMAREEL_SCREENSHOT_NO_PAUSE") == 1;
+            QTimer::singleShot(captureDelay - 400, editor, [editor, screenshotTime, noPause] {
+                if (!noPause) QMetaObject::invokeMethod(editor, "pause");
                 QMetaObject::invokeMethod(editor, "seek", Q_ARG(double, screenshotTime));
             });
         }

@@ -13,6 +13,8 @@
 #include <QQuickWindow>
 #include <algorithm>
 #include <functional>
+#include <QVideoFrame>
+#include <QVideoSink>
 #include <QtTest>
 
 using namespace Omareel;
@@ -340,6 +342,37 @@ private slots:
         const QVariantMap camera = editor.projectMap().value(QStringLiteral("camera")).toMap();
         QCOMPARE(camera.value(QStringLiteral("rotation")).toInt(), 270);
         QVERIFY(camera.value(QStringLiteral("flipHorizontal")).toBool());
+    }
+
+    // Regression: after the player reaches the end of the media, seeking must still land the
+    // player in a paused state at the requested position (previously it stayed stopped at the
+    // end and the preview kept showing the final black frame while scrubbing).
+    void seekAfterEndOfMediaResumesPausedDecoding()
+    {
+        Editor editor(m_bundle);
+        QVERIFY(editor.isValid());
+        // Attach a sink up front (as the editor window does) so playback really decodes and
+        // runs off the end the way it does in the app.
+        QVideoSink sink;
+        QObject holder;
+        holder.setProperty("videoSink", QVariant::fromValue(&sink));
+        editor.attachVideoOutput(&holder);
+        int framesAfterSeek = 0;
+        bool counting = false;
+        QObject::connect(&sink, &QVideoSink::videoFrameChanged, &sink, [&](const QVideoFrame &f) {
+            if (counting && f.isValid()) ++framesAfterSeek;
+        });
+        QTRY_VERIFY_WITH_TIMEOUT(editor.playerMediaStatusForTests() >= QMediaPlayer::LoadedMedia, 15000);
+        QTRY_VERIFY_WITH_TIMEOUT(editor.duration() > 1.0, 15000);
+        editor.seek(editor.duration() - 0.3);
+        editor.play();
+        QTRY_VERIFY_WITH_TIMEOUT(!editor.playing(), 15000);          // ran off the end
+        counting = true;
+        editor.seek(0.5);
+        QTRY_VERIFY_WITH_TIMEOUT(framesAfterSeek > 0, 5000);
+        QTRY_VERIFY_WITH_TIMEOUT(editor.playerPlaybackStateForTests() == QMediaPlayer::PausedState, 5000);
+        QVERIFY(qAbs(editor.position() - 0.5) < 0.2);
+        QVERIFY(editor.playerMediaStatusForTests() != QMediaPlayer::EndOfMedia);
     }
 
     void exportThroughEditorApi()

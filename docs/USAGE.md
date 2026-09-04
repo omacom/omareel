@@ -153,6 +153,9 @@ clip, style, cursor, and zoom edits are stored in `project.json`.
 - `OMAREEL_SCREENSHOT_SIZE=1440x900` sets the debug-capture window dimensions.
 - `OMAREEL_SCREENSHOT_SEEK=SECONDS` seeks the editor before capture
   (`OMAREEL_SCREENSHOT_TIME` remains accepted for compatibility).
+- `OMAREEL_SCREENSHOT_PLAY_TO_END=1` first plays the last 1.5 s of the clip so the player reaches
+  its end-of-media state before the seek; `OMAREEL_SCREENSHOT_NO_PAUSE=1` seeks without pausing
+  first, the way a playhead drag does. Together they reproduce scrub-after-end rendering.
 - `OMAREEL_SCREENSHOT_PROJECT_VALUES=JSON` applies path/value pairs through the editor before
   capture, for example `{"camera.rotation":180}`.
 - `OMAREEL_SCREENSHOT_VIEW=export|aspect|background-expanded|background-gradient-3|background-gradient-7|rail-tooltip|camera-proof` opens a transient

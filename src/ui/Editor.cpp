@@ -418,7 +418,14 @@ void Editor::attachVideoOutput(QObject *output)
             ++m_previewStatsFrames;
             if (m_warmingPreview) {
                 m_warmingPreview = false;
-                QTimer::singleShot(0, this, &Editor::pause);
+                QTimer::singleShot(0, this, [this] {
+                    pause();
+                    // The decoder may have advanced a frame or two during warm-up; re-seek so
+                    // the paused frame is the one the playhead points at.
+                    m_internalSeek = true;
+                    m_player.setPosition(qRound64(sourcePosition() * 1000.0));
+                    m_internalSeek = false;
+                });
             }
             m_previewStatsCostNs += cost.nsecsElapsed();
         });
@@ -651,7 +658,30 @@ void Editor::seek(double outputTime)
     const double source = clip.in + (m_outputPosition - clipStart) * clip.speed;
     m_internalSeek = true;
     m_player.setPlaybackRate(clip.speed);
-    m_player.setPosition(qRound64(std::clamp(source, clip.in, clip.out) * 1000.0));
+    const qint64 targetMs = qRound64(std::clamp(source, clip.in, clip.out) * 1000.0);
+    // After the player has run off the end it sits in EndOfMedia/Stopped, where a bare
+    // setPosition() does not decode a frame, so scrubbing keeps showing the last (black)
+    // frame. Seek first, then briefly run the decoder and pause it as soon as the sink has
+    // delivered a frame at the new position. (Calling play() and pause() back to back does
+    // not work: it flushes the sink without decoding.)
+    const bool stalled = m_player.mediaStatus() == QMediaPlayer::EndOfMedia
+        || m_player.playbackState() == QMediaPlayer::StoppedState;
+    if (stalled) {
+        // play() on a Stopped player restarts from 0 and drops any pending seek, so move to
+        // Paused first (play+pause leaves the position alone), seek, then let the decoder run
+        // until the sink reports one frame at the new position and pause on that frame.
+        m_player.play();
+        m_player.pause();
+        m_player.setPosition(targetMs);
+        m_warmingPreview = true;
+        m_player.play();
+        // Safety net in case the sink never reports a frame (no video output attached).
+        QTimer::singleShot(250, this, [this] {
+            if (m_warmingPreview) { m_warmingPreview = false; m_player.pause(); }
+        });
+    } else {
+        m_player.setPosition(targetMs);
+    }
     syncCamera(source, true);
     m_internalSeek = false;
     emit positionChanged();
@@ -710,8 +740,17 @@ void Editor::syncCamera(double screenSourceTime, bool force)
     const CameraTime mapped = mapCameraTime(screenSourceTime, m_cameraOffset, m_cameraDuration);
     const qint64 target = qRound64(mapped.seconds * 1000.0);
     m_cameraPlayer.setPlaybackRate(m_player.playbackRate());
-    if (force || std::abs(m_cameraPlayer.position() - target) > 250)
+    if (force || std::abs(m_cameraPlayer.position() - target) > 250) {
+        const bool cameraStalled = m_cameraPlayer.mediaStatus() == QMediaPlayer::EndOfMedia
+            || m_cameraPlayer.playbackState() == QMediaPlayer::StoppedState;
         m_cameraPlayer.setPosition(target);
+        if (cameraStalled && m_player.playbackState() != QMediaPlayer::PlayingState) {
+            m_cameraPlayer.play();
+            QTimer::singleShot(250, this, [this] {
+                if (m_player.playbackState() != QMediaPlayer::PlayingState) m_cameraPlayer.pause();
+            });
+        }
+    }
     if (m_player.playbackState() == QMediaPlayer::PlayingState
         && !mapped.beforeStart && !mapped.beyondEnd)
         if (m_cameraPlayer.playbackState() != QMediaPlayer::PlayingState) m_cameraPlayer.play();
