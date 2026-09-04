@@ -211,6 +211,8 @@ bool Editor::loadBundle()
     QFile captureFile(QDir(m_bundlePath).filePath(QStringLiteral("capture.json")));
     if (captureFile.open(QIODevice::ReadOnly)) {
         captureRoot = QJsonDocument::fromJson(captureFile.readAll()).object();
+        const double scale = captureRoot.value(QStringLiteral("scale")).toDouble(1.0);
+        if (scale > 0.0) m_captureScale = scale;
         const QJsonObject audio = captureRoot.value(QStringLiteral("audio")).toObject();
         m_hasDesktopAudio = info.audio && audio.value(QStringLiteral("desktop")).toBool(false);
         m_hasMicrophoneAudio = info.audio && audio.value(QStringLiteral("mic")).toBool(false);

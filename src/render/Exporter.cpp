@@ -275,12 +275,14 @@ bool Exporter::run(const ExportOptions &options, QString *error)
     const auto input = InputLog::loadBundle(bundle.absolutePath(), media.duration, &inputError);
     if (!inputError.isEmpty()) { if (error) *error = inputError; return false; }
     double captureFps = 60.0;
+    double captureScale = 1.0;
     double cameraOffset = 0.0;
     QJsonObject captureRoot;
     QFile capture(bundle.filePath(QStringLiteral("capture.json")));
     if (capture.open(QIODevice::ReadOnly)) {
         captureRoot = QJsonDocument::fromJson(capture.readAll()).object();
         captureFps = captureRoot.value("fps").toDouble(60.0);
+        captureScale = captureRoot.value(QStringLiteral("scale")).toDouble(1.0);
         const qint64 screenFirst = captureRoot.value(QStringLiteral("first_frame_us")).toVariant().toLongLong();
         const qint64 cameraFirst = captureRoot.value(QStringLiteral("camera")).toObject()
                                        .value(QStringLiteral("first_frame_us")).toVariant().toLongLong();
@@ -369,6 +371,7 @@ bool Exporter::run(const ExportOptions &options, QString *error)
     state.outputWidth = width; state.outputHeight = height;
     state.softwareRendering = softwareRendering;
     state.sourceWidth = media.width; state.sourceHeight = media.height;
+    state.captureScale = captureScale > 0.0 ? captureScale : 1.0;
     state.cameraAvailable = cameraMedia.width > 0;
     state.cameraSourceWidth = cameraMedia.width;
     state.cameraSourceHeight = cameraMedia.height;

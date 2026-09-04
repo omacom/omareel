@@ -13,6 +13,11 @@ Item {
     width: comp.outputWidth
     height: comp.outputHeight
     property real ref: height / 1080
+    // The cursor keeps the size it had on screen: one logical screen pixel is captureScale
+    // source pixels, and the (cropped) source is drawn at videoWidth output pixels. A small
+    // region therefore gets a proportionally large cursor instead of a microscopic one.
+    property real cursorRef: (comp.captureScale > 0 ? comp.captureScale : 1)
+                             * videoWidth / Math.max(1, comp.sourceWidth * comp.project.crop.w)
     property bool noBackground: comp.project.background.type === "none"
     property real pad: noBackground ? 0 : Math.min(width, height) * comp.project.frame.padding
     property real availableWidth: width - 2 * pad
@@ -61,7 +66,7 @@ Item {
             cursor: comp.cursor
             ripples: comp.ripples
             settings: comp.project.cursor
-            ref: composition.ref
+            ref: composition.cursorRef
         }
     }
     CameraOverlay {

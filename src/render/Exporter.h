@@ -28,6 +28,7 @@ class CompositionState : public QObject
     Q_PROPERTY(int outputHeight MEMBER outputHeight NOTIFY changed)
     Q_PROPERTY(int sourceWidth MEMBER sourceWidth NOTIFY changed)
     Q_PROPERTY(int sourceHeight MEMBER sourceHeight NOTIFY changed)
+    Q_PROPERTY(double captureScale MEMBER captureScale NOTIFY changed)
     Q_PROPERTY(bool cameraAvailable MEMBER cameraAvailable NOTIFY changed)
     Q_PROPERTY(bool cameraVisible MEMBER cameraVisible NOTIFY changed)
     Q_PROPERTY(int cameraSourceWidth MEMBER cameraSourceWidth NOTIFY changed)
@@ -45,6 +46,7 @@ public:
     int outputHeight = 0;
     int sourceWidth = 0;
     int sourceHeight = 0;
+    double captureScale = 1.0;   // physical pixels per logical pixel at capture time
     bool cameraAvailable = false;
     bool cameraVisible = true;
     int cameraSourceWidth = 0;

@@ -429,7 +429,9 @@ bool dispatchOnce(ScreenCapture::Private *d, int timeoutMs)
     const int result = poll(&descriptor, 1, timeoutMs);
     if (result < 0) return errno == EINTR;
     if (result == 0) return true;
-    return wl_display_dispatch(d->registry.display) >= 0;
+    // A stop signal (SIGUSR1/2) can land while dispatching; that is not a connection failure.
+    if (wl_display_dispatch(d->registry.display) < 0) return errno == EINTR;
+    return true;
 }
 
 } // namespace
@@ -676,14 +678,42 @@ bool ScreenCapture::start(const ScreenCaptureConfig &config, QString *error)
     if (useGpuConversion)
         arguments << QStringLiteral("-vf") << QStringLiteral("hwupload_cuda,scale_cuda=format=nv12");
     arguments << QStringLiteral("-c:v");
-    if (preferred)
+    // Quality: the capture is an intermediate that gets re-encoded on export, so keep it near
+    // visually lossless. A plain -cq without a rate mode made NVENC starve small regions (a
+    // 440x234 capture came out at ~110 kbit/s with visible macroblocks), so pin VBR with a
+    // generous ceiling scaled to the frame size, plus a 1-second GOP for clean seeking.
+    const double megapixels = d->encodedSize.width() * double(d->encodedSize.height()) / 1e6;
+    const int maxrateKbps = int(std::clamp(megapixels * 12000.0 * (d->config.fps / 60.0), 8000.0, 120000.0));
+    // Debug aid: OMARECORD_NATIVE_ENCODER=lossless stores the raw capture losslessly so capture
+    // problems can be told apart from encoder artefacts.
+    const bool lossless = qEnvironmentVariable("OMARECORD_NATIVE_ENCODER") == QLatin1String("lossless");
+    // Small captures (regions, windows) are cheap enough to store losslessly, and NVENC's lossy
+    // modes smear high-contrast edges into visible macroblocks at these sizes. Larger frames use
+    // a high-quality VBR tier instead.
+    const bool smallFrame = megapixels < 1.5;
+    if (lossless)
+        arguments << QStringLiteral("libx264rgb") << QStringLiteral("-preset") << QStringLiteral("ultrafast")
+                  << QStringLiteral("-qp") << QStringLiteral("0");
+    else if (preferred && smallFrame)
         arguments << QStringLiteral("h264_nvenc") << QStringLiteral("-preset") << QStringLiteral("p4")
-                  << QStringLiteral("-tune") << QStringLiteral("ll") << QStringLiteral("-cq")
-                  << QStringLiteral("20");
+                  << QStringLiteral("-tune") << QStringLiteral("lossless")
+                  << QStringLiteral("-g") << QString::number(d->config.fps)
+                  << QStringLiteral("-bf") << QStringLiteral("0");
+    else if (preferred)
+        arguments << QStringLiteral("h264_nvenc") << QStringLiteral("-preset") << QStringLiteral("p4")
+                  << QStringLiteral("-tune") << QStringLiteral("hq")
+                  << QStringLiteral("-rc") << QStringLiteral("vbr")
+                  << QStringLiteral("-cq") << QStringLiteral("16")
+                  << QStringLiteral("-b:v") << QStringLiteral("0")
+                  << QStringLiteral("-maxrate") << QStringLiteral("%1k").arg(maxrateKbps)
+                  << QStringLiteral("-bufsize") << QStringLiteral("%1k").arg(maxrateKbps * 2)
+                  << QStringLiteral("-g") << QString::number(d->config.fps)
+                  << QStringLiteral("-bf") << QStringLiteral("0");
     else
         arguments << QStringLiteral("libx264") << QStringLiteral("-preset") << QStringLiteral("veryfast")
-                  << QStringLiteral("-crf") << QStringLiteral("20");
-    if (!useGpuConversion) arguments << QStringLiteral("-pix_fmt") << QStringLiteral("yuv420p");
+                  << QStringLiteral("-crf") << (smallFrame ? QStringLiteral("10") : QStringLiteral("16"))
+                  << QStringLiteral("-g") << QString::number(d->config.fps);
+    if (!useGpuConversion && !lossless) arguments << QStringLiteral("-pix_fmt") << QStringLiteral("yuv420p");
     arguments << QStringLiteral("-movflags") << QStringLiteral("+faststart") << config.outputPath;
     if (!startEncoder(arguments, &d->encoderPid, &d->encoderFd, &d->encoderErrorFd, error))
         return false;
@@ -708,8 +738,13 @@ bool ScreenCapture::captureFrame(QString *error)
     const qint64 now = monotonicUs();
     const qint64 intervalUs = 1000000 / d->config.fps;
     if (d->lastCaptureRequestUs == 0 || now - d->lastCaptureRequestUs >= intervalUs) {
+        // The protocol allows exactly one frame object per session; requesting another
+        // while one is outstanding raises duplicate_frame and kills the connection.
+        bool frameInFlight = false;
+        for (const Private::Slot &slot : d->captureSlots)
+            if (slot.frame) { frameInFlight = true; break; }
         int index = -1;
-        {
+        if (!frameInFlight) {
             std::lock_guard<std::mutex> lock(d->ringMutex);
             index = d->ring.acquire();
         }
@@ -732,7 +767,9 @@ bool ScreenCapture::captureFrame(QString *error)
         }
     }
     if (!dispatchOnce(d.get(), 2)) {
-        if (error) *error = QStringLiteral("Capture connection failed");
+        const int displayError = wl_display_get_error(d->registry.display);
+        if (error) *error = QStringLiteral("Capture connection failed (errno %1: %2, display error %3)")
+            .arg(errno).arg(QString::fromLocal8Bit(std::strerror(errno))).arg(displayError);
         return false;
     }
 

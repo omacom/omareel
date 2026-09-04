@@ -41,6 +41,7 @@ class Editor : public QObject
     Q_PROPERTY(double sourceDuration READ sourceDuration CONSTANT)
     Q_PROPERTY(int sourceWidth READ sourceWidth CONSTANT)
     Q_PROPERTY(int sourceHeight READ sourceHeight CONSTANT)
+    Q_PROPERTY(double captureScale READ captureScale CONSTANT)
     Q_PROPERTY(double fps READ fps CONSTANT)
     Q_PROPERTY(bool hasAudio READ hasAudio CONSTANT)
     Q_PROPERTY(bool hasDesktopAudio READ hasDesktopAudio CONSTANT)
@@ -96,6 +97,7 @@ public:
     double sourceDuration() const { return m_sourceDuration; }
     int sourceWidth() const { return m_sourceWidth; }
     int sourceHeight() const { return m_sourceHeight; }
+    double captureScale() const { return m_captureScale; }
     double fps() const { return m_fps; }
     bool hasAudio() const { return m_hasAudio; }
     bool hasDesktopAudio() const { return m_hasDesktopAudio; }
@@ -233,6 +235,7 @@ private:
     double m_sourceDuration = 0.0;
     int m_sourceWidth = 0;
     int m_sourceHeight = 0;
+    double m_captureScale = 1.0;
     double m_fps = 60.0;
     bool m_hasAudio = false;
     bool m_hasDesktopAudio = false;

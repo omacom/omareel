@@ -192,7 +192,7 @@ ApplicationWindow {
                 id: recordControl
                 visible: !window.showingRecording
                 anchors.centerIn: parent
-                width: 236; height: 168
+                width: 236; height: 150
                 hoverEnabled: true
                 Accessible.name: "Record"
                 onClicked: window.beginRecording()
@@ -237,16 +237,12 @@ ApplicationWindow {
                             }
                         }
                     }
-                    OmButton {
+                    Label {
                         Layout.alignment: Qt.AlignHCenter
-                        Layout.preferredWidth: 160
-                        Layout.preferredHeight: 36
-                        width: 160; height: 36
                         text: "Record"
-                        primary: true
-                        leadingDot: true
-                        trailingIconSource: ""
-                        onClicked: window.beginRecording()
+                        color: theme.foreground
+                        font.pixelSize: theme.font.title
+                        font.bold: true
                     }
                     RowLayout {
                         Layout.alignment: Qt.AlignHCenter
