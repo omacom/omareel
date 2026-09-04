@@ -78,7 +78,7 @@ public:
     QColor textMuted() const;
     QColor textFaint() const;
     QColor accentSoft() const;
-    QColor zoomAccent() const { return m_accent; }
+    QColor zoomAccent() const { return m_zoomAccent; }
     QColor record() const { return m_record; }
     QColor normalFill() const { return m_normalFill; }
     QColor hoverFill() const { return m_hoverFill; }
@@ -126,7 +126,7 @@ private slots:
 private:
     void rearmWatcher();
     QFileSystemWatcher m_watcher;
-    QColor m_accent, m_background, m_lighterBackground, m_darkBackground, m_foreground, m_record;
+    QColor m_accent, m_zoomAccent, m_background, m_lighterBackground, m_darkBackground, m_foreground, m_record;
     QColor m_normalFill, m_hoverFill, m_selectedFill, m_pressedFill, m_selectionFill;
     QColor m_normalBorder, m_hoverBorder, m_selectedBorder;
     QColor m_popupBackground, m_popupText, m_popupBorder;

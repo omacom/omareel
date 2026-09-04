@@ -151,6 +151,8 @@ clip, style, cursor, and zoom edits are stored in `project.json`.
 - `OMAREEL_SCREENSHOT_PANEL=background|shape|cursor|zoom|clip|camera|keystrokes|audio` selects an editor inspector
   before the debug capture.
 - `OMAREEL_SCREENSHOT_SIZE=1440x900` sets the debug-capture window dimensions.
+- `OMAREEL_SCREENSHOT_HOVER_HANDLE=clip-right|zoom-left` forces the selected block's named
+  trim handle into its hovered and dragging visuals for deterministic interaction captures.
 - `OMAREEL_SCREENSHOT_SEEK=SECONDS` seeks the editor before capture
   (`OMAREEL_SCREENSHOT_TIME` remains accepted for compatibility).
 - `OMAREEL_SCREENSHOT_PLAY_TO_END=1` first plays the last 1.5 s of the clip so the player reaches

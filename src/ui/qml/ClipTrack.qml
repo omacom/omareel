@@ -25,16 +25,27 @@ Item {
             x: root.outputStart(index) * root.pixelsPerSecond
             width: gestureActive ? gestureWidth : Math.max(20, (modelData.out-modelData.in)/modelData.speed * root.pixelsPerSecond)
             height: root.height
+            y: clipHover.hovered ? -1 : 0
             radius: theme.radius
             color: clipBlock.selected ? theme.selectedFill
                 : clipHover.hovered ? theme.hoverFill : theme.normalFill
-            border.width: clipBlock.selected ? theme.selectedBorderWidth
+            border.width: clipBlock.selected ? Math.max(1, theme.selectedBorderWidth)
                 : clipHover.hovered ? theme.hoverBorderWidth : theme.normalBorderWidth
-            border.color: clipBlock.selected ? theme.selectedBorder
-                : clipHover.hovered ? theme.hoverBorder : theme.normalBorder
-            Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
-            Behavior on border.color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
-            clip: true
+            border.color: clipBlock.selected ? theme.accent
+                : clipHover.hovered ? Qt.alpha(theme.accent, .72) : theme.normalBorder
+            Behavior on y {
+                enabled: !editor.loading
+                NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
+            }
+            Behavior on color {
+                enabled: !editor.loading
+                ColorAnimation { duration: 120; easing.type: Easing.OutCubic }
+            }
+            Behavior on border.color {
+                enabled: !editor.loading
+                ColorAnimation { duration: 120; easing.type: Easing.OutCubic }
+            }
+            clip: false
             HoverHandler { id: clipHover }
             Repeater {
                 model: editor.waveform
@@ -51,18 +62,25 @@ Item {
             }
             MouseArea {
                 anchors.fill: parent
+                cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
                 onPressed: root.focusTarget.forceActiveFocus()
                 onClicked: editor.selectedClipId = modelData.id
             }
             Rectangle {
+                id: clipBadge
                 anchors.centerIn: parent
                 visible: clipBlock.width >= 68
                 width: Math.min(parent.width - 16, clipLabel.implicitWidth + 16)
                 height: 24
+                opacity: leftTrim.engaged || rightTrim.engaged ? .60 : 1
                 radius: theme.radius
                 color: Qt.alpha(theme.surface, .80)
                 border.width: 1
                 border.color: theme.hairline
+                Behavior on opacity {
+                    enabled: !editor.loading
+                    NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
+                }
                 Label {
                     id: clipLabel
                     anchors.fill: parent
@@ -101,62 +119,78 @@ Item {
                     }
                 }
             }
-            Rectangle {
-                width: 8; height: parent.height; color: clipBlock.border.color; radius: theme.radius
-                opacity: clipBlock.selected || clipHover.hovered ? 1 : 0
-                Behavior on opacity { NumberAnimation { duration: 120 } }
-                MouseArea {
-                    anchors.fill: parent; cursorShape: Qt.SizeHorCursor
-                    enabled: clipBlock.selected
-                    property real pressTrackX; property real pressWidth; property real originalIn
-                    onPressed: {
-                        root.focusTarget.forceActiveFocus(); editor.selectedClipId = modelData.id
-                        pressTrackX = mapToItem(root, mouse.x, mouse.y).x
-                        pressWidth = clipBlock.width; originalIn = modelData.in
-                        clipBlock.gestureWidth = clipBlock.width; clipBlock.gestureActive = true
-                        editor.beginCoalescedEdit("trim-" + modelData.id)
-                    }
-                    onPositionChanged: if (pressed) {
-                        const delta = mapToItem(root, mouse.x, mouse.y).x - pressTrackX
-                        clipBlock.gestureWidth = Math.max(.1 / modelData.speed * root.pixelsPerSecond, pressWidth - delta)
-                    }
-                    onReleased: {
-                        const facade = editor
-                        const delta = pressWidth - clipBlock.gestureWidth
-                        clipBlock.gestureActive = false
-                        facade.trimClip(modelData.id, originalIn + delta / root.pixelsPerSecond * modelData.speed, modelData.out)
-                        facade.endCoalescedEdit()
-                    }
-                    onCanceled: { clipBlock.gestureActive = false; editor.endCoalescedEdit() }
+            OmTrimHandle {
+                id: leftTrim
+                objectName: "clipTrimHandle-" + modelData.id + "-left"
+                edge: "left"
+                accent: theme.accent
+                active: clipBlock.selected || clipHover.hovered
+                dragging: mouseArea.pressed
+                mouseArea.enabled: clipBlock.selected
+                property real pressTrackX
+                property real pressWidth
+                property real originalIn
+                mouseArea.onPressed: mouse => {
+                    root.focusTarget.forceActiveFocus(); editor.selectedClipId = modelData.id
+                    leftTrim.pressTrackX = mouseArea.mapToItem(root, mouse.x, mouse.y).x
+                    leftTrim.pressWidth = clipBlock.width; leftTrim.originalIn = modelData.in
+                    clipBlock.gestureWidth = clipBlock.width; clipBlock.gestureActive = true
+                    editor.beginCoalescedEdit("trim-" + modelData.id)
+                }
+                mouseArea.onPositionChanged: mouse => { if (mouseArea.pressed) {
+                    const delta = mouseArea.mapToItem(root, mouse.x, mouse.y).x - leftTrim.pressTrackX
+                    clipBlock.gestureWidth = Math.max(.1 / modelData.speed * root.pixelsPerSecond,
+                                                      leftTrim.pressWidth - delta)
+                } }
+                mouseArea.onReleased: {
+                    const facade = editor
+                    const delta = leftTrim.pressWidth - clipBlock.gestureWidth
+                    clipBlock.gestureActive = false
+                    facade.trimClip(modelData.id,
+                                    leftTrim.originalIn + delta / root.pixelsPerSecond * modelData.speed,
+                                    modelData.out)
+                    facade.endCoalescedEdit()
+                }
+                mouseArea.onCanceled: {
+                    clipBlock.gestureActive = false
+                    editor.endCoalescedEdit()
                 }
             }
-            Rectangle {
-                anchors.right: parent.right; width: 8; height: parent.height; color: clipBlock.border.color; radius: theme.radius
-                opacity: clipBlock.selected || clipHover.hovered ? 1 : 0
-                Behavior on opacity { NumberAnimation { duration: 120 } }
-                MouseArea {
-                    anchors.fill: parent; cursorShape: Qt.SizeHorCursor
-                    enabled: clipBlock.selected
-                    property real pressTrackX; property real pressWidth; property real originalOut
-                    onPressed: {
-                        root.focusTarget.forceActiveFocus(); editor.selectedClipId = modelData.id
-                        pressTrackX = mapToItem(root, mouse.x, mouse.y).x
-                        pressWidth = clipBlock.width; originalOut = modelData.out
-                        clipBlock.gestureWidth = clipBlock.width; clipBlock.gestureActive = true
-                        editor.beginCoalescedEdit("trim-" + modelData.id)
-                    }
-                    onPositionChanged: if (pressed) {
-                        const delta = mapToItem(root, mouse.x, mouse.y).x - pressTrackX
-                        clipBlock.gestureWidth = Math.max(.1 / modelData.speed * root.pixelsPerSecond, pressWidth + delta)
-                    }
-                    onReleased: {
-                        const facade = editor
-                        const delta = clipBlock.gestureWidth - pressWidth
-                        clipBlock.gestureActive = false
-                        facade.trimClip(modelData.id, modelData.in, originalOut + delta / root.pixelsPerSecond * modelData.speed)
-                        facade.endCoalescedEdit()
-                    }
-                    onCanceled: { clipBlock.gestureActive = false; editor.endCoalescedEdit() }
+            OmTrimHandle {
+                id: rightTrim
+                objectName: "clipTrimHandle-" + modelData.id + "-right"
+                anchors.right: parent.right
+                edge: "right"
+                accent: theme.accent
+                active: clipBlock.selected || clipHover.hovered
+                dragging: mouseArea.pressed
+                mouseArea.enabled: clipBlock.selected
+                property real pressTrackX
+                property real pressWidth
+                property real originalOut
+                mouseArea.onPressed: mouse => {
+                    root.focusTarget.forceActiveFocus(); editor.selectedClipId = modelData.id
+                    rightTrim.pressTrackX = mouseArea.mapToItem(root, mouse.x, mouse.y).x
+                    rightTrim.pressWidth = clipBlock.width; rightTrim.originalOut = modelData.out
+                    clipBlock.gestureWidth = clipBlock.width; clipBlock.gestureActive = true
+                    editor.beginCoalescedEdit("trim-" + modelData.id)
+                }
+                mouseArea.onPositionChanged: mouse => { if (mouseArea.pressed) {
+                    const delta = mouseArea.mapToItem(root, mouse.x, mouse.y).x - rightTrim.pressTrackX
+                    clipBlock.gestureWidth = Math.max(.1 / modelData.speed * root.pixelsPerSecond,
+                                                      rightTrim.pressWidth + delta)
+                } }
+                mouseArea.onReleased: {
+                    const facade = editor
+                    const delta = clipBlock.gestureWidth - rightTrim.pressWidth
+                    clipBlock.gestureActive = false
+                    facade.trimClip(modelData.id, modelData.in,
+                                    rightTrim.originalOut + delta / root.pixelsPerSecond * modelData.speed)
+                    facade.endCoalescedEdit()
+                }
+                mouseArea.onCanceled: {
+                    clipBlock.gestureActive = false
+                    editor.endCoalescedEdit()
                 }
             }
         }

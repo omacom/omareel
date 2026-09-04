@@ -202,17 +202,29 @@ FocusScope {
                 border.color: theme.normalBorder
             }
             Rectangle {
+                id: cameraBlock
                 visible: editor.hasCamera
                 x: 0
-                y: 148
+                y: cameraHover.hovered ? 147 : 148
                 width: Math.max(20, editor.duration * root.pixelsPerSecond)
                 height: 40
                 radius: theme.radius
                 color: cameraHover.hovered ? theme.hoverFill : theme.normalFill
                 border.width: 1
-                border.color: cameraHover.hovered ? theme.hoverBorder : theme.normalBorder
+                border.color: cameraHover.hovered ? Qt.alpha(theme.accent, .72) : theme.normalBorder
                 clip: true
-                Behavior on color { ColorAnimation { duration: 120 } }
+                Behavior on y {
+                    enabled: !editor.loading
+                    NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
+                }
+                Behavior on color {
+                    enabled: !editor.loading
+                    ColorAnimation { duration: 120; easing.type: Easing.OutCubic }
+                }
+                Behavior on border.color {
+                    enabled: !editor.loading
+                    ColorAnimation { duration: 120; easing.type: Easing.OutCubic }
+                }
                 Row {
                     id: cameraStrip
                     anchors.fill: parent
@@ -220,16 +232,30 @@ FocusScope {
                     spacing: 2
                     Repeater {
                         model: editor.cameraThumbnails
-                        delegate: Image {
+                        delegate: Item {
                             required property string modelData
                             width: (cameraStrip.width - cameraStrip.spacing
                                     * Math.max(0, editor.cameraThumbnails.length - 1))
                                    / Math.max(1, editor.cameraThumbnails.length)
                             height: cameraStrip.height
-                            source: modelData
-                            sourceSize: Qt.size(112, 72)
-                            fillMode: Image.PreserveAspectCrop
-                            smooth: true
+                            Image {
+                                anchors.fill: parent
+                                source: modelData
+                                sourceSize: Qt.size(112, 72)
+                                fillMode: Image.PreserveAspectCrop
+                                smooth: true
+                            }
+                            Rectangle {
+                                anchors.fill: parent
+                                color: "transparent"
+                                border.width: 1
+                                border.color: theme.accent
+                                opacity: cameraHover.hovered ? 1 : 0
+                                Behavior on opacity {
+                                    enabled: !editor.loading
+                                    NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
+                                }
+                            }
                         }
                     }
                 }
@@ -245,6 +271,8 @@ FocusScope {
                             width: (parent.width - 14) / 8
                             height: parent.height
                             color: index % 2 ? theme.normalFill : theme.hoverFill
+                            border.width: cameraHover.hovered ? 1 : 0
+                            border.color: theme.accent
                         }
                     }
                 }
@@ -282,30 +310,70 @@ FocusScope {
                 id: playhead
                 x: editor.position * root.pixelsPerSecond - width / 2
                 y: 25
-                width: 1.5
+                width: playheadDrag.pressed ? 2 : 1.5
                 height: root.tracksBottom - y
                 color: theme.record
                 z: 20
-                Shape {
+                Behavior on width {
+                    enabled: !editor.loading
+                    NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
+                }
+                Item {
+                    id: playheadHead
                     x: -5.25
                     y: -1
                     width: 12
                     height: 8
-                    ShapePath {
-                        strokeWidth: 0
-                        fillColor: theme.record
-                        startX: 0
-                        startY: 0
-                        PathLine { x: 12; y: 0 }
-                        PathLine { x: 6; y: 8 }
-                        PathLine { x: 0; y: 0 }
+                    scale: playheadDrag.pressed ? 1.25 : playheadDrag.containsMouse ? 1.15 : 1
+                    transformOrigin: Item.Center
+                    Behavior on scale {
+                        enabled: !editor.loading
+                        NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
+                    }
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: -6
+                        radius: height / 2
+                        color: Qt.alpha(theme.record, .30)
+                        opacity: playheadDrag.pressed ? 1 : 0
+                        Behavior on opacity {
+                            enabled: !editor.loading
+                            NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
+                        }
+                    }
+                    Shape {
+                        anchors.fill: parent
+                        ShapePath {
+                            strokeWidth: 0
+                            fillColor: theme.record
+                            startX: 0
+                            startY: 0
+                            PathLine { x: 12; y: 0 }
+                            PathLine { x: 6; y: 8 }
+                            PathLine { x: 0; y: 0 }
+                        }
                     }
                 }
-                Item {
-                    x: -7; y: -4
-                    width: 15; height: 14
-                    HoverHandler { id: playheadHeadHover }
-                    ToolTip.visible: playheadHeadHover.hovered
+                MouseArea {
+                    id: playheadDrag
+                    x: -10; y: -6
+                    width: 21; height: 20
+                    hoverEnabled: true
+                    preventStealing: true
+                    cursorShape: Qt.SizeHorCursor
+                    function seekAt(mouseX, mouseY) {
+                        const contentX = mapToItem(content, mouseX, mouseY).x
+                        editor.seek(Math.max(0, Math.min(editor.duration,
+                                                        contentX / root.pixelsPerSecond)))
+                    }
+                    onPressed: mouse => {
+                        root.forceActiveFocus()
+                        seekAt(mouse.x, mouse.y)
+                    }
+                    onPositionChanged: mouse => {
+                        if (pressed) seekAt(mouse.x, mouse.y)
+                    }
+                    ToolTip.visible: containsMouse
                     ToolTip.text: editor.formatTime(editor.position)
                     ToolTip.delay: 250
                 }

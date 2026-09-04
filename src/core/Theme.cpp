@@ -120,6 +120,8 @@ void Theme::reload()
     const auto colors = readToml(QDir(themePath).filePath(QStringLiteral("colors.toml")));
     const auto shell = readToml(QDir(themePath).filePath(QStringLiteral("shell.toml")));
     const QColor accent(colors.value(QStringLiteral(".accent"), QStringLiteral("#7aa2f7")));
+    const QColor zoomAccent(colors.value(QStringLiteral(".color4"),
+                                         QStringLiteral("#bb9af7")));
     const QColor background(colors.value(QStringLiteral(".background"), QStringLiteral("#1a1b26")));
     const QColor foreground(colors.value(QStringLiteral(".foreground"), QStringLiteral("#a9b1d6")));
     const QColor lighter = colors.contains(QStringLiteral(".lighter_background"))
@@ -144,6 +146,7 @@ void Theme::reload()
     };
 
     m_accent = accent;
+    m_zoomAccent = zoomAccent;
     m_background = background;
     m_foreground = foreground;
     m_lighterBackground = lighter;

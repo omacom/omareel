@@ -74,6 +74,7 @@ qt_add_qml_module(omareel_ui STATIC
         src/ui/qml/ui/OmButtonGroup.qml
         src/ui/qml/ui/OmToggle.qml
         src/ui/qml/ui/OmSlider.qml
+        src/ui/qml/ui/OmTrimHandle.qml
         src/ui/qml/ui/OmSectionHeader.qml
         src/ui/qml/ui/OmHero.qml
         src/ui/qml/ui/OmSeparator.qml

@@ -164,6 +164,26 @@ static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplicat
             }
         }
     }
+    const QString forcedHandle = qEnvironmentVariable("OMAREEL_SCREENSHOT_HOVER_HANDLE").toLower();
+    if (forcedHandle == QLatin1String("clip-right") || forcedHandle == QLatin1String("zoom-left")) {
+        if (QObject *editorObject = engine.rootContext()->contextProperty(QStringLiteral("editor")).value<QObject *>()) {
+            const bool clipHandle = forcedHandle.startsWith(QLatin1String("clip"));
+            const QVariantList blocks = editorObject->property(clipHandle ? "clips" : "zooms").toList();
+            if (!blocks.isEmpty()) {
+                const QString id = blocks.first().toMap().value(QStringLiteral("id")).toString();
+                editorObject->setProperty(clipHandle ? "selectedClipId" : "selectedZoomId", id);
+                const QString objectName = (clipHandle ? QStringLiteral("clipTrimHandle-")
+                                                       : QStringLiteral("zoomTrimHandle-"))
+                    + id + (clipHandle ? QStringLiteral("-right") : QStringLiteral("-left"));
+                QTimer::singleShot(250, window, [window, objectName] {
+                    if (QObject *handle = window->findChild<QObject *>(objectName)) {
+                        handle->setProperty("debugHovered", true);
+                        handle->setProperty("debugDragging", true);
+                    }
+                });
+            }
+        }
+    }
     if (qEnvironmentVariable("OMAREEL_SCREENSHOT_PICK_ZOOM") == QLatin1String("1"))
         if (QObject *editor = engine.rootContext()->contextProperty(QStringLiteral("editor")).value<QObject *>())
             editor->setProperty("pickingZoomTarget", true);

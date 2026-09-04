@@ -138,15 +138,39 @@ FocusScope {
                 Repeater {
                     model: [{x:0,y:0,corner:0},{x:1,y:0,corner:1},{x:0,y:1,corner:2},{x:1,y:1,corner:3}]
                     delegate: Rectangle {
+                        id: cropHandle
                         required property var modelData
                         width: cropRect.handleSize; height: width; radius: theme.radius
                         x: modelData.x * cropRect.width - width / 2
                         y: modelData.y * cropRect.height - height / 2
-                        color: theme.accent; border.color: theme.accentForeground
+                        color: theme.accent
+                        border.width: 1 / scaled.scale
+                        border.color: theme.accentForeground
+                        scale: cropDrag.containsMouse || cropDrag.pressed ? 1.15 : 1
+                        transformOrigin: Item.Center
+                        Behavior on scale {
+                            enabled: !editor.loading
+                            NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
+                        }
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.margins: -6 / scaled.scale
+                            radius: Math.max(cropHandle.radius, height / 2)
+                            color: Qt.alpha(theme.accent, .30)
+                            opacity: cropDrag.pressed ? 1 : 0
+                            z: -1
+                            Behavior on opacity {
+                                enabled: !editor.loading
+                                NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
+                            }
+                        }
                         MouseArea {
+                            id: cropDrag
                             anchors.fill: parent
                             drag.target: parent
-                            cursorShape: Qt.SizeAllCursor
+                            hoverEnabled: true
+                            cursorShape: modelData.corner === 0 || modelData.corner === 3
+                                ? Qt.SizeBDiagCursor : Qt.SizeFDiagCursor
                             onPressed: editor.beginCoalescedEdit("crop")
                             onPositionChanged: {
                                 if (!pressed) return
@@ -164,6 +188,7 @@ FocusScope {
                                 }
                             }
                             onReleased: editor.endCoalescedEdit()
+                            onCanceled: editor.endCoalescedEdit()
                         }
                     }
                 }
