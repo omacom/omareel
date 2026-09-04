@@ -75,6 +75,7 @@ Item {
 
     MouseArea {
         id: hitArea
+        objectName: root.objectName + "-hit"
         x: root.edge === "left" ? -6 : 0
         y: -6
         width: 20

@@ -22,10 +22,41 @@ Item {
             property bool gestureActive: false
             property real gestureX: 0
             property real gestureWidth: 0
-            x: root.outputStart(index) * root.pixelsPerSecond
+            property real bodyPressTrackX: 0
+            property real bodyPressBlockX: 0
+            property real bodyOriginalIn: 0
+            function beginBodyDrag(area, mouse) {
+                root.focusTarget.forceActiveFocus()
+                editor.selectedClipId = modelData.id
+                bodyPressTrackX = area.mapToItem(root, mouse.x, mouse.y).x
+                bodyPressBlockX = clipBlock.x
+                bodyOriginalIn = modelData.in
+                gestureX = clipBlock.x
+                gestureWidth = clipBlock.width
+                gestureActive = true
+                editor.beginCoalescedEdit("move-clip-" + modelData.id)
+                editor.traceInput(area.objectName, "press", mouse.x, mouse.y)
+            }
+            function updateBodyDrag(area, mouse) {
+                if (!area.pressed) return
+                const trackX = area.mapToItem(root, mouse.x, mouse.y).x
+                const deltaPixels = trackX - bodyPressTrackX
+                gestureX = Math.max(0, bodyPressBlockX + deltaPixels)
+                editor.traceInput(area.objectName, "move", mouse.x, mouse.y)
+            }
+            function endBodyDrag(area, mouse, phase) {
+                const facade = editor
+                facade.traceInput(area.objectName, phase, mouse ? mouse.x : 0, mouse ? mouse.y : 0)
+                const nextIn = bodyOriginalIn
+                    + (gestureX - bodyPressBlockX) / root.pixelsPerSecond * modelData.speed
+                gestureActive = false
+                if (phase === "release") facade.moveClip(modelData.id, nextIn)
+                facade.endCoalescedEdit()
+            }
+            x: gestureActive ? gestureX : root.outputStart(index) * root.pixelsPerSecond
             width: gestureActive ? gestureWidth : Math.max(20, (modelData.out-modelData.in)/modelData.speed * root.pixelsPerSecond)
             height: root.height
-            y: clipHover.hovered ? -1 : 0
+            y: 0
             radius: theme.radius
             color: clipBlock.selected ? theme.selectedFill
                 : clipHover.hovered ? theme.hoverFill : theme.normalFill
@@ -33,10 +64,6 @@ Item {
                 : clipHover.hovered ? theme.hoverBorderWidth : theme.normalBorderWidth
             border.color: clipBlock.selected ? theme.accent
                 : clipHover.hovered ? Qt.alpha(theme.accent, .72) : theme.normalBorder
-            Behavior on y {
-                enabled: !editor.loading
-                NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
-            }
             Behavior on color {
                 enabled: !editor.loading
                 ColorAnimation { duration: 120; easing.type: Easing.OutCubic }
@@ -61,10 +88,15 @@ Item {
                 }
             }
             MouseArea {
+                id: clipBody
+                objectName: "clipBody-" + modelData.id
                 anchors.fill: parent
+                anchors.leftMargin: 14; anchors.rightMargin: 14
                 cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
-                onPressed: root.focusTarget.forceActiveFocus()
-                onClicked: editor.selectedClipId = modelData.id
+                onPressed: mouse => clipBlock.beginBodyDrag(clipBody, mouse)
+                onPositionChanged: mouse => clipBlock.updateBodyDrag(clipBody, mouse)
+                onReleased: mouse => clipBlock.endBodyDrag(clipBody, mouse, "release")
+                onCanceled: clipBlock.endBodyDrag(clipBody, null, "cancel")
             }
             Rectangle {
                 id: clipBadge
@@ -94,11 +126,14 @@ Item {
                     color: theme.foreground
                 }
                 MouseArea {
+                    id: badgeMouse
+                    objectName: "clipBadge-" + modelData.id
                     anchors.fill: parent
-                    onPressed: {
-                        root.focusTarget.forceActiveFocus()
-                        editor.selectedClipId = modelData.id
-                    }
+                    cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+                    onPressed: mouse => clipBlock.beginBodyDrag(badgeMouse, mouse)
+                    onPositionChanged: mouse => clipBlock.updateBodyDrag(badgeMouse, mouse)
+                    onReleased: mouse => clipBlock.endBodyDrag(badgeMouse, mouse, "release")
+                    onCanceled: clipBlock.endBodyDrag(badgeMouse, null, "cancel")
                     onClicked: speedMenu.open()
                 }
             }
@@ -131,6 +166,7 @@ Item {
                 property real pressWidth
                 property real originalIn
                 mouseArea.onPressed: mouse => {
+                    editor.traceInput(mouseArea.objectName, "press", mouse.x, mouse.y)
                     root.focusTarget.forceActiveFocus(); editor.selectedClipId = modelData.id
                     leftTrim.pressTrackX = mouseArea.mapToItem(root, mouse.x, mouse.y).x
                     leftTrim.pressWidth = clipBlock.width; leftTrim.originalIn = modelData.in
@@ -138,11 +174,13 @@ Item {
                     editor.beginCoalescedEdit("trim-" + modelData.id)
                 }
                 mouseArea.onPositionChanged: mouse => { if (mouseArea.pressed) {
+                    editor.traceInput(mouseArea.objectName, "move", mouse.x, mouse.y)
                     const delta = mouseArea.mapToItem(root, mouse.x, mouse.y).x - leftTrim.pressTrackX
                     clipBlock.gestureWidth = Math.max(.1 / modelData.speed * root.pixelsPerSecond,
                                                       leftTrim.pressWidth - delta)
                 } }
                 mouseArea.onReleased: {
+                    editor.traceInput(mouseArea.objectName, "release", 0, 0)
                     const facade = editor
                     const delta = leftTrim.pressWidth - clipBlock.gestureWidth
                     clipBlock.gestureActive = false
@@ -152,6 +190,7 @@ Item {
                     facade.endCoalescedEdit()
                 }
                 mouseArea.onCanceled: {
+                    editor.traceInput(mouseArea.objectName, "cancel", 0, 0)
                     clipBlock.gestureActive = false
                     editor.endCoalescedEdit()
                 }
@@ -159,7 +198,7 @@ Item {
             OmTrimHandle {
                 id: rightTrim
                 objectName: "clipTrimHandle-" + modelData.id + "-right"
-                anchors.right: parent.right
+                x: parent.width - width
                 edge: "right"
                 accent: theme.accent
                 active: clipBlock.selected || clipHover.hovered
@@ -169,6 +208,7 @@ Item {
                 property real pressWidth
                 property real originalOut
                 mouseArea.onPressed: mouse => {
+                    editor.traceInput(mouseArea.objectName, "press", mouse.x, mouse.y)
                     root.focusTarget.forceActiveFocus(); editor.selectedClipId = modelData.id
                     rightTrim.pressTrackX = mouseArea.mapToItem(root, mouse.x, mouse.y).x
                     rightTrim.pressWidth = clipBlock.width; rightTrim.originalOut = modelData.out
@@ -176,11 +216,13 @@ Item {
                     editor.beginCoalescedEdit("trim-" + modelData.id)
                 }
                 mouseArea.onPositionChanged: mouse => { if (mouseArea.pressed) {
+                    editor.traceInput(mouseArea.objectName, "move", mouse.x, mouse.y)
                     const delta = mouseArea.mapToItem(root, mouse.x, mouse.y).x - rightTrim.pressTrackX
                     clipBlock.gestureWidth = Math.max(.1 / modelData.speed * root.pixelsPerSecond,
                                                       rightTrim.pressWidth + delta)
                 } }
                 mouseArea.onReleased: {
+                    editor.traceInput(mouseArea.objectName, "release", 0, 0)
                     const facade = editor
                     const delta = clipBlock.gestureWidth - rightTrim.pressWidth
                     clipBlock.gestureActive = false
@@ -189,6 +231,7 @@ Item {
                     facade.endCoalescedEdit()
                 }
                 mouseArea.onCanceled: {
+                    editor.traceInput(mouseArea.objectName, "cancel", 0, 0)
                     clipBlock.gestureActive = false
                     editor.endCoalescedEdit()
                 }

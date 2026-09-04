@@ -56,6 +56,7 @@ private slots:
         QVERIFY(!preferences.webcamEnabled);
         QCOMPARE(preferences.webcamDevice, QStringLiteral("/dev/video2"));
         QCOMPARE(preferences.webcamHeight, 1080);
+        QVERIFY(!preferences.countdownBeforeRecording);
         preferences.systemAudio = false;
         preferences.microphoneDevice = QStringLiteral("test_input");
         preferences.webcamEnabled = true;
@@ -63,6 +64,7 @@ private slots:
         preferences.webcamHeight = 720;
         preferences.webcamRotation = 270;
         preferences.webcamFlipHorizontal = true;
+        preferences.countdownBeforeRecording = true;
         QString error;
         QVERIFY2(preferences.save(&error), qPrintable(error));
         const RecordingPreferences loaded = RecordingPreferences::load();
@@ -74,6 +76,7 @@ private slots:
         QCOMPARE(loaded.webcamHeight, 720);
         QCOMPARE(loaded.webcamRotation, 270);
         QVERIFY(loaded.webcamFlipHorizontal);
+        QVERIFY(loaded.countdownBeforeRecording);
     }
 
     void migratesLegacyRecordingPreferencesByCopy()

@@ -122,6 +122,33 @@ ApplicationWindow {
     }
 
     Window {
+        id: countdownWindow
+        objectName: "countdownWindow"
+        visible: false
+        width: 240
+        height: 240
+        color: "transparent"
+        flags: Qt.FramelessWindowHint | Qt.Tool
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: 180
+            height: 180
+            radius: 90
+            color: Qt.alpha(theme.surface, .94)
+            border.width: 3
+            border.color: theme.record
+            Label {
+                anchors.centerIn: parent
+                text: recordingBar.countdownValue
+                color: theme.foreground
+                font.pixelSize: 104
+                font.weight: Font.Bold
+            }
+        }
+    }
+
+    Window {
         id: selfViewWindow
         objectName: "selfViewWindow"
         visible: false

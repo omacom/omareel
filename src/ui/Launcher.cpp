@@ -37,10 +37,11 @@ Launcher::Launcher(QObject *parent): QObject(parent)
     m_webcamFlipHorizontal = preferences.webcamFlipHorizontal;
     m_selfViewEnabled = preferences.selfViewEnabled;
     m_selfViewSize = preferences.selfViewSize;
+    m_countdownBeforeRecording = preferences.countdownBeforeRecording;
     refreshAudioDevices();
     refreshWebcamDevices();
     connect(&m_recordingTimer, &QTimer::timeout, this, &Launcher::refreshRecording);
-    m_recordingTimer.start(1000);
+    m_recordingTimer.start(50);
     refreshRecording();
 }
 
@@ -57,6 +58,7 @@ void Launcher::saveRecordingPreferences()
     preferences.webcamFlipHorizontal = m_webcamFlipHorizontal;
     preferences.selfViewEnabled = m_selfViewEnabled;
     preferences.selfViewSize = m_selfViewSize;
+    preferences.countdownBeforeRecording = m_countdownBeforeRecording;
     QString error;
     if (!preferences.save(&error)) emit errorOccurred(error);
 }
@@ -147,6 +149,14 @@ void Launcher::setSelfViewSize(const QString &value)
     emit recordingPreferencesChanged();
 }
 
+void Launcher::setCountdownBeforeRecording(bool value)
+{
+    if (m_countdownBeforeRecording == value) return;
+    m_countdownBeforeRecording = value;
+    saveRecordingPreferences();
+    emit recordingPreferencesChanged();
+}
+
 QVariant Launcher::webcamCameraDevice() const
 {
     const QByteArray wanted = QFileInfo(m_webcamDevice).absoluteFilePath().toUtf8();
@@ -225,18 +235,28 @@ void Launcher::refreshWebcamDevices()
 void Launcher::refreshRecording()
 {
     const bool active = Recorder::isRecording();
-    if (active != m_recording) {
-        m_recording = active;
+    const bool captureStarted = active && Recorder::recordingState()
+                                            .value(QStringLiteral("capture_started")).toBool(false);
+    if (captureStarted != m_recording) {
+        m_recording = captureStarted;
         emit recordingChanged();
     }
     QString elapsed = QStringLiteral("00:00");
-    if (active) {
+    if (captureStarted) {
         const qint64 startedUs = Recorder::recordingStartedUs();
         elapsed = formatDuration(std::max<qint64>(0, monotonicUs() - startedUs) / 1000000.0);
     }
     if (elapsed != m_recordingElapsed) {
         m_recordingElapsed = elapsed;
         emit recordingElapsedChanged();
+    }
+    if (captureStarted && m_startingRecording) {
+        m_startingRecording = false;
+        emit startingRecordingChanged();
+    }
+    if (captureStarted && m_quitWhenStarted) {
+        m_quitWhenStarted = false;
+        emit quitRequested();
     }
 }
 
@@ -274,6 +294,8 @@ void Launcher::record()
 {
     if (m_recording || m_startingRecording) return;
     m_startingRecording = true;
+    m_quitWhenStarted = true;
+    emit startingRecordingChanged();
     emit recordingStarting();
     QTimer::singleShot(150, this, [this] {
         QStringList arguments{QStringLiteral("record")};
@@ -286,12 +308,23 @@ void Launcher::record()
         if (m_webcam) arguments << QStringLiteral("--with-webcam")
                                 << QStringLiteral("--webcam-device") << m_webcamDevice
                                 << QStringLiteral("--webcam-height") << QString::number(m_webcamHeight);
-        if (!QProcess::startDetached(QCoreApplication::applicationFilePath(), arguments)) {
-            m_startingRecording = false;
-            emit errorOccurred(QStringLiteral("Could not start recording"));
-            return;
-        }
-        emit quitRequested();
+        m_recordingProcess = new QProcess(this);
+        m_recordingProcess->setProcessChannelMode(QProcess::MergedChannels);
+        connect(m_recordingProcess, &QProcess::finished, this,
+                [this](int exitCode, QProcess::ExitStatus status) {
+            const QString output = QString::fromUtf8(m_recordingProcess->readAll()).trimmed();
+            m_recordingProcess->deleteLater();
+            m_recordingProcess = nullptr;
+            refreshRecording();
+            if (status == QProcess::NormalExit && exitCode == 0) return;
+            m_quitWhenStarted = false;
+            if (m_startingRecording) {
+                m_startingRecording = false;
+                emit startingRecordingChanged();
+            }
+            emit errorOccurred(output.isEmpty() ? QStringLiteral("Could not start recording") : output);
+        });
+        m_recordingProcess->start(QCoreApplication::applicationFilePath(), arguments);
     });
 }
 

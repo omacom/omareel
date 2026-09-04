@@ -5,12 +5,15 @@
 #include <QTimer>
 #include <QVariantList>
 
+class QProcess;
+
 namespace Omareel {
 
 class Launcher : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(bool recording READ recording NOTIFY recordingChanged)
+    Q_PROPERTY(bool startingRecording READ startingRecording NOTIFY startingRecordingChanged)
     Q_PROPERTY(QString recordingElapsed READ recordingElapsed NOTIFY recordingElapsedChanged)
     Q_PROPERTY(bool systemAudio READ systemAudio WRITE setSystemAudio NOTIFY recordingPreferencesChanged)
     Q_PROPERTY(bool microphone READ microphone WRITE setMicrophone NOTIFY recordingPreferencesChanged)
@@ -23,12 +26,14 @@ class Launcher : public QObject
     Q_PROPERTY(bool webcamFlipHorizontal READ webcamFlipHorizontal WRITE setWebcamFlipHorizontal NOTIFY recordingPreferencesChanged)
     Q_PROPERTY(bool selfViewEnabled READ selfViewEnabled WRITE setSelfViewEnabled NOTIFY recordingPreferencesChanged)
     Q_PROPERTY(QString selfViewSize READ selfViewSize WRITE setSelfViewSize NOTIFY recordingPreferencesChanged)
+    Q_PROPERTY(bool countdownBeforeRecording READ countdownBeforeRecording WRITE setCountdownBeforeRecording NOTIFY recordingPreferencesChanged)
     Q_PROPERTY(QVariant webcamCameraDevice READ webcamCameraDevice NOTIFY recordingPreferencesChanged)
     Q_PROPERTY(bool webcamPreviewAvailable READ webcamPreviewAvailable NOTIFY webcamDevicesChanged)
     Q_PROPERTY(QVariantList webcamDevices READ webcamDevices NOTIFY webcamDevicesChanged)
 public:
     explicit Launcher(QObject *parent = nullptr);
     bool recording() const { return m_recording; }
+    bool startingRecording() const { return m_startingRecording; }
     QString recordingElapsed() const { return m_recordingElapsed; }
     bool systemAudio() const { return m_systemAudio; }
     bool microphone() const { return m_microphone; }
@@ -41,6 +46,7 @@ public:
     bool webcamFlipHorizontal() const { return m_webcamFlipHorizontal; }
     bool selfViewEnabled() const { return m_selfViewEnabled; }
     QString selfViewSize() const { return m_selfViewSize; }
+    bool countdownBeforeRecording() const { return m_countdownBeforeRecording; }
     QVariant webcamCameraDevice() const;
     bool webcamPreviewAvailable() const;
     QVariantList webcamDevices() const { return m_webcamDevices; }
@@ -55,6 +61,7 @@ public:
     void setWebcamFlipHorizontal(bool value);
     void setSelfViewEnabled(bool value);
     void setSelfViewSize(const QString &value);
+    void setCountdownBeforeRecording(bool value);
 
     Q_INVOKABLE void openBundle(const QString &path);
     Q_INVOKABLE void showRecordingsFolder();
@@ -64,6 +71,7 @@ public:
 
 signals:
     void recordingChanged();
+    void startingRecordingChanged();
     void recordingElapsedChanged();
     void recordingPreferencesChanged();
     void audioDevicesChanged();
@@ -95,6 +103,9 @@ private:
     QVariantList m_webcamDevices;
     QList<QCameraDevice> m_cameraDevices;
     bool m_startingRecording = false;
+    bool m_countdownBeforeRecording = false;
+    bool m_quitWhenStarted = false;
+    QProcess *m_recordingProcess = nullptr;
 };
 
 } // namespace Omareel

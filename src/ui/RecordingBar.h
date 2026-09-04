@@ -32,6 +32,8 @@ class RecordingBar : public QObject
     Q_PROPERTY(bool webcam READ webcam CONSTANT)
     Q_PROPERTY(bool hidden READ hidden CONSTANT)
     Q_PROPERTY(bool captureStarted READ captureStarted NOTIFY captureStartedChanged)
+    Q_PROPERTY(bool countdownActive READ countdownActive NOTIFY countdownChanged)
+    Q_PROPERTY(int countdownValue READ countdownValue NOTIFY countdownChanged)
     Q_PROPERTY(int cameraRotation READ cameraRotation NOTIFY cameraSettingsChanged)
     Q_PROPERTY(bool cameraFlipHorizontal READ cameraFlipHorizontal NOTIFY cameraSettingsChanged)
     Q_PROPERTY(QString cameraError READ cameraError NOTIFY cameraErrorChanged)
@@ -50,6 +52,8 @@ public:
     bool webcam() const { return m_webcam; }
     bool hidden() const { return m_hidden; }
     bool captureStarted() const { return m_captureStarted; }
+    bool countdownActive() const { return m_countdownActive; }
+    int countdownValue() const { return m_countdownValue; }
     int cameraRotation() const { return m_cameraRotation; }
     bool cameraFlipHorizontal() const { return m_cameraFlipHorizontal; }
     QString cameraError() const { return m_cameraError; }
@@ -81,6 +85,7 @@ signals:
     void selfViewVisibilityChanged();
     void selfViewPlacementChanged();
     void captureStartedChanged();
+    void countdownChanged();
     void finished();
 
 private:
@@ -91,6 +96,8 @@ private:
     bool m_webcam = false;
     bool m_hidden = false;
     bool m_captureStarted = false;
+    bool m_countdownActive = false;
+    int m_countdownValue = 3;
     int m_cameraRotation = 0;
     bool m_cameraFlipHorizontal = false;
     QString m_cameraError;

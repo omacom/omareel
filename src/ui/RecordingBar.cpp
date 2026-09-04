@@ -8,6 +8,7 @@
 #include <ctime>
 #include <QCursor>
 #include <QDebug>
+#include <QFile>
 
 using namespace Omareel;
 
@@ -16,6 +17,23 @@ static qint64 barMonotonicUs()
     timespec value{};
     clock_gettime(CLOCK_MONOTONIC, &value);
     return qint64(value.tv_sec) * 1000000 + value.tv_nsec / 1000;
+}
+
+static void debugBarStage(const QString &stage, const QString &detail = {})
+{
+    if (qEnvironmentVariable("OMAREEL_DEBUG") != QLatin1String("1")) return;
+    QFile file(QStringLiteral("/tmp/omareel.log"));
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) return;
+    QString line = QStringLiteral("OMAREEL_START stage=%1 monotonic_us=%2")
+        .arg(stage).arg(barMonotonicUs());
+    const qint64 daemonStartUs = Recorder::recordingState()
+                                     .value(QStringLiteral("daemon_started_us"))
+                                     .toVariant().toLongLong();
+    if (daemonStartUs > 0)
+        line += QStringLiteral(" elapsed_ms=%1")
+                    .arg((barMonotonicUs() - daemonStartUs) / 1000.0, 0, 'f', 3);
+    if (!detail.isEmpty()) line += QLatin1Char(' ') + detail;
+    file.write((line + QLatin1Char('\n')).toUtf8());
 }
 
 RecordingBar::RecordingBar(bool hidden, QObject *parent): QObject(parent),
@@ -32,6 +50,7 @@ RecordingBar::RecordingBar(bool hidden, QObject *parent): QObject(parent),
     m_selfViewX = state.value(QStringLiteral("selfview_x")).toInt(16);
     m_selfViewY = state.value(QStringLiteral("selfview_y")).toInt(16);
     m_captureStarted = state.value(QStringLiteral("capture_started")).toBool(false);
+    m_countdownActive = state.value(QStringLiteral("countdown_active")).toBool(false);
     m_commandSequence = state.value(QStringLiteral("recording_bar_command_sequence"))
                             .toVariant().toLongLong();
     m_saveSelfViewTimer.setSingleShot(true);
@@ -65,6 +84,7 @@ RecordingBar::RecordingBar(bool hidden, QObject *parent): QObject(parent),
                 {QStringLiteral("camera_height_actual"), m_cameraCapture->captureSize().height()},
                 {QStringLiteral("camera_fps"), m_cameraCapture->frameRate()}
             });
+            debugBarStage(QStringLiteral("camera_ready"));
         });
         connect(m_cameraCapture.get(), &CameraCapture::errorOccurred, this,
                 [this](const QString &message) {
@@ -102,6 +122,21 @@ void RecordingBar::poll()
     if (captureStarted != m_captureStarted) {
         m_captureStarted = captureStarted;
         emit captureStartedChanged();
+    }
+    if (captureStarted && qEnvironmentVariable("OMAREEL_DEBUG") == QLatin1String("1")
+        && !property("captureStageLogged").toBool()) {
+        setProperty("captureStageLogged", true);
+        debugBarStage(QStringLiteral("capture_seen_by_bar"));
+    }
+    const bool countdownActive = state.value(QStringLiteral("countdown_active")).toBool(false);
+    const qint64 countdownEndUs = state.value(QStringLiteral("countdown_end_us"))
+                                      .toVariant().toLongLong();
+    const int countdownValue = std::clamp(
+        int((std::max<qint64>(0, countdownEndUs - barMonotonicUs()) + 999999) / 1000000), 1, 3);
+    if (countdownActive != m_countdownActive || countdownValue != m_countdownValue) {
+        m_countdownActive = countdownActive;
+        m_countdownValue = countdownValue;
+        emit countdownChanged();
     }
     const bool requestedSelfView = state.value(QStringLiteral("selfview")).toBool(false);
     if (requestedSelfView != m_selfViewVisible) {

@@ -11,6 +11,7 @@
 #include <QQmlEngine>
 #include <QQuickItem>
 #include <QQuickWindow>
+#include <QImage>
 #include <algorithm>
 #include <functional>
 #include <QVideoFrame>
@@ -231,6 +232,148 @@ private slots:
             if (entry.toMap().value(QStringLiteral("id")).toString() == id) moved = entry.toMap();
         QVERIFY(!moved.isEmpty());
         QVERIFY(qAbs(moved.value(QStringLiteral("start")).toDouble() - (originalStart + 0.4)) < 0.06);
+    }
+
+    void realTimelineBlockBodiesDrag()
+    {
+        QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));
+        Editor editor(m_bundle);
+        QVERIFY(editor.isValid());
+        editor.seek(1.0);
+        QVERIFY(editor.splitAtPlayhead());
+        const QString clipId = editor.clips().first().toMap().value(QStringLiteral("id")).toString();
+        QVERIFY(editor.trimClip(clipId, 0.0, 0.7));
+        const double originalClipIn = editor.clips().first().toMap().value(QStringLiteral("in")).toDouble();
+        while (!editor.zooms().isEmpty())
+            QVERIFY(editor.removeZoom(editor.zooms().first().toMap().value(QStringLiteral("id")).toString()));
+        const QString zoomId = editor.addZoomAt(0.1, 1.0);
+        QVERIFY(!zoomId.isEmpty());
+        const double originalZoomStart = editor.zooms().first().toMap().value(QStringLiteral("start")).toDouble();
+
+        qputenv("OMAREEL_INPUT_TRACE", "1");
+        Theme theme;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("editor"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import QtQuick
+            import QtQuick.Window
+            import Omareel
+            Window {
+                width: 800; height: 180; visible: true
+                Timeline { anchors.fill: parent; scaleFactor: 1 }
+            })", QUrl());
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        std::unique_ptr<QObject> object(component.create());
+        auto *window = qobject_cast<QQuickWindow *>(object.get());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+
+        const auto findItem = [](QQuickItem *parent, const QString &name) {
+            std::function<QQuickItem *(QQuickItem *)> visit = [&](QQuickItem *item) -> QQuickItem * {
+                if (item->objectName() == name) return item;
+                for (QQuickItem *child : item->childItems())
+                    if (QQuickItem *match = visit(child)) return match;
+                return nullptr;
+            };
+            return visit(parent);
+        };
+        auto *clipBlock = findItem(window->contentItem(), QStringLiteral("clipBlock-") + clipId);
+        QTRY_VERIFY(clipBlock);
+        const auto dragCentre = [window](QQuickItem *block) {
+            const QPoint start = block->mapToScene(
+                QPointF(block->width() / 2, block->height() / 2)).toPoint();
+            const QPoint finish = start + QPoint(80, 0);
+            QTest::mousePress(window, Qt::LeftButton, Qt::NoModifier, start);
+            QTest::mouseMove(window, finish, 20);
+            QTest::mouseRelease(window, Qt::LeftButton, Qt::NoModifier, finish);
+        };
+        dragCentre(clipBlock);
+        QTRY_VERIFY(editor.clips().first().toMap().value(QStringLiteral("in")).toDouble()
+                    > originalClipIn + 0.05);
+        auto *zoomBlock = findItem(window->contentItem(), QStringLiteral("zoomBlock-") + zoomId);
+        QTRY_VERIFY(zoomBlock);
+        dragCentre(zoomBlock);
+        QVariantMap movedZoom;
+        for (const QVariant &entry : editor.zooms())
+            if (entry.toMap().value(QStringLiteral("id")).toString() == zoomId)
+                movedZoom = entry.toMap();
+        QVERIFY(movedZoom.value(QStringLiteral("start")).toDouble() > originalZoomStart + 0.05);
+        qunsetenv("OMAREEL_INPUT_TRACE");
+    }
+
+    void clipHandleHoverKeepsAccentBounds()
+    {
+        QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));
+        Editor editor(m_bundle);
+        QVERIFY(editor.isValid());
+        const QString clipId = editor.clips().first().toMap().value(QStringLiteral("id")).toString();
+        editor.setSelectedClipId(clipId);
+        Theme theme;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("editor"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import QtQuick
+            import QtQuick.Window
+            import Omareel
+            Window {
+                width: 600; height: 80; visible: true; color: theme.surface
+                Item { id: focusItem; anchors.fill: parent }
+                ClipTrack { anchors.fill: parent; pixelsPerSecond: 200; focusTarget: focusItem }
+            })", QUrl());
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        std::unique_ptr<QObject> object(component.create());
+        auto *window = qobject_cast<QQuickWindow *>(object.get());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        const QString handleName = QStringLiteral("clipTrimHandle-") + clipId
+            + QStringLiteral("-right");
+        std::function<QQuickItem *(QQuickItem *)> findHandle = [&](QQuickItem *item) -> QQuickItem * {
+            if (item->objectName() == handleName) return item;
+            for (QQuickItem *child : item->childItems())
+                if (QQuickItem *match = findHandle(child)) return match;
+            return nullptr;
+        };
+        auto *handle = findHandle(window->contentItem());
+        QTRY_VERIFY(handle);
+        QTest::qWait(180);
+        const QImage normal = window->grabWindow();
+        QVERIFY(!normal.isNull());
+        QVERIFY(handle->setProperty("debugHovered", true));
+        QTest::qWait(180);
+        const QImage hovered = window->grabWindow();
+        QVERIFY(!hovered.isNull());
+
+        const QRect sample = QRect(handle->mapToScene(QPointF()).toPoint(),
+                                   QSize(qRound(handle->width()), qRound(handle->height())))
+                                 .adjusted(-1, -1, 1, 1);
+        const QColor accent = theme.accent();
+        const auto accentBounds = [sample, accent](const QImage &image) {
+            QRect bounds;
+            const int accentHue = accent.hsvHue();
+            for (int y = std::max(0, sample.top()); y <= std::min(image.height() - 1, sample.bottom()); ++y) {
+                for (int x = std::max(0, sample.left()); x <= std::min(image.width() - 1, sample.right()); ++x) {
+                    const QColor pixel = image.pixelColor(x, y);
+                    const int hueDistance = std::abs(pixel.hsvHue() - accentHue);
+                    if (pixel.hsvSaturationF() < accent.hsvSaturationF() * 0.45
+                        || std::min(hueDistance, 360 - hueDistance) > 12) continue;
+                    bounds |= QRect(x, y, 1, 1);
+                }
+            }
+            return bounds;
+        };
+        const QRect normalBounds = accentBounds(normal);
+        const QRect hoverBounds = accentBounds(hovered);
+        qInfo().noquote() << QStringLiteral("handle accent bounds normal=%1,%2 %3x%4 hover=%5,%6 %7x%8")
+            .arg(normalBounds.x()).arg(normalBounds.y())
+            .arg(normalBounds.width()).arg(normalBounds.height())
+            .arg(hoverBounds.x()).arg(hoverBounds.y())
+            .arg(hoverBounds.width()).arg(hoverBounds.height());
+        QVERIFY(normalBounds.isValid());
+        QCOMPARE(hoverBounds, normalBounds);
     }
 
     void timelineWheelScrollsHorizontally()

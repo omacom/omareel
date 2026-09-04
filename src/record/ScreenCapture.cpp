@@ -5,9 +5,14 @@
 
 #include <QByteArray>
 #include <QDebug>
+#include <QDir>
 #include <QElapsedTimer>
+#include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QProcess>
 #include <QSaveFile>
+#include <QStandardPaths>
 #include <QTextStream>
 #include <algorithm>
 #include <atomic>
@@ -15,6 +20,7 @@
 #include <condition_variable>
 #include <cstring>
 #include <fcntl.h>
+#include <future>
 #include <mutex>
 #include <poll.h>
 #include <signal.h>
@@ -166,6 +172,18 @@ qint64 realtimeUs()
     return qint64(value.tv_sec) * 1000000 + value.tv_nsec / 1000;
 }
 
+void debugStartStage(const QString &stage, qint64 startUs, const QString &detail = {})
+{
+    if (qEnvironmentVariable("OMAREEL_DEBUG") != QLatin1String("1")) return;
+    QFile file(QStringLiteral("/tmp/omareel.log"));
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) return;
+    const qint64 now = monotonicUs();
+    QString line = QStringLiteral("OMAREEL_START stage=%1 monotonic_us=%2 elapsed_ms=%3")
+        .arg(stage).arg(now).arg((now - startUs) / 1000.0, 0, 'f', 3);
+    if (!detail.isEmpty()) line += QLatin1Char(' ') + detail;
+    file.write((line + QLatin1Char('\n')).toUtf8());
+}
+
 bool preferredEncoderAvailable()
 {
     QProcess probe;
@@ -192,6 +210,62 @@ bool gpuConversionAvailable()
     probe.write(QByteArray(256 * 256 * 4, '\0'));
     probe.closeWriteChannel();
     return probe.waitForFinished(10000) && probe.exitCode() == 0;
+}
+
+struct EncoderProbeResults {
+    bool preferred = false;
+    bool gpuConversion = false;
+    bool cached = false;
+};
+
+QJsonObject encoderProbeKey()
+{
+    const QString binary = QStandardPaths::findExecutable(QStringLiteral("ffmpeg"));
+    const QFileInfo executable(binary);
+    QFile driver(QStringLiteral("/sys/module/nvidia/version"));
+    QString driverVersion = QStringLiteral("absent");
+    if (driver.open(QIODevice::ReadOnly | QIODevice::Text))
+        driverVersion = QString::fromUtf8(driver.readAll()).trimmed();
+    return QJsonObject{
+        {QStringLiteral("binary"), executable.canonicalFilePath()},
+        {QStringLiteral("mtime_ms"), executable.lastModified().toMSecsSinceEpoch()},
+        {QStringLiteral("size"), executable.size()},
+        {QStringLiteral("driver"), driverVersion}};
+}
+
+QString encoderProbeCachePath()
+{
+    return QDir(QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation))
+        .filePath(QStringLiteral("omareel/encoder-probe.json"));
+}
+
+EncoderProbeResults encoderProbeResults()
+{
+    const QJsonObject key = encoderProbeKey();
+    QFile cachedFile(encoderProbeCachePath());
+    if (cachedFile.open(QIODevice::ReadOnly)) {
+        const QJsonObject cached = QJsonDocument::fromJson(cachedFile.readAll()).object();
+        if (cached.value(QStringLiteral("key")).toObject() == key) {
+            return {cached.value(QStringLiteral("preferred")).toBool(false),
+                    cached.value(QStringLiteral("gpuConversion")).toBool(false), true};
+        }
+    }
+
+    auto preferredFuture = std::async(std::launch::async, preferredEncoderAvailable);
+    auto conversionFuture = std::async(std::launch::async, gpuConversionAvailable);
+    EncoderProbeResults results{preferredFuture.get(), conversionFuture.get(), false};
+    const QString cachePath = encoderProbeCachePath();
+    QDir().mkpath(QFileInfo(cachePath).absolutePath());
+    QSaveFile output(cachePath);
+    if (output.open(QIODevice::WriteOnly)) {
+        output.write(QJsonDocument(QJsonObject{
+            {QStringLiteral("key"), key},
+            {QStringLiteral("preferred"), results.preferred},
+            {QStringLiteral("gpuConversion"), results.gpuConversion}})
+                         .toJson(QJsonDocument::Indented));
+        output.commit();
+    }
+    return results;
 }
 
 struct Output {
@@ -646,12 +720,18 @@ bool ScreenCapture::isSupported()
 
 bool ScreenCapture::start(const ScreenCaptureConfig &config, QString *error)
 {
+    const qint64 setupStartUs = monotonicUs();
+    auto probes = std::async(std::launch::async, encoderProbeResults);
     d->config = config;
     d->config.fps = std::max(1, config.fps);
+    const qint64 registryStartUs = monotonicUs();
     if (!connectRegistry(&d->registry)) {
         if (error) *error = QStringLiteral("Could not connect to the display server");
         return false;
     }
+    debugStartStage(QStringLiteral("registry"), setupStartUs,
+                    QStringLiteral("duration_ms=%1")
+                        .arg((monotonicUs() - registryStartUs) / 1000.0, 0, 'f', 3));
     if (!d->registry.captureManager || !d->registry.sourceManager || !d->registry.shm) {
         if (error) *error = QStringLiteral("The in-process capture protocol is unavailable");
         return false;
@@ -724,10 +804,15 @@ bool ScreenCapture::start(const ScreenCaptureConfig &config, QString *error)
             d->width, d->height, d->stride, format);
     }
 
-    const bool preferred = preferredEncoderAvailable();
+    const EncoderProbeResults probeResults = probes.get();
+    const bool preferred = probeResults.preferred;
+    debugStartStage(QStringLiteral("probes"), setupStartUs,
+                    QStringLiteral("cache=%1 preferred=%2 gpu=%3")
+                        .arg(probeResults.cached ? QStringLiteral("hit") : QStringLiteral("miss"))
+                        .arg(probeResults.preferred).arg(probeResults.gpuConversion));
     const QString requestedConversion = qEnvironmentVariable("OMAREEL_NATIVE_CONVERSION").toLower();
     const bool useGpuConversion = preferred && requestedConversion != QLatin1String("cpu")
-        && gpuConversionAvailable();
+        && probeResults.gpuConversion;
     d->conversion = useGpuConversion ? QStringLiteral("gpu") : QStringLiteral("cpu");
     QStringList arguments{QStringLiteral("-y"), QStringLiteral("-loglevel"), QStringLiteral("error"),
         QStringLiteral("-f"), QStringLiteral("rawvideo"), QStringLiteral("-pix_fmt"),
@@ -782,6 +867,7 @@ bool ScreenCapture::start(const ScreenCaptureConfig &config, QString *error)
         .arg(d->conversion).arg(slotCount).arg(d->encodedSize.width()).arg(d->encodedSize.height());
     d->rateClock.start();
     d->writer = std::thread([state = d.get()] { state->writerLoop(); });
+    debugStartStage(QStringLiteral("capture_setup_ready"), setupStartUs);
     return true;
 }
 

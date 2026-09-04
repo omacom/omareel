@@ -14,10 +14,12 @@ Item {
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton
         preventStealing: true
+        z: 0
         property real originX: 0
         property real currentX: 0
         property bool selecting: false
         onPressed: mouse => {
+            editor.traceInput(objectName, "press", mouse.x, mouse.y)
             root.focusTarget.forceActiveFocus()
             originX = mouse.x
             currentX = mouse.x
@@ -25,10 +27,12 @@ Item {
         }
         onPositionChanged: mouse => {
             if (!pressed) return
+            editor.traceInput(objectName, "move", mouse.x, mouse.y)
             currentX = Math.max(0, Math.min(width, mouse.x))
             selecting = Math.abs(currentX - originX) >= 2
         }
         onReleased: mouse => {
+            editor.traceInput(objectName, "release", mouse.x, mouse.y)
             currentX = Math.max(0, Math.min(width, mouse.x))
             selecting = Math.abs(currentX - originX) >= 2
             if (selecting)
@@ -66,21 +70,18 @@ Item {
             property real gestureX: 0
             property real gestureWidth: 0
             readonly property bool selected: editor.selectedZoomIds.indexOf(modelData.id) >= 0
+            z: 1
             visible: outputStart >= 0 && outputEnd >= 0
             x: gestureActive ? gestureX : Math.max(0, outputStart) * root.pixelsPerSecond
             width: gestureActive ? gestureWidth : Math.max(18, (outputEnd-outputStart) * root.pixelsPerSecond)
             height: root.height
-            y: zoomHover.hovered ? -1 : 0
+            y: 0
             radius: theme.radius
             color: Qt.alpha(theme.zoomAccent, .18)
             border.width: 1
             border.color: selected ? theme.zoomAccent
                         : zoomHover.hovered ? Qt.alpha(theme.zoomAccent, .80)
                         : Qt.alpha(theme.zoomAccent, .60)
-            Behavior on y {
-                enabled: !editor.loading
-                NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
-            }
             Behavior on color {
                 enabled: !editor.loading
                 ColorAnimation { duration: 120; easing.type: Easing.OutCubic }
@@ -123,11 +124,12 @@ Item {
             MouseArea {
                 objectName: "zoomBody-" + modelData.id
                 anchors.fill: parent
-                anchors.leftMargin: 8; anchors.rightMargin: 8
+                anchors.leftMargin: 14; anchors.rightMargin: 14
                 cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
                 property real pressTrackX
                 property real pressBlockX
                 onPressed: mouse => {
+                    editor.traceInput(objectName, "press", mouse.x, mouse.y)
                     root.focusTarget.forceActiveFocus()
                     if (editor.selectedZoomIds.indexOf(modelData.id) < 0)
                         editor.selectedZoomId = modelData.id
@@ -139,17 +141,23 @@ Item {
                     editor.beginCoalescedEdit("move-selection")
                 }
                 onPositionChanged: mouse => { if (pressed) {
+                    editor.traceInput(objectName, "move", mouse.x, mouse.y)
                     const trackX = mapToItem(root, mouse.x, mouse.y).x
                     const nextX = Math.max(0, Math.min(editor.duration * root.pixelsPerSecond - zoomBlock.width,
                         pressBlockX + trackX - pressTrackX))
                     zoomBlock.gestureX = nextX
-                    editor.moveSelectedZooms(modelData.id, editor.outputToSource(nextX / root.pixelsPerSecond))
                 } }
-                onReleased: {
+                onReleased: mouse => {
+                    const facade = editor
+                    facade.traceInput(objectName, "release", mouse.x, mouse.y)
+                    const nextStart = facade.outputToSource(
+                        zoomBlock.gestureX / root.pixelsPerSecond)
                     zoomBlock.gestureActive = false
-                    editor.endCoalescedEdit()
+                    facade.moveSelectedZooms(modelData.id, nextStart)
+                    facade.endCoalescedEdit()
                 }
                 onCanceled: {
+                    editor.traceInput(objectName, "cancel", 0, 0)
                     zoomBlock.gestureActive = false
                     editor.endCoalescedEdit()
                 }
@@ -165,6 +173,7 @@ Item {
                 property real pressBlockX
                 property real pressRight
                 mouseArea.onPressed: mouse => {
+                    editor.traceInput(mouseArea.objectName, "press", mouse.x, mouse.y)
                     root.focusTarget.forceActiveFocus(); editor.selectedZoomId = modelData.id
                     leftTrim.pressTrackX = mouseArea.mapToItem(root, mouse.x, mouse.y).x
                     leftTrim.pressBlockX = zoomBlock.x
@@ -173,18 +182,21 @@ Item {
                     zoomBlock.gestureActive = true; editor.beginCoalescedEdit("resize-" + modelData.id)
                 }
                 mouseArea.onPositionChanged: mouse => { if (mouseArea.pressed) {
+                    editor.traceInput(mouseArea.objectName, "move", mouse.x, mouse.y)
                     const trackX = mouseArea.mapToItem(root, mouse.x, mouse.y).x
                     const nextX = Math.max(0, Math.min(leftTrim.pressRight - root.pixelsPerSecond,
                         leftTrim.pressBlockX + trackX - leftTrim.pressTrackX))
                     zoomBlock.gestureX = nextX; zoomBlock.gestureWidth = leftTrim.pressRight - nextX
                 } }
                 mouseArea.onReleased: {
+                    editor.traceInput(mouseArea.objectName, "release", 0, 0)
                     const facade = editor
                     const start = editor.outputToSource(zoomBlock.gestureX / root.pixelsPerSecond)
                     zoomBlock.gestureActive = false; facade.resizeZoom(modelData.id, start, modelData.end)
                     facade.endCoalescedEdit()
                 }
                 mouseArea.onCanceled: {
+                    editor.traceInput(mouseArea.objectName, "cancel", 0, 0)
                     zoomBlock.gestureActive = false
                     editor.endCoalescedEdit()
                 }
@@ -192,7 +204,7 @@ Item {
             OmTrimHandle {
                 id: rightTrim
                 objectName: "zoomTrimHandle-" + modelData.id + "-right"
-                anchors.right: parent.right
+                x: parent.width - width
                 edge: "right"
                 accent: theme.zoomAccent
                 active: zoomBlock.selected || zoomHover.hovered
@@ -200,6 +212,7 @@ Item {
                 property real pressTrackX
                 property real pressWidth
                 mouseArea.onPressed: mouse => {
+                    editor.traceInput(mouseArea.objectName, "press", mouse.x, mouse.y)
                     root.focusTarget.forceActiveFocus(); editor.selectedZoomId = modelData.id
                     rightTrim.pressTrackX = mouseArea.mapToItem(root, mouse.x, mouse.y).x
                     rightTrim.pressWidth = zoomBlock.width
@@ -207,12 +220,14 @@ Item {
                     zoomBlock.gestureActive = true; editor.beginCoalescedEdit("resize-" + modelData.id)
                 }
                 mouseArea.onPositionChanged: mouse => { if (mouseArea.pressed) {
+                    editor.traceInput(mouseArea.objectName, "move", mouse.x, mouse.y)
                     const trackX = mouseArea.mapToItem(root, mouse.x, mouse.y).x
                     zoomBlock.gestureWidth = Math.max(root.pixelsPerSecond,
                         Math.min(editor.duration * root.pixelsPerSecond - zoomBlock.gestureX,
                             rightTrim.pressWidth + trackX - rightTrim.pressTrackX))
                 } }
                 mouseArea.onReleased: {
+                    editor.traceInput(mouseArea.objectName, "release", 0, 0)
                     const facade = editor
                     const end = editor.outputToSource((zoomBlock.gestureX + zoomBlock.gestureWidth)
                                                        / root.pixelsPerSecond)
@@ -220,6 +235,7 @@ Item {
                     facade.endCoalescedEdit()
                 }
                 mouseArea.onCanceled: {
+                    editor.traceInput(mouseArea.objectName, "cancel", 0, 0)
                     zoomBlock.gestureActive = false
                     editor.endCoalescedEdit()
                 }

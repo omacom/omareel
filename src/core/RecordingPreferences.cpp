@@ -40,6 +40,8 @@ RecordingPreferences RecordingPreferences::load()
     preferences.selfViewX = qBound(0.0, selfViewPosition.value(QStringLiteral("x")).toDouble(1.0), 1.0);
     preferences.selfViewY = qBound(0.0, selfViewPosition.value(QStringLiteral("y")).toDouble(1.0), 1.0);
     preferences.captureBackend = root.value(QStringLiteral("captureBackend")).toString(QStringLiteral("auto"));
+    preferences.countdownBeforeRecording = root.value(
+        QStringLiteral("countdownBeforeRecording")).toBool(false);
     if (root.value(QStringLiteral("webcam")).isObject()) {
         preferences.webcam = root.value(QStringLiteral("webcam")).toObject();
         if (!preferences.webcam.contains(QStringLiteral("border"))
@@ -88,6 +90,7 @@ bool RecordingPreferences::save(QString *error) const
             {QStringLiteral("x"), qBound(0.0, selfViewX, 1.0)},
             {QStringLiteral("y"), qBound(0.0, selfViewY, 1.0)}}},
         {QStringLiteral("captureBackend"), captureBackend},
+        {QStringLiteral("countdownBeforeRecording"), countdownBeforeRecording},
         {QStringLiteral("webcam"), savedWebcam}
     };
     if (file.write(QJsonDocument(root).toJson(QJsonDocument::Indented)) < 0 || !file.commit()) {

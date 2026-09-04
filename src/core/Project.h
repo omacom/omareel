@@ -97,8 +97,10 @@ struct ExportSettings {
 class Project
 {
 public:
+    static constexpr int CurrentDefaultsVersion = 2;
     static Project defaults(const QString &name = QStringLiteral("Untitled Recording"),
                             double duration = 0.0);
+    static QJsonObject migrateDefaults(const QJsonObject &json, bool *changed = nullptr);
     static Project fromJson(const QJsonObject &json);
     static Project load(const QString &path, QString *error = nullptr);
 
@@ -108,6 +110,7 @@ public:
     void setJson(const QJsonObject &json) { *this = fromJson(json); }
 
     int version = 1;
+    int defaultsVersion = CurrentDefaultsVersion;
     QString name = QStringLiteral("Untitled Recording");
     QString aspect = QStringLiteral("auto");
     QRectF crop{0.0, 0.0, 1.0, 1.0};

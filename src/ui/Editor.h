@@ -166,6 +166,7 @@ public:
     Q_INVOKABLE double outputToSource(double outputTime) const;
     Q_INVOKABLE double sourceToOutput(double sourceTime, int preferredClip = -1) const;
     Q_INVOKABLE bool splitAtPlayhead();
+    Q_INVOKABLE bool moveClip(const QString &id, double sourceIn);
     Q_INVOKABLE bool trimClip(const QString &id, double newIn, double newOut);
     Q_INVOKABLE bool removeClip(const QString &id);
     Q_INVOKABLE bool mergeClip(const QString &id, int direction);
@@ -192,6 +193,8 @@ public:
     Q_INVOKABLE void openContainingFolder(const QString &path) const;
     Q_INVOKABLE void copyPath(const QString &path) const;
     Q_INVOKABLE void refreshOmarchyTheme();
+    Q_INVOKABLE void traceInput(const QString &objectName, const QString &phase,
+                                double x, double y) const;
 
 signals:
     void projectChanged();

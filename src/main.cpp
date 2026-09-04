@@ -14,6 +14,7 @@
 
 #include <QGuiApplication>
 #include <algorithm>
+#include <chrono>
 #include <QFont>
 #include <QFontDatabase>
 #include <QDir>
@@ -26,6 +27,7 @@
 #include <QJsonObject>
 #include <QProcess>
 #include <QQuickStyle>
+#include <QQuickItem>
 #include <QQuickWindow>
 #include <QScreen>
 #include <QQmlApplicationEngine>
@@ -39,6 +41,7 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
+#include <functional>
 #include <unistd.h>
 #include <vector>
 
@@ -47,6 +50,22 @@
 #endif
 
 using namespace Omareel;
+
+static void debugUiStage(const QString &stage)
+{
+    if (qEnvironmentVariable("OMAREEL_DEBUG") != QLatin1String("1")) return;
+    QFile file(QStringLiteral("/tmp/omareel.log"));
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) return;
+    const auto now = std::chrono::steady_clock::now().time_since_epoch();
+    const qint64 monotonicUs = std::chrono::duration_cast<std::chrono::microseconds>(now).count();
+    const qint64 daemonStartUs = Recorder::recordingState()
+                                     .value(QStringLiteral("daemon_started_us"))
+                                     .toVariant().toLongLong();
+    file.write(QStringLiteral("OMAREEL_START stage=%1 monotonic_us=%2 elapsed_ms=%3\n")
+                   .arg(stage).arg(monotonicUs)
+                   .arg(daemonStartUs > 0 ? (monotonicUs - daemonStartUs) / 1000.0 : 0.0,
+                        0, 'f', 3).toUtf8());
+}
 
 struct ResolvedFonts {
     QString ui;
@@ -170,25 +189,27 @@ static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplicat
     const QString forcedHandle = !forcedDragHandle.isEmpty() ? forcedDragHandle
         : !forcedHoverHandle.isEmpty() ? forcedHoverHandle : forcedSelectHandle;
     if (forcedHandle == QLatin1String("clip-right") || forcedHandle == QLatin1String("zoom-left")) {
-        if (QObject *editorObject = engine.rootContext()->contextProperty(QStringLiteral("editor")).value<QObject *>()) {
-            const bool clipHandle = forcedHandle.startsWith(QLatin1String("clip"));
-            const QVariantList blocks = editorObject->property(clipHandle ? "clips" : "zooms").toList();
-            if (!blocks.isEmpty()) {
-                const QString id = blocks.first().toMap().value(QStringLiteral("id")).toString();
-                editorObject->setProperty(clipHandle ? "selectedClipId" : "selectedZoomId", id);
-                const QString objectName = (clipHandle ? QStringLiteral("clipTrimHandle-")
-                                                       : QStringLiteral("zoomTrimHandle-"))
-                    + id + (clipHandle ? QStringLiteral("-right") : QStringLiteral("-left"));
-                QTimer::singleShot(250, window,
-                                   [window, objectName, forcedHoverHandle, forcedDragHandle] {
-                    if (QObject *handle = window->findChild<QObject *>(objectName)) {
-                        handle->setProperty("debugHovered", !forcedHoverHandle.isEmpty()
-                                                                   || !forcedDragHandle.isEmpty());
-                        handle->setProperty("debugDragging", !forcedDragHandle.isEmpty());
-                    }
-                });
+        const bool clipHandle = forcedHandle.startsWith(QLatin1String("clip"));
+        const QString prefix = clipHandle ? QStringLiteral("clipTrimHandle-")
+                                          : QStringLiteral("zoomTrimHandle-");
+        const QString suffix = clipHandle ? QStringLiteral("-right")
+                                          : QStringLiteral("-left");
+        QTimer::singleShot(std::min(1500, captureDelay / 2), window,
+                           [window, prefix, suffix, forcedHoverHandle, forcedDragHandle] {
+            std::function<QQuickItem *(QQuickItem *)> findItem =
+                [&](QQuickItem *item) -> QQuickItem * {
+                if (item->objectName().startsWith(prefix) && item->objectName().endsWith(suffix))
+                    return item;
+                for (QQuickItem *child : item->childItems())
+                    if (QQuickItem *match = findItem(child)) return match;
+                return nullptr;
+            };
+            if (QObject *handle = findItem(window->contentItem())) {
+                handle->setProperty("debugHovered", !forcedHoverHandle.isEmpty()
+                                                           || !forcedDragHandle.isEmpty());
+                handle->setProperty("debugDragging", !forcedDragHandle.isEmpty());
             }
-        }
+        });
     }
     if (qEnvironmentVariable("OMAREEL_SCREENSHOT_PICK_ZOOM") == QLatin1String("1"))
         if (QObject *editor = engine.rootContext()->contextProperty(QStringLiteral("editor")).value<QObject *>())
@@ -352,6 +373,7 @@ static int recordCommand(const QStringList &arguments)
     options.selfView = preferences.selfViewEnabled;
     options.selfViewSize = preferences.selfViewSize;
     options.captureBackend = preferences.captureBackend;
+    options.countdown = preferences.countdownBeforeRecording;
     int modeCount = 0;
     for (int i = 0; i < arguments.size(); ++i) {
         const QString arg = arguments[i];
@@ -632,7 +654,55 @@ int main(int argc, char **argv)
         };
         QObject::connect(&recordingBar, &RecordingBar::captureStartedChanged,
                          window, updateBarVisibility);
+        auto barMappedLogged = std::make_shared<bool>(false);
+        QObject::connect(window, &QWindow::visibleChanged, window,
+                         [window, barMappedLogged](bool visible) {
+            if (!visible || *barMappedLogged) return;
+            QTimer::singleShot(0, window, [window, barMappedLogged] {
+                if (!window->isVisible() || *barMappedLogged) return;
+                *barMappedLogged = true;
+                debugUiStage(QStringLiteral("bar_mapped"));
+            });
+        });
         updateBarVisibility();
+
+        QQuickWindow *countdownWindow = window->findChild<QQuickWindow *>(
+            QStringLiteral("countdownWindow"));
+        if (!countdownWindow) {
+            for (QWindow *candidate : QGuiApplication::allWindows()) {
+                if (candidate->objectName() == QLatin1String("countdownWindow")) {
+                    countdownWindow = qobject_cast<QQuickWindow *>(candidate);
+                    break;
+                }
+            }
+        }
+        if (countdownWindow) {
+            if (screen) countdownWindow->setScreen(screen);
+            auto *countdownLayer = LayerShellQt::Window::get(countdownWindow);
+            countdownLayer->setLayer(LayerShellQt::Window::LayerOverlay);
+            countdownLayer->setAnchors({});
+            countdownLayer->setExclusiveZone(0);
+            countdownLayer->setKeyboardInteractivity(
+                LayerShellQt::Window::KeyboardInteractivityNone);
+            countdownLayer->setScope(QStringLiteral("omareel-record-bar"));
+            countdownLayer->setActivateOnShow(false);
+            if (screen) countdownLayer->setScreen(screen);
+            Recorder::updateRecordingState(QJsonObject{
+                {QStringLiteral("countdown_width"), countdownWindow->width()},
+                {QStringLiteral("countdown_height"), countdownWindow->height()},
+                {QStringLiteral("countdown_ready"), true}});
+            const auto updateCountdownVisibility = [&recordingBar, countdownWindow] {
+                if (recordingBar.countdownActive() && !recordingBar.captureStarted())
+                    countdownWindow->show();
+                else
+                    countdownWindow->hide();
+            };
+            QObject::connect(&recordingBar, &RecordingBar::countdownChanged,
+                             countdownWindow, updateCountdownVisibility);
+            QObject::connect(&recordingBar, &RecordingBar::captureStartedChanged,
+                             countdownWindow, updateCountdownVisibility);
+            updateCountdownVisibility();
+        }
 
         QQuickWindow *selfViewWindow = window->findChild<QQuickWindow *>(QStringLiteral("selfViewWindow"));
         if (!selfViewWindow) {

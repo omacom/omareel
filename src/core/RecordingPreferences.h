@@ -19,6 +19,7 @@ struct RecordingPreferences {
     double selfViewX = 1.0;
     double selfViewY = 1.0;
     QString captureBackend = QStringLiteral("auto");
+    bool countdownBeforeRecording = false;
     QJsonObject webcam{
         {QStringLiteral("enabled"), false},
         {QStringLiteral("position"), QStringLiteral("bottom-right")},

@@ -28,6 +28,7 @@ ApplicationWindow {
     property bool screenshotRecording: false
     property string errorMessage: ""
     readonly property bool showingRecording: launcher.recording || screenshotRecording
+    readonly property bool busy: showingRecording || launcher.startingRecording
 
     Behavior on height { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
 
@@ -81,7 +82,7 @@ ApplicationWindow {
         signal menuRequested()
         Layout.fillWidth: true
         Layout.preferredHeight: 28
-        enabled: !window.showingRecording
+        enabled: !window.busy
         hoverEnabled: true
         leftPadding: 8; rightPadding: 8; topPadding: 0; bottomPadding: 0
         contentItem: RowLayout {
@@ -131,7 +132,7 @@ ApplicationWindow {
     Camera {
         id: previewCamera
         cameraDevice: launcher.webcamCameraDevice
-        active: launcher.webcam && launcher.webcamPreviewAvailable && !window.showingRecording
+        active: launcher.webcam && launcher.webcamPreviewAvailable && !window.busy
     }
     CaptureSession { camera: previewCamera; videoOutput: cameraSource }
 
@@ -200,6 +201,7 @@ ApplicationWindow {
             Button {
                 id: recordControl
                 visible: !window.showingRecording
+                enabled: !launcher.startingRecording
                 anchors.centerIn: parent
                 width: 236; height: 150
                 hoverEnabled: true
@@ -234,6 +236,12 @@ ApplicationWindow {
                             anchors.centerIn: parent
                             width: 64; height: 64; radius: 32
                             color: recordControl.down ? Qt.darker(theme.record, 1.08) : theme.record
+                            SequentialAnimation on opacity {
+                                running: launcher.startingRecording
+                                loops: Animation.Infinite
+                                NumberAnimation { from: 1; to: .38; duration: 480; easing.type: Easing.InOutSine }
+                                NumberAnimation { from: .38; to: 1; duration: 480; easing.type: Easing.InOutSine }
+                            }
                             layer.enabled: recordControl.hovered && !recordControl.down
                             layer.effect: MultiEffect {
                                 shadowEnabled: true
@@ -253,7 +261,7 @@ ApplicationWindow {
                     }
                     Label {
                         Layout.alignment: Qt.AlignHCenter
-                        text: "Record"
+                        text: launcher.startingRecording ? "Starting…" : "Record"
                         color: theme.foreground
                         font.pixelSize: theme.font.title
                         font.bold: true
@@ -419,7 +427,7 @@ ApplicationWindow {
             CaptureRow {
                 id: webcamRow
                 text: "Webcam"; iconFile: "video.svg"; selected: launcher.webcam; hasMenu: true
-                enabled: !window.showingRecording && (launcher.webcam || launcher.webcamDevices.length > 0)
+                enabled: !window.busy && (launcher.webcam || launcher.webcamDevices.length > 0)
                 onClicked: launcher.webcam = !launcher.webcam
                 onMenuRequested: webcamMenu.popup(webcamRow, 28, webcamRow.height + 4)
             }
@@ -503,6 +511,7 @@ ApplicationWindow {
             Label { text: "Defaults for new recordings"; color: theme.textMuted; font.pixelSize: theme.font.caption }
             Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: theme.hairline }
             OmToggle { Layout.fillWidth: true; text: "Show camera self-view"; checked: launcher.selfViewEnabled; onToggled: launcher.selfViewEnabled = checked }
+            OmToggle { Layout.fillWidth: true; text: "Countdown before recording"; checked: launcher.countdownBeforeRecording; onToggled: launcher.countdownBeforeRecording = checked }
             Label { text: "Self-view size"; color: theme.textMuted; font.pixelSize: theme.font.caption }
             OmButtonGroup {
                 Layout.fillWidth: true
@@ -549,13 +558,13 @@ ApplicationWindow {
         }
     }
 
-    Shortcut { sequence: "Ctrl+R"; enabled: !window.showingRecording; onActivated: window.beginRecording() }
+    Shortcut { sequence: "Ctrl+R"; enabled: !window.busy; onActivated: window.beginRecording() }
     Shortcut {
         sequence: "Ctrl+Shift+R"
         onActivated: { reelSpin.stop(); logoReel.rotation = 0; reelSpin.start() }
     }
-    Shortcut { sequence: "Return"; enabled: !window.showingRecording && !settingsPopover.visible; onActivated: window.beginRecording() }
-    Shortcut { sequence: "Enter"; enabled: !window.showingRecording && !settingsPopover.visible; onActivated: window.beginRecording() }
+    Shortcut { sequence: "Return"; enabled: !window.busy && !settingsPopover.visible; onActivated: window.beginRecording() }
+    Shortcut { sequence: "Enter"; enabled: !window.busy && !settingsPopover.visible; onActivated: window.beginRecording() }
 
     FolderDialog {
         id: folderDialog

@@ -797,6 +797,23 @@ bool Editor::splitAtPlayhead()
     return true;
 }
 
+bool Editor::moveClip(const QString &id, double sourceIn)
+{
+    const int index = clipIndex(id);
+    if (index < 0) return false;
+    const double length = m_project.clips[index].out - m_project.clips[index].in;
+    const double lower = index > 0 ? m_project.clips[index - 1].out : 0.0;
+    const double upper = (index + 1 < m_project.clips.size()
+        ? m_project.clips[index + 1].in : m_sourceDuration) - length;
+    const double nextIn = std::clamp(sourceIn, lower, std::max(lower, upper));
+    if (qFuzzyCompare(nextIn + 1.0, m_project.clips[index].in + 1.0)) return true;
+    snapshot(m_coalesceKey.isEmpty() ? QStringLiteral("move-clip-") + id : m_coalesceKey);
+    m_project.clips[index].in = nextIn;
+    m_project.clips[index].out = nextIn + length;
+    changed(false);
+    return true;
+}
+
 bool Editor::trimClip(const QString &id, double newIn, double newOut)
 {
     const int index = clipIndex(id);
@@ -811,6 +828,14 @@ bool Editor::trimClip(const QString &id, double newIn, double newOut)
     m_project.clips[index].out = newOut;
     changed(false);
     return true;
+}
+
+void Editor::traceInput(const QString &objectName, const QString &phase,
+                        double x, double y) const
+{
+    if (qEnvironmentVariable("OMAREEL_INPUT_TRACE") != QLatin1String("1")) return;
+    QTextStream(stderr) << QStringLiteral("OMAREEL_INPUT object=%1 phase=%2 local=(%3,%4)\n")
+        .arg(objectName, phase).arg(x, 0, 'f', 1).arg(y, 0, 'f', 1);
 }
 
 bool Editor::removeClip(const QString &id)
@@ -1150,7 +1175,9 @@ QStringList Editor::presetNames() const
 QJsonObject Editor::stylePreset() const
 {
     const auto json = m_project.toJson();
-    return {{QStringLiteral("version"), 1}, {QStringLiteral("background"), json.value(QStringLiteral("background"))},
+    return {{QStringLiteral("version"), 1},
+        {QStringLiteral("defaultsVersion"), Project::CurrentDefaultsVersion},
+        {QStringLiteral("background"), json.value(QStringLiteral("background"))},
         {QStringLiteral("frame"), json.value(QStringLiteral("frame"))}, {QStringLiteral("cursor"), json.value(QStringLiteral("cursor"))},
         {QStringLiteral("zoomStyle"), json.value(QStringLiteral("zoomStyle"))}, {QStringLiteral("camera"), json.value(QStringLiteral("camera"))},
         {QStringLiteral("audio"), json.value(QStringLiteral("audio"))},
@@ -1172,7 +1199,8 @@ void Editor::loadPreset(const QString &rawName)
 {
     QFile file(QDir(presetsDirectory()).filePath(cleanPresetName(rawName) + QStringLiteral(".json")));
     if (!file.open(QIODevice::ReadOnly)) { emit errorOccurred(file.errorString()); return; }
-    const QJsonObject preset = QJsonDocument::fromJson(file.readAll()).object();
+    const QJsonObject preset = Project::migrateDefaults(
+        QJsonDocument::fromJson(file.readAll()).object());
     QJsonObject project = m_project.toJson();
     for (const QString &key : {QStringLiteral("background"), QStringLiteral("frame"), QStringLiteral("cursor"),
                                QStringLiteral("zoomStyle"), QStringLiteral("camera"), QStringLiteral("audio"),

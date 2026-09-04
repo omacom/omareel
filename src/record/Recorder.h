@@ -23,6 +23,7 @@ struct RecordOptions {
     bool selfView = true;
     QString selfViewSize = QStringLiteral("M");
     QString captureBackend = QStringLiteral("auto");
+    bool countdown = false;
     bool noOpen = false;
     bool noBar = false;
 };

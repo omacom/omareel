@@ -49,25 +49,80 @@ Project Project::defaults(const QString &projectName, double duration)
     return result;
 }
 
+QJsonObject Project::migrateDefaults(const QJsonObject &json, bool *changed)
+{
+    QJsonObject migrated = json;
+    const int storedVersion = json.value(QStringLiteral("defaultsVersion")).toInt(0);
+    bool didChange = storedVersion < CurrentDefaultsVersion;
+    if (storedVersion < CurrentDefaultsVersion) {
+        QJsonObject frame = migrated.value(QStringLiteral("frame")).toObject();
+        const QJsonObject shadow = frame.value(QStringLiteral("shadow")).toObject();
+        const double intensity = shadow.value(QStringLiteral("intensity"))
+                                     .toDouble(shadow.value(QStringLiteral("opacity")).toDouble());
+        const double blur = shadow.value(QStringLiteral("blur")).toDouble();
+        const double distance = shadow.value(QStringLiteral("distance"))
+                                    .toDouble(shadow.value(QStringLiteral("offsetY")).toDouble());
+        const bool oldShadowDefaults = !shadow.isEmpty()
+            && shadow.value(QStringLiteral("enabled")).toBool(true)
+            && qFuzzyCompare(intensity, 0.75)
+            && qFuzzyCompare(blur, 20.0)
+            && qFuzzyCompare(distance, 25.0)
+            && qFuzzyCompare(shadow.value(QStringLiteral("angle")).toDouble(90.0), 90.0);
+        if (oldShadowDefaults) {
+            const Shadow defaults;
+            frame.insert(QStringLiteral("shadow"), QJsonObject{
+                {QStringLiteral("enabled"), defaults.enabled},
+                {QStringLiteral("intensity"), defaults.intensity},
+                {QStringLiteral("blur"), defaults.blur},
+                {QStringLiteral("distance"), defaults.distance},
+                {QStringLiteral("angle"), defaults.angle}});
+        }
+
+        const QString borderKey = frame.contains(QStringLiteral("border"))
+            ? QStringLiteral("border") : QStringLiteral("inset");
+        const QJsonObject border = frame.value(borderKey).toObject();
+        const bool oldBorderDefaults = !border.isEmpty()
+            && !border.value(QStringLiteral("enabled")).toBool(false)
+            && qFuzzyIsNull(border.value(QStringLiteral("width")).toDouble())
+            && parseColor(border.value(QStringLiteral("color")), Qt::black) == QColor(Qt::black)
+            && qFuzzyCompare(border.value(QStringLiteral("alpha")).toDouble(), 0.5);
+        if (oldBorderDefaults) {
+            const Border defaults;
+            frame.remove(QStringLiteral("inset"));
+            frame.insert(QStringLiteral("border"), QJsonObject{
+                {QStringLiteral("enabled"), defaults.enabled},
+                {QStringLiteral("width"), defaults.width},
+                {QStringLiteral("color"), defaults.color.name(QColor::HexRgb)},
+                {QStringLiteral("alpha"), defaults.alpha}});
+        }
+        migrated.insert(QStringLiteral("frame"), frame);
+        migrated.insert(QStringLiteral("defaultsVersion"), CurrentDefaultsVersion);
+    }
+    if (changed) *changed = didChange;
+    return migrated;
+}
+
 Project Project::fromJson(const QJsonObject &root)
 {
-    Project p = defaults(root.value("name").toString(QStringLiteral("Untitled Recording")), 0.0);
-    p.version = root.value("version").toInt(1);
-    const QString aspect = root.value("aspect").isNull() ? QStringLiteral("auto")
-                                                          : root.value("aspect").toString("auto");
+    const QJsonObject source = migrateDefaults(root);
+    Project p = defaults(source.value("name").toString(QStringLiteral("Untitled Recording")), 0.0);
+    p.version = source.value("version").toInt(1);
+    p.defaultsVersion = source.value("defaultsVersion").toInt(CurrentDefaultsVersion);
+    const QString aspect = source.value("aspect").isNull() ? QStringLiteral("auto")
+                                                            : source.value("aspect").toString("auto");
     if (allowedAspects().contains(aspect)) p.aspect = aspect;
-    const auto crop = root.value("crop").toObject();
+    const auto crop = source.value("crop").toObject();
     p.crop = QRectF(crop.value("x").toDouble(0.0), crop.value("y").toDouble(0.0),
                     crop.value("w").toDouble(1.0), crop.value("h").toDouble(1.0));
 
     p.clips.clear();
-    for (const auto &value : root.value("clips").toArray()) {
+    for (const auto &value : source.value("clips").toArray()) {
         const auto o = value.toObject();
         p.clips << Clip{o.value("id").toString(), o.value("in").toDouble(),
                        o.value("out").toDouble(), o.value("speed").toDouble(1.0)};
     }
     p.zooms.clear();
-    for (const auto &value : root.value("zooms").toArray()) {
+    for (const auto &value : source.value("zooms").toArray()) {
         const auto o = value.toObject();
         ZoomSegment z;
         z.id = o.value("id").toString();
@@ -82,13 +137,13 @@ Project Project::fromJson(const QJsonObject &root)
         }
         p.zooms << z;
     }
-    const auto zs = root.value("zoomStyle").toObject();
+    const auto zs = source.value("zoomStyle").toObject();
     p.zoomStyle.spring = springFromJson(zs.value("spring").toObject(), p.zoomStyle.spring);
     p.zoomStyle.snapToEdgesRatio = zs.value("snapToEdgesRatio").toDouble(0.25);
     p.zoomStyle.instantAnimation = zs.value("instantAnimation").toBool(false);
     p.zoomStyle.motionBlur = std::clamp(zs.value("motionBlur").toDouble(0.0), 0.0, 1.0);
 
-    const auto bg = root.value("background").toObject();
+    const auto bg = source.value("background").toObject();
     p.background.type = bg.value("type").toString(p.background.type);
     p.background.wallpaper = bg.value("wallpaper").toString(p.background.wallpaper);
     p.background.color = parseColor(bg.value("color"), p.background.color);
@@ -104,22 +159,24 @@ Project Project::fromJson(const QJsonObject &root)
         }
     }
 
-    const auto f = root.value("frame").toObject();
+    const auto f = source.value("frame").toObject();
     p.frame.padding = f.value("padding").toDouble(0.10);
     p.frame.radius = f.value("radius").toDouble(12.0);
     const auto sh = f.value("shadow").toObject();
-    p.frame.shadow.enabled = sh.value("enabled").toBool(true);
-    p.frame.shadow.intensity = sh.value("intensity").toDouble(sh.value("opacity").toDouble(0.25));
-    p.frame.shadow.blur = sh.value("blur").toDouble(40.0);
-    p.frame.shadow.distance = sh.value("distance").toDouble(sh.value("offsetY").toDouble(10.0));
-    p.frame.shadow.angle = sh.value("angle").toDouble(90.0);
+    p.frame.shadow.enabled = sh.value("enabled").toBool(p.frame.shadow.enabled);
+    p.frame.shadow.intensity = sh.value("intensity").toDouble(
+        sh.value("opacity").toDouble(p.frame.shadow.intensity));
+    p.frame.shadow.blur = sh.value("blur").toDouble(p.frame.shadow.blur);
+    p.frame.shadow.distance = sh.value("distance").toDouble(
+        sh.value("offsetY").toDouble(p.frame.shadow.distance));
+    p.frame.shadow.angle = sh.value("angle").toDouble(p.frame.shadow.angle);
     const auto border = (f.contains("border") ? f.value("border") : f.value("inset")).toObject();
-    p.frame.border.enabled = border.value("enabled").toBool(false);
-    p.frame.border.width = border.value("width").toDouble(7.0);
-    p.frame.border.color = parseColor(border.value("color"), Qt::black);
-    p.frame.border.alpha = border.value("alpha").toDouble(1.0);
+    p.frame.border.enabled = border.value("enabled").toBool(p.frame.border.enabled);
+    p.frame.border.width = border.value("width").toDouble(p.frame.border.width);
+    p.frame.border.color = parseColor(border.value("color"), p.frame.border.color);
+    p.frame.border.alpha = border.value("alpha").toDouble(p.frame.border.alpha);
 
-    const auto c = root.value("cursor").toObject();
+    const auto c = source.value("cursor").toObject();
     p.cursor.visible = c.value("visible").toBool(true);
     p.cursor.size = c.value("size").toDouble(1.5);
     p.cursor.smoothing = c.value("smoothing").isBool() ? c.value("smoothing").toBool()
@@ -137,7 +194,7 @@ Project Project::fromJson(const QJsonObject &root)
     p.cursor.clickSound = c.value("clickSound").toString("none");
     if (p.cursor.clickSound != QLatin1String("soft")) p.cursor.clickSound = QStringLiteral("none");
 
-    const auto keystrokes = root.value("keystrokes").toObject();
+    const auto keystrokes = source.value("keystrokes").toObject();
     p.keystrokes.enabled = keystrokes.value("enabled").toBool(false);
     p.keystrokes.position = keystrokes.value("position").toString("bottom-center");
     const QStringList keystrokePositions{QStringLiteral("top-left"), QStringLiteral("top-center"),
@@ -149,11 +206,11 @@ Project Project::fromJson(const QJsonObject &root)
     p.keystrokes.showOnlyShortcuts = keystrokes.value("showOnlyShortcuts").toBool(true);
     p.keystrokes.holdMs = std::clamp(keystrokes.value("holdMs").toInt(900), 100, 5000);
 
-    const auto a = root.value("audio").toObject();
+    const auto a = source.value("audio").toObject();
     p.audio.desktop = a.value("desktop").toBool(true);
     p.audio.mic = a.value("mic").toBool(true);
     p.audio.volume = a.value("volume").toDouble(1.0);
-    const auto camera = root.value("camera").toObject();
+    const auto camera = source.value("camera").toObject();
     p.camera.enabled = camera.value("enabled").toBool(false);
     p.camera.position = camera.value("position").toString("bottom-right");
     p.camera.size = camera.value("size").toDouble(0.25);
@@ -192,7 +249,7 @@ Project Project::fromJson(const QJsonObject &root)
     const auto cameraOffset = camera.value("offset").toObject();
     p.camera.offset = QPointF(cameraOffset.value("x").toDouble(0.02),
                               cameraOffset.value("y").toDouble(0.02));
-    const auto e = root.value("export").toObject();
+    const auto e = source.value("export").toObject();
     p.exportSettings.format = e.value("format").toString("mp4");
     p.exportSettings.fps = e.value("fps").toInt(60);
     p.exportSettings.height = e.value("height").toInt(1080);
@@ -234,7 +291,7 @@ QJsonObject Project::toJson() const
         {"hideWhenIdleMs", cursor.hideWhenIdleMs < 0 ? QJsonValue(QJsonValue::Null) : QJsonValue(cursor.hideWhenIdleMs)},
         {"style", cursor.style}, {"ringColor", cursor.ringColor.name(QColor::HexRgb)},
         {"clickSound", cursor.clickSound}};
-    return {{"version", version}, {"name", name},
+    return {{"version", version}, {"defaultsVersion", defaultsVersion}, {"name", name},
         {"aspect", aspect == QLatin1String("auto") ? QJsonValue(QJsonValue::Null) : QJsonValue(aspect)},
         {"crop", QJsonObject{{"x", crop.x()}, {"y", crop.y()}, {"w", crop.width()}, {"h", crop.height()}}},
         {"clips", clipArray}, {"zooms", zoomArray},
@@ -270,8 +327,12 @@ Project Project::load(const QString &path, QString *error)
     if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
         if (error) *error = parseError.errorString(); return {};
     }
+    bool migrated = false;
+    const QJsonObject json = migrateDefaults(doc.object(), &migrated);
+    Project project = fromJson(json);
+    if (migrated && !project.save(path, error)) return project;
     if (error) error->clear();
-    return fromJson(doc.object());
+    return project;
 }
 
 bool Project::save(const QString &path, QString *error) const

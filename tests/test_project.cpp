@@ -1,5 +1,7 @@
 #include "core/Project.h"
 
+#include <QFile>
+#include <QJsonDocument>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -14,6 +16,7 @@ private slots:
         const Project original = Project::defaults(QStringLiteral("Demo"), 12.5);
         const auto json = original.toJson();
         QCOMPARE(json.value("version").toInt(), 1);
+        QCOMPARE(json.value("defaultsVersion").toInt(), 2);
         QVERIFY(json.value("aspect").isNull());
         QCOMPARE(json.value("clips").toArray().first().toObject().value("out").toDouble(), 12.5);
         QCOMPARE(original.frame.padding, 0.10);
@@ -89,6 +92,74 @@ private slots:
         QVERIFY(!json.value(QStringLiteral("frame")).toObject().contains(QStringLiteral("inset")));
         QVERIFY(json.value(QStringLiteral("camera")).toObject().contains(QStringLiteral("border")));
         QVERIFY(!json.value(QStringLiteral("camera")).toObject().contains(QStringLiteral("inset")));
+    }
+
+    void migratesOnlyUntouchedOldFrameDefaults()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const auto writeAndLoad = [&directory](const QString &name, const QJsonObject &frame) {
+            const QString path = directory.filePath(name + QStringLiteral(".json"));
+            QFile file(path);
+            if (!file.open(QIODevice::WriteOnly)) return Project{};
+            file.write(QJsonDocument(QJsonObject{{QStringLiteral("frame"), frame}})
+                           .toJson(QJsonDocument::Indented));
+            file.close();
+            QString error;
+            const Project loaded = Project::load(path, &error);
+            if (!error.isEmpty()) return Project{};
+            return loaded;
+        };
+
+        const Project untouched = writeAndLoad(QStringLiteral("untouched"), QJsonObject{
+            {QStringLiteral("shadow"), QJsonObject{
+                {QStringLiteral("enabled"), true}, {QStringLiteral("intensity"), 0.75},
+                {QStringLiteral("blur"), 20.0}, {QStringLiteral("distance"), 25.0}}},
+            {QStringLiteral("inset"), QJsonObject{
+                {QStringLiteral("enabled"), false}, {QStringLiteral("width"), 0.0},
+                {QStringLiteral("color"), QStringLiteral("#000000")},
+                {QStringLiteral("alpha"), 0.5}}}});
+        QCOMPARE(untouched.defaultsVersion, 2);
+        QCOMPARE(untouched.frame.shadow.intensity, 0.25);
+        QCOMPARE(untouched.frame.shadow.blur, 40.0);
+        QCOMPARE(untouched.frame.shadow.distance, 10.0);
+        QCOMPARE(untouched.frame.border.width, 7.0);
+        QCOMPARE(untouched.frame.border.alpha, 1.0);
+
+        const Project customised = writeAndLoad(QStringLiteral("customised"), QJsonObject{
+            {QStringLiteral("shadow"), QJsonObject{
+                {QStringLiteral("enabled"), true}, {QStringLiteral("intensity"), 0.61},
+                {QStringLiteral("blur"), 20.0}, {QStringLiteral("distance"), 25.0}}},
+            {QStringLiteral("inset"), QJsonObject{
+                {QStringLiteral("enabled"), true}, {QStringLiteral("width"), 3.0},
+                {QStringLiteral("color"), QStringLiteral("#123456")},
+                {QStringLiteral("alpha"), 0.5}}}});
+        QCOMPARE(customised.defaultsVersion, 2);
+        QCOMPARE(customised.frame.shadow.intensity, 0.61);
+        QCOMPARE(customised.frame.shadow.blur, 20.0);
+        QCOMPARE(customised.frame.shadow.distance, 25.0);
+        QVERIFY(customised.frame.border.enabled);
+        QCOMPARE(customised.frame.border.width, 3.0);
+        QCOMPARE(customised.frame.border.color, QColor(QStringLiteral("#123456")));
+        QCOMPARE(customised.frame.border.alpha, 0.5);
+
+        const Project toggled = writeAndLoad(QStringLiteral("toggled"), QJsonObject{
+            {QStringLiteral("shadow"), QJsonObject{
+                {QStringLiteral("enabled"), false}, {QStringLiteral("intensity"), 0.75},
+                {QStringLiteral("blur"), 20.0}, {QStringLiteral("distance"), 25.0},
+                {QStringLiteral("angle"), 90.0}}},
+            {QStringLiteral("inset"), QJsonObject{
+                {QStringLiteral("enabled"), true}, {QStringLiteral("width"), 0.0},
+                {QStringLiteral("color"), QStringLiteral("#000000")},
+                {QStringLiteral("alpha"), 0.5}}}});
+        QCOMPARE(toggled.defaultsVersion, 2);
+        QVERIFY(!toggled.frame.shadow.enabled);
+        QCOMPARE(toggled.frame.shadow.intensity, 0.75);
+        QCOMPARE(toggled.frame.shadow.blur, 20.0);
+        QCOMPARE(toggled.frame.shadow.distance, 25.0);
+        QVERIFY(toggled.frame.border.enabled);
+        QCOMPARE(toggled.frame.border.width, 0.0);
+        QCOMPARE(toggled.frame.border.alpha, 0.5);
     }
 };
 
