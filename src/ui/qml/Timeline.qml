@@ -6,6 +6,7 @@ FocusScope {
     id: root
     required property real scaleFactor
     signal scaleFactorRequested(real value)
+    signal cameraSelected()
     implicitHeight: editor.hasCamera ? 204 : 148
     property real labelWidth: 72
     property real basePixels: Math.max(55, (width - labelWidth - 24) / Math.max(1, editor.duration))
@@ -190,6 +191,7 @@ FocusScope {
                 focusTarget: root
             }
             Rectangle {
+                id: cameraTrack
                 visible: editor.hasCamera
                 x: 0
                 y: 144
@@ -206,15 +208,73 @@ FocusScope {
                 width: Math.max(20, editor.duration * root.pixelsPerSecond)
                 height: 40
                 radius: theme.radius
-                color: theme.normalFill
+                color: cameraHover.hovered ? theme.hoverFill : theme.normalFill
                 border.width: 1
-                border.color: theme.normalBorder
-                Label {
-                    anchors.centerIn: parent
-                    text: "Camera"
-                    color: theme.textMuted
-                    font.pixelSize: theme.font.body
-                    font.weight: Font.Medium
+                border.color: cameraHover.hovered ? theme.hoverBorder : theme.normalBorder
+                clip: true
+                Behavior on color { ColorAnimation { duration: 120 } }
+                Row {
+                    id: cameraStrip
+                    anchors.fill: parent
+                    anchors.margins: 3
+                    spacing: 2
+                    Repeater {
+                        model: editor.cameraThumbnails
+                        delegate: Image {
+                            required property string modelData
+                            width: (cameraStrip.width - cameraStrip.spacing
+                                    * Math.max(0, editor.cameraThumbnails.length - 1))
+                                   / Math.max(1, editor.cameraThumbnails.length)
+                            height: cameraStrip.height
+                            source: modelData
+                            sourceSize: Qt.size(112, 72)
+                            fillMode: Image.PreserveAspectCrop
+                            smooth: true
+                        }
+                    }
+                }
+                Row {
+                    visible: editor.cameraThumbnails.length === 0
+                    anchors.fill: parent
+                    anchors.margins: 3
+                    spacing: 2
+                    Repeater {
+                        model: 8
+                        Rectangle {
+                            required property int index
+                            width: (parent.width - 14) / 8
+                            height: parent.height
+                            color: index % 2 ? theme.normalFill : theme.hoverFill
+                        }
+                    }
+                }
+                Rectangle {
+                    anchors.left: parent.left; anchors.leftMargin: 8
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: cameraLabel.implicitWidth + 14
+                    height: 22
+                    radius: theme.radius
+                    color: Qt.alpha(theme.surface, .82)
+                    border.width: 1; border.color: theme.hairline
+                    Label {
+                        id: cameraLabel
+                        anchors.centerIn: parent
+                        text: "Camera"
+                        color: theme.foreground
+                        font.pixelSize: theme.font.caption
+                        font.weight: Font.DemiBold
+                    }
+                }
+                HoverHandler { id: cameraHover }
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onPressed: root.forceActiveFocus()
+                    onClicked: root.cameraSelected()
+                }
+                ToolTip {
+                    visible: cameraHover.hovered
+                    text: "Open Camera controls"
                 }
             }
 
@@ -240,6 +300,14 @@ FocusScope {
                         PathLine { x: 6; y: 8 }
                         PathLine { x: 0; y: 0 }
                     }
+                }
+                Item {
+                    x: -7; y: -4
+                    width: 15; height: 14
+                    HoverHandler { id: playheadHeadHover }
+                    ToolTip.visible: playheadHeadHover.hovered
+                    ToolTip.text: editor.formatTime(editor.position)
+                    ToolTip.delay: 250
                 }
             }
         }

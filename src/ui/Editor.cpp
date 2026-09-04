@@ -10,6 +10,7 @@
 
 #include <QAudioOutput>
 #include <QClipboard>
+#include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -125,6 +126,44 @@ QVariantList buildWaveform(const QString &videoPath)
     return peaks;
 }
 
+QVariantList buildCameraThumbnails(const QString &videoPath, double duration,
+                                   const QString &cacheDirectory)
+{
+    constexpr int count = 8;
+    QDir directory(cacheDirectory);
+    if (!directory.exists() && !directory.mkpath(QStringLiteral("."))) return {};
+
+    const auto thumbnailPath = [&directory](int index) {
+        return directory.filePath(QStringLiteral("camera-%1.jpg").arg(index + 1, 2, 10,
+                                                                     QLatin1Char('0')));
+    };
+    bool complete = true;
+    for (int index = 0; index < count; ++index)
+        complete = complete && QFileInfo(thumbnailPath(index)).size() > 0;
+
+    if (!complete) {
+        for (int index = 0; index < count; ++index) {
+            if (QFileInfo(thumbnailPath(index)).size() > 0) continue;
+            const double timestamp = duration * (index + 0.5) / count;
+            QProcess process;
+            process.start(QStringLiteral("ffmpeg"), {
+                QStringLiteral("-v"), QStringLiteral("error"), QStringLiteral("-ss"),
+                QString::number(timestamp, 'f', 3), QStringLiteral("-i"), videoPath,
+                QStringLiteral("-frames:v"), QStringLiteral("1"), QStringLiteral("-vf"),
+                QStringLiteral("scale=112:72:force_original_aspect_ratio=increase,crop=112:72"),
+                QStringLiteral("-q:v"), QStringLiteral("5"), QStringLiteral("-y"),
+                thumbnailPath(index)});
+            if (!process.waitForFinished(15000) || process.exitCode() != 0) return {};
+        }
+    }
+
+    QVariantList result;
+    result.reserve(count);
+    for (int index = 0; index < count; ++index)
+        result << QUrl::fromLocalFile(thumbnailPath(index)).toString();
+    return result;
+}
+
 } // namespace
 
 Editor::Editor(const QString &bundlePath, QObject *parent)
@@ -144,6 +183,10 @@ Editor::Editor(const QString &bundlePath, QObject *parent)
         m_waveform = m_waveformWatcher.result();
         emit waveformChanged();
     });
+    connect(&m_cameraThumbnailWatcher, &QFutureWatcher<QVariantList>::finished, this, [this] {
+        m_cameraThumbnails = m_cameraThumbnailWatcher.result();
+        emit cameraThumbnailsChanged();
+    });
 
     QFile gradientsFile(QStringLiteral(":/omareel/assets/gradients.json"));
     if (gradientsFile.open(QIODevice::ReadOnly))
@@ -152,6 +195,12 @@ Editor::Editor(const QString &bundlePath, QObject *parent)
     if (!loadBundle()) return;
     m_audioOutput = std::make_unique<QAudioOutput>();
     m_player.setAudioOutput(m_audioOutput.get());
+    connect(&m_player, &QMediaPlayer::mediaStatusChanged, this,
+            [this](QMediaPlayer::MediaStatus status) {
+        if (status == QMediaPlayer::LoadedMedia || status == QMediaPlayer::BufferedMedia
+            || status == QMediaPlayer::EndOfMedia || status == QMediaPlayer::InvalidMedia)
+            QTimer::singleShot(0, this, &Editor::finishLoading);
+    });
     m_player.setSource(QUrl::fromLocalFile(m_videoPath));
     m_previewTimer.setTimerType(Qt::PreciseTimer);
     m_previewTimer.setInterval(16);
@@ -186,6 +235,8 @@ Editor::Editor(const QString &bundlePath, QObject *parent)
     ++m_motionGeneration;
     rebuildMotion();
     startWaveformBuild();
+    startCameraThumbnailBuild();
+    QTimer::singleShot(1500, this, &Editor::finishLoading);
 }
 
 Editor::~Editor()
@@ -194,6 +245,7 @@ Editor::~Editor()
     if (m_dirty) saveNow();
     m_motionWatcher.waitForFinished();
     m_waveformWatcher.waitForFinished();
+    m_cameraThumbnailWatcher.waitForFinished();
     cancelExport();
 }
 
@@ -1017,6 +1069,29 @@ void Editor::startWaveformBuild()
 {
     if (!m_hasAudio) return;
     m_waveformWatcher.setFuture(QtConcurrent::run(buildWaveform, m_videoPath));
+}
+
+void Editor::startCameraThumbnailBuild()
+{
+    if (!m_hasCamera) return;
+    const QFileInfo source(m_cameraVideoPath);
+    const QByteArray fingerprint = QCryptographicHash::hash(
+        (source.canonicalFilePath() + QLatin1Char('|') + QString::number(source.size())
+         + QLatin1Char('|') + QString::number(source.lastModified().toMSecsSinceEpoch())).toUtf8(),
+        QCryptographicHash::Sha256).toHex().left(16);
+    const QString cacheDirectory = QDir(
+        QStandardPaths::writableLocation(QStandardPaths::CacheLocation))
+        .filePath(QStringLiteral("camera-filmstrips/") + QString::fromLatin1(fingerprint));
+    m_cameraThumbnailWatcher.setFuture(QtConcurrent::run(
+        buildCameraThumbnails, m_cameraVideoPath, m_cameraDuration, cacheDirectory));
+}
+
+void Editor::finishLoading()
+{
+    if (qEnvironmentVariableIntValue("OMAREEL_SCREENSHOT_LOADING") == 1) return;
+    if (!m_loading) return;
+    m_loading = false;
+    emit loadingChanged();
 }
 
 QString Editor::presetsDirectory() const

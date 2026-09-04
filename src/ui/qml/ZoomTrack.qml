@@ -1,5 +1,7 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.impl
+import QtQuick.Layouts
 
 Item {
     id: root
@@ -76,15 +78,29 @@ Item {
             Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
             Behavior on border.color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
             HoverHandler { id: zoomHover }
-            Label {
+            RowLayout {
                 anchors.centerIn: parent
                 width: Math.max(0, parent.width - 20)
-                elide: Text.ElideRight
-                horizontalAlignment: Text.AlignHCenter
-                text: "Zoom " + Number(modelData.level).toFixed(1) + "× · " + (typeof modelData.target === "object" ? "Manual" : "Auto")
-                color: theme.foreground
-                font.pixelSize: theme.font.body
-                font.weight: Font.Medium
+                visible: zoomBlock.width >= 72
+                spacing: 5
+                Item {
+                    Layout.preferredWidth: 12; Layout.preferredHeight: 12
+                    IconImage {
+                        anchors.fill: parent
+                        source: "qrc:/omareel/assets/icons/lucide/zoom-in.svg"
+                        sourceSize: Qt.size(12, 12)
+                        color: theme.foreground
+                    }
+                }
+                Label {
+                    Layout.fillWidth: true
+                    elide: Text.ElideRight
+                    horizontalAlignment: Text.AlignLeft
+                    text: "Zoom " + Number(modelData.level).toFixed(1) + "× · " + (typeof modelData.target === "object" ? "Manual" : "Auto")
+                    color: theme.foreground
+                    font.pixelSize: theme.font.body
+                    font.weight: Font.Medium
+                }
             }
             MouseArea {
                 objectName: "zoomBody-" + modelData.id

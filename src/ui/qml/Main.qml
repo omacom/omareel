@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.impl
 import QtQuick.Layouts
 
 ApplicationWindow {
@@ -7,12 +8,12 @@ ApplicationWindow {
     visible: true
     width: 1440
     height: 900
-    minimumWidth: 1200
-    minimumHeight: 760
+    minimumWidth: 1100
+    minimumHeight: 720
     font.family: theme.fontFamily
     font.pixelSize: theme.font.body
     color: theme.surface
-    title: editor.bundleName + " — omareel"
+    title: editor.bundleName + " — Omareel"
     property real timelineScale: 1
     property bool cropMode: false
     readonly property bool singleKeyShortcutsBlocked: activeFocusItem !== null
@@ -32,6 +33,8 @@ ApplicationWindow {
             Qt.callLater(window.openExport)
         }
         else if (view === "aspect") bottomBar.openAspectMenu()
+        else if (view === "shortcuts") bottomBar.openShortcuts()
+        else if (view === "background-hover") sidePanel.setBackgroundHoverProof(3)
         else if (view === "background-expanded"
                  || view === "background-wallpapers-expanded")
             sidePanel.setBackgroundExpanded(true)
@@ -53,51 +56,87 @@ ApplicationWindow {
         }
     }
 
-    ColumnLayout {
+    Item {
+        id: editorUi
         anchors.fill: parent
-        spacing: 0
-        TopBar {
-            id: topBar
-            Layout.fillWidth: true
-            onShowExport: window.openExport()
-        }
-        RowLayout {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
+        opacity: editor.loading ? 0 : 1
+        Behavior on opacity { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+
+        ColumnLayout {
+            anchors.fill: parent
             spacing: 0
-            ColumnLayout {
+            TopBar {
+                id: topBar
+                Layout.fillWidth: true
+                onShowExport: window.openExport()
+            }
+            RowLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 spacing: 0
-                PreviewPane {
-                    id: previewPane
+                ColumnLayout {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    cropMode: window.cropMode
+                    Layout.minimumWidth: 528
+                    spacing: 0
+                    PreviewPane {
+                        id: previewPane
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        Layout.minimumHeight: 338
+                        cropMode: window.cropMode
+                    }
+                    BottomBar {
+                        id: bottomBar
+                        Layout.fillWidth: true
+                        timelineScale: window.timelineScale
+                        cropMode: window.cropMode
+                        onTimelineScaleChanged: window.timelineScale = timelineScale
+                        onCropModeChanged: window.cropMode = cropMode
+                    }
                 }
-                BottomBar {
-                    id: bottomBar
-                    Layout.fillWidth: true
-                    timelineScale: window.timelineScale
-                    cropMode: window.cropMode
-                    onTimelineScaleChanged: window.timelineScale = timelineScale
-                    onCropModeChanged: window.cropMode = cropMode
+                SidePanel {
+                    id: sidePanel
+                    Layout.preferredWidth: 376
+                    Layout.minimumWidth: 376
+                    Layout.maximumWidth: 376
+                    Layout.fillHeight: true
                 }
             }
-            SidePanel {
-                id: sidePanel
-                Layout.preferredWidth: 376
-                Layout.minimumWidth: 376
-                Layout.maximumWidth: 376
-                Layout.fillHeight: true
+            Timeline {
+                id: timeline
+                Layout.fillWidth: true
+                Layout.preferredHeight: implicitHeight
+                scaleFactor: window.timelineScale
+                onScaleFactorRequested: value => window.timelineScale = value
+                onCameraSelected: sidePanel.section = 5
             }
         }
-        Timeline {
-            id: timeline
-            Layout.fillWidth: true
-            Layout.preferredHeight: implicitHeight
-            scaleFactor: window.timelineScale
-            onScaleFactorRequested: value => window.timelineScale = value
+    }
+
+    Column {
+        anchors.centerIn: parent
+        spacing: 10
+        visible: editor.loading
+        opacity: visible ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: 160 } }
+        IconImage {
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: 24; height: 24
+            source: "qrc:/omareel/assets/icons/reel.svg"
+            sourceSize: Qt.size(24, 24)
+            color: theme.accent
+            RotationAnimator on rotation {
+                running: editor.loading
+                loops: Animation.Infinite
+                from: 0; to: 360; duration: 720
+                easing.type: Easing.InOutSine
+            }
+        }
+        Label {
+            text: "Opening recording…"
+            color: theme.textMuted
+            font.pixelSize: theme.font.body
         }
     }
 
@@ -115,5 +154,6 @@ ApplicationWindow {
     Shortcut { sequence: "Ctrl+Shift+Z"; onActivated: editor.redo() }
     Shortcut { sequence: "Ctrl+S"; onActivated: { topBar.commitProjectName(); editor.saveNow() } }
     Shortcut { sequence: "Ctrl+E"; onActivated: window.openExport() }
+    Shortcut { sequence: "?"; enabled: !window.singleKeyShortcutsBlocked; onActivated: bottomBar.openShortcuts() }
     Shortcut { sequence: "Escape"; enabled: editor.pickingZoomTarget; onActivated: editor.setPickingZoomTarget(false) }
 }

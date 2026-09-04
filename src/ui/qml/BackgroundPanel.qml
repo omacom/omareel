@@ -10,6 +10,7 @@ ColumnLayout {
     spacing: theme.space.panelGap
     property bool showAllWallpapers: false
     property bool showAllGradients: false
+    property int proofHoveredIndex: -1
     readonly property var background: editor.project.background
     readonly property var plainColours: [
         Qt.rgba(0, 0, 0, 1), Qt.rgba(1, 1, 1, 1),
@@ -93,6 +94,9 @@ ColumnLayout {
                 readonly property bool selected: !picker && root.background.type === "wallpaper"
                     && modelData.url === root.background.resolvedImage
                 clip: true
+                scale: wallpaperMouse.containsMouse ? 1.04 : 1
+                z: wallpaperMouse.containsMouse ? 2 : 0
+                Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
                 Rectangle {
                     anchors.fill: parent
                     anchors.margins: wallpaperTile.selected ? 3 : 1
@@ -172,6 +176,9 @@ ColumnLayout {
                 color: selected ? theme.selectedFill : "transparent"
                 border.width: 1
                 border.color: selected ? theme.selectedBorder : theme.normalBorder
+                scale: gradientMouse.containsMouse || root.proofHoveredIndex === presetIndex ? 1.04 : 1
+                z: gradientMouse.containsMouse || root.proofHoveredIndex === presetIndex ? 2 : 0
+                Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
                 Rectangle {
                     anchors.fill: parent
                     anchors.margins: gradientTile.selected ? 3 : 1
@@ -182,6 +189,7 @@ ColumnLayout {
                     }
                 }
                 MouseArea {
+                    id: gradientMouse
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor

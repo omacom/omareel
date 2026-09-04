@@ -169,14 +169,6 @@ ApplicationWindow {
                 maskSpreadAtMin: 1
                 maskThresholdMin: .5
             }
-            Rectangle {
-                anchors.fill: parent
-                radius: width / 2
-                color: "transparent"
-                border.width: 2
-                border.color: theme.normalBorder
-                antialiasing: true
-            }
             Label {
                 anchors.centerIn: parent
                 width: parent.width - 20

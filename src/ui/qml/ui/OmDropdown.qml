@@ -1,15 +1,38 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.impl
+import QtQuick.Layouts
 
 ComboBox {
     id: control
+    property url leadingIconSource
     implicitHeight: theme.space.controlHeight
     leftPadding: theme.space.controlPaddingX
     rightPadding: theme.space.controlPaddingX + 18
     topPadding: 0; bottomPadding: 0
     hoverEnabled: true; focusPolicy: Qt.TabFocus
     font.family: theme.fontFamily; font.pixelSize: theme.font.body
-    contentItem: Text { text: control.displayText; color: control.enabled ? theme.foreground : theme.textFaint; font: control.font; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+    contentItem: RowLayout {
+        spacing: theme.space.md
+        Item {
+            visible: control.leadingIconSource.toString() !== ""
+            Layout.preferredWidth: 14; Layout.preferredHeight: 14
+            IconImage {
+                anchors.fill: parent
+                source: control.leadingIconSource
+                sourceSize: Qt.size(14, 14)
+                color: control.enabled ? theme.foreground : theme.textFaint
+            }
+        }
+        Text {
+            Layout.fillWidth: true
+            text: control.displayText
+            color: control.enabled ? theme.foreground : theme.textFaint
+            font: control.font
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+        }
+    }
     indicator: Text { x: control.width - width - theme.space.controlPaddingX; anchors.verticalCenter: parent.verticalCenter; text: "⌄"; color: theme.textMuted; font.family: theme.fontFamily; font.pixelSize: theme.font.body }
     background: Rectangle {
         radius: theme.radius
@@ -32,6 +55,6 @@ ComboBox {
         implicitHeight: Math.min(contentItem.implicitHeight + 4, theme.space.popupRowHeight * 8 + 4)
         padding: 2
         contentItem: ListView { clip: true; implicitHeight: contentHeight; model: control.popup.visible ? control.delegateModel : null; currentIndex: control.highlightedIndex }
-        background: Rectangle { radius: theme.radius; color: theme.popupBackground; border.width: 2; border.color: theme.popupBorder }
+        background: OmPopupCard { padding: 0 }
     }
 }

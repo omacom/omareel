@@ -1,20 +1,51 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Omareel">
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="background" x1="84" y1="64" x2="430" y2="452" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#2c2c2f"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2c2c2f"/>
       <stop offset="1" stop-color="#161618"/>
     </linearGradient>
+    <linearGradient id="film" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFE45C"/>
+      <stop offset="1" stop-color="#FFD60A"/>
+    </linearGradient>
+    <clipPath id="tile"><rect x="16" y="16" width="480" height="480" rx="112"/></clipPath>
   </defs>
-  <rect x="24" y="24" width="464" height="464" rx="112" fill="url(#background)"/>
-  <path d="M294 300c41 31 104 19 119 60 9 25-9 53-42 47" fill="none" stroke="#ffd60a" stroke-width="30" stroke-linecap="round"/>
-  <circle cx="232" cy="222" r="142" fill="#e6e6ea"/>
-  <g fill="#161618">
-    <circle cx="232" cy="140" r="31"/>
-    <circle cx="310" cy="197" r="31"/>
-    <circle cx="280" cy="289" r="31"/>
-    <circle cx="184" cy="289" r="31"/>
-    <circle cx="154" cy="197" r="31"/>
+
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#bg)"/>
+
+  <!-- Film strip unwinding from the reel toward the bottom-right corner -->
+  <g clip-path="url(#tile)">
+    <path d="M300 372 C356 410 420 424 520 418" stroke="url(#film)" stroke-width="72" stroke-linecap="butt" fill="none"/>
+    <!-- sprocket holes along both edges of the strip -->
+    <g fill="#161618" opacity=".7">
+      <rect x="330" y="368" width="16" height="12" rx="3" transform="rotate(28 338 374)"/>
+      <rect x="372" y="388" width="16" height="12" rx="3" transform="rotate(18 380 394)"/>
+      <rect x="416" y="400" width="16" height="12" rx="3" transform="rotate(8 424 406)"/>
+      <rect x="462" y="404" width="16" height="12" rx="3" transform="rotate(0 470 410)"/>
+      <rect x="318" y="418" width="16" height="12" rx="3" transform="rotate(28 326 424)"/>
+      <rect x="362" y="438" width="16" height="12" rx="3" transform="rotate(18 370 444)"/>
+      <rect x="408" y="450" width="16" height="12" rx="3" transform="rotate(8 416 456)"/>
+      <rect x="456" y="454" width="16" height="12" rx="3" transform="rotate(0 464 460)"/>
+    </g>
   </g>
-  <circle cx="232" cy="222" r="27" fill="#ff5a5f"/>
+
+  <!-- Reel: outer disc -->
+  <circle cx="228" cy="236" r="160" fill="#e6e6ea"/>
+  <!-- Wound film visible through the reel (dark ring between rim and spokes) -->
+  <circle cx="228" cy="236" r="132" fill="#26262a"/>
+  <!-- Three large lightening holes -->
+  <g fill="#161618">
+    <circle cx="228" cy="156" r="40"/>
+    <circle cx="158.7" cy="276" r="40"/>
+    <circle cx="297.3" cy="276" r="40"/>
+  </g>
+  <!-- Spokes between the holes -->
+  <g stroke="#e6e6ea" stroke-width="30" stroke-linecap="round">
+    <path d="M228 236 L228 118"/>
+    <path d="M228 236 L126 295"/>
+    <path d="M228 236 L330 295"/>
+  </g>
+  <!-- Hub + record dot -->
+  <circle cx="228" cy="236" r="58" fill="#e6e6ea"/>
+  <circle cx="228" cy="236" r="28" fill="#ff5a5f"/>
 </svg>

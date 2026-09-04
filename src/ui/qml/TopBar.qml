@@ -55,6 +55,7 @@ Rectangle {
         spacing: 8
 
         RowLayout {
+            Layout.minimumWidth: 102
             spacing: 6
             IconImage {
                 Layout.preferredWidth: 20; Layout.preferredHeight: 20
@@ -76,42 +77,44 @@ Rectangle {
             Layout.rightMargin: 4
             color: theme.hairlineStrong
         }
-        OmTextField {
-            id: projectName
-            Layout.preferredWidth: Math.max(160, Math.min(300, contentWidth + 24))
+        Item {
+            Layout.fillWidth: true
+            Layout.minimumWidth: 120
+            Layout.preferredWidth: 300
             Layout.preferredHeight: 32
-            text: editor.bundleName
-            selectByMouse: true
-            hoverEnabled: true
-            font.pixelSize: theme.font.title
-            font.weight: Font.DemiBold
-            leftPadding: 8
-            rightPadding: 8
-            topPadding: 0
-            bottomPadding: 0
-            color: theme.foreground
-            focusPolicy: Qt.StrongFocus
-            onEditingFinished: root.commitProjectName()
-            onAccepted: {
-                root.commitProjectName()
-                focus = false
-                root.restoreEditorFocus()
-            }
-            Keys.onEscapePressed: event => {
-                text = editor.bundleName
-                focus = false
-                root.restoreEditorFocus()
-                event.accepted = true
+            OmTextField {
+                id: projectName
+                anchors.left: parent.left
+                width: Math.min(parent.width, Math.max(120, Math.min(300, contentWidth + 24)))
+                height: 32
+                text: editor.bundleName
+                selectByMouse: true
+                hoverEnabled: true
+                font.pixelSize: theme.font.title
+                font.weight: Font.DemiBold
+                leftPadding: 8; rightPadding: 8; topPadding: 0; bottomPadding: 0
+                color: theme.foreground
+                focusPolicy: Qt.StrongFocus
+                onEditingFinished: root.commitProjectName()
+                onAccepted: {
+                    root.commitProjectName()
+                    focus = false
+                    root.restoreEditorFocus()
+                }
+                Keys.onEscapePressed: event => {
+                    text = editor.bundleName
+                    focus = false
+                    root.restoreEditorFocus()
+                    event.accepted = true
+                }
             }
         }
         Label {
+            visible: root.width >= 1200
             text: editor.dirty ? "Unsaved changes" : "Saved · " + root.savedTime
             color: theme.textMuted
             font.pixelSize: theme.font.bodySmall
         }
-
-        Item { Layout.fillWidth: true }
-
         IconToolButton {
             enabled: editor.canUndo
             icon.source: "qrc:/omareel/assets/icons/lucide/undo-2.svg"
@@ -145,13 +148,15 @@ Rectangle {
         }
         EditorButton {
             id: presetButton
-            Layout.preferredWidth: 92
+            Layout.preferredWidth: 106
+            Layout.minimumWidth: 106
             text: "Presets"
             trailingIconSource: "qrc:/omareel/assets/icons/lucide/chevron-down.svg"
             onClicked: presetsMenu.open()
         }
         EditorButton {
             Layout.preferredWidth: 104
+            Layout.minimumWidth: 104
             primary: true
             text: "Export"
             icon.source: "qrc:/omareel/assets/icons/lucide/download.svg"
@@ -165,12 +170,7 @@ Rectangle {
         y: presetButton.height + 4
         width: 188
         padding: 4
-        background: Rectangle {
-            radius: theme.radius
-            color: theme.menuBackground
-            border.width: 2
-            border.color: theme.popupBorder
-        }
+        background: OmPopupCard { padding: 0 }
         BarMenuItem { text: "Save current…"; onTriggered: savePresetDialog.open() }
         MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: theme.hairline } }
         Repeater {

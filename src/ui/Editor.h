@@ -48,6 +48,8 @@ class Editor : public QObject
     Q_PROPERTY(bool hasMicrophoneAudio READ hasMicrophoneAudio CONSTANT)
     Q_PROPERTY(bool hasCamera READ hasCamera CONSTANT)
     Q_PROPERTY(QVariantList waveform READ waveform NOTIFY waveformChanged)
+    Q_PROPERTY(QVariantList cameraThumbnails READ cameraThumbnails NOTIFY cameraThumbnailsChanged)
+    Q_PROPERTY(bool loading READ loading NOTIFY loadingChanged)
     Q_PROPERTY(double position READ position NOTIFY positionChanged)
     Q_PROPERTY(bool playing READ playing NOTIFY playingChanged)
     Q_PROPERTY(bool canUndo READ canUndo NOTIFY historyChanged)
@@ -104,6 +106,8 @@ public:
     bool hasMicrophoneAudio() const { return m_hasMicrophoneAudio; }
     bool hasCamera() const { return m_hasCamera; }
     QVariantList waveform() const { return m_waveform; }
+    QVariantList cameraThumbnails() const { return m_cameraThumbnails; }
+    bool loading() const { return m_loading; }
     double position() const { return m_outputPosition; }
     bool playing() const;
     bool canUndo() const { return !m_undo.isEmpty(); }
@@ -197,6 +201,8 @@ signals:
     void presetsChanged();
     void wallpapersChanged();
     void waveformChanged();
+    void cameraThumbnailsChanged();
+    void loadingChanged();
     void outputSizeChanged();
     void compositionChanged();
     void exportProgressChanged();
@@ -222,6 +228,8 @@ private:
     void attachPreviewWindow(QQuickWindow *window);
     void syncCamera(double screenSourceTime, bool force = false);
     void startWaveformBuild();
+    void startCameraThumbnailBuild();
+    void finishLoading();
     QString presetsDirectory() const;
     QJsonObject stylePreset() const;
 
@@ -284,6 +292,9 @@ private:
     std::shared_ptr<const MotionTrack> m_motion;
     QVariantList m_waveform;
     QFutureWatcher<QVariantList> m_waveformWatcher;
+    QVariantList m_cameraThumbnails;
+    QFutureWatcher<QVariantList> m_cameraThumbnailWatcher;
+    bool m_loading = true;
     QVariantList m_gradients;
     mutable QVariantMap m_projectMapCache;
     mutable bool m_projectMapCacheValid = false;

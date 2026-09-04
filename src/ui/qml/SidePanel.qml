@@ -8,6 +8,7 @@ Rectangle {
     objectName: "sidePanel"
     color: theme.surfaceRaised
     property int section: 0
+    property int displayedSection: 0
     property string forcedTooltip: ""
     readonly property var sections: [
         {name:"Background", meta:"", icon:"palette.svg"},
@@ -19,6 +20,16 @@ Rectangle {
         {name:"Keystrokes", meta:"SHORTCUT OVERLAY", icon:"keyboard.svg"},
         {name:"Audio", meta:"TRACKS & VOLUME", icon:"volume-2.svg"}
     ]
+
+    onSectionChanged: {
+        if (displayedSection !== section) panelCrossfade.restart()
+    }
+    SequentialAnimation {
+        id: panelCrossfade
+        NumberAnimation { target: panelLoader; property: "opacity"; to: 0; duration: 60; easing.type: Easing.OutCubic }
+        ScriptAction { script: root.displayedSection = root.section }
+        NumberAnimation { target: panelLoader; property: "opacity"; to: 1; duration: 60; easing.type: Easing.InCubic }
+    }
 
     function panelMeta(index) {
         return index === 0 ? "CANVAS BEHIND THE VIDEO" : root.sections[index].meta
@@ -34,6 +45,12 @@ Rectangle {
         root.section = 0
         Qt.callLater(function() {
             if (panelLoader.item) panelLoader.item.showAllGradients = value
+        })
+    }
+    function setBackgroundHoverProof(index) {
+        root.section = 0
+        Qt.callLater(function() {
+            if (panelLoader.item) panelLoader.item.proofHoveredIndex = index
         })
     }
     function scrollInspectorToBottom() {
@@ -173,21 +190,21 @@ Rectangle {
                     ScrollBar.vertical.width: 6
                     Item {
                         width: scroller.width
-                        implicitHeight: panelLoader.item ? panelLoader.item.implicitHeight + theme.space.panelPadding * 2 : 0
+                        implicitHeight: panelLoader.item ? panelLoader.item.implicitHeight + 20 + theme.space.panelPadding : 0
                         height: implicitHeight
                         Loader {
                             id: panelLoader
                             x: theme.space.panelPadding
-                            y: theme.space.panelPadding
+                            y: 20
                             width: inspectorPanel.width - theme.space.panelPadding * 2
                             height: item ? item.implicitHeight : 0
-                            sourceComponent: root.section === 0 ? backgroundPanel
-                                : root.section === 1 ? shapePanel
-                                : root.section === 2 ? cursorPanel
-                                : root.section === 3 ? zoomPanel
-                                : root.section === 4 ? clipPanel
-                                : root.section === 5 ? cameraPanel
-                                : root.section === 6 ? keystrokesPanel : audioPanel
+                            sourceComponent: root.displayedSection === 0 ? backgroundPanel
+                                : root.displayedSection === 1 ? shapePanel
+                                : root.displayedSection === 2 ? cursorPanel
+                                : root.displayedSection === 3 ? zoomPanel
+                                : root.displayedSection === 4 ? clipPanel
+                                : root.displayedSection === 5 ? cameraPanel
+                                : root.displayedSection === 6 ? keystrokesPanel : audioPanel
                         }
                     }
                 }

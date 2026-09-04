@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Effects
 
 FocusScope {
     id: root
@@ -31,10 +32,31 @@ FocusScope {
         anchors.bottomMargin: 44
 
         Rectangle {
+            id: shadowShape
+            anchors.fill: previewFrame
+            radius: theme.radius
+            color: theme.surfaceRaised
+            visible: false
+            layer.enabled: true
+        }
+        MultiEffect {
+            anchors.fill: previewFrame
+            source: shadowShape
+            shadowEnabled: true
+            shadowColor: theme.dark ? Qt.alpha(theme.surfaceRaised, .65)
+                                    : Qt.alpha(theme.foreground, .16)
+            shadowOpacity: 1
+            shadowBlur: 1
+            blurMax: 6
+            shadowVerticalOffset: 2
+            autoPaddingEnabled: true
+        }
+        Rectangle {
         id: previewFrame
         anchors.centerIn: parent
-        width: Math.min(parent.width, parent.height * editor.outputWidth / editor.outputHeight)
-        height: width * editor.outputHeight / editor.outputWidth
+        height: Math.min(parent.height, 620,
+                         parent.width * editor.outputHeight / Math.max(1, editor.outputWidth))
+        width: height * editor.outputWidth / Math.max(1, editor.outputHeight)
         color: theme.normalFill
         radius: theme.radius
         clip: true
@@ -150,7 +172,7 @@ FocusScope {
         Rectangle {
             anchors.fill: parent
             color: "transparent"
-            border.color: theme.normalBorder
+            border.color: theme.hairlineStrong
             border.width: 1
             radius: theme.radius
             z: 30
@@ -177,14 +199,24 @@ FocusScope {
             }
         }
         }
-    }
-    Label {
-        anchors.right: previewArea.right
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: 12
-        text: root.formatTenths(editor.position) + " / " + root.formatTenths(editor.duration)
-        color: theme.textMuted
-        font.family: theme.monoFamily
-        font.pixelSize: theme.font.body
+        Rectangle {
+            anchors.right: previewFrame.right
+            anchors.top: previewFrame.bottom
+            anchors.topMargin: 8
+            width: timeLabel.implicitWidth + 16
+            height: 26
+            radius: 13
+            color: theme.normalFill
+            border.width: 1
+            border.color: theme.hairline
+            Label {
+                id: timeLabel
+                anchors.centerIn: parent
+                text: root.formatTenths(editor.position) + " / " + root.formatTenths(editor.duration)
+                color: theme.textMuted
+                font.family: theme.monoFamily
+                font.pixelSize: theme.font.caption
+            }
+        }
     }
 }

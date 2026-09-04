@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.impl
 import QtQuick.Dialogs
 import QtQuick.Layouts
 import Omareel.Ui
@@ -187,6 +188,18 @@ Dialog {
         RowLayout {
             Layout.fillWidth: true
             visible: editor.exporting
+            IconImage {
+                Layout.preferredWidth: 16; Layout.preferredHeight: 16
+                source: "qrc:/omareel/assets/icons/reel.svg"
+                sourceSize: Qt.size(16, 16)
+                color: theme.accent
+                RotationAnimator on rotation {
+                    running: editor.exporting
+                    loops: Animation.Infinite
+                    from: 0; to: 360; duration: 720
+                    easing.type: Easing.InOutSine
+                }
+            }
             Label { text: Math.round(editor.exportProgress * 100) + "%"; font.weight: Font.DemiBold }
             Item { Layout.fillWidth: true }
             Label {

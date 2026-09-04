@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import Omareel.Ui
 
 Item {
     id: root
@@ -53,16 +54,27 @@ Item {
                 onPressed: root.focusTarget.forceActiveFocus()
                 onClicked: editor.selectedClipId = modelData.id
             }
-            Label {
+            Rectangle {
                 anchors.centerIn: parent
-                width: Math.max(0, parent.width - 22)
-                horizontalAlignment: Text.AlignHCenter
-                elide: Text.ElideRight
-                text: clipBlock.width < 68 ? "" : "Clip · " + Number(modelData.speed).toFixed(modelData.speed % 1 ? 2 : 0) + "×"
-                font.weight: Font.Medium
-                font.pixelSize: theme.font.body
-                color: theme.foreground
-                padding: 3
+                visible: clipBlock.width >= 68
+                width: Math.min(parent.width - 16, clipLabel.implicitWidth + 16)
+                height: 24
+                radius: theme.radius
+                color: Qt.alpha(theme.surface, .80)
+                border.width: 1
+                border.color: theme.hairline
+                Label {
+                    id: clipLabel
+                    anchors.fill: parent
+                    anchors.leftMargin: 8; anchors.rightMargin: 8
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    elide: Text.ElideRight
+                    text: "Clip · " + Number(modelData.speed).toFixed(modelData.speed % 1 ? 2 : 0) + "×"
+                    font.weight: Font.Medium
+                    font.pixelSize: theme.font.body
+                    color: theme.foreground
+                }
                 MouseArea {
                     anchors.fill: parent
                     onPressed: {
@@ -76,12 +88,7 @@ Item {
                 id: speedMenu
                 width: 120
                 padding: 4
-                background: Rectangle {
-                    radius: theme.radius
-                    color: theme.menuBackground
-                    border.width: 2
-                    border.color: theme.popupBorder
-                }
+                background: OmPopupCard { padding: 0 }
                 Repeater {
                     model: [0.5,0.75,1,1.2,1.4,1.6,1.8,2,3,4,8,16,24]
                     delegate: MenuItem {

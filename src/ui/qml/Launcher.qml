@@ -16,7 +16,7 @@ ApplicationWindow {
     maximumWidth: 380
     minimumHeight: desiredHeight - 40
     maximumHeight: desiredHeight
-    title: "omareel"
+    title: "Omareel"
     color: theme.surface
     font.family: theme.fontFamily
     font.pixelSize: theme.font.body
@@ -159,6 +159,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 spacing: 8
                 IconImage {
+                    id: logoReel
                     Layout.preferredWidth: 20; Layout.preferredHeight: 20
                     source: "qrc:/omareel/assets/icons/reel.svg"
                     sourceSize: Qt.size(20, 20)
@@ -174,11 +175,9 @@ ApplicationWindow {
                     font.weight: Font.DemiBold
                 }
                 Label {
-                    text: "SCREEN RECORDING"
+                    text: "Screen recordings that look great"
                     color: theme.textMuted
-                    font.pixelSize: theme.font.caption
-                    font.bold: true
-                    font.letterSpacing: 1.2
+                    font.pixelSize: 13
                 }
                 }
             }
@@ -213,10 +212,15 @@ ApplicationWindow {
                     Item {
                         Layout.alignment: Qt.AlignHCenter
                         width: 72; height: 72
-                        scale: recordControl.down ? .96 : 1
+                        property real entranceScale: 1
+                        scale: recordControl.down ? .96 : entranceScale
                         y: recordControl.hovered && !recordControl.down ? -2 : 0
-                        Behavior on scale { NumberAnimation { duration: 120 } }
                         Behavior on y { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+                        SequentialAnimation on entranceScale {
+                            running: true
+                            NumberAnimation { from: 1; to: 1.06; duration: 150; easing.type: Easing.OutCubic }
+                            NumberAnimation { from: 1.06; to: 1; duration: 150; easing.type: Easing.InCubic }
+                        }
                         Rectangle {
                             anchors.fill: parent
                             radius: 36
@@ -350,7 +354,6 @@ ApplicationWindow {
                         anchors.centerIn: parent
                         width: 96; height: 96; radius: 48
                         color: theme.normalFill
-                        border.width: 2; border.color: theme.normalBorder
                         clip: true
                         VideoOutput {
                             id: cameraSource
@@ -366,12 +369,17 @@ ApplicationWindow {
                             }
                         }
                     }
-                    Label {
+                    Rectangle {
                         visible: !launcher.webcamPreviewAvailable
                         anchors.centerIn: parent
-                        text: "Starting camera…"
-                        color: theme.textMuted
-                        font.pixelSize: theme.font.caption
+                        width: 96; height: 96; radius: 48
+                        color: theme.normalFill
+                        Label {
+                            anchors.centerIn: parent
+                            text: "Starting camera…"
+                            color: theme.textMuted
+                            font.pixelSize: theme.font.caption
+                        }
                     }
                 }
                 Item { Layout.preferredHeight: 8 }
@@ -507,7 +515,23 @@ ApplicationWindow {
                 value: launcher.selfViewSize
                 onChanged: value => launcher.selfViewSize = value
             }
+            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: theme.hairline }
+            Label {
+                Layout.fillWidth: true
+                text: "Version " + Qt.application.version + " · Made for Omarchy"
+                color: theme.textMuted
+                font.pixelSize: theme.font.caption
+                horizontalAlignment: Text.AlignHCenter
+            }
         }
+    }
+
+    NumberAnimation {
+        id: reelSpin
+        target: logoReel
+        property: "rotation"
+        from: 0; to: 360; duration: 500
+        easing.type: Easing.InOutCubic
     }
 
     Rectangle {
@@ -531,6 +555,10 @@ ApplicationWindow {
     }
 
     Shortcut { sequence: "Ctrl+R"; enabled: !window.showingRecording; onActivated: window.beginRecording() }
+    Shortcut {
+        sequence: "Ctrl+Shift+R"
+        onActivated: { reelSpin.stop(); logoReel.rotation = 0; reelSpin.start() }
+    }
     Shortcut { sequence: "Return"; enabled: !window.showingRecording && !settingsPopover.visible; onActivated: window.beginRecording() }
     Shortcut { sequence: "Enter"; enabled: !window.showingRecording && !settingsPopover.visible; onActivated: window.beginRecording() }
 

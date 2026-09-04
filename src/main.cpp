@@ -124,6 +124,7 @@ static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplicat
     QString path = qEnvironmentVariable("OMAREEL_SCREENSHOT_LIVE");
     if (path.isEmpty()) path = qEnvironmentVariable("OMAREEL_SCREENSHOT");
     if (path.isEmpty() || engine.rootObjects().isEmpty()) return;
+    const int captureDelay = qEnvironmentVariableIsEmpty("OMAREEL_SCREENSHOT_LIVE") ? 3000 : 30000;
 
     auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
     if (!window) return;
@@ -134,8 +135,11 @@ static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplicat
     bool heightOk = false;
     const int width = dimensions.value(0).toInt(&widthOk);
     const int height = dimensions.value(1).toInt(&heightOk);
-    if (dimensions.size() == 2 && widthOk && heightOk && width > 0 && height > 0)
+    if (dimensions.size() == 2 && widthOk && heightOk && width > 0 && height > 0) {
+        if (qEnvironmentVariableIsEmpty("OMAREEL_SCREENSHOT_LIVE"))
+            window->setMinimumSize(QSize(1, 1));
         window->resize(width, height);
+    }
 
     static const QHash<QString, int> panels{
         {QStringLiteral("background"), 0}, {QStringLiteral("shape"), 1},
@@ -167,9 +171,14 @@ static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplicat
     QString screenshotSeek = qEnvironmentVariable("OMAREEL_SCREENSHOT_SEEK");
     if (screenshotSeek.isEmpty()) screenshotSeek = qEnvironmentVariable("OMAREEL_SCREENSHOT_TIME");
     const double screenshotTime = screenshotSeek.toDouble(&screenshotTimeOk);
-    if (screenshotTimeOk)
-        if (QObject *editor = engine.rootContext()->contextProperty(QStringLiteral("editor")).value<QObject *>())
-            QMetaObject::invokeMethod(editor, "seek", Q_ARG(double, screenshotTime));
+    if (screenshotTimeOk) {
+        if (QObject *editor = engine.rootContext()->contextProperty(QStringLiteral("editor")).value<QObject *>()) {
+            QTimer::singleShot(captureDelay - 400, editor, [editor, screenshotTime] {
+                QMetaObject::invokeMethod(editor, "pause");
+                QMetaObject::invokeMethod(editor, "seek", Q_ARG(double, screenshotTime));
+            });
+        }
+    }
 
     const QJsonObject projectValues = QJsonDocument::fromJson(
         qEnvironmentVariable("OMAREEL_SCREENSHOT_PROJECT_VALUES").toUtf8()).object();
@@ -192,7 +201,7 @@ static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplicat
         });
     }
 
-    QTimer::singleShot(3000, &app, [&app, window, path] {
+    QTimer::singleShot(captureDelay, &app, [&app, window, path] {
         QDir().mkpath(QFileInfo(path).absolutePath());
         const QImage image = window->grabWindow();
         const bool saved = !image.isNull() && image.save(path);
@@ -469,6 +478,7 @@ int main(int argc, char **argv)
     QGuiApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("omareel"));
     app.setOrganizationName(QStringLiteral("omareel"));
+    app.setApplicationVersion(QStringLiteral(OMAREEL_VERSION));
     const ResolvedFonts resolvedFonts = resolveFonts();
     QFont applicationFont(resolvedFonts.ui);
     applicationFont.setPixelSize(shellFontBaseSize());
