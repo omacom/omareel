@@ -164,7 +164,11 @@ static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplicat
             }
         }
     }
-    const QString forcedHandle = qEnvironmentVariable("OMAREEL_SCREENSHOT_HOVER_HANDLE").toLower();
+    const QString forcedHoverHandle = qEnvironmentVariable("OMAREEL_SCREENSHOT_HOVER_HANDLE").toLower();
+    const QString forcedDragHandle = qEnvironmentVariable("OMAREEL_SCREENSHOT_DRAG_HANDLE").toLower();
+    const QString forcedSelectHandle = qEnvironmentVariable("OMAREEL_SCREENSHOT_SELECT_HANDLE").toLower();
+    const QString forcedHandle = !forcedDragHandle.isEmpty() ? forcedDragHandle
+        : !forcedHoverHandle.isEmpty() ? forcedHoverHandle : forcedSelectHandle;
     if (forcedHandle == QLatin1String("clip-right") || forcedHandle == QLatin1String("zoom-left")) {
         if (QObject *editorObject = engine.rootContext()->contextProperty(QStringLiteral("editor")).value<QObject *>()) {
             const bool clipHandle = forcedHandle.startsWith(QLatin1String("clip"));
@@ -175,10 +179,12 @@ static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplicat
                 const QString objectName = (clipHandle ? QStringLiteral("clipTrimHandle-")
                                                        : QStringLiteral("zoomTrimHandle-"))
                     + id + (clipHandle ? QStringLiteral("-right") : QStringLiteral("-left"));
-                QTimer::singleShot(250, window, [window, objectName] {
+                QTimer::singleShot(250, window,
+                                   [window, objectName, forcedHoverHandle, forcedDragHandle] {
                     if (QObject *handle = window->findChild<QObject *>(objectName)) {
-                        handle->setProperty("debugHovered", true);
-                        handle->setProperty("debugDragging", true);
+                        handle->setProperty("debugHovered", !forcedHoverHandle.isEmpty()
+                                                                   || !forcedDragHandle.isEmpty());
+                        handle->setProperty("debugDragging", !forcedDragHandle.isEmpty());
                     }
                 });
             }
@@ -538,12 +544,52 @@ int main(int argc, char **argv)
     const QString command = args[1];
     if (command == QLatin1String("__record-daemon")) return Recorder::daemonMain(args.mid(2));
     if (command == QLatin1String("__record-bar-ipc")) {
-        if (args.size() != 4 || args[2] != QLatin1String("selfview")
-            || (args[3] != QLatin1String("hide") && args[3] != QLatin1String("show")))
-            return usage(QStringLiteral("__record-bar-ipc requires selfview hide|show"));
+        if (args.size() < 3)
+            return usage(QStringLiteral("__record-bar-ipc requires rotate|flip|selfview hide|show|move|drag-sim"));
+        QJsonObject values;
+        if (args.size() == 3 && (args[2] == QLatin1String("rotate")
+                                || args[2] == QLatin1String("flip"))) {
+            const QJsonObject state = Recorder::recordingState();
+            values.insert(QStringLiteral("recording_bar_command"), args[2]);
+            values.insert(QStringLiteral("recording_bar_command_sequence"),
+                          state.value(QStringLiteral("recording_bar_command_sequence"))
+                              .toVariant().toLongLong() + 1);
+        } else if (args.size() == 4 && args[2] == QLatin1String("selfview")
+                   && (args[3] == QLatin1String("hide")
+                                || args[3] == QLatin1String("show"))) {
+            values.insert(QStringLiteral("selfview"), args[3] == QLatin1String("show"));
+        } else if (args.size() == 6 && args[2] == QLatin1String("selfview")
+                   && args[3] == QLatin1String("move")) {
+            bool xOk = false;
+            bool yOk = false;
+            const int x = args[4].toInt(&xOk);
+            const int y = args[5].toInt(&yOk);
+            if (!xOk || !yOk)
+                return usage(QStringLiteral("__record-bar-ipc selfview move requires integer x y"));
+            values.insert(QStringLiteral("selfview_x"), x);
+            values.insert(QStringLiteral("selfview_y"), y);
+        } else if (args.size() == 8 && args[2] == QLatin1String("selfview")
+                   && args[3] == QLatin1String("drag-sim")) {
+            bool ok[4] = {false, false, false, false};
+            int position[4];
+            for (int index = 0; index < 4; ++index)
+                position[index] = args[index + 4].toInt(&ok[index]);
+            if (!ok[0] || !ok[1] || !ok[2] || !ok[3])
+                return usage(QStringLiteral("__record-bar-ipc selfview drag-sim requires integer x0 y0 x1 y1"));
+            const QJsonObject state = Recorder::recordingState();
+            values.insert(QStringLiteral("recording_bar_command"), QStringLiteral("drag-sim"));
+            values.insert(QStringLiteral("recording_bar_command_sequence"),
+                          state.value(QStringLiteral("recording_bar_command_sequence"))
+                              .toVariant().toLongLong() + 1);
+            values.insert(QStringLiteral("drag_x0"), position[0]);
+            values.insert(QStringLiteral("drag_y0"), position[1]);
+            values.insert(QStringLiteral("drag_x1"), position[2]);
+            values.insert(QStringLiteral("drag_y1"), position[3]);
+        } else {
+            return usage(QStringLiteral("__record-bar-ipc requires rotate|flip|selfview hide|show|move|drag-sim"));
+        }
         QString error;
-        if (!Recorder::updateRecordingState(
-                QJsonObject{{QStringLiteral("selfview"), args[3] == QLatin1String("show")}}, &error)) {
+        if (!Recorder::updateRecordingState(values, &error)) {
             QTextStream(stderr) << "omareel: " << error << '\n';
             return 2;
         }
@@ -577,7 +623,16 @@ int main(int argc, char **argv)
         layerWindow->setScope(QStringLiteral("omareel-record-bar"));
         layerWindow->setActivateOnShow(false);
         if (screen) layerWindow->setScreen(screen);
-        if (!hiddenRecordBar) window->show();
+        Recorder::updateRecordingState(QJsonObject{
+            {QStringLiteral("bar_width"), window->width()},
+            {QStringLiteral("bar_height"), window->height()}});
+        const auto updateBarVisibility = [&recordingBar, window] {
+            if (recordingBar.captureStarted() && !recordingBar.hidden()) window->show();
+            else window->hide();
+        };
+        QObject::connect(&recordingBar, &RecordingBar::captureStartedChanged,
+                         window, updateBarVisibility);
+        updateBarVisibility();
 
         QQuickWindow *selfViewWindow = window->findChild<QQuickWindow *>(QStringLiteral("selfViewWindow"));
         if (!selfViewWindow) {
@@ -596,6 +651,11 @@ int main(int argc, char **argv)
             if (selfViewScreen) {
                 selfViewWindow->setScreen(selfViewScreen);
                 recordingBar.setSelfViewScreenSize(selfViewScreen->geometry().size());
+                if (qEnvironmentVariableIsSet("OMAREEL_SELFVIEW_DRAG_LOG"))
+                    qInfo().nospace() << "self-view logical-screen="
+                                      << selfViewScreen->geometry().width() << 'x'
+                                      << selfViewScreen->geometry().height()
+                                      << " scale=" << selfViewScreen->devicePixelRatio();
             }
             QProcess layerRule;
             layerRule.start(QStringLiteral("hyprctl"), {QStringLiteral("eval"),
@@ -618,15 +678,19 @@ int main(int argc, char **argv)
             updateSelfViewPlacement();
             QObject::connect(&recordingBar, &RecordingBar::selfViewPlacementChanged,
                              selfViewWindow, updateSelfViewPlacement);
-            const auto updateSelfViewInput = [&recordingBar, selfViewWindow] {
-                selfViewWindow->setMask(recordingBar.selfViewVisible()
+            const auto updateSelfViewVisibility = [&recordingBar, selfViewWindow] {
+                const bool visible = recordingBar.captureStarted() && recordingBar.selfViewVisible();
+                selfViewWindow->setMask(visible
                     ? QRegion(0, 0, selfViewWindow->width(), selfViewWindow->height())
                     : QRegion());
+                if (visible) selfViewWindow->show();
+                else selfViewWindow->hide();
             };
             QObject::connect(&recordingBar, &RecordingBar::selfViewVisibilityChanged,
-                             selfViewWindow, updateSelfViewInput);
-            updateSelfViewInput();
-            selfViewWindow->show();
+                             selfViewWindow, updateSelfViewVisibility);
+            QObject::connect(&recordingBar, &RecordingBar::captureStartedChanged,
+                             selfViewWindow, updateSelfViewVisibility);
+            updateSelfViewVisibility();
         }
         configureDebugScreenshot(engine, app);
         return app.exec();

@@ -111,24 +111,24 @@ ColumnLayout {
         PanelSlider { Layout.fillWidth: true; label: "Distance"; path: "camera.shadow.distance"; from: 0; to: 80; value: root.camera.shadow.distance; stepSize: 1 }
 
         Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: theme.separator }
-        PanelHeading { text: "Inset border" }
-        EditorSwitch { Layout.preferredHeight: 32; text: "Border"; checked: root.camera.inset.enabled; onToggled: editor.setProjectValue("camera.inset.enabled", checked) }
-        PanelSlider { Layout.fillWidth: true; label: "Width"; path: "camera.inset.width"; from: 0; to: 16; value: root.camera.inset.width; stepSize: 1 }
-        PanelSlider { Layout.fillWidth: true; label: "Opacity"; path: "camera.inset.alpha"; from: 0; to: 1; value: root.camera.inset.alpha; stepSize: .01; decimals: 2 }
+        PanelHeading { text: "Border" }
+        EditorSwitch { Layout.preferredHeight: 32; text: "Border"; checked: root.camera.border.enabled; onToggled: editor.setProjectValue("camera.border.enabled", checked) }
+        PanelSlider { Layout.fillWidth: true; label: "Width"; path: "camera.border.width"; from: 0; to: 16; value: root.camera.border.width; stepSize: 1 }
+        PanelSlider { Layout.fillWidth: true; label: "Opacity"; path: "camera.border.alpha"; from: 0; to: 1; value: root.camera.border.alpha; stepSize: .01; decimals: 2 }
         RowLayout {
             Layout.fillWidth: true
             PanelLabel { text: "Colour"; Layout.fillWidth: true }
             Rectangle {
-                width: 44; height: 28; radius: theme.radius; color: root.camera.inset.color
-                border.width: 1; border.color: root.camera.inset.enabled ? theme.selectedBorder : theme.normalBorder
-                MouseArea { anchors.fill: parent; onClicked: insetColourDialog.open() }
+                width: 44; height: 28; radius: theme.radius; color: root.camera.border.color
+                border.width: 1; border.color: root.camera.border.enabled ? theme.selectedBorder : theme.normalBorder
+                MouseArea { anchors.fill: parent; onClicked: borderColourDialog.open() }
             }
         }
         PanelSlider { Layout.fillWidth: true; label: "Shrink while zoomed"; path: "camera.scaleDuringZoom"; from: .4; to: 1; value: root.camera.scaleDuringZoom; stepSize: .01; decimals: 2 }
     }
     ColorDialog {
-        id: insetColourDialog
-        selectedColor: root.camera.inset.color
-        onAccepted: editor.setProjectValue("camera.inset.color", selectedColor)
+        id: borderColourDialog
+        selectedColor: root.camera.border.color
+        onAccepted: editor.setProjectValue("camera.border.color", selectedColor)
     }
 }

@@ -22,8 +22,12 @@ Item {
     property real pad: noBackground ? 0 : Math.min(width, height) * comp.project.frame.padding
     property real availableWidth: width - 2 * pad
     property real availableHeight: height - 2 * pad
+    property real borderWidth: !noBackground && comp.project.frame.border.enabled
+                               ? comp.project.frame.border.width * ref : 0
     property real sourceAspect: (comp.sourceWidth * comp.project.crop.w) / Math.max(1, comp.sourceHeight * comp.project.crop.h)
-    property real videoWidth: noBackground ? width : Math.min(availableWidth, availableHeight * sourceAspect)
+    property real videoWidth: noBackground ? width
+        : Math.max(1, Math.min(availableWidth - 2 * borderWidth,
+                              (availableHeight - 2 * borderWidth) * sourceAspect))
     property real videoHeight: noBackground ? height : videoWidth / sourceAspect
     clip: true
 

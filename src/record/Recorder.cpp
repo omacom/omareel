@@ -506,6 +506,7 @@ namespace {
 struct MonitorLayout {
     QString name;
     QRectF geometry;
+    QMarginsF reserved;
 };
 
 struct SelfViewPlacement {
@@ -527,12 +528,17 @@ QList<MonitorLayout> monitorLayouts()
         const QJsonObject monitor = value.toObject();
         if (monitor.value(QStringLiteral("disabled")).toBool(false)) continue;
         const double scale = std::max(0.01, monitor.value(QStringLiteral("scale")).toDouble(1.0));
+        const QJsonArray reserved = monitor.value(QStringLiteral("reserved")).toArray();
+        const auto reservedAt = [&reserved](qsizetype index) {
+            return index < reserved.size() ? reserved.at(index).toDouble() : 0.0;
+        };
         result << MonitorLayout{
             monitor.value(QStringLiteral("name")).toString(),
             QRectF(monitor.value(QStringLiteral("x")).toDouble(),
                    monitor.value(QStringLiteral("y")).toDouble(),
                    monitor.value(QStringLiteral("width")).toDouble() / scale,
-                   monitor.value(QStringLiteral("height")).toDouble() / scale)};
+                   monitor.value(QStringLiteral("height")).toDouble() / scale),
+            QMarginsF(reservedAt(0), reservedAt(1), reservedAt(2), reservedAt(3))};
     }
     return result;
 }
@@ -569,6 +575,45 @@ SelfViewPlacement selfViewPlacement(const RecordOptions &options, const CaptureR
     };
     placement.position = persistedPosition(placement.pixels);
     return placement;
+}
+
+QVector<QRect> maskedCaptureRects(const QJsonObject &state, const CaptureRegion &capture,
+                                  const MonitorLayout &monitor)
+{
+    QVector<QRect> result;
+    const double scale = std::max(0.01, capture.scale);
+    const QPointF captureOrigin(capture.x - monitor.geometry.x(),
+                                capture.y - monitor.geometry.y());
+    const auto pixelRect = [&](const QRectF &logical) {
+        const int left = qFloor((logical.x() - captureOrigin.x()) * scale);
+        const int top = qFloor((logical.y() - captureOrigin.y()) * scale);
+        const int right = qCeil((logical.x() + logical.width() - captureOrigin.x()) * scale);
+        const int bottom = qCeil((logical.y() + logical.height() - captureOrigin.y()) * scale);
+        return QRect(left, top, right - left, bottom - top)
+            .intersected(QRect(0, 0, capture.physicalWidth, capture.physicalHeight));
+    };
+    if (state.value(QStringLiteral("bar_visible")).toBool(true)) {
+        const int width = state.value(QStringLiteral("bar_width")).toInt(
+            state.value(QStringLiteral("webcam")).toBool(false) ? 520 : 276);
+        const int height = state.value(QStringLiteral("bar_height")).toInt(40);
+        const double usableWidth = monitor.geometry.width() - monitor.reserved.left()
+                                   - monitor.reserved.right();
+        const QRect bar = pixelRect(QRectF(monitor.reserved.left()
+                                               + (usableWidth - width) / 2.0,
+                                           monitor.reserved.top() + 12.0, width, height));
+        if (bar.isValid()) result << bar;
+    }
+    if (state.value(QStringLiteral("selfview")).toBool(false)
+        && state.value(QStringLiteral("selfview_monitor")).toString() == capture.monitorName) {
+        const int pixels = state.value(QStringLiteral("selfview_pixels")).toInt(160);
+        const QRect selfView = pixelRect(QRectF(monitor.reserved.left()
+                                                    + state.value(QStringLiteral("selfview_x")).toInt(16),
+                                                monitor.reserved.top()
+                                                    + state.value(QStringLiteral("selfview_y")).toInt(16),
+                                                pixels, pixels));
+        if (selfView.isValid()) result << selfView;
+    }
+    return result;
 }
 
 } // namespace
@@ -799,6 +844,9 @@ int Recorder::daemonMain(const QStringList &arguments)
                       {"capture_x", region.x}, {"capture_y", region.y},
                       {"capture_width", region.width}, {"capture_height", region.height},
                       {"capture_backend", captureBackend},
+                      {"capture_started", false},
+                      {"bar_visible", !options.noBar},
+                      {"bar_width", options.webcam ? 520 : 276}, {"bar_height", 40},
                       {"selfview", selfView.visible}, {"selfview_safe", selfView.safe},
                       {"selfview_monitor", selfView.monitor},
                       {"selfview_size", selfView.sizeName}, {"selfview_pixels", selfView.pixels},
@@ -854,22 +902,28 @@ int Recorder::daemonMain(const QStringList &arguments)
     }
 
     ScreenCapture screenCapture;
+    MonitorLayout recordedMonitorLayout;
     if (nativeCapture) {
         QRect crop;
         const QList<MonitorLayout> layouts = monitorLayouts();
         const auto monitor = std::find_if(layouts.cbegin(), layouts.cend(), [&](const MonitorLayout &layout) {
             return layout.name == region.monitorName;
         });
-        if (monitor != layouts.cend())
+        if (monitor != layouts.cend()) {
+            recordedMonitorLayout = *monitor;
             crop = QRect(qRound((region.x - monitor->geometry.x()) * region.scale),
                          qRound((region.y - monitor->geometry.y()) * region.scale),
                          region.physicalWidth, region.physicalHeight);
+        }
         ScreenCaptureConfig config{region.monitorName, nativeVideo, video + QStringLiteral(".ts"),
                                    crop, options.fps};
         if (!screenCapture.start(config, &error)) {
             nativeCapture = false;
             captureBackend = QStringLiteral("gsr");
             updateRecordingState(QJsonObject{{QStringLiteral("capture_backend"), captureBackend}});
+        } else {
+            screenCapture.setMaskedRects(maskedCaptureRects(readState(), region,
+                                                              recordedMonitorLayout));
         }
     }
     if (!nativeCapture) {
@@ -888,6 +942,25 @@ int Recorder::daemonMain(const QStringList &arguments)
         audioActive = startAudioCapture(&audioRecorder, options, audioVideo, &audioStartedUs);
     const qint64 recorderStartedUs = CursorSampler::monotonicUs();
     updateRecordingState(QJsonObject{{QStringLiteral("started_us"), recorderStartedUs}});
+    bool captureLoopFailed = false;
+    if (nativeCapture) {
+        QElapsedTimer seedTimer;
+        seedTimer.start();
+        while (screenCapture.encodedFrames() == 0 && seedTimer.elapsed() < 2500
+               && !stopRequested) {
+            if (!screenCapture.captureFrame(&error)) {
+                captureLoopFailed = true;
+                break;
+            }
+            QThread::msleep(1);
+        }
+        if (screenCapture.encodedFrames() == 0 && !captureLoopFailed) {
+            error = QStringLiteral("Capture did not produce its initial frame");
+            captureLoopFailed = true;
+        }
+    }
+    if (!captureLoopFailed)
+        updateRecordingState(QJsonObject{{QStringLiteral("capture_started"), true}});
     if (cameraAvailable) {
         QElapsedTimer firstFrameTimer;
         firstFrameTimer.start();
@@ -910,9 +983,15 @@ int Recorder::daemonMain(const QStringList &arguments)
                          QStringLiteral("Stop with the bar, the REC indicator, or your keybind")});
     runOptionalDetached(QStringLiteral("omarchy-shell"),
                         {QStringLiteral("-q"), QStringLiteral("omarchy.indicators"), QStringLiteral("refresh")});
-    bool captureLoopFailed = false;
-    while (!stopRequested) {
+    QVector<QRect> currentMasks;
+    while (!stopRequested && !captureLoopFailed) {
         if (nativeCapture) {
+            const QVector<QRect> nextMasks = maskedCaptureRects(readState(), region,
+                                                                 recordedMonitorLayout);
+            if (nextMasks != currentMasks) {
+                screenCapture.setMaskedRects(nextMasks);
+                currentMasks = nextMasks;
+            }
             if (!screenCapture.captureFrame(&error)) { captureLoopFailed = true; break; }
         } else {
             if (recorder.state() == QProcess::NotRunning) { captureLoopFailed = true; break; }

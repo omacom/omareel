@@ -107,9 +107,11 @@ timestamp, rotation, and horizontal flip. Rotation and flip affect previews and 
 not baked into `camera.mp4`.
 
 The self-view starts at the persisted bottom-right position on the recorded monitor and remains
-draggable with S, M, and L sizes. Privacy rules mark the self-view and recording bar as excluded
-from in-process screen copies, so neither overlay is encoded. No picker or alternate-monitor
-placement is involved. For in-process audio, a separate pulse capture is timestamped from the
+draggable with S, M, and L sizes. The in-process backend captures one seed frame before mapping
+the private overlays, then replaces their black exclusion rectangles with persistent desktop
+underlays in the writer thread. A vacated self-view area refreshes from later visible frames.
+The fallback backend does not apply this mask. No picker or alternate-monitor placement is
+involved. For in-process audio, a separate pulse capture is timestamped from the
 monotonic clock and copy-muxed with the video at stop.
 
 ## 3. Project model (`project.json`, version 1)
@@ -135,8 +137,8 @@ monotonic clock and copy-muxed with the video at stop.
                  "color":"#1a1b26", "image":null, "blur":0},        // blur 0..100
   "frame": {"padding":0.08,       // fraction of min(outW,outH), 0..0.3
             "radius":12,           // px at 1080p reference, scaled
-            "shadow":{"enabled":true,"opacity":0.5,"blur":40,"offsetY":20},
-            "inset":{"enabled":false,"width":0,"color":"#000000","alpha":0.5}},
+            "shadow":{"enabled":true,"intensity":0.25,"blur":40,"distance":10,"angle":90},
+            "border":{"enabled":false,"width":7,"color":"#000000","alpha":1.0}},
   "cursor": {"visible":true,"size":1.5,"smoothing":0.8,       // 0=raw, 1=very smooth
              "clickEffect":"ripple",      // none | ripple | shrink | highlight
              "clickShrink":0.85,"hideWhenIdleMs":null,"style":"macos"},
@@ -231,7 +233,7 @@ Exporter pipeline (`render/Exporter`):
   `~/.config/omareel/presets/*.json`), **Export** button (accent).
 - **Center:** preview canvas (Composition, letterboxed, keeps output aspect).
 - **Right panel:** icon rail + panel. Sections: Background (Wallpaper | Gradient | Color |
-  Image tabs, blur slider), Shape (padding, roundness, shadow, inset), Cursor (visible, size,
+  Image tabs, blur slider), Shape (padding, roundness, shadow, outside border), Cursor (visible, size,
   smoothing, click effect, hide-when-idle), Zoom (default level, transition, follow smoothing,
   regenerate), Audio (desktop/mic toggles, volume), Export (format, fps, size, quality, gif
   opts). Wallpaper tab shows the Omarchy theme backgrounds
@@ -245,6 +247,8 @@ Exporter pipeline (`render/Exporter`):
   track** (blue blocks labelled "Zoom 2x · Auto"), drag to move, drag edges to resize, click to
   select → inspector shows level (1.25/1.5/2/2.5/3/4) and target (Auto / pick point on
   preview), delete key removes, double-click empty area adds a 2 s zoom.
+  Either wheel axis scrolls horizontally (80 px per mouse-wheel notch); Ctrl+wheel zooms around
+  the pointer. The 12 px scrollbar stays visible whenever content overflows.
 - Playback: `QMediaPlayer` on screen.mp4, mapping output time ↔ source time through clips;
   skipping over trimmed regions; cursor + zoom overlay driven by player position.
 - Keyboard: Space play/pause, ←/→ 1 frame, Shift+←/→ 1 s, S split, Delete, Ctrl+Z/Ctrl+Shift+Z,
@@ -389,8 +393,8 @@ Zoom target for a range at time `t`, in normalized cropped-source coordinates:
 
 ```
 frame.padding 0.10 (ratio of the shorter output side), radius 12 @1080p,
-shadow { enabled: true, intensity 0.75, blur 20, distance 25, angle 90 }   // replaces opacity/offsetY
-inset  { enabled:false, width 0, color "#000000", alpha 0.5 }
+shadow { enabled: true, intensity 0.25, blur 40, distance 10, angle 90 }
+border { enabled:false, width 7, color "#000000", alpha 1.0 } // outside the video edge
 cursor.size 1.5
 background default: type "wallpaper", wallpaper "omarchy:current"
 ```

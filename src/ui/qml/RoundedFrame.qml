@@ -13,11 +13,17 @@ Item {
     property real ref: 1
     property bool unframed: false
     property bool nativePreview: false
+    readonly property real borderWidth: !unframed && settings.border.enabled
+                                        ? settings.border.width * ref : 0
+    readonly property real outerRadius: unframed ? 0 : settings.radius * ref + borderWidth
 
     Rectangle {
         id: shadowShape
-        anchors.fill: parent
-        radius: root.unframed ? 0 : root.settings.radius * root.ref
+        x: -root.borderWidth
+        y: -root.borderWidth
+        width: parent.width + 2 * root.borderWidth
+        height: parent.height + 2 * root.borderWidth
+        radius: root.outerRadius
         color: Qt.rgba(0, 0, 0, 1)
         layer.enabled: true
         antialiasing: true
@@ -35,15 +41,17 @@ Item {
         autoPaddingEnabled: true
     }
     Rectangle {
-        anchors.fill: parent
-        x: Math.cos(root.settings.shadow.angle * Math.PI / 180) * root.settings.shadow.distance * root.ref
-        y: Math.sin(root.settings.shadow.angle * Math.PI / 180) * root.settings.shadow.distance * root.ref
-        radius: root.unframed ? 0 : root.settings.radius * root.ref
+        x: -root.borderWidth + Math.cos(root.settings.shadow.angle * Math.PI / 180) * root.settings.shadow.distance * root.ref
+        y: -root.borderWidth + Math.sin(root.settings.shadow.angle * Math.PI / 180) * root.settings.shadow.distance * root.ref
+        width: parent.width + 2 * root.borderWidth
+        height: parent.height + 2 * root.borderWidth
+        radius: root.outerRadius
         color: "black"
         opacity: root.softwareRendering && root.settings.shadow.enabled && !root.unframed ? root.settings.shadow.intensity * 0.45 : 0
     }
     Item {
         id: videoClip
+        z: 2
         anchors.fill: parent
         clip: true
         layer.enabled: !root.unframed && !root.softwareRendering
@@ -79,15 +87,18 @@ Item {
         }
     }
     Rectangle {
-        anchors.fill: parent
+        x: -root.borderWidth
+        y: -root.borderWidth
+        width: parent.width + 2 * root.borderWidth
+        height: parent.height + 2 * root.borderWidth
         visible: !root.unframed
-        radius: root.settings.radius * root.ref
-        color: "transparent"
-        border.width: root.settings.inset.enabled ? root.settings.inset.width * root.ref : 0
-        border.color: Qt.rgba(Qt.color(root.settings.inset.color).r,
-                              Qt.color(root.settings.inset.color).g,
-                              Qt.color(root.settings.inset.color).b,
-                              root.settings.inset.alpha)
+        radius: root.outerRadius
+        color: root.settings.border.enabled
+            ? Qt.rgba(Qt.color(root.settings.border.color).r,
+                      Qt.color(root.settings.border.color).g,
+                      Qt.color(root.settings.border.color).b,
+                      root.settings.border.alpha) : "transparent"
         antialiasing: true
+        z: 1
     }
 }

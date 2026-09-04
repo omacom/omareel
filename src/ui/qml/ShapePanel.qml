@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 
 ColumnLayout {
@@ -30,9 +31,23 @@ ColumnLayout {
         PanelSlider { Layout.fillWidth: true; label: "Distance"; path: "frame.shadow.distance"; from: 0; to: 100; value: editor.project.frame.shadow.distance; stepSize: 1 }
         PanelSlider { Layout.fillWidth: true; label: "Angle"; path: "frame.shadow.angle"; from: 0; to: 360; value: editor.project.frame.shadow.angle; stepSize: 1 }
         Rectangle { Layout.fillWidth: true; height: 1; color: theme.separator }
-        PanelHeading { text: "Inset border" }
-        EditorSwitch { Layout.preferredHeight: 32; text: "Enable border"; checked: editor.project.frame.inset.enabled; onToggled: editor.setProjectValue("frame.inset.enabled", checked) }
-        PanelSlider { Layout.fillWidth: true; label: "Inset width"; path: "frame.inset.width"; from: 0; to: 16; value: editor.project.frame.inset.width; stepSize: 1 }
-        PanelSlider { Layout.fillWidth: true; label: "Inset opacity"; path: "frame.inset.alpha"; from: 0; to: 1; value: editor.project.frame.inset.alpha; stepSize: 0.01; decimals: 2 }
+        PanelHeading { text: "Border" }
+        EditorSwitch { Layout.preferredHeight: 32; text: "Border"; checked: editor.project.frame.border.enabled; onToggled: editor.setProjectValue("frame.border.enabled", checked) }
+        PanelSlider { Layout.fillWidth: true; label: "Width"; path: "frame.border.width"; from: 0; to: 16; value: editor.project.frame.border.width; stepSize: 1 }
+        RowLayout {
+            Layout.fillWidth: true
+            PanelLabel { text: "Color"; Layout.fillWidth: true }
+            Rectangle {
+                width: 44; height: 28; radius: theme.radius; color: editor.project.frame.border.color
+                border.width: 1; border.color: editor.project.frame.border.enabled ? theme.selectedBorder : theme.normalBorder
+                MouseArea { anchors.fill: parent; onClicked: borderColorDialog.open() }
+            }
+        }
+        PanelSlider { Layout.fillWidth: true; label: "Opacity"; path: "frame.border.alpha"; from: 0; to: 1; value: editor.project.frame.border.alpha; stepSize: 0.01; decimals: 2 }
+    }
+    ColorDialog {
+        id: borderColorDialog
+        selectedColor: editor.project.frame.border.color
+        onAccepted: editor.setProjectValue("frame.border.color", selectedColor)
     }
 }

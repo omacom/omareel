@@ -23,18 +23,18 @@ struct Background {
 };
 struct Shadow {
     bool enabled = true;
-    double intensity = 0.75;
-    double blur = 20.0;
-    double distance = 25.0;
+    double intensity = 0.25;
+    double blur = 40.0;
+    double distance = 10.0;
     double angle = 90.0;
 };
-struct Inset {
+struct Border {
     bool enabled = false;
-    double width = 0.0;
+    double width = 7.0;
     QColor color = QColor(Qt::black);
-    double alpha = 0.5;
+    double alpha = 1.0;
 };
-struct Frame { double padding = 0.10; double radius = 12.0; Shadow shadow; Inset inset; };
+struct Frame { double padding = 0.10; double radius = 12.0; Shadow shadow; Border border; };
 struct Cursor {
     bool visible = true;
     double size = 1.5;
@@ -81,7 +81,7 @@ struct Camera {
     bool flipHorizontal = false;
     int rotation = 0;
     Shadow shadow{false, 0.55, 18.0, 18.0, 90.0};
-    Inset inset{false, 2.0, QColor(Qt::white), 0.7};
+    Border border{false, 2.0, QColor(Qt::white), 0.7};
     double scaleDuringZoom = 0.7;
     QPointF offset{0.02, 0.02};
 };

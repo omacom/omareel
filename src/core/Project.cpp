@@ -109,15 +109,15 @@ Project Project::fromJson(const QJsonObject &root)
     p.frame.radius = f.value("radius").toDouble(12.0);
     const auto sh = f.value("shadow").toObject();
     p.frame.shadow.enabled = sh.value("enabled").toBool(true);
-    p.frame.shadow.intensity = sh.value("intensity").toDouble(sh.value("opacity").toDouble(0.75));
-    p.frame.shadow.blur = sh.value("blur").toDouble(20.0);
-    p.frame.shadow.distance = sh.value("distance").toDouble(sh.value("offsetY").toDouble(25.0));
+    p.frame.shadow.intensity = sh.value("intensity").toDouble(sh.value("opacity").toDouble(0.25));
+    p.frame.shadow.blur = sh.value("blur").toDouble(40.0);
+    p.frame.shadow.distance = sh.value("distance").toDouble(sh.value("offsetY").toDouble(10.0));
     p.frame.shadow.angle = sh.value("angle").toDouble(90.0);
-    const auto in = f.value("inset").toObject();
-    p.frame.inset.enabled = in.value("enabled").toBool(false);
-    p.frame.inset.width = in.value("width").toDouble();
-    p.frame.inset.color = parseColor(in.value("color"), Qt::black);
-    p.frame.inset.alpha = in.value("alpha").toDouble(0.5);
+    const auto border = (f.contains("border") ? f.value("border") : f.value("inset")).toObject();
+    p.frame.border.enabled = border.value("enabled").toBool(false);
+    p.frame.border.width = border.value("width").toDouble(7.0);
+    p.frame.border.color = parseColor(border.value("color"), Qt::black);
+    p.frame.border.alpha = border.value("alpha").toDouble(1.0);
 
     const auto c = root.value("cursor").toObject();
     p.cursor.visible = c.value("visible").toBool(true);
@@ -182,11 +182,12 @@ Project Project::fromJson(const QJsonObject &root)
     } else {
         p.camera.shadow.enabled = cameraShadowValue.toBool(false);
     }
-    const QJsonObject cameraInset = camera.value("inset").toObject();
-    p.camera.inset.enabled = cameraInset.value("enabled").toBool(false);
-    p.camera.inset.width = cameraInset.value("width").toDouble(2.0);
-    p.camera.inset.color = parseColor(cameraInset.value("color"), Qt::white);
-    p.camera.inset.alpha = cameraInset.value("alpha").toDouble(0.7);
+    const QJsonObject cameraBorder = (camera.contains("border")
+        ? camera.value("border") : camera.value("inset")).toObject();
+    p.camera.border.enabled = cameraBorder.value("enabled").toBool(false);
+    p.camera.border.width = cameraBorder.value("width").toDouble(2.0);
+    p.camera.border.color = parseColor(cameraBorder.value("color"), Qt::white);
+    p.camera.border.alpha = cameraBorder.value("alpha").toDouble(0.7);
     p.camera.scaleDuringZoom = camera.value("scaleDuringZoom").toDouble(0.7);
     const auto cameraOffset = camera.value("offset").toObject();
     p.camera.offset = QPointF(cameraOffset.value("x").toDouble(0.02),
@@ -225,8 +226,8 @@ QJsonObject Project::toJson() const
     const QJsonObject frameJson{{"padding", frame.padding}, {"radius", frame.radius},
         {"shadow", QJsonObject{{"enabled", frame.shadow.enabled}, {"intensity", frame.shadow.intensity},
             {"blur", frame.shadow.blur}, {"distance", frame.shadow.distance}, {"angle", frame.shadow.angle}}},
-        {"inset", QJsonObject{{"enabled", frame.inset.enabled}, {"width", frame.inset.width},
-            {"color", frame.inset.color.name(QColor::HexRgb)}, {"alpha", frame.inset.alpha}}}};
+        {"border", QJsonObject{{"enabled", frame.border.enabled}, {"width", frame.border.width},
+            {"color", frame.border.color.name(QColor::HexRgb)}, {"alpha", frame.border.alpha}}}};
     const QJsonObject cursorJson{{"visible", cursor.visible}, {"size", cursor.size}, {"smoothing", cursor.smoothing},
         {"spring", springToJson(cursor.spring)}, {"clickEffect", cursor.clickEffect}, {"clickShrink", cursor.clickShrink},
         {"rotateOnXMovementRatio", cursor.rotateOnXMovementRatio},
@@ -250,9 +251,9 @@ QJsonObject Project::toJson() const
             {"shadow", QJsonObject{{"enabled", camera.shadow.enabled},
                 {"intensity", camera.shadow.intensity}, {"blur", camera.shadow.blur},
                 {"distance", camera.shadow.distance}}},
-            {"inset", QJsonObject{{"enabled", camera.inset.enabled},
-                {"width", camera.inset.width}, {"color", camera.inset.color.name(QColor::HexRgb)},
-                {"alpha", camera.inset.alpha}}},
+            {"border", QJsonObject{{"enabled", camera.border.enabled},
+                {"width", camera.border.width}, {"color", camera.border.color.name(QColor::HexRgb)},
+                {"alpha", camera.border.alpha}}},
             {"scaleDuringZoom", camera.scaleDuringZoom}, {"offset", QJsonObject{{"x", camera.offset.x()},
                 {"y", camera.offset.y()}}}}},
         {"export", QJsonObject{{"format", exportSettings.format}, {"fps", exportSettings.fps}, {"height", exportSettings.height},

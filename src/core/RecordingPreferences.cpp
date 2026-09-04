@@ -42,6 +42,10 @@ RecordingPreferences RecordingPreferences::load()
     preferences.captureBackend = root.value(QStringLiteral("captureBackend")).toString(QStringLiteral("auto"));
     if (root.value(QStringLiteral("webcam")).isObject()) {
         preferences.webcam = root.value(QStringLiteral("webcam")).toObject();
+        if (!preferences.webcam.contains(QStringLiteral("border"))
+            && preferences.webcam.contains(QStringLiteral("inset")))
+            preferences.webcam.insert(QStringLiteral("border"),
+                                      preferences.webcam.take(QStringLiteral("inset")));
         preferences.webcamEnabled = preferences.webcam.value(QStringLiteral("enabled")).toBool(false);
         preferences.webcamDevice = preferences.webcam.value(QStringLiteral("device"))
                                        .toString(QStringLiteral("/dev/video2"));

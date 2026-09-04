@@ -14,6 +14,7 @@ Item {
     property bool softwareRendering: false
     property bool nativePreview: false
     property real ref: outputHeight / 1080
+    readonly property real borderWidth: settings.border.enabled ? settings.border.width * ref : 0
     readonly property bool squareCrop: settings.shape === "round" || settings.crop === "square"
     readonly property bool quarterTurn: settings.rotation === 90 || settings.rotation === 270
     readonly property real sourceAspect: sourceWidth / Math.max(1, sourceHeight)
@@ -39,9 +40,12 @@ Item {
 
     Rectangle {
         id: shadowShape
-        anchors.fill: parent
+        x: -root.borderWidth
+        y: -root.borderWidth
+        width: parent.width + 2 * root.borderWidth
+        height: parent.height + 2 * root.borderWidth
         radius: root.settings.shape === "round" ? width / 2
-              : root.settings.shape === "rounded" ? root.settings.radius * root.ref : 0
+              : root.settings.shape === "rounded" ? root.settings.radius * root.ref + root.borderWidth : 0
         color: Qt.rgba(0, 0, 0, 1)
         layer.enabled: true
         antialiasing: true
@@ -58,8 +62,10 @@ Item {
         autoPaddingEnabled: true
     }
     Rectangle {
-        anchors.fill: parent
-        y: root.settings.shadow.distance * root.ref
+        x: -root.borderWidth
+        y: -root.borderWidth + root.settings.shadow.distance * root.ref
+        width: parent.width + 2 * root.borderWidth
+        height: parent.height + 2 * root.borderWidth
         radius: shadowShape.radius
         color: "black"
         opacity: root.softwareRendering && root.settings.shadow.enabled
@@ -116,15 +122,17 @@ Item {
         }
     }
     Rectangle {
-        z: 3
-        anchors.fill: parent
+        z: 1
+        x: -root.borderWidth
+        y: -root.borderWidth
+        width: parent.width + 2 * root.borderWidth
+        height: parent.height + 2 * root.borderWidth
         radius: shadowShape.radius
-        color: "transparent"
-        border.width: root.settings.inset.enabled ? root.settings.inset.width * root.ref : 0
-        border.color: Qt.rgba(Qt.color(root.settings.inset.color).r,
-                              Qt.color(root.settings.inset.color).g,
-                              Qt.color(root.settings.inset.color).b,
-                              root.settings.inset.alpha)
+        color: root.settings.border.enabled
+            ? Qt.rgba(Qt.color(root.settings.border.color).r,
+                      Qt.color(root.settings.border.color).g,
+                      Qt.color(root.settings.border.color).b,
+                      root.settings.border.alpha) : "transparent"
         antialiasing: true
     }
     readonly property alias cameraFrameSource: cameraVideo

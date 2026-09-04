@@ -31,7 +31,7 @@ struct RecordingPreferences {
         {QStringLiteral("shadow"), QJsonObject{{QStringLiteral("enabled"), false},
             {QStringLiteral("intensity"), 0.55}, {QStringLiteral("blur"), 18},
             {QStringLiteral("distance"), 18}}},
-        {QStringLiteral("inset"), QJsonObject{{QStringLiteral("enabled"), false},
+        {QStringLiteral("border"), QJsonObject{{QStringLiteral("enabled"), false},
             {QStringLiteral("width"), 2}, {QStringLiteral("color"), QStringLiteral("#ffffff")},
             {QStringLiteral("alpha"), 0.7}}},
         {QStringLiteral("scaleDuringZoom"), 0.7},

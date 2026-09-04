@@ -55,6 +55,7 @@ ApplicationWindow {
                 icon.source: "qrc:/omareel/assets/icons/lucide/rotate-cw.svg"
                 icon.color: theme.foreground
                 icon.width: 15; icon.height: 15
+                tooltipText: ""
                 onClicked: recordingBar.rotateCamera()
                 Accessible.name: "Rotate camera"
             }
@@ -66,6 +67,7 @@ ApplicationWindow {
                 icon.source: "qrc:/omareel/assets/icons/lucide/flip-horizontal-2.svg"
                 icon.color: theme.foreground
                 icon.width: 15; icon.height: 15
+                tooltipText: ""
                 selected: recordingBar.cameraFlipHorizontal
                 onClicked: recordingBar.flipCamera()
                 Accessible.name: "Flip camera"
@@ -78,9 +80,10 @@ ApplicationWindow {
                 focusPolicy: Qt.NoFocus
                 font.pixelSize: theme.font.caption
                 text: recordingBar.selfViewVisible ? "Hide self-view" : "Show self-view"
-                tooltipText: "Hide self-view while recording"
+                tooltipText: ""
                 bordered: true
                 onClicked: recordingBar.setSelfViewVisible(!recordingBar.selfViewVisible)
+                Accessible.name: text
             }
 
             OmButton {
@@ -91,8 +94,10 @@ ApplicationWindow {
                 font.weight: Font.DemiBold
                 onClicked: recordingBar.stop()
                 text: "Stop"
+                tooltipText: ""
                 bordered: true
                 primary: true
+                Accessible.name: "Stop recording"
             }
 
             OmButton {
@@ -100,11 +105,13 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 28
                 text: armed ? "Discard?" : "Discard"
+                tooltipText: ""
                 focusPolicy: Qt.NoFocus
                 font.pixelSize: theme.font.caption
                 property bool armed: false
                 bordered: true
                 destructive: armed
+                Accessible.name: armed ? "Confirm discard recording" : "Discard recording"
                 onClicked: {
                     if (armed) recordingBar.cancel()
                     else { armed = true; disarm.restart() }
@@ -132,18 +139,8 @@ ApplicationWindow {
 
             VideoOutput {
                 id: cameraOutput
-                anchors.centerIn: parent
-                width: recordingBar.cameraRotation === 90 || recordingBar.cameraRotation === 270
-                    ? parent.height : parent.width
-                height: recordingBar.cameraRotation === 90 || recordingBar.cameraRotation === 270
-                    ? parent.width : parent.height
+                anchors.fill: parent
                 fillMode: VideoOutput.PreserveAspectCrop
-                rotation: recordingBar.cameraRotation
-                transform: Scale {
-                    origin.x: cameraOutput.width / 2
-                    origin.y: cameraOutput.height / 2
-                    xScale: recordingBar.cameraFlipHorizontal ? -1 : 1
-                }
                 Component.onCompleted: recordingBar.attachCameraOutput(cameraOutput)
             }
             ShaderEffectSource {
@@ -162,12 +159,19 @@ ApplicationWindow {
                 layer.enabled: true
             }
             MultiEffect {
+                id: transformedCamera
                 anchors.fill: parent
                 source: cameraTexture
                 maskEnabled: true
                 maskSource: cameraMask
                 maskSpreadAtMin: 1
                 maskThresholdMin: .5
+                rotation: recordingBar.cameraRotation
+                transform: Scale {
+                    origin.x: transformedCamera.width / 2
+                    origin.y: transformedCamera.height / 2
+                    xScale: recordingBar.cameraFlipHorizontal ? -1 : 1
+                }
             }
             Label {
                 anchors.centerIn: parent
@@ -182,17 +186,15 @@ ApplicationWindow {
             MouseArea {
                 anchors.fill: parent
                 cursorShape: Qt.SizeAllCursor
-                property real lastX: 0
-                property real lastY: 0
-                onPressed: function(mouse) { lastX = mouse.x; lastY = mouse.y }
+                onPressed: function(mouse) {
+                    recordingBar.beginDrag(recordingBar.globalCursorPos())
+                }
                 onPositionChanged: function(mouse) {
                     if (!pressed) return
-                    const dx = Math.round(mouse.x - lastX)
-                    const dy = Math.round(mouse.y - lastY)
-                    if (dx !== 0 || dy !== 0) recordingBar.moveSelfView(dx, dy)
-                    lastX = mouse.x
-                    lastY = mouse.y
+                    recordingBar.dragTo(recordingBar.globalCursorPos())
                 }
+                onReleased: recordingBar.endDrag()
+                onCanceled: recordingBar.endDrag()
             }
         }
     }

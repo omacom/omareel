@@ -104,17 +104,37 @@ Button {
         Behavior on border.color { ColorAnimation { duration: 120 } }
     }
     ToolTip {
+        id: toolTip
+        objectName: "omButtonToolTip"
         parent: control
         visible: control.tooltipText !== "" && control.hovered
         delay: 400
+        x: (control.width - width) / 2
+        y: {
+            const below = control.height + 6
+            if (!control.Window.window) return below
+            const sceneBelow = control.mapToItem(null, 0, below).y
+            if (sceneBelow + height <= control.Window.window.height) return below
+            const above = -height - 6
+            if (control.mapToItem(null, 0, above).y >= 0) return above
+            const controlSceneY = control.mapToItem(null, 0, 0).y
+            return Math.max(-controlSceneY,
+                            control.Window.window.height - height - controlSceneY)
+        }
+        closePolicy: Popup.NoAutoClose
+        modal: false
+        dim: false
+        focus: false
         padding: theme.space.controlPaddingY
         contentItem: Text {
+            enabled: false
             text: control.tooltipText
             color: theme.tooltipText
             font.family: theme.fontFamily
             font.pixelSize: theme.font.bodySmall
         }
         background: Rectangle {
+            enabled: false
             color: theme.tooltipBackground
             border.width: 1; border.color: theme.tooltipBorder
             radius: theme.radius

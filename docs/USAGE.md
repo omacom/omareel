@@ -128,6 +128,9 @@ auto-generated zoom summary.
 | `Ctrl+S` | Save |
 | `Ctrl+E` | Export |
 
+The timeline scrolls horizontally with either wheel axis (80 px per mouse-wheel notch), and
+touchpad horizontal or vertical scrolling. Ctrl+wheel zooms around the pointer.
+
 ## Project bundle
 
 The bundle directory contains `screen.mp4`, its `screen.mp4.ts` first-frame timestamp,
@@ -141,6 +144,8 @@ clip, style, cursor, and zoom edits are stored in `project.json`.
   frame handling cost, and drops once per second.
 - `OMAREEL_CAPTURE=gsr` forces the fallback screen capture backend.
 - `OMAREEL_CAPTURE=native` selects the native screen capture backend when supported.
+- Native recordings mask the private recording bar and self-view rectangles with desktop pixels
+  captured before those overlays appear. The fallback backend records overlays normally.
 - `OMAREEL_NATIVE_CONVERSION=cpu` forces CPU colour conversion for native capture. By default,
   the hardware conversion filter is exercised with a BGRA frame first and CPU conversion is used
   automatically when that exact conversion is unsupported.
@@ -152,7 +157,7 @@ clip, style, cursor, and zoom edits are stored in `project.json`.
   before the debug capture.
 - `OMAREEL_SCREENSHOT_SIZE=1440x900` sets the debug-capture window dimensions.
 - `OMAREEL_SCREENSHOT_HOVER_HANDLE=clip-right|zoom-left` forces the selected block's named
-  trim handle into its hovered and dragging visuals for deterministic interaction captures.
+  trim handle into its hovered visual; `OMAREEL_SCREENSHOT_DRAG_HANDLE` selects its dragging visual.
 - `OMAREEL_SCREENSHOT_SEEK=SECONDS` seeks the editor before capture
   (`OMAREEL_SCREENSHOT_TIME` remains accepted for compatibility).
 - `OMAREEL_SCREENSHOT_PLAY_TO_END=1` first plays the last 1.5 s of the clip so the player reaches

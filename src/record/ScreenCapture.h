@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QByteArray>
 #include <QRect>
 #include <QSize>
 #include <QString>
@@ -24,6 +25,9 @@ struct CaptureRowCopy {
 
 QVector<CaptureRowCopy> captureCropRows(const QSize &sourceSize, int sourceStride,
                                         const QRect &requestedCrop);
+bool captureRectIsBlack(const uchar *frame, const QSize &size, int stride, const QRect &rect);
+void applyCaptureMasks(uchar *frame, const QSize &size, int stride,
+                       const QVector<QRect> &rects, QByteArray *underlay);
 
 class CaptureRingBookkeeping
 {
@@ -54,6 +58,7 @@ public:
 
     static bool isSupported();
     bool start(const ScreenCaptureConfig &config, QString *error = nullptr);
+    void setMaskedRects(const QVector<QRect> &rects);
     bool captureFrame(QString *error = nullptr);
     bool finish(QString *error = nullptr);
     void abort();

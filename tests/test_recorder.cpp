@@ -2,6 +2,7 @@
 #include "record/CameraCapture.h"
 #include "record/ScreenCapture.h"
 #include "core/RecordingPreferences.h"
+#include "ui/RecordingBar.h"
 
 #include <QtTest>
 #include <QTemporaryDir>
@@ -195,6 +196,53 @@ private slots:
         QCOMPARE(full.size(), 1);
         QCOMPARE(full.first().sourceOffset, qsizetype(0));
         QCOMPARE(full.first().bytes, qsizetype(3840) * 2160 * 4);
+    }
+
+    void blackCaptureRectUsesPersistentUnderlay()
+    {
+        const QSize size(64, 64);
+        const int stride = size.width() * 4;
+        QByteArray frame(stride * size.height(), char(0));
+        QByteArray underlay(stride * size.height(), char(0));
+        const QRect masked(16, 16, 24, 24);
+        for (int y = 0; y < size.height(); ++y) {
+            for (int x = 0; x < size.width(); ++x) {
+                uchar *saved = reinterpret_cast<uchar *>(underlay.data()) + y * stride + x * 4;
+                saved[0] = uchar(20 + x); saved[1] = uchar(30 + y); saved[2] = 90; saved[3] = 255;
+                uchar *current = reinterpret_cast<uchar *>(frame.data()) + y * stride + x * 4;
+                current[0] = 110; current[1] = 120; current[2] = 130; current[3] = 255;
+            }
+        }
+        // Logical layer geometry can leave a one-pixel compositor rounding fringe around the
+        // black exclusion rectangle; classification ignores that fringe and replaces it too.
+        const QRect black = masked.adjusted(1, 1, -1, -1);
+        for (int y = black.top(); y <= black.bottom(); ++y)
+            std::memset(frame.data() + y * stride + black.x() * 4, 0,
+                        size_t(black.width() * 4));
+
+        QVERIFY(captureRectIsBlack(reinterpret_cast<const uchar *>(frame.constData()),
+                                   size, stride, masked));
+        const QByteArray expected = underlay;
+        applyCaptureMasks(reinterpret_cast<uchar *>(frame.data()), size, stride,
+                          QVector<QRect>{masked}, &underlay);
+        for (int y = masked.top(); y <= masked.bottom(); ++y)
+            QCOMPARE(frame.mid(y * stride + masked.x() * 4, masked.width() * 4),
+                     expected.mid(y * stride + masked.x() * 4, masked.width() * 4));
+        QCOMPARE(underlay, frame);
+    }
+
+    void selfViewDragUsesStableGlobalCoordinates()
+    {
+        const QSize screenSize(2400, 1350);
+        QCOMPARE(clampedSelfViewDragPosition(QPointF(100, 100), QPoint(400, 300),
+                                             QPointF(160, 140), screenSize, 160),
+                 QPoint(460, 340));
+        QCOMPARE(clampedSelfViewDragPosition(QPointF(100, 100), QPoint(2200, 1200),
+                                             QPointF(500, 500), screenSize, 160),
+                 QPoint(2240, 1190));
+        QCOMPARE(clampedSelfViewDragPosition(QPointF(100, 100), QPoint(20, 20),
+                                             QPointF(-100, -100), screenSize, 160),
+                 QPoint(0, 0));
     }
 };
 

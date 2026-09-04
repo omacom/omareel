@@ -233,6 +233,41 @@ private slots:
         QVERIFY(qAbs(moved.value(QStringLiteral("start")).toDouble() - (originalStart + 0.4)) < 0.06);
     }
 
+    void timelineWheelScrollsHorizontally()
+    {
+        QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));
+        Editor editor(m_bundle);
+        QVERIFY(editor.isValid());
+        Theme theme;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("editor"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import QtQuick
+            import QtQuick.Window
+            import Omareel
+            Window {
+                width: 400; height: 180; visible: true
+                Timeline { anchors.fill: parent; scaleFactor: 5 }
+            })", QUrl());
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        std::unique_ptr<QObject> object(component.create());
+        auto *window = qobject_cast<QQuickWindow *>(object.get());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        auto *flickable = window->findChild<QQuickItem *>(QStringLiteral("timelineFlickable"));
+        QTRY_VERIFY(flickable);
+        QCOMPARE(flickable->property("contentX").toDouble(), 0.0);
+        QTest::mouseMove(window, QPoint(220, 90));
+        QTest::wheelEvent(window, QPointF(220, 90), QPoint(0, -120));
+        QTRY_VERIFY(flickable->property("contentX").toDouble() > 0.0);
+        QCOMPARE(flickable->property("contentX").toDouble(), 80.0);
+        QVERIFY(flickable->setProperty("contentX", 0.0));
+        QTest::wheelEvent(window, QPointF(220, 90), QPoint(-120, 0));
+        QTRY_COMPARE(flickable->property("contentX").toDouble(), 80.0);
+    }
+
     void zoomTrackRubberBandSelectsAndDeletesTwo()
     {
         QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));
@@ -290,7 +325,7 @@ private slots:
                     rotation: 90, flipHorizontal: true, scaleDuringZoom: .7,
                     offset: {x: .02, y: .02},
                     shadow: {enabled: false, intensity: .55, blur: 18, distance: 18},
-                    inset: {enabled: false, width: 2, color: "white", alpha: .7}
+                    border: {enabled: false, width: 2, color: "white", alpha: .7}
                 })
                 zoomScale: 1
                 outputWidth: 1280; outputHeight: 720

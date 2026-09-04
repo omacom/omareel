@@ -13,88 +13,62 @@ Item {
     readonly property bool hovered: hitArea.containsMouse || debugHovered
     readonly property bool engaged: dragging || hitArea.pressed || debugDragging
     readonly property bool shown: active || hovered || engaged
-    property bool releasing: false
 
     width: 14
     height: parent ? parent.height : 0
     z: 50
 
-    onEngagedChanged: {
-        if (!engaged) {
-            releasing = true
-            releaseTimer.restart()
-        }
-    }
-
-    Timer {
-        id: releaseTimer
-        interval: 180
-        onTriggered: root.releasing = false
-    }
-
     Item {
         id: capVisual
         x: 0
-        y: -2
+        y: 0
         width: 14
-        height: root.height + 4
+        height: root.height
         opacity: root.shown ? 1 : 0
         visible: opacity > 0
-        scale: root.engaged ? 1.12 : root.hovered ? 1.08 : 1
-        transformOrigin: Item.Center
+        readonly property color capColor: root.engaged ? Qt.lighter(root.accent, 1.20)
+                                         : root.hovered ? Qt.lighter(root.accent, 1.12)
+                                                        : root.accent
 
         Behavior on opacity {
             enabled: !editor.loading
             NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
         }
-        Behavior on scale {
-            enabled: !editor.loading
-            NumberAnimation {
-                duration: root.releasing ? 180 : 140
-                easing.type: root.releasing ? Easing.OutBack : Easing.OutCubic
-                easing.overshoot: 1.6
-            }
-        }
-
         Rectangle {
-            anchors.fill: cap
-            anchors.margins: -2
-            radius: cap.radius + 2
-            color: "transparent"
-            border.width: 1
-            border.color: Qt.alpha(root.accent, .35)
-            opacity: root.engaged ? 1 : 0
-            Behavior on opacity {
-                enabled: !editor.loading
-                NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
-            }
-        }
-
-        Rectangle {
-            id: cap
+            id: roundedCap
             anchors.fill: parent
-            // Deliberate exception: a square theme still gets a 3 px cap radius.
-            radius: Math.max(3, theme.radius)
-            color: root.hovered || root.engaged ? Qt.lighter(root.accent, 1.08) : root.accent
+            radius: theme.radius
+            color: capVisual.capColor
             Behavior on color {
                 enabled: !editor.loading
                 ColorAnimation { duration: 120; easing.type: Easing.OutCubic }
             }
+        }
+        Rectangle {
+            x: root.edge === "left" ? parent.width / 2 : 0
+            y: 0
+            width: parent.width / 2
+            height: parent.height
+            color: capVisual.capColor
+            Behavior on color {
+                enabled: !editor.loading
+                ColorAnimation { duration: 120; easing.type: Easing.OutCubic }
+            }
+        }
 
-            Rectangle {
-                anchors.centerIn: parent
-                width: root.engaged ? 3 : 2
-                height: root.height * (root.hovered || root.engaged ? .60 : .40)
-                radius: width / 2
-                color: theme.surface
-                Behavior on width {
-                    enabled: !editor.loading
-                    NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
-                }
-                Behavior on height {
-                    enabled: !editor.loading
-                    NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
-                }
+        Rectangle {
+            anchors.centerIn: parent
+            width: root.hovered || root.engaged ? 3 : 2
+            height: root.height * (root.hovered || root.engaged ? .60 : .40)
+            radius: width / 2
+            color: theme.surface
+            Behavior on width {
+                enabled: !editor.loading
+                NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
+            }
+            Behavior on height {
+                enabled: !editor.loading
+                NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
             }
         }
     }

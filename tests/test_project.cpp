@@ -17,7 +17,13 @@ private slots:
         QVERIFY(json.value("aspect").isNull());
         QCOMPARE(json.value("clips").toArray().first().toObject().value("out").toDouble(), 12.5);
         QCOMPARE(original.frame.padding, 0.10);
-        QCOMPARE(original.frame.shadow.intensity, 0.75);
+        QCOMPARE(original.frame.shadow.intensity, 0.25);
+        QCOMPARE(original.frame.shadow.blur, 40.0);
+        QCOMPARE(original.frame.shadow.distance, 10.0);
+        QCOMPARE(original.frame.border.enabled, false);
+        QCOMPARE(original.frame.border.width, 7.0);
+        QCOMPARE(original.frame.border.color, QColor(QStringLiteral("#000000")));
+        QCOMPARE(original.frame.border.alpha, 1.0);
         QCOMPARE(original.zoomStyle.spring.mass, 2.25);
         QCOMPARE(original.cursor.spring.stiffness, 470.0);
         QCOMPARE(original.cursor.clickShrink, 0.8);
@@ -41,7 +47,7 @@ private slots:
         QCOMPARE(original.camera.flipHorizontal, false);
         QCOMPARE(original.camera.rotation, 0);
         QCOMPARE(original.camera.shadow.enabled, false);
-        QCOMPARE(original.camera.inset.enabled, false);
+        QCOMPARE(original.camera.border.enabled, false);
         QCOMPARE(original.camera.scaleDuringZoom, 0.7);
         QCOMPARE(original.camera.offset, QPointF(0.02, 0.02));
         QVERIFY(allowedAspects().contains(QStringLiteral("3:4")));
@@ -53,6 +59,36 @@ private slots:
         const auto loaded = Project::load(path, &error);
         QVERIFY2(error.isEmpty(), qPrintable(error));
         QCOMPARE(loaded.toJson(), original.toJson());
+        const QJsonObject writtenFrame = loaded.toJson().value(QStringLiteral("frame")).toObject();
+        QVERIFY(writtenFrame.contains(QStringLiteral("border")));
+        QVERIFY(!writtenFrame.contains(QStringLiteral("inset")));
+    }
+
+    void migratesLegacyInsetToBorder()
+    {
+        const Project migrated = Project::fromJson(QJsonObject{
+            {QStringLiteral("frame"), QJsonObject{
+                {QStringLiteral("inset"), QJsonObject{
+                    {QStringLiteral("enabled"), true}, {QStringLiteral("width"), 5.0},
+                    {QStringLiteral("color"), QStringLiteral("#123456")},
+                    {QStringLiteral("alpha"), 0.6}}}}},
+            {QStringLiteral("camera"), QJsonObject{
+                {QStringLiteral("inset"), QJsonObject{
+                    {QStringLiteral("enabled"), true}, {QStringLiteral("width"), 3.0},
+                    {QStringLiteral("color"), QStringLiteral("#abcdef")},
+                    {QStringLiteral("alpha"), 0.8}}}}}
+        });
+        QVERIFY(migrated.frame.border.enabled);
+        QCOMPARE(migrated.frame.border.width, 5.0);
+        QCOMPARE(migrated.frame.border.color, QColor(QStringLiteral("#123456")));
+        QCOMPARE(migrated.frame.border.alpha, 0.6);
+        QVERIFY(migrated.camera.border.enabled);
+        QCOMPARE(migrated.camera.border.width, 3.0);
+        const QJsonObject json = migrated.toJson();
+        QVERIFY(json.value(QStringLiteral("frame")).toObject().contains(QStringLiteral("border")));
+        QVERIFY(!json.value(QStringLiteral("frame")).toObject().contains(QStringLiteral("inset")));
+        QVERIFY(json.value(QStringLiteral("camera")).toObject().contains(QStringLiteral("border")));
+        QVERIFY(!json.value(QStringLiteral("camera")).toObject().contains(QStringLiteral("inset")));
     }
 };
 

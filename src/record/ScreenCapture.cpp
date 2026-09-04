@@ -109,6 +109,47 @@ QVector<CaptureRowCopy> Omareel::captureCropRows(const QSize &sourceSize, int so
     return result;
 }
 
+bool Omareel::captureRectIsBlack(const uchar *frame, const QSize &size, int stride,
+                                 const QRect &requestedRect)
+{
+    if (!frame || size.isEmpty() || stride < size.width() * 4) return false;
+    const QRect rect = requestedRect.intersected(QRect(QPoint(), size));
+    if (!rect.isValid()) return false;
+    // Layer-surface logical coordinates can land between capture pixels. Ignore the one-pixel
+    // rounding fringe while classifying, but replace the complete requested rectangle.
+    const QRect samples = rect.width() > 2 && rect.height() > 2
+        ? rect.adjusted(1, 1, -1, -1) : rect;
+    for (int y = samples.top(); y <= samples.bottom(); y += 8) {
+        const uchar *row = frame + qsizetype(y) * stride;
+        for (int x = samples.left(); x <= samples.right(); x += 8) {
+            const uchar *pixel = row + qsizetype(x) * 4;
+            if (pixel[0] > 2 || pixel[1] > 2 || pixel[2] > 2) return false;
+        }
+    }
+    return true;
+}
+
+void Omareel::applyCaptureMasks(uchar *frame, const QSize &size, int stride,
+                                const QVector<QRect> &rects, QByteArray *underlay)
+{
+    if (!frame || !underlay || size.isEmpty() || stride < size.width() * 4) return;
+    const qsizetype bytes = qsizetype(stride) * size.height();
+    if (underlay->size() != bytes) {
+        *underlay = QByteArray(reinterpret_cast<const char *>(frame), bytes);
+        return;
+    }
+    for (const QRect &requestedRect : rects) {
+        const QRect rect = requestedRect.intersected(QRect(QPoint(), size));
+        if (!rect.isValid() || !captureRectIsBlack(frame, size, stride, rect)) continue;
+        const qsizetype rowBytes = qsizetype(rect.width()) * 4;
+        for (int y = rect.top(); y <= rect.bottom(); ++y)
+            std::memcpy(frame + qsizetype(y) * stride + qsizetype(rect.x()) * 4,
+                        underlay->constData() + qsizetype(y) * stride + qsizetype(rect.x()) * 4,
+                        size_t(rowBytes));
+    }
+    std::memcpy(underlay->data(), frame, size_t(bytes));
+}
+
 namespace {
 
 qint64 monotonicUs()
@@ -355,6 +396,9 @@ struct ScreenCapture::Private {
     std::vector<Slot> captureSlots;
     CaptureRingBookkeeping ring{4};
     std::mutex ringMutex;
+    std::mutex maskMutex;
+    QVector<QRect> maskedRects;
+    QByteArray maskUnderlay;
     std::condition_variable queuedFrame;
     std::thread writer;
     bool writerStopping = false;
@@ -460,6 +504,21 @@ void ScreenCapture::Private::writerLoop()
             for (const CaptureRowCopy &row : std::as_const(cropRows))
                 std::memcpy(cropped.data() + row.destinationOffset,
                             bytes + row.sourceOffset, size_t(row.bytes));
+            output = cropped.constData();
+            outputBytes = cropped.size();
+        }
+        QVector<QRect> masks;
+        {
+            std::lock_guard<std::mutex> lock(maskMutex);
+            masks = maskedRects;
+        }
+        if (!masks.isEmpty() || !maskUnderlay.isEmpty()) {
+            if (cropRows.size() == 1) {
+                cropped = QByteArray(output, outputBytes);
+                output = cropped.constData();
+            }
+            applyCaptureMasks(reinterpret_cast<uchar *>(cropped.data()), encodedSize,
+                              encodedSize.width() * 4, masks, &maskUnderlay);
             output = cropped.constData();
             outputBytes = cropped.size();
         }
@@ -823,6 +882,12 @@ bool ScreenCapture::captureFrame(QString *error)
         d->rateClock.restart();
     }
     return true;
+}
+
+void ScreenCapture::setMaskedRects(const QVector<QRect> &rects)
+{
+    std::lock_guard<std::mutex> lock(d->maskMutex);
+    d->maskedRects = rects;
 }
 
 bool ScreenCapture::finish(QString *error)

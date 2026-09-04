@@ -69,31 +69,43 @@ FocusScope {
         clip: true
         interactive: false
         boundsBehavior: Flickable.StopAtBounds
+        function scrollFromWheel(event) {
+            const pixel = event.pixelDelta.x !== 0 ? event.pixelDelta.x : event.pixelDelta.y
+            const angle = event.angleDelta.x !== 0 ? event.angleDelta.x : event.angleDelta.y
+            const amount = pixel !== 0 ? pixel : angle / 120 * 80
+            contentX = Math.max(0, Math.min(contentWidth - width, contentX - amount))
+            event.accepted = true
+        }
 
         WheelHandler {
             target: null
+            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+            acceptedModifiers: Qt.ControlModifier
             onWheel: event => {
-                if (event.modifiers & Qt.ControlModifier) {
-                    const pointerX = event.position.x
-                    const timeAtPointer = (flick.contentX + pointerX) / root.pixelsPerSecond
-                    const delta = event.angleDelta.y !== 0 ? event.angleDelta.y : event.pixelDelta.y
-                    const next = Math.max(1, Math.min(5, root.scaleFactor * Math.pow(1.12, delta / 120)))
-                    root.scaleFactorRequested(next)
-                    Qt.callLater(function() {
-                        flick.contentX = Math.max(0, Math.min(flick.contentWidth - flick.width,
-                            timeAtPointer * root.pixelsPerSecond - pointerX))
-                    })
-                } else {
-                    const pixel = Math.abs(event.pixelDelta.x) > Math.abs(event.pixelDelta.y)
-                        ? event.pixelDelta.x : event.pixelDelta.y
-                    const angle = Math.abs(event.angleDelta.x) > Math.abs(event.angleDelta.y)
-                        ? event.angleDelta.x : event.angleDelta.y
-                    const amount = pixel !== 0 ? pixel : angle / 120 * 72
+                const pointerX = event.position.x
+                const timeAtPointer = (flick.contentX + pointerX) / root.pixelsPerSecond
+                const delta = event.angleDelta.y !== 0 ? event.angleDelta.y : event.pixelDelta.y
+                const next = Math.max(1, Math.min(5, root.scaleFactor * Math.pow(1.12, delta / 120)))
+                root.scaleFactorRequested(next)
+                Qt.callLater(function() {
                     flick.contentX = Math.max(0, Math.min(flick.contentWidth - flick.width,
-                        flick.contentX - amount))
-                }
+                        timeAtPointer * root.pixelsPerSecond - pointerX))
+                })
                 event.accepted = true
             }
+        }
+        WheelHandler {
+            target: null
+            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+            // NoModifier is zero, so it cannot represent an alternative when OR'ed with Shift.
+            acceptedModifiers: Qt.NoModifier
+            onWheel: event => flick.scrollFromWheel(event)
+        }
+        WheelHandler {
+            target: null
+            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+            acceptedModifiers: Qt.ShiftModifier
+            onWheel: event => flick.scrollFromWheel(event)
         }
         readonly property int firstVisibleTick: Math.max(0,
             Math.floor(contentX * root.ticksPerSecond / root.pixelsPerSecond) - 1)
@@ -384,15 +396,28 @@ FocusScope {
             id: horizontalBar
             policy: flick.contentWidth > flick.width ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
             interactive: true
-            height: 6
-            opacity: timelineHover.hovered || flick.moving || pressed ? 1 : 0
-            background: null
-            contentItem: Rectangle {
-                implicitHeight: 6
-                radius: theme.radius
-                color: theme.textFaint
+            height: 12
+            topPadding: 2
+            bottomPadding: 2
+            minimumSize: Math.min(1, 32 / Math.max(1, width))
+            opacity: 1
+            background: Rectangle {
+                width: parent.width
+                height: 1
+                y: (parent.height - height) / 2
+                color: theme.hairline
             }
-            Behavior on opacity { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+            contentItem: Rectangle {
+                implicitWidth: 32
+                implicitHeight: 8
+                radius: theme.radius
+                color: horizontalBar.hovered || horizontalBar.pressed
+                    ? theme.foreground : theme.textFaint
+                Behavior on color {
+                    enabled: !editor.loading
+                    ColorAnimation { duration: 120; easing.type: Easing.OutCubic }
+                }
+            }
         }
     }
 }
