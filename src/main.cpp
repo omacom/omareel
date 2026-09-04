@@ -301,7 +301,7 @@ static int recordCommand(const QStringList &arguments)
     options.webcamFlipHorizontal = preferences.webcamFlipHorizontal;
     options.selfView = preferences.selfViewEnabled;
     options.selfViewSize = preferences.selfViewSize;
-    options.hideSelfViewViaPortal = preferences.hideSelfViewViaPortal;
+    options.captureBackend = preferences.captureBackend;
     int modeCount = 0;
     for (int i = 0; i < arguments.size(); ++i) {
         const QString arg = arguments[i];
@@ -364,36 +364,8 @@ static int recordCommand(const QStringList &arguments)
 
 static QScreen *recordBarScreen(const QString &recordedMonitor)
 {
-    QProcess process;
-    process.start(QStringLiteral("hyprctl"), {QStringLiteral("-j"), QStringLiteral("monitors")});
-    if (!process.waitForFinished(3000) || process.exitCode() != 0)
-        return QGuiApplication::primaryScreen();
-
-    const QJsonArray monitors = QJsonDocument::fromJson(process.readAllStandardOutput()).array();
-    QString targetName = recordedMonitor;
-    int enabledCount = 0;
-    for (const QJsonValue &value : monitors) {
-        const QJsonObject monitor = value.toObject();
-        if (monitor.value(QStringLiteral("disabled")).toBool()
-            || (monitor.contains(QStringLiteral("dpmsStatus"))
-                && !monitor.value(QStringLiteral("dpmsStatus")).toBool())) continue;
-        ++enabledCount;
-    }
-    if (enabledCount > 1) {
-        for (const QJsonValue &value : monitors) {
-            const QJsonObject monitor = value.toObject();
-            const QString name = monitor.value(QStringLiteral("name")).toString();
-            const bool available = !monitor.value(QStringLiteral("disabled")).toBool()
-                && (!monitor.contains(QStringLiteral("dpmsStatus"))
-                    || monitor.value(QStringLiteral("dpmsStatus")).toBool());
-            if (available && name != recordedMonitor) {
-                targetName = name;
-                break;
-            }
-        }
-    }
     for (QScreen *screen : QGuiApplication::screens()) {
-        if (screen->name() == targetName) return screen;
+        if (screen->name() == recordedMonitor) return screen;
     }
     return QGuiApplication::primaryScreen();
 }
@@ -534,6 +506,11 @@ int main(int argc, char **argv)
         if (!window) return 2;
         QScreen *screen = recordBarScreen(recordingBar.recordedMonitor());
         if (screen) window->setScreen(screen);
+        QProcess barRule;
+        barRule.start(QStringLiteral("hyprctl"), {QStringLiteral("eval"),
+            QStringLiteral("hl.layer_rule({ name = 'omarecord-record-bar-private', match = { namespace = 'omarecord-record-bar' }, no_screen_share = true })")});
+        if (!barRule.waitForFinished(3000) || barRule.exitCode() != 0)
+            qWarning().noquote() << "omarecord: could not apply the recording bar privacy rule";
         auto *layerWindow = LayerShellQt::Window::get(window);
         layerWindow->setLayer(LayerShellQt::Window::LayerOverlay);
         layerWindow->setAnchors(LayerShellQt::Window::AnchorTop);
@@ -615,6 +592,8 @@ int main(int argc, char **argv)
         QObject::connect(&theme, &Theme::sourceChanged, &editor, &Editor::refreshOmarchyTheme);
         engine.load(QUrl(QStringLiteral("qrc:/qt/qml/Omarecord/Main.qml")));
         if (engine.rootObjects().isEmpty()) return 2;
+        if (qEnvironmentVariableIntValue("OMARECORD_PREVIEW_STATS") == 1)
+            QTimer::singleShot(1500, &editor, &Editor::play);
         configureDebugScreenshot(engine, app);
         return app.exec();
     }

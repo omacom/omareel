@@ -18,8 +18,7 @@ struct RecordingPreferences {
     QString selfViewSize = QStringLiteral("M");
     double selfViewX = 1.0;
     double selfViewY = 1.0;
-    bool hideSelfViewViaPortal = false;
-    bool selfViewCaptureWarningShown = false;
+    QString captureBackend = QStringLiteral("auto");
     QJsonObject webcam{
         {QStringLiteral("enabled"), false},
         {QStringLiteral("position"), QStringLiteral("bottom-right")},

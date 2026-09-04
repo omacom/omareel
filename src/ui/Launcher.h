@@ -23,7 +23,6 @@ class Launcher : public QObject
     Q_PROPERTY(bool webcamFlipHorizontal READ webcamFlipHorizontal WRITE setWebcamFlipHorizontal NOTIFY recordingPreferencesChanged)
     Q_PROPERTY(bool selfViewEnabled READ selfViewEnabled WRITE setSelfViewEnabled NOTIFY recordingPreferencesChanged)
     Q_PROPERTY(QString selfViewSize READ selfViewSize WRITE setSelfViewSize NOTIFY recordingPreferencesChanged)
-    Q_PROPERTY(bool hideSelfViewViaPortal READ hideSelfViewViaPortal WRITE setHideSelfViewViaPortal NOTIFY recordingPreferencesChanged)
     Q_PROPERTY(QVariant webcamCameraDevice READ webcamCameraDevice NOTIFY recordingPreferencesChanged)
     Q_PROPERTY(bool webcamPreviewAvailable READ webcamPreviewAvailable NOTIFY webcamDevicesChanged)
     Q_PROPERTY(QVariantList webcamDevices READ webcamDevices NOTIFY webcamDevicesChanged)
@@ -42,7 +41,6 @@ public:
     bool webcamFlipHorizontal() const { return m_webcamFlipHorizontal; }
     bool selfViewEnabled() const { return m_selfViewEnabled; }
     QString selfViewSize() const { return m_selfViewSize; }
-    bool hideSelfViewViaPortal() const { return m_hideSelfViewViaPortal; }
     QVariant webcamCameraDevice() const;
     bool webcamPreviewAvailable() const;
     QVariantList webcamDevices() const { return m_webcamDevices; }
@@ -57,7 +55,6 @@ public:
     void setWebcamFlipHorizontal(bool value);
     void setSelfViewEnabled(bool value);
     void setSelfViewSize(const QString &value);
-    void setHideSelfViewViaPortal(bool value);
 
     Q_INVOKABLE void openBundle(const QString &path);
     Q_INVOKABLE void showRecordingsFolder();
@@ -95,7 +92,6 @@ private:
     bool m_webcamFlipHorizontal = false;
     bool m_selfViewEnabled = true;
     QString m_selfViewSize = QStringLiteral("M");
-    bool m_hideSelfViewViaPortal = false;
     QVariantList m_webcamDevices;
     QList<QCameraDevice> m_cameraDevices;
     bool m_startingRecording = false;

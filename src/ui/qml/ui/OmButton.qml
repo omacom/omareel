@@ -10,6 +10,7 @@ Button {
     property bool bordered: false
     property bool primary: false
     property bool destructive: false
+    property bool leadingDot: false
     property string tooltipText: ""
     property url trailingIconSource
 
@@ -41,15 +42,22 @@ Button {
         width: Math.min(implicitWidth, parent.width)
         spacing: control.spacing
         Item {
-            visible: control.icon.source.toString() !== ""
+            visible: control.leadingDot || control.icon.source.toString() !== ""
             Layout.preferredWidth: control.icon.width
             Layout.preferredHeight: control.icon.height
             Layout.alignment: Qt.AlignVCenter
             IconImage {
+                visible: !control.leadingDot
                 anchors.fill: parent
                 source: control.icon.source
                 sourceSize: Qt.size(control.icon.width, control.icon.height)
                 color: control.icon.color
+            }
+            Rectangle {
+                visible: control.leadingDot
+                anchors.centerIn: parent
+                width: 10; height: 10; radius: 5
+                color: theme.record
             }
         }
         Text {

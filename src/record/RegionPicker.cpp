@@ -1,4 +1,6 @@
 #include "RegionPicker.h"
+#include "ScreenCapture.h"
+#include "core/RecordingPreferences.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -85,6 +87,10 @@ static QStringList captureOptions()
 static const Monitor *capturableMonitor(const QVector<Monitor> &values, const Monitor *requested,
                                         QString *note)
 {
+    const QString backend = qEnvironmentVariable("OMARECORD_CAPTURE").toLower();
+    if (backend != QLatin1String("gsr")
+        && RecordingPreferences::load().captureBackend != QLatin1String("gsr")
+        && ScreenCapture::isSupported()) return requested;
     const QStringList options = captureOptions();
     if (options.isEmpty() || options.contains(requested->name)) return requested;
     for (const QString &name : options) {

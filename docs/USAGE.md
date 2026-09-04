@@ -49,9 +49,10 @@ one mode may be supplied.
 - `--stop` only stops; it returns status 1 when no recording is active.
 - `--cancel` stops and permanently discards the in-progress bundle.
 
-The Omarchy shell's live REC indicator watches `gpu-screen-recorder`. OmaRecord refreshes that
-indicator on both start and stop. A stop that needs a force-kill or cannot finalize sends a
-critical Omarchy notification.
+The shell's live REC indicator recognizes the fallback capture process. OmaRecord refreshes the
+indicator on both start and stop and always maintains its own recording state. On installations
+where the indicator only checks that process name, it may remain off during in-process capture.
+A stop that cannot finalize sends a critical notification.
 
 ## Stopping a recording
 
@@ -63,14 +64,12 @@ An active recording can be stopped in any of these ways:
   keybinds.
 - Run `omarecord record --cancel` to stop and discard the recording instead of saving it.
 
-When two monitors are available, the recording bar is placed at the top center of the monitor
-that is not being recorded. On a single-monitor setup, the bar remains accessible at the top
-center but is visible inside the recording. Use `--no-bar` or set `OMARECORD_NO_BAR=1` on the
-start command to suppress it.
+The recording bar is placed at the top center of the recorded monitor. In-process capture omits
+the bar from the video. Use `--no-bar` or set `OMARECORD_NO_BAR=1` to suppress it.
 
 ## Launcher window
 
-The launcher opens at 380×460 and grows to 380×580 while its webcam preview is visible. Its
+The launcher opens at 380×460 and grows to 380×596 while its webcam preview is visible. Its
 Wayland app id is `omarecord-launcher`. This optional Omarchy rule keeps it floating, centred,
 and at the intended default size:
 
@@ -81,21 +80,16 @@ o.window("^omarecord-launcher$", { float = true, center = true, size = "380 460"
 ## Camera self-view
 
 When webcam capture is enabled, the camera self-view is a separate 160 px overlay by default.
-Choose S, M, or L in launcher settings and drag the bubble to persist its position. Placement is
-chosen when recording starts:
+Choose S, M, or L in launcher settings and drag the bubble to persist its position. It starts at
+the bottom-right of the recorded monitor and may be moved anywhere on that monitor. In-process
+capture omits both the self-view and recording bar without showing a picker. The recording bar
+can hide or show the self-view while recording.
 
-- On a multi-monitor setup, the self-view and recording bar use a monitor that is not recorded.
-- For a region or window, the self-view uses the recorded monitor only when it fits completely
-  outside the captured rectangle; it shrinks to S if necessary.
-- For a single-monitor full-screen capture, the normal capture path shows a one-time warning
-  that the self-view will be visible. The recording bar can hide or show it while recording.
-
-The launcher setting **Hide self-view while recording** uses portal capture for the last case.
-The first run shows Omarchy's share picker once. Accept it and allow its restore token; setting
-`allow_token_by_default = true` in `~/.config/hypr/xdph.conf` avoids re-picking. If portal
-capture encounters the possible EGL DMA-BUF failure noted by Omarchy's capture script, capture
-automatically falls back to the monitor path and sends the notification “Self-view will be
-visible in the recording”.
+The native backend is selected automatically when its display protocol is available. It uses four
+shared-memory capture slots and a bounded encoder queue, and crops regions on its writer thread.
+Set `OMARECORD_CAPTURE=native` to require this selection or `OMARECORD_CAPTURE=gsr` to force the
+fallback backend for one invocation. The same values may be stored as `captureBackend` in the
+settings file. The fallback cannot omit overlays placed inside its capture area.
 
 ### `edit BUNDLE`
 
@@ -138,6 +132,13 @@ clip, style, cursor, and zoom edits are stored in `project.json`.
 ## Environment
 
 - `OMARECORD_DEBUG=1` appends `gpu-screen-recorder` stderr to `/tmp/omarecord.log`.
+- `OMARECORD_PREVIEW_STATS=1` plays an opened recording and logs preview frame rate, average
+  frame handling cost, and drops once per second.
+- `OMARECORD_CAPTURE=gsr` forces the fallback screen capture backend.
+- `OMARECORD_CAPTURE=native` selects the native screen capture backend when supported.
+- `OMARECORD_NATIVE_CONVERSION=cpu` forces CPU colour conversion for native capture. By default,
+  the hardware conversion filter is exercised with a BGRA frame first and CPU conversion is used
+  automatically when that exact conversion is unsupported.
 - `OMARECORD_NO_BAR=1` suppresses the recording bar.
 - `OMARECORD_SCREENSHOT=/path/out.png` makes `omarecord edit` capture its own window with
   `QQuickWindow::grabWindow()` three seconds after loading, save the PNG, and quit. The launcher

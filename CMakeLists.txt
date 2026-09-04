@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(omarecord VERSION 0.1.0 LANGUAGES CXX)
+project(omarecord VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -10,6 +10,27 @@ find_package(Qt6 6.8 REQUIRED COMPONENTS Core Concurrent Gui Quick QuickControls
 find_package(LayerShellQt REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBEVDEV REQUIRED IMPORTED_TARGET libevdev)
+pkg_check_modules(WAYLAND_CLIENT REQUIRED IMPORTED_TARGET wayland-client)
+find_program(WAYLAND_SCANNER REQUIRED NAMES wayland-scanner)
+
+function(generate_wayland_protocol protocol_name protocol_xml)
+    set(protocol_header ${CMAKE_CURRENT_BINARY_DIR}/generated/${protocol_name}-client-protocol.h)
+    set(protocol_code ${CMAKE_CURRENT_BINARY_DIR}/generated/${protocol_name}-protocol.c)
+    add_custom_command(OUTPUT ${protocol_header} ${protocol_code}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/generated
+        COMMAND ${WAYLAND_SCANNER} client-header ${protocol_xml} ${protocol_header}
+        COMMAND ${WAYLAND_SCANNER} private-code ${protocol_xml} ${protocol_code}
+        DEPENDS ${protocol_xml}
+        VERBATIM)
+    set(GENERATED_WAYLAND_SOURCES ${GENERATED_WAYLAND_SOURCES} ${protocol_header} ${protocol_code} PARENT_SCOPE)
+endfunction()
+
+generate_wayland_protocol(ext-image-capture-source-v1
+    /usr/share/wayland-protocols/staging/ext-image-capture-source/ext-image-capture-source-v1.xml)
+generate_wayland_protocol(ext-image-copy-capture-v1
+    /usr/share/wayland-protocols/staging/ext-image-copy-capture/ext-image-copy-capture-v1.xml)
+generate_wayland_protocol(ext-foreign-toplevel-list-v1
+    /usr/share/wayland-protocols/staging/ext-foreign-toplevel-list/ext-foreign-toplevel-list-v1.xml)
 
 qt_standard_project_setup()
 qt_policy(SET QTP0004 NEW)
@@ -32,11 +53,13 @@ add_library(omarecord_core STATIC
     src/record/EvdevListener.cpp
     src/record/RegionPicker.cpp
     src/record/Recorder.cpp
+    src/record/ScreenCapture.cpp
+    ${GENERATED_WAYLAND_SOURCES}
 )
-target_include_directories(omarecord_core PUBLIC src)
+target_include_directories(omarecord_core PUBLIC src PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
 target_link_libraries(omarecord_core
     PUBLIC Qt6::Core Qt6::Gui Qt6::Quick Qt6::Multimedia Qt6::Svg
-    PRIVATE PkgConfig::LIBEVDEV
+    PRIVATE PkgConfig::LIBEVDEV PkgConfig::WAYLAND_CLIENT
 )
 
 add_library(omarecord_render STATIC)

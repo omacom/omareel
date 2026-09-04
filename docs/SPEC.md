@@ -12,8 +12,12 @@ This document is the frozen contract. Implementation runs are scoped to it.
 - **Language/UI:** C++17, Qt 6.11 (Quick/QML, Controls Material dark, Multimedia, Effects,
   Svg). Same stack as omacut/omasnap so it feels native on Omarchy. Build with **CMake + Ninja**.
   Single binary `omarecord` with subcommands.
-- **Capture:** `gpu-screen-recorder` (already on every Omarchy install) with `-cursor no`,
-  `-write-first-frame-ts yes`, `-fm cfr`, `-f 60`, `-k auto` (NVENC/VAAPI, cpu fallback).
+- **Capture:** prefer an in-process `ext-image-copy-capture-v1` output session when advertised.
+  Create the session with options `0` so cursors are omitted, negotiate XRGB8888 shared memory,
+  and rotate four buffers through capturing, queued, writing, and available states. A dedicated
+  bounded writer feeds the encoder without blocking display dispatch and crops regions while
+  copying their rows. Generate protocol bindings at build time. The established recorder remains
+  the explicit and automatic startup fallback.
 - **Cursor position:** poll the Hyprland IPC socket
   `$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket.sock` with request `j/cursorpos`
   (returns logical global coords). One request ≈ 6 µs; poll at 240 Hz on a dedicated thread.
@@ -23,7 +27,7 @@ This document is the frozen contract. Implementation runs are scoped to it.
   Omarchy). Open every device that has `EV_KEY` with `BTN_LEFT` or `EV_REL`/`REL_WHEEL` or
   keyboard keys. If no device can be opened, keep recording without click data and warn.
 - **Encode/decode:** `ffmpeg`/`ffprobe` subprocesses. Never link libav directly.
-- **Time base:** all recorded events carry `CLOCK_MONOTONIC` microseconds. gpu-screen-recorder
+- **Time base:** all recorded events carry `CLOCK_MONOTONIC` microseconds. Each capture backend
   writes `<out>.mp4.ts` with `monotonic_microsec realtime_microsec` of the first frame. Video
   time `t = (event_us - first_frame_us) / 1e6`.
 - **Coordinates:** Hyprland gives logical coords. Recording region is chosen in logical coords
@@ -65,10 +69,11 @@ Also call `omarchy-shell -q omarchy.indicators refresh` if present (it watches g
 
 ```
 screen.mp4          raw capture (no cursor), cfr
-screen.mp4.ts       gsr first-frame timestamps (kept verbatim)
+screen.mp4.ts       first-frame timestamps
 camera.mp4          optional webcam capture, without audio
 camera.mp4.ts       webcam first-frame timestamps
-capture.json        { "version":1, "fps":60, "width":3840, "height":2160,
+capture.json        { "version":1, "backend":"ext-image-copy-capture", "fps":60,
+                      "width":3840, "height":2160,
                       "region":{"x":1600,"y":0,"w":2400,"h":1350},   # logical
                       "scale":1.6, "monitor":"DP-3", "first_frame_us":182833061901,
                       "started_us":..., "stopped_us":..., "audio":{"desktop":false,"mic":false} }
@@ -97,6 +102,12 @@ device and the daemon starts the V4L2 fallback capture. `capture.json.camera.bac
 `qt-multimedia` or `v4l2-fallback`, along with the device, dimensions, frame rate, first-frame
 timestamp, rotation, and horizontal flip. Rotation and flip affect previews and rendering but are
 not baked into `camera.mp4`.
+
+The self-view starts at the persisted bottom-right position on the recorded monitor and remains
+draggable with S, M, and L sizes. Privacy rules mark the self-view and recording bar as excluded
+from in-process screen copies, so neither overlay is encoded. No picker or alternate-monitor
+placement is involved. For in-process audio, a separate pulse capture is timestamped from the
+monotonic clock and copy-muxed with the video at stop.
 
 ## 3. Project model (`project.json`, version 1)
 
@@ -191,9 +202,10 @@ Layers (bottom → top):
 4. Cursor: SVG arrow (ship our own `assets/cursors/arrow.svg`, hotspot (0,0) at the tip),
    size = `24 * cursor.size` px at 1080p ref, scaled with output size. Ripple circles.
 
-`FrameSource` is a C++ `QQuickItem` (`QSGSimpleTextureNode`) that displays the current
-`QImage`/`QVideoFrame`. Preview feeds it from `QMediaPlayer` + `QVideoSink`. Export feeds it
-from an ffmpeg rawvideo pipe (`-f rawvideo -pix_fmt rgba`), frame by frame, deterministic.
+`FrameSource` is a C++ `QQuickItem` (`QSGSimpleTextureNode`) used by deterministic export frames.
+Interactive preview uses the multimedia scene-graph video item directly, with crop and rounded
+masking on the GPU. A precise 60 Hz timer samples playback position for composition bindings;
+camera correction seeks only when drift exceeds 250 ms.
 
 Exporter pipeline (`render/Exporter`):
 - Decode: `ffmpeg -hwaccel cuda|auto -i screen.mp4 -vf select+fps -f rawvideo -pix_fmt rgba -`

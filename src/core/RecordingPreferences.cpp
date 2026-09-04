@@ -31,8 +31,7 @@ RecordingPreferences RecordingPreferences::load()
     const QJsonObject selfViewPosition = root.value(QStringLiteral("selfViewPosition")).toObject();
     preferences.selfViewX = qBound(0.0, selfViewPosition.value(QStringLiteral("x")).toDouble(1.0), 1.0);
     preferences.selfViewY = qBound(0.0, selfViewPosition.value(QStringLiteral("y")).toDouble(1.0), 1.0);
-    preferences.hideSelfViewViaPortal = root.value(QStringLiteral("hideSelfViewViaPortal")).toBool(false);
-    preferences.selfViewCaptureWarningShown = root.value(QStringLiteral("selfViewCaptureWarningShown")).toBool(false);
+    preferences.captureBackend = root.value(QStringLiteral("captureBackend")).toString(QStringLiteral("auto"));
     if (root.value(QStringLiteral("webcam")).isObject()) {
         preferences.webcam = root.value(QStringLiteral("webcam")).toObject();
         preferences.webcamEnabled = preferences.webcam.value(QStringLiteral("enabled")).toBool(false);
@@ -76,8 +75,7 @@ bool RecordingPreferences::save(QString *error) const
         {QStringLiteral("selfViewPosition"), QJsonObject{
             {QStringLiteral("x"), qBound(0.0, selfViewX, 1.0)},
             {QStringLiteral("y"), qBound(0.0, selfViewY, 1.0)}}},
-        {QStringLiteral("hideSelfViewViaPortal"), hideSelfViewViaPortal},
-        {QStringLiteral("selfViewCaptureWarningShown"), selfViewCaptureWarningShown},
+        {QStringLiteral("captureBackend"), captureBackend},
         {QStringLiteral("webcam"), savedWebcam}
     };
     if (file.write(QJsonDocument(root).toJson(QJsonDocument::Indented)) < 0 || !file.commit()) {

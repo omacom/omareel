@@ -1,15 +1,18 @@
 import QtQuick
 import QtQuick.Effects
+import QtMultimedia
 import Omarecord
 
 Item {
     id: root
     readonly property alias frameSource: video
+    readonly property alias videoOutput: nativeVideo
     required property var settings
     required property var crop
     property bool softwareRendering: false
     property real ref: 1
     property bool unframed: false
+    property bool nativePreview: false
 
     Rectangle {
         id: shadowShape
@@ -40,14 +43,38 @@ Item {
         opacity: root.softwareRendering && root.settings.shadow.enabled && !root.unframed ? root.settings.shadow.intensity * 0.45 : 0
     }
     Item {
+        id: videoClip
         anchors.fill: parent
         clip: true
+        layer.enabled: !root.unframed && !root.softwareRendering
+        layer.effect: MultiEffect {
+            maskEnabled: true
+            maskSource: videoMask
+        }
+        Rectangle {
+            id: videoMask
+            anchors.fill: parent
+            radius: root.settings.radius * root.ref
+            color: "white"
+            visible: false
+            layer.enabled: true
+        }
+        VideoOutput {
+            id: nativeVideo
+            visible: root.nativePreview
+            x: -root.crop.x * width
+            y: -root.crop.y * height
+            width: parent.width / Math.max(.0001, root.crop.w)
+            height: parent.height / Math.max(.0001, root.crop.h)
+            fillMode: VideoOutput.Stretch
+        }
         FrameSource {
             id: video
             objectName: "videoFrameSource"
             anchors.fill: parent
+            visible: !root.nativePreview
             cropRect: Qt.rect(root.crop.x, root.crop.y, root.crop.w, root.crop.h)
-            cornerRadiusRatio: root.unframed ? 0
+            cornerRadiusRatio: !root.softwareRendering || root.unframed ? 0
                 : root.settings.radius * root.ref / Math.max(1, Math.min(root.width, root.height))
         }
     }

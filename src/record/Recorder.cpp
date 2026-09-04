@@ -1,6 +1,7 @@
 #include "Recorder.h"
 #include "CursorSampler.h"
 #include "EvdevListener.h"
+#include "ScreenCapture.h"
 #include "core/RecordingPreferences.h"
 
 #include <QCoreApplication>
@@ -242,7 +243,7 @@ int Recorder::startDetached(const RecordOptions &options, QString *message)
         arguments << QStringLiteral("--webcam-flip-horizontal");
     if (!options.selfView) arguments << QStringLiteral("--no-selfview");
     arguments << QStringLiteral("--selfview-size") << options.selfViewSize;
-    if (options.hideSelfViewViaPortal) arguments << QStringLiteral("--hide-selfview-via-portal");
+    arguments << QStringLiteral("--capture-backend") << options.captureBackend;
     if (options.noOpen) arguments << QStringLiteral("--no-open");
     if (options.noBar) arguments << QStringLiteral("--no-bar");
     QProcess daemon;
@@ -363,6 +364,88 @@ static qint64 firstFrameTimestamp(const QString &path)
     return 0;
 }
 
+static QString commandOutput(const QString &program, const QStringList &arguments)
+{
+    QProcess process;
+    process.start(program, arguments);
+    if (!process.waitForFinished(3000) || process.exitCode() != 0) return {};
+    return QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+}
+
+static bool writeStartTimestamp(const QString &path, qint64 monotonic)
+{
+    timespec realtime{};
+    clock_gettime(CLOCK_REALTIME, &realtime);
+    const qint64 realtimeMicroseconds = qint64(realtime.tv_sec) * 1000000 + realtime.tv_nsec / 1000;
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) return false;
+    QTextStream stream(&file);
+    stream << "monotonic_microsec\trealtime_microsec\n"
+           << monotonic << '\t' << realtimeMicroseconds << '\n';
+    return file.commit();
+}
+
+static bool startAudioCapture(QProcess *process, const RecordOptions &options,
+                              const QString &path, qint64 *startedUs)
+{
+    QStringList sources;
+    if (options.desktopAudio) {
+        const QString sink = commandOutput(QStringLiteral("pactl"), {QStringLiteral("get-default-sink")});
+        if (!sink.isEmpty()) sources << sink + QStringLiteral(".monitor");
+    }
+    if (options.microphoneAudio) {
+        QString source = options.microphoneDevice;
+        if (source == QLatin1String("default_input"))
+            source = commandOutput(QStringLiteral("pactl"), {QStringLiteral("get-default-source")});
+        if (!source.isEmpty()) sources << source;
+    }
+    if (sources.isEmpty()) return false;
+    QStringList arguments{QStringLiteral("-y"), QStringLiteral("-loglevel"), QStringLiteral("error")};
+    for (const QString &source : std::as_const(sources))
+        arguments << QStringLiteral("-thread_queue_size") << QStringLiteral("1024")
+                  << QStringLiteral("-f") << QStringLiteral("pulse")
+                  << QStringLiteral("-i") << source;
+    if (sources.size() > 1)
+        arguments << QStringLiteral("-filter_complex")
+                  << QStringLiteral("[0:a][1:a]amix=inputs=2:duration=longest[a]")
+                  << QStringLiteral("-map") << QStringLiteral("[a]");
+    else
+        arguments << QStringLiteral("-map") << QStringLiteral("0:a");
+    arguments << QStringLiteral("-c:a") << QStringLiteral("aac")
+              << QStringLiteral("-b:a") << QStringLiteral("192k") << path;
+    process->setProcessChannelMode(QProcess::MergedChannels);
+    *startedUs = CursorSampler::monotonicUs();
+    process->start(QStringLiteral("ffmpeg"), arguments);
+    return process->waitForStarted(5000) && writeStartTimestamp(path + QStringLiteral(".ts"), *startedUs);
+}
+
+static bool finishAudioCapture(QProcess *process, const QString &screenPath,
+                               const QString &audioPath, const QString &outputPath,
+                               qint64 screenStartedUs, qint64 audioStartedUs)
+{
+    if (process->state() != QProcess::NotRunning) {
+        ::kill(pid_t(process->processId()), SIGINT);
+        if (!process->waitForFinished(10000)) {
+            process->kill();
+            process->waitForFinished(1000);
+        }
+    }
+    const bool cleanAudioStop = process->exitStatus() == QProcess::NormalExit
+        && (process->exitCode() == 0 || process->exitCode() == 255);
+    if (!cleanAudioStop
+        || QFileInfo(audioPath).size() <= 0) return false;
+    const double offset = (audioStartedUs - screenStartedUs) / 1000000.0;
+    QProcess mux;
+    mux.start(QStringLiteral("ffmpeg"), {QStringLiteral("-y"), QStringLiteral("-loglevel"),
+        QStringLiteral("error"), QStringLiteral("-i"), screenPath, QStringLiteral("-itsoffset"),
+        QString::number(offset, 'f', 6), QStringLiteral("-i"), audioPath,
+        QStringLiteral("-map"), QStringLiteral("0:v:0"), QStringLiteral("-map"),
+        QStringLiteral("1:a:0"), QStringLiteral("-c"), QStringLiteral("copy"),
+        QStringLiteral("-shortest"), QStringLiteral("-movflags"), QStringLiteral("+faststart"),
+        outputPath});
+    return mux.waitForFinished(30000) && mux.exitCode() == 0 && QFileInfo(outputPath).size() > 0;
+}
+
 static QPointF cursorAt(const QVector<RawCursorSample> &samples, qint64 time)
 {
     if (samples.isEmpty()) return {};
@@ -384,7 +467,6 @@ struct MonitorLayout {
 struct SelfViewPlacement {
     bool visible = false;
     bool safe = false;
-    bool portal = false;
     QString monitor;
     QString sizeName = QStringLiteral("M");
     int pixels = 160;
@@ -399,9 +481,7 @@ QList<MonitorLayout> monitorLayouts()
     QList<MonitorLayout> result;
     for (const QJsonValue &value : QJsonDocument::fromJson(process.readAllStandardOutput()).array()) {
         const QJsonObject monitor = value.toObject();
-        if (monitor.value(QStringLiteral("disabled")).toBool(false)
-            || (monitor.contains(QStringLiteral("dpmsStatus"))
-                && !monitor.value(QStringLiteral("dpmsStatus")).toBool())) continue;
+        if (monitor.value(QStringLiteral("disabled")).toBool(false)) continue;
         const double scale = std::max(0.01, monitor.value(QStringLiteral("scale")).toDouble(1.0));
         result << MonitorLayout{
             monitor.value(QStringLiteral("name")).toString(),
@@ -433,14 +513,8 @@ SelfViewPlacement selfViewPlacement(const RecordOptions &options, const CaptureR
     });
     if (recorded == monitors.cend()) return placement;
 
-    auto target = std::find_if(monitors.cbegin(), monitors.cend(), [&](const MonitorLayout &monitor) {
-        return monitor.name != capture.monitorName;
-    });
-    if (target != monitors.cend()) {
-        placement.safe = true;
-    } else {
-        target = recorded;
-    }
+    auto target = recorded;
+    placement.safe = true;
     placement.monitor = target->name;
 
     const auto persistedPosition = [&](int pixels) {
@@ -449,43 +523,7 @@ SelfViewPlacement selfViewPlacement(const RecordOptions &options, const CaptureR
         return QPoint(16 + qRound(preferences.selfViewX * xRange),
                       16 + qRound(preferences.selfViewY * yRange));
     };
-    if (placement.safe) {
-        placement.position = persistedPosition(placement.pixels);
-        return placement;
-    }
-
-    const QRectF captured(capture.x, capture.y, capture.width, capture.height);
-    const auto outsideCorner = [&](int pixels, QPoint *best) {
-        const int right = std::max(16, qRound(target->geometry.width()) - pixels - 16);
-        const int bottom = std::max(16, qRound(target->geometry.height()) - pixels - 16);
-        const QList<QPoint> candidates{{16, 16}, {right, 16}, {16, bottom}, {right, bottom}};
-        double bestScore = -1.0;
-        bool found = false;
-        for (const QPoint &candidate : candidates) {
-            const QRectF global(target->geometry.x() + candidate.x(),
-                                target->geometry.y() + candidate.y(), pixels, pixels);
-            if (global.intersects(captured)) continue;
-            const QPointF delta = global.center() - captured.center();
-            const double score = delta.x() * delta.x() + delta.y() * delta.y();
-            if (score > bestScore) { bestScore = score; *best = candidate; found = true; }
-        }
-        return found;
-    };
-
-    if (capture.mode != CaptureMode::Fullscreen && outsideCorner(placement.pixels, &placement.position)) {
-        placement.safe = true;
-        return placement;
-    }
-    if (capture.mode != CaptureMode::Fullscreen && placement.sizeName != QLatin1String("S")) {
-        placement.sizeName = QStringLiteral("S");
-        placement.pixels = selfViewPixels(placement.sizeName);
-        if (outsideCorner(placement.pixels, &placement.position)) {
-            placement.safe = true;
-            return placement;
-        }
-    }
     placement.position = persistedPosition(placement.pixels);
-    placement.portal = capture.mode == CaptureMode::Fullscreen && options.hideSelfViewViaPortal;
     return placement;
 }
 
@@ -620,7 +658,8 @@ int Recorder::daemonMain(const QStringList &arguments)
     options.selfViewSize = valueAfter(arguments, QStringLiteral("--selfview-size")).toUpper();
     if (options.selfViewSize != QLatin1String("S") && options.selfViewSize != QLatin1String("L"))
         options.selfViewSize = QStringLiteral("M");
-    options.hideSelfViewViaPortal = arguments.contains(QStringLiteral("--hide-selfview-via-portal"));
+    options.captureBackend = valueAfter(arguments, QStringLiteral("--capture-backend"));
+    if (options.captureBackend.isEmpty()) options.captureBackend = QStringLiteral("auto");
     CaptureRegion region;
     const QString mode = valueAfter(arguments, QStringLiteral("--mode"));
     region.mode = mode == QLatin1String("fullscreen") ? CaptureMode::Fullscreen
@@ -658,15 +697,9 @@ int Recorder::daemonMain(const QStringList &arguments)
     const QString video = bundle + QStringLiteral("/screen.mp4");
     const QString cameraVideo = bundle + QStringLiteral("/camera.mp4");
     QStringList gsr;
-    QStringList kmsTarget;
     if (region.mode == CaptureMode::Fullscreen) {
-        kmsTarget << QStringLiteral("-w") << region.monitorName
-                  << QStringLiteral("-s") << QStringLiteral("0x0");
-        if (selfView.portal)
-            gsr << QStringLiteral("-w") << QStringLiteral("portal")
-                << QStringLiteral("-restore-portal-session") << QStringLiteral("yes");
-        else
-            gsr << kmsTarget;
+        gsr << QStringLiteral("-w") << region.monitorName
+            << QStringLiteral("-s") << QStringLiteral("0x0");
     } else {
         const int captureX = int(std::lround(region.x));
         const int captureY = int(std::lround(region.y));
@@ -697,6 +730,20 @@ int Recorder::daemonMain(const QStringList &arguments)
         (void)debugLog.open(QIODevice::WriteOnly | QIODevice::Append);
     bool cameraAvailable = false;
     QString cameraBackend;
+    const QString environmentBackend = qEnvironmentVariable("OMARECORD_CAPTURE").toLower();
+    bool nativeCapture = environmentBackend != QLatin1String("gsr")
+        && options.captureBackend != QLatin1String("gsr")
+        && ScreenCapture::isSupported();
+    QString captureBackend = nativeCapture ? QStringLiteral("ext-image-copy-capture")
+                                           : QStringLiteral("gsr");
+    const bool audioRequested = options.desktopAudio || options.microphoneAudio;
+    const QString nativeVideo = audioRequested
+        ? bundle + QStringLiteral("/screen-video.mp4") : video;
+    const QString audioVideo = bundle + QStringLiteral("/audio.m4a");
+    QProcess audioRecorder;
+    qint64 audioStartedUs = 0;
+    bool audioActive = false;
+    bool audioMuxed = !audioRequested;
     QJsonObject state{{"pid", daemonPid}, {"bundle", bundle}, {"started_us", startedUs},
                       {"monitor", region.monitorName}, {"no_open", options.noOpen},
                       {"webcam", options.webcam},
@@ -707,11 +754,11 @@ int Recorder::daemonMain(const QStringList &arguments)
                       {"capture_mode", modeName(region.mode)},
                       {"capture_x", region.x}, {"capture_y", region.y},
                       {"capture_width", region.width}, {"capture_height", region.height},
+                      {"capture_backend", captureBackend},
                       {"selfview", selfView.visible}, {"selfview_safe", selfView.safe},
                       {"selfview_monitor", selfView.monitor},
                       {"selfview_size", selfView.sizeName}, {"selfview_pixels", selfView.pixels},
                       {"selfview_x", selfView.position.x()}, {"selfview_y", selfView.position.y()},
-                      {"portal_capture", selfView.portal},
                       {"camera_status", options.webcam ? QStringLiteral("starting")
                                                        : QStringLiteral("disabled")},
                       {"camera_record", false},
@@ -721,14 +768,6 @@ int Recorder::daemonMain(const QStringList &arguments)
             ? QStringLiteral("Could not write recorder state")
             : QStringLiteral("Could not write recorder state: %1").arg(error);
         return failRecorderStartup(reason, bundle, video, &cursorSampler, &evdevListener);
-    }
-    if (selfView.visible && !selfView.safe && !selfView.portal
-        && !preferences.selfViewCaptureWarningShown) {
-        runOptionalDetached(QStringLiteral("omarchy-notification-send"),
-                            {QStringLiteral("Camera self-view"),
-                             QStringLiteral("Self-view will be visible in the recording")});
-        preferences.selfViewCaptureWarningShown = true;
-        preferences.save();
     }
     if (!options.noBar || options.webcam) {
         QStringList barArguments{QStringLiteral("__record-bar")};
@@ -770,55 +809,54 @@ int Recorder::daemonMain(const QStringList &arguments)
         }
     }
 
-    QStringList recorderArguments{QStringLiteral("__record-gsr")};
-    recorderArguments << gsr;
-    recorder.start(QCoreApplication::applicationFilePath(), recorderArguments);
-    if (!recorder.waitForStarted(5000)) {
-        if (cameraAvailable) updateRecordingState(QJsonObject{{QStringLiteral("camera_stop"), true}});
-        drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
-        QString reason = lastNonEmptyLine(recorderOutput);
-        if (reason.isEmpty()) reason = recorder.errorString();
-        return failRecorderStartup(reason, bundle, video, &cursorSampler, &evdevListener);
+    ScreenCapture screenCapture;
+    if (nativeCapture) {
+        QRect crop;
+        const QList<MonitorLayout> layouts = monitorLayouts();
+        const auto monitor = std::find_if(layouts.cbegin(), layouts.cend(), [&](const MonitorLayout &layout) {
+            return layout.name == region.monitorName;
+        });
+        if (monitor != layouts.cend())
+            crop = QRect(qRound((region.x - monitor->geometry.x()) * region.scale),
+                         qRound((region.y - monitor->geometry.y()) * region.scale),
+                         region.physicalWidth, region.physicalHeight);
+        ScreenCaptureConfig config{region.monitorName, nativeVideo, video + QStringLiteral(".ts"),
+                                   crop, options.fps};
+        if (!screenCapture.start(config, &error)) {
+            nativeCapture = false;
+            captureBackend = QStringLiteral("gsr");
+            updateRecordingState(QJsonObject{{QStringLiteral("capture_backend"), captureBackend}});
+        }
     }
-    bool portalActive = selfView.portal;
-    if (portalActive) {
-        QElapsedTimer portalStartup;
-        portalStartup.start();
-        while (portalStartup.elapsed() < 2500 && recorder.state() != QProcess::NotRunning) {
-            recorder.waitForFinished(50);
+    if (!nativeCapture) {
+        QStringList recorderArguments{QStringLiteral("__record-gsr")};
+        recorderArguments << gsr;
+        recorder.start(QCoreApplication::applicationFilePath(), recorderArguments);
+        if (!recorder.waitForStarted(5000)) {
+            if (cameraAvailable) updateRecordingState(QJsonObject{{QStringLiteral("camera_stop"), true}});
             drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
-        }
-        if (recorder.state() == QProcess::NotRunning) {
-            QFile::remove(video);
-            QFile::remove(video + QStringLiteral(".ts"));
-            gsr = kmsTarget + gsr.mid(4);
-            recorderArguments = {QStringLiteral("__record-gsr")};
-            recorderArguments << gsr;
-            recorderOutput.clear();
-            recorder.start(QCoreApplication::applicationFilePath(), recorderArguments);
-            if (!recorder.waitForStarted(5000)) {
-                if (cameraAvailable) updateRecordingState(QJsonObject{{QStringLiteral("camera_stop"), true}});
-                const QString reason = recorder.errorString();
-                return failRecorderStartup(reason, bundle, video, &cursorSampler, &evdevListener);
-            }
-            portalActive = false;
-            updateRecordingState(QJsonObject{{QStringLiteral("portal_capture"), false}});
-            runOptionalDetached(QStringLiteral("omarchy-notification-send"),
-                                {QStringLiteral("Camera self-view"),
-                                 QStringLiteral("Self-view will be visible in the recording")});
+            QString reason = lastNonEmptyLine(recorderOutput);
+            if (reason.isEmpty()) reason = recorder.errorString();
+            return failRecorderStartup(reason, bundle, video, &cursorSampler, &evdevListener);
         }
     }
+    if (nativeCapture && audioRequested)
+        audioActive = startAudioCapture(&audioRecorder, options, audioVideo, &audioStartedUs);
     const qint64 recorderStartedUs = CursorSampler::monotonicUs();
     updateRecordingState(QJsonObject{{QStringLiteral("started_us"), recorderStartedUs}});
     if (cameraAvailable) {
         QElapsedTimer firstFrameTimer;
         firstFrameTimer.start();
-        while (firstFrameTimer.elapsed() < 2500 && recorder.state() != QProcess::NotRunning
-               && !stopRequested) {
+        while (firstFrameTimer.elapsed() < 2500 && !stopRequested) {
             if (firstFrameTimestamp(video + QStringLiteral(".ts")) > 0) break;
-            recorder.waitForFinished(0);
-            drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
-            QThread::msleep(10);
+            if (nativeCapture) {
+                if (!screenCapture.captureFrame(&error)) break;
+            } else {
+                if (recorder.state() == QProcess::NotRunning) break;
+                recorder.waitForFinished(0);
+                drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
+                QThread::msleep(10);
+            }
         }
         updateRecordingState(QJsonObject{{QStringLiteral("camera_record"), true}});
     }
@@ -828,23 +866,34 @@ int Recorder::daemonMain(const QStringList &arguments)
                          QStringLiteral("Stop with the bar, the REC indicator, or your keybind")});
     runOptionalDetached(QStringLiteral("omarchy-shell"),
                         {QStringLiteral("-q"), QStringLiteral("omarchy.indicators"), QStringLiteral("refresh")});
-    while (!stopRequested && recorder.state() != QProcess::NotRunning
-           && CursorSampler::monotonicUs() - recorderStartedUs < 2000000) {
-        recorder.waitForFinished(0);
-        drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
-        QThread::msleep(40);
+    bool captureLoopFailed = false;
+    while (!stopRequested) {
+        if (nativeCapture) {
+            if (!screenCapture.captureFrame(&error)) { captureLoopFailed = true; break; }
+        } else {
+            if (recorder.state() == QProcess::NotRunning) { captureLoopFailed = true; break; }
+            recorder.waitForFinished(0);
+            drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
+            QThread::msleep(40);
+        }
     }
-    drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
-    while (!stopRequested && recorder.state() != QProcess::NotRunning) {
-        recorder.waitForFinished(0);
-        drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
-        QThread::msleep(40);
-    }
-    const bool unexpectedExit = !stopRequested && recorder.state() == QProcess::NotRunning;
+    const bool unexpectedExit = !stopRequested && captureLoopFailed;
     bool forcedStop = false;
     if (cameraAvailable)
         updateRecordingState(QJsonObject{{QStringLiteral("camera_stop"), true}});
-    if (recorder.state() != QProcess::NotRunning) {
+    if (nativeCapture) {
+        if (!screenCapture.finish(&error)) captureLoopFailed = true;
+        if (audioActive)
+            audioMuxed = finishAudioCapture(&audioRecorder, nativeVideo, audioVideo, video,
+                                            screenCapture.firstFrameUs(), audioStartedUs);
+        if (!audioMuxed) {
+            QFile::remove(video);
+            if (nativeVideo != video) QFile::rename(nativeVideo, video);
+        }
+        QFile::remove(audioVideo);
+        QFile::remove(audioVideo + QStringLiteral(".ts"));
+        if (audioMuxed && nativeVideo != video) QFile::remove(nativeVideo);
+    } else if (recorder.state() != QProcess::NotRunning) {
         ::kill(pid_t(recorder.processId()), SIGINT);
         if (!recorder.waitForFinished(5000)) {
             forcedStop = true;
@@ -861,9 +910,10 @@ int Recorder::daemonMain(const QStringList &arguments)
             QThread::msleep(20);
         }
     }
-    drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
-    const QString recorderErrorLine = lastNonEmptyLine(recorderOutput);
-    const bool recorderFailed = recorder.exitStatus() != QProcess::NormalExit || recorder.exitCode() != 0;
+    if (!nativeCapture) drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
+    const QString recorderErrorLine = nativeCapture ? error : lastNonEmptyLine(recorderOutput);
+    const bool recorderFailed = nativeCapture ? captureLoopFailed
+        : recorder.exitStatus() != QProcess::NormalExit || recorder.exitCode() != 0;
     const qint64 stoppedUs = CursorSampler::monotonicUs();
     cursorSampler.stop();
     evdevListener.stop();
@@ -893,14 +943,15 @@ int Recorder::daemonMain(const QStringList &arguments)
     bool durationOk = false;
     const double probedDuration = probeFinished && ffprobe.exitCode() == 0
         ? QString::fromUtf8(ffprobe.readAllStandardOutput()).trimmed().toDouble(&durationOk) : 0.0;
-    const int effectiveExitCode = recorder.exitStatus() == QProcess::NormalExit ? recorder.exitCode() : -1;
+    const int effectiveExitCode = nativeCapture ? (recorderFailed ? -1 : 0)
+        : recorder.exitStatus() == QProcess::NormalExit ? recorder.exitCode() : -1;
     const auto exitClassification = classifyGsrExit(effectiveExitCode, stopRequested,
                                                      QFileInfo(video).size(),
                                                      durationOk ? probedDuration : 0.0);
     if (debugLog.isOpen()) {
         const char *classification = exitClassification == GsrExitClassification::UserStop ? "user-stop"
             : exitClassification == GsrExitClassification::ExternalStop ? "external-stop" : "failure";
-        debugLog.write(QByteArray("omarecord: gsr exit classified as ") + classification
+        debugLog.write(QByteArray("omarecord: capture exit classified as ") + classification
                        + ", exit=" + QByteArray::number(effectiveExitCode)
                        + ", bytes=" + QByteArray::number(QFileInfo(video).size())
                        + ", duration=" + QByteArray::number(probedDuration, 'f', 3) + "\n");
@@ -908,18 +959,47 @@ int Recorder::daemonMain(const QStringList &arguments)
     }
     bool ok = !forcedStop && exitClassification != GsrExitClassification::Failure
         && firstFrameUs > 0;
-    ok = writeInputLog(bundle + QStringLiteral("/input.jsonl"), cursor, deviceEvents, region, &error) && ok;
+    CaptureRegion recordedRegion = region;
+    const int recordedFps = options.fps;
+    if (nativeCapture && region.width > 0.0) {
+        recordedRegion.physicalWidth = screenCapture.outputSize().width();
+        recordedRegion.physicalHeight = screenCapture.outputSize().height();
+        recordedRegion.scale = screenCapture.outputSize().width() / region.width;
+    }
+    ok = writeInputLog(bundle + QStringLiteral("/input.jsonl"), cursor, deviceEvents,
+                       recordedRegion, &error) && ok;
     QJsonObject capture{
-        {"version", 1}, {"fps", options.fps}, {"width", region.physicalWidth},
-        {"height", region.physicalHeight},
+        {"version", 1}, {"backend", captureBackend}, {"fps", recordedFps},
+        {"width", nativeCapture ? screenCapture.outputSize().width() : region.physicalWidth},
+        {"height", nativeCapture ? screenCapture.outputSize().height() : region.physicalHeight},
         {"mode", modeName(region.mode)},
         {"region", QJsonObject{{"x", region.x}, {"y", region.y},
                                 {"w", region.width}, {"h", region.height}}},
-        {"scale", region.scale}, {"monitor", region.monitorName},
+        {"scale", recordedRegion.scale}, {"monitor", region.monitorName},
         {"first_frame_us", firstFrameUs}, {"started_us", startedUs}, {"stopped_us", stoppedUs},
-        {"audio", QJsonObject{{"desktop", options.desktopAudio}, {"mic", options.microphoneAudio},
+        {"audio", QJsonObject{{"desktop", options.desktopAudio && (!nativeCapture || audioMuxed)},
+                                {"mic", options.microphoneAudio && (!nativeCapture || audioMuxed)},
                                 {"microphoneDevice", options.microphoneDevice}}}
     };
+    if (nativeCapture) {
+        const qint64 capturedSpanUs = std::max<qint64>(1,
+            screenCapture.lastFrameUs() - screenCapture.firstFrameUs());
+        const double measuredRate = screenCapture.encodedFrames() > 1
+            ? (screenCapture.encodedFrames() - 1) * 1000000.0 / capturedSpanUs : 0.0;
+        capture.insert(QStringLiteral("capture"), QJsonObject{
+            {QStringLiteral("frames"), screenCapture.encodedFrames()},
+            {QStringLiteral("drops"), screenCapture.droppedFrames()},
+            {QStringLiteral("measuredFps"), measuredRate},
+            {QStringLiteral("conversion"), screenCapture.conversionMode()}
+        });
+        if (audioRequested && audioStartedUs > 0)
+            capture[QStringLiteral("audio")] = QJsonObject{
+                {QStringLiteral("desktop"), options.desktopAudio && audioMuxed},
+                {QStringLiteral("mic"), options.microphoneAudio && audioMuxed},
+                {QStringLiteral("microphoneDevice"), options.microphoneDevice},
+                {QStringLiteral("startOffsetUs"), audioStartedUs - screenCapture.firstFrameUs()}
+            };
+    }
     if (cameraAvailable && QFileInfo(cameraVideo).size() > 0) {
         const qint64 cameraFirstFrameUs = firstFrameTimestamp(cameraVideo + QStringLiteral(".ts"));
         QProcess cameraProbe;

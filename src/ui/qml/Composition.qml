@@ -6,7 +6,10 @@ Item {
     id: composition
     // Preview-only access point. Exporter continues finding the same objectName.
     readonly property alias frameSource: frame.frameSource
+    readonly property alias videoOutput: frame.videoOutput
     readonly property alias cameraFrameSource: cameraOverlay.cameraFrameSource
+    readonly property alias cameraVideoOutput: cameraOverlay.cameraVideoOutput
+    property bool nativePreview: false
     width: comp.outputWidth
     height: comp.outputHeight
     property real ref: height / 1080
@@ -48,6 +51,7 @@ Item {
             softwareRendering: comp.softwareRendering
             ref: composition.ref
             unframed: composition.noBackground
+            nativePreview: composition.nativePreview
         }
         CursorOverlay {
             x: frame.x
@@ -70,6 +74,7 @@ Item {
         sourceWidth: comp.cameraSourceWidth
         sourceHeight: comp.cameraSourceHeight
         softwareRendering: comp.softwareRendering
+        nativePreview: composition.nativePreview
     }
     KeystrokeOverlay {
         visible: comp.project.keystrokes.enabled && comp.keystrokePills.length > 0

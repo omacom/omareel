@@ -99,18 +99,26 @@ Item {
                         editor.selectedZoomId = modelData.id
                     pressTrackX = mapToItem(root, mouse.x, mouse.y).x
                     pressBlockX = zoomBlock.x
+                    zoomBlock.gestureX = zoomBlock.x
+                    zoomBlock.gestureWidth = zoomBlock.width
+                    zoomBlock.gestureActive = true
                     editor.beginCoalescedEdit("move-selection")
                 }
                 onPositionChanged: mouse => { if (pressed) {
                     const trackX = mapToItem(root, mouse.x, mouse.y).x
                     const nextX = Math.max(0, Math.min(editor.duration * root.pixelsPerSecond - zoomBlock.width,
                         pressBlockX + trackX - pressTrackX))
+                    zoomBlock.gestureX = nextX
                     editor.moveSelectedZooms(modelData.id, editor.outputToSource(nextX / root.pixelsPerSecond))
                 } }
                 onReleased: {
+                    zoomBlock.gestureActive = false
                     editor.endCoalescedEdit()
                 }
-                onCanceled: editor.endCoalescedEdit()
+                onCanceled: {
+                    zoomBlock.gestureActive = false
+                    editor.endCoalescedEdit()
+                }
             }
             Rectangle {
                 width: 8; height: parent.height; radius: theme.radius; color: zoomBlock.border.color

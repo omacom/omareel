@@ -37,7 +37,6 @@ Launcher::Launcher(QObject *parent): QObject(parent)
     m_webcamFlipHorizontal = preferences.webcamFlipHorizontal;
     m_selfViewEnabled = preferences.selfViewEnabled;
     m_selfViewSize = preferences.selfViewSize;
-    m_hideSelfViewViaPortal = preferences.hideSelfViewViaPortal;
     refreshAudioDevices();
     refreshWebcamDevices();
     connect(&m_recordingTimer, &QTimer::timeout, this, &Launcher::refreshRecording);
@@ -58,7 +57,6 @@ void Launcher::saveRecordingPreferences()
     preferences.webcamFlipHorizontal = m_webcamFlipHorizontal;
     preferences.selfViewEnabled = m_selfViewEnabled;
     preferences.selfViewSize = m_selfViewSize;
-    preferences.hideSelfViewViaPortal = m_hideSelfViewViaPortal;
     QString error;
     if (!preferences.save(&error)) emit errorOccurred(error);
 }
@@ -145,14 +143,6 @@ void Launcher::setSelfViewSize(const QString &value)
         && normalized != QLatin1String("L")) return;
     if (m_selfViewSize == normalized) return;
     m_selfViewSize = normalized;
-    saveRecordingPreferences();
-    emit recordingPreferencesChanged();
-}
-
-void Launcher::setHideSelfViewViaPortal(bool value)
-{
-    if (m_hideSelfViewViaPortal == value) return;
-    m_hideSelfViewViaPortal = value;
     saveRecordingPreferences();
     emit recordingPreferencesChanged();
 }

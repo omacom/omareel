@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Effects
+import QtMultimedia
 import Omarecord
 
 Item {
@@ -11,6 +12,7 @@ Item {
     required property int sourceWidth
     required property int sourceHeight
     property bool softwareRendering: false
+    property bool nativePreview: false
     property real ref: outputHeight / 1080
     readonly property bool squareCrop: settings.shape === "round" || settings.crop === "square"
     readonly property bool quarterTurn: settings.rotation === 90 || settings.rotation === 270
@@ -63,23 +65,54 @@ Item {
         opacity: root.softwareRendering && root.settings.shadow.enabled
             ? root.settings.shadow.intensity * .45 : 0
     }
-    FrameSource {
-        id: cameraVideo
+    Item {
         z: 2
-        objectName: "cameraFrameSource"
-        anchors.centerIn: parent
-        width: root.quarterTurn ? parent.height : parent.width
-        height: root.quarterTurn ? parent.width : parent.height
-        cropRect: root.sourceCrop()
-        cornerRadiusRatio: root.settings.shape === "round" ? .5
-            : root.settings.shape === "rounded"
-              ? root.settings.radius * root.ref / Math.max(1, Math.min(width, height)) : 0
-        rotation: root.settings.rotation
-        transform: Scale {
-            objectName: "cameraFlipTransform"
-            origin.x: cameraVideo.width / 2
-            origin.y: cameraVideo.height / 2
-            xScale: root.settings.flipHorizontal ? -1 : 1
+        id: cameraClip
+        anchors.fill: parent
+        clip: true
+        layer.enabled: !root.softwareRendering
+        layer.effect: MultiEffect {
+            maskEnabled: true
+            maskSource: cameraMask
+        }
+        Rectangle {
+            id: cameraMask
+            anchors.fill: parent
+            radius: shadowShape.radius
+            color: "white"
+            visible: false
+            layer.enabled: true
+        }
+        Item {
+            id: cameraRotated
+            objectName: "cameraRotated"
+            anchors.centerIn: parent
+            width: root.quarterTurn ? parent.height : parent.width
+            height: root.quarterTurn ? parent.width : parent.height
+            rotation: root.settings.rotation
+            transform: Scale {
+                objectName: "cameraFlipTransform"
+                origin.x: cameraRotated.width / 2
+                origin.y: cameraRotated.height / 2
+                xScale: root.settings.flipHorizontal ? -1 : 1
+            }
+            VideoOutput {
+                id: nativeCameraVideo
+                visible: root.nativePreview
+                anchors.fill: parent
+                fillMode: VideoOutput.PreserveAspectCrop
+            }
+            FrameSource {
+                id: cameraVideo
+                objectName: "cameraFrameSource"
+                visible: !root.nativePreview
+                anchors.fill: parent
+                cropRect: root.sourceCrop()
+                cornerRadiusRatio: !root.softwareRendering ? 0
+                    : root.settings.shape === "round" ? .5
+                    : root.settings.shape === "rounded"
+                      ? root.settings.radius * root.ref / Math.max(1, Math.min(width, height)) : 0
+            }
         }
     }
     Rectangle {
@@ -95,4 +128,5 @@ Item {
         antialiasing: true
     }
     readonly property alias cameraFrameSource: cameraVideo
+    readonly property alias cameraVideoOutput: nativeCameraVideo
 }

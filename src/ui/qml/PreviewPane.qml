@@ -70,9 +70,10 @@ FocusScope {
             Composition {
                 id: composition
                 anchors.fill: parent
+                nativePreview: true
                 Component.onCompleted: {
-                    editor.attachFrameSource(frameSource)
-                    editor.attachCameraFrameSource(cameraFrameSource)
+                    editor.attachVideoOutput(videoOutput)
+                    editor.attachCameraVideoOutput(cameraVideoOutput)
                 }
             }
             MouseArea {

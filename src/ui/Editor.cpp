@@ -7,7 +7,6 @@
 #include "core/Theme.h"
 #include "render/Exporter.h"
 #include "render/FrameSource.h"
-#include "render/PreviewSink.h"
 
 #include <QAudioOutput>
 #include <QClipboard>
@@ -20,9 +19,11 @@
 #include <QProcess>
 #include <QRegularExpression>
 #include <QSaveFile>
+#include <QQuickItem>
 #include <QQuickWindow>
 #include <QPointer>
 #include <QStandardPaths>
+#include <QTextStream>
 #include <QUrl>
 #include <QVideoSink>
 #include <QUuid>
@@ -151,28 +152,34 @@ Editor::Editor(const QString &bundlePath, QObject *parent)
     if (!loadBundle()) return;
     m_audioOutput = std::make_unique<QAudioOutput>();
     m_player.setAudioOutput(m_audioOutput.get());
-    m_videoSink = std::make_unique<QVideoSink>();
-    m_previewSink = std::make_unique<PreviewSink>(m_videoSink.get(), this);
-    m_player.setVideoSink(m_videoSink.get());
-    connect(m_videoSink.get(), &QVideoSink::videoFrameChanged, this, [this](const QVideoFrame &) {
-        if (m_warmingPreview) {
-            m_warmingPreview = false;
-            QTimer::singleShot(0, this, &Editor::pause);
-        }
-    });
     m_player.setSource(QUrl::fromLocalFile(m_videoPath));
-    connect(&m_player, &QMediaPlayer::positionChanged, this, &Editor::handlePlayerPosition);
-    connect(&m_player, &QMediaPlayer::playbackStateChanged, this, [this] { emit playingChanged(); });
+    m_previewTimer.setTimerType(Qt::PreciseTimer);
+    m_previewTimer.setInterval(16);
+    connect(&m_previewTimer, &QTimer::timeout, this, [this] {
+        handlePlayerPosition(m_player.position());
+    });
+    m_previewStatsEnabled = qEnvironmentVariableIntValue("OMARECORD_PREVIEW_STATS") == 1;
+    if (m_previewStatsEnabled) QTextStream(stderr) << "preview stats enabled\n";
+    m_previewStatsTimer.setInterval(1000);
+    connect(&m_previewStatsTimer, &QTimer::timeout, this, &Editor::handlePreviewStats);
+    connect(&m_player, &QMediaPlayer::playbackStateChanged, this, [this] {
+        if (m_previewStatsEnabled)
+            QTextStream(stderr) << "preview state=" << int(m_player.playbackState()) << '\n';
+        if (playing()) {
+            if (!m_previewWindow) m_previewTimer.start();
+            if (m_previewStatsEnabled) {
+                m_previewStatsFrames = 0;
+                m_previewStatsCostNs = 0;
+                m_previewStatsClock.restart();
+                m_previewStatsTimer.start();
+            }
+        } else {
+            m_previewTimer.stop();
+            m_previewStatsTimer.stop();
+        }
+        emit playingChanged();
+    });
     if (m_hasCamera) {
-        m_cameraVideoSink = std::make_unique<QVideoSink>();
-        m_cameraPreviewSink = std::make_unique<PreviewSink>(m_cameraVideoSink.get(), this);
-        m_cameraPlayer.setVideoSink(m_cameraVideoSink.get());
-        connect(m_cameraVideoSink.get(), &QVideoSink::videoFrameChanged, this,
-                [this](const QVideoFrame &) {
-            if (!m_warmingCameraPreview) return;
-            m_warmingCameraPreview = false;
-            if (!playing()) m_cameraPlayer.pause();
-        });
         m_cameraPlayer.setSource(QUrl::fromLocalFile(m_cameraVideoPath));
     }
     m_valid = true;
@@ -345,19 +352,59 @@ bool Editor::cameraVisible() const
     return !mapped.beforeStart;
 }
 
-void Editor::attachFrameSource(QObject *source)
+void Editor::attachVideoOutput(QObject *output)
 {
-    if (m_previewSink) m_previewSink->setFrameSource(qobject_cast<FrameSource *>(source));
+    m_videoSink = output ? output->property("videoSink").value<QVideoSink *>() : nullptr;
+    m_player.setVideoSink(m_videoSink);
+    if (m_videoSink) connect(m_videoSink, &QVideoSink::videoFrameChanged, this,
+        [this](const QVideoFrame &) {
+            QElapsedTimer cost;
+            cost.start();
+            ++m_previewStatsFrames;
+            if (m_warmingPreview) {
+                m_warmingPreview = false;
+                QTimer::singleShot(0, this, &Editor::pause);
+            }
+            m_previewStatsCostNs += cost.nsecsElapsed();
+        });
+    QObject::disconnect(m_previewWindowConnection);
+    if (auto *item = qobject_cast<QQuickItem *>(output)) {
+        m_previewWindowConnection = connect(item, &QQuickItem::windowChanged,
+            this, &Editor::attachPreviewWindow);
+        attachPreviewWindow(item->window());
+    } else {
+        attachPreviewWindow(nullptr);
+    }
     if (m_player.mediaStatus() != QMediaPlayer::InvalidMedia) {
         m_warmingPreview = true;
         m_player.play();
     }
 }
 
-void Editor::attachCameraFrameSource(QObject *source)
+void Editor::attachPreviewWindow(QQuickWindow *window)
 {
-    if (m_cameraPreviewSink)
-        m_cameraPreviewSink->setFrameSource(qobject_cast<FrameSource *>(source));
+    QObject::disconnect(m_previewFrameConnection);
+    m_previewWindow = window;
+    if (window) {
+        m_previewTimer.stop();
+        m_previewFrameConnection = connect(window, &QQuickWindow::afterAnimating, this, [this] {
+            if (playing()) handlePlayerPosition(m_player.position());
+        });
+    } else if (playing()) {
+        m_previewTimer.start();
+    }
+}
+
+void Editor::attachCameraVideoOutput(QObject *output)
+{
+    m_cameraVideoSink = output ? output->property("videoSink").value<QVideoSink *>() : nullptr;
+    m_cameraPlayer.setVideoSink(m_cameraVideoSink);
+    if (m_cameraVideoSink) connect(m_cameraVideoSink, &QVideoSink::videoFrameChanged, this,
+        [this](const QVideoFrame &) {
+            if (!m_warmingCameraPreview) return;
+            m_warmingCameraPreview = false;
+            if (!playing()) m_cameraPlayer.pause();
+        });
     syncCamera(sourcePosition(), true);
     if (m_hasCamera && m_cameraPlayer.mediaStatus() != QMediaPlayer::InvalidMedia) {
         m_warmingCameraPreview = true;
@@ -608,16 +655,32 @@ void Editor::syncCamera(double screenSourceTime, bool force)
     const CameraTime mapped = mapCameraTime(screenSourceTime, m_cameraOffset, m_cameraDuration);
     const qint64 target = qRound64(mapped.seconds * 1000.0);
     m_cameraPlayer.setPlaybackRate(m_player.playbackRate());
-    if (force || std::abs(m_cameraPlayer.position() - target) > 80)
+    if (force || std::abs(m_cameraPlayer.position() - target) > 250)
         m_cameraPlayer.setPosition(target);
     if (m_player.playbackState() == QMediaPlayer::PlayingState
         && !mapped.beforeStart && !mapped.beyondEnd)
-        m_cameraPlayer.play();
+        if (m_cameraPlayer.playbackState() != QMediaPlayer::PlayingState) m_cameraPlayer.play();
     else
-        m_cameraPlayer.pause();
+        if (m_cameraPlayer.playbackState() != QMediaPlayer::PausedState) m_cameraPlayer.pause();
 }
 
 void Editor::updatePreview() { emit compositionChanged(); }
+
+void Editor::handlePreviewStats()
+{
+    const qint64 elapsed = m_previewStatsClock.elapsed();
+    if (elapsed <= 0) return;
+    const double fps = m_previewStatsFrames * 1000.0 / elapsed;
+    const double averageMs = m_previewStatsFrames > 0
+        ? m_previewStatsCostNs / 1000000.0 / m_previewStatsFrames : 0.0;
+    const int expected = qRound(m_fps * elapsed / 1000.0);
+    const int drops = std::max(0, expected - m_previewStatsFrames);
+    QTextStream(stderr) << QStringLiteral("preview fps=%1 average_frame_cost_ms=%2 drops=%3\n")
+        .arg(fps, 0, 'f', 1).arg(averageMs, 0, 'f', 3).arg(drops);
+    m_previewStatsFrames = 0;
+    m_previewStatsCostNs = 0;
+    m_previewStatsClock.restart();
+}
 
 bool Editor::splitAtPlayhead()
 {

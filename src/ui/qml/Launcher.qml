@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Controls.impl
 import QtQuick.Dialogs
 import QtQuick.Layouts
+import QtQuick.Effects
 import QtMultimedia
 import Omarecord.Ui
 
@@ -20,7 +21,7 @@ ApplicationWindow {
     font.family: theme.fontFamily
     font.pixelSize: theme.font.body
 
-    readonly property int desiredHeight: launcher.webcam && !showingRecording ? 580 : 460
+    readonly property int desiredHeight: launcher.webcam && !showingRecording ? 596 : 460
     readonly property string iconRoot: "qrc:/omarecord/assets/icons/" + "luc" + "ide/"
     readonly property bool cameraQuarterTurn: launcher.webcamRotation === 90
                                                || launcher.webcamRotation === 270
@@ -185,44 +186,67 @@ ApplicationWindow {
 
         Item {
             Layout.fillWidth: true
-            Layout.preferredHeight: 132
+            Layout.preferredHeight: 168
 
             Button {
                 id: recordControl
                 visible: !window.showingRecording
                 anchors.centerIn: parent
-                width: 236; height: 132
+                width: 236; height: 168
                 hoverEnabled: true
                 Accessible.name: "Record"
                 onClicked: window.beginRecording()
                 background: Item {}
+                HoverHandler { cursorShape: Qt.PointingHandCursor }
                 contentItem: ColumnLayout {
-                    spacing: 4
-                    Rectangle {
+                    spacing: 8
+                    Item {
                         Layout.alignment: Qt.AlignHCenter
-                        width: 72; height: 72; radius: 36
-                        color: recordControl.down ? Qt.darker(theme.record, 1.12) : theme.record
-                        scale: recordControl.hovered ? 1.04 : 1
+                        width: 72; height: 72
+                        scale: recordControl.down ? .96 : 1
+                        y: recordControl.hovered && !recordControl.down ? -2 : 0
                         Behavior on scale { NumberAnimation { duration: 120 } }
+                        Behavior on y { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
                         Rectangle {
-                            anchors.centerIn: parent
-                            width: 48; height: 48; radius: 24
+                            anchors.fill: parent
+                            radius: 36
                             color: "transparent"
-                            border.width: 2
-                            border.color: Qt.rgba(1, 1, 1, .30)
+                            border.width: 3
+                            border.color: Qt.alpha(theme.record, recordControl.hovered ? .70 : .35)
+                            Behavior on border.color { ColorAnimation { duration: 120 } }
                         }
                         Rectangle {
+                            id: recordDisc
                             anchors.centerIn: parent
-                            width: 26; height: 26; radius: 13
-                            color: "white"
+                            width: 64; height: 64; radius: 32
+                            color: recordControl.down ? Qt.darker(theme.record, 1.08) : theme.record
+                            layer.enabled: recordControl.hovered && !recordControl.down
+                            layer.effect: MultiEffect {
+                                shadowEnabled: true
+                                shadowColor: Qt.rgba(0, 0, 0, .30)
+                                shadowOpacity: .30
+                                shadowBlur: .25
+                                blurMax: 32
+                                shadowVerticalOffset: 2
+                                autoPaddingEnabled: true
+                            }
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 22; height: 22; radius: 11
+                                color: "white"
+                            }
                         }
                     }
-                    Label {
+                    OmButton {
                         Layout.alignment: Qt.AlignHCenter
+                        Layout.preferredWidth: 160
+                        Layout.preferredHeight: 36
+                        width: 160; height: 36
                         text: "Record"
-                        color: theme.foreground
-                        font.pixelSize: theme.font.title
-                        font.bold: true
+                        primary: true
+                        leadingDot: true
+                        trailingIconSource: ""
+                        onClicked: window.beginRecording()
                     }
                     RowLayout {
                         Layout.alignment: Qt.AlignHCenter
@@ -303,62 +327,67 @@ ApplicationWindow {
 
         Item {
             Layout.fillWidth: true
-            Layout.preferredHeight: launcher.webcam && !window.showingRecording ? 120 : 0
+            Layout.preferredHeight: launcher.webcam && !window.showingRecording ? 136 : 0
             opacity: launcher.webcam && !window.showingRecording ? 1 : 0
             clip: true
             Behavior on Layout.preferredHeight { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
             Behavior on opacity { NumberAnimation { duration: 120 } }
 
-            Rectangle {
+            ColumnLayout {
                 anchors.horizontalCenter: parent.horizontalCenter
-                y: 0
-                width: 96; height: 96; radius: 48
-                color: theme.normalFill
-                border.width: 2; border.color: theme.normalBorder
-                clip: true
-                VideoOutput {
-                    id: cameraSource
-                    anchors.centerIn: parent
-                    width: window.cameraQuarterTurn ? parent.height : parent.width
-                    height: window.cameraQuarterTurn ? parent.width : parent.height
-                    fillMode: VideoOutput.PreserveAspectCrop
-                    rotation: launcher.webcamRotation
-                    transform: Scale {
-                        origin.x: cameraSource.width / 2
-                        origin.y: cameraSource.height / 2
-                        xScale: launcher.webcamFlipHorizontal ? -1 : 1
+                spacing: 0
+                Rectangle {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.preferredWidth: 96; Layout.preferredHeight: 96
+                    radius: 48
+                    color: theme.normalFill
+                    border.width: 2; border.color: theme.normalBorder
+                    clip: true
+                    VideoOutput {
+                        id: cameraSource
+                        anchors.centerIn: parent
+                        width: window.cameraQuarterTurn ? parent.height : parent.width
+                        height: window.cameraQuarterTurn ? parent.width : parent.height
+                        fillMode: VideoOutput.PreserveAspectCrop
+                        rotation: launcher.webcamRotation
+                        transform: Scale {
+                            origin.x: cameraSource.width / 2
+                            origin.y: cameraSource.height / 2
+                            xScale: launcher.webcamFlipHorizontal ? -1 : 1
+                        }
+                    }
+                    IconImage {
+                        visible: !launcher.webcamPreviewAvailable
+                        anchors.centerIn: parent
+                        width: 24; height: 24
+                        source: window.iconRoot + "video.svg"
+                        sourceSize: Qt.size(24, 24)
+                        color: theme.textFaint
                     }
                 }
-                IconImage {
-                    visible: !launcher.webcamPreviewAvailable
-                    anchors.centerIn: parent
-                    width: 24; height: 24
-                    source: window.iconRoot + "video.svg"
-                    sourceSize: Qt.size(24, 24)
-                    color: theme.textFaint
+                Item { Layout.preferredHeight: 8 }
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 8
+                    OmIconButton {
+                        width: 28; height: 28
+                        bordered: true
+                        icon.source: window.iconRoot + "rotate-cw.svg"
+                        icon.color: theme.foreground
+                        tooltipText: "Rotate camera"
+                        onClicked: launcher.webcamRotation = (launcher.webcamRotation + 90) % 360
+                    }
+                    OmIconButton {
+                        width: 28; height: 28
+                        bordered: true
+                        selected: launcher.webcamFlipHorizontal
+                        icon.source: window.iconRoot + "flip-horizontal-2.svg"
+                        icon.color: theme.foreground
+                        tooltipText: "Flip camera"
+                        onClicked: launcher.webcamFlipHorizontal = !launcher.webcamFlipHorizontal
+                    }
                 }
-            }
-            RowLayout {
-                anchors.horizontalCenter: parent.horizontalCenter
-                y: 92
-                spacing: 8
-                OmIconButton {
-                    width: 28; height: 28
-                    bordered: true
-                    icon.source: window.iconRoot + "rotate-cw.svg"
-                    icon.color: theme.foreground
-                    tooltipText: "Rotate camera"
-                    onClicked: launcher.webcamRotation = (launcher.webcamRotation + 90) % 360
-                }
-                OmIconButton {
-                    width: 28; height: 28
-                    bordered: true
-                    selected: launcher.webcamFlipHorizontal
-                    icon.source: window.iconRoot + "flip-horizontal-2.svg"
-                    icon.color: theme.foreground
-                    tooltipText: "Flip camera"
-                    onClicked: launcher.webcamFlipHorizontal = !launcher.webcamFlipHorizontal
-                }
+                Item { Layout.preferredHeight: 4 }
             }
         }
 
@@ -462,7 +491,6 @@ ApplicationWindow {
             Label { text: "Defaults for new recordings"; color: theme.textMuted; font.pixelSize: theme.font.caption }
             Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: theme.hairline }
             OmToggle { Layout.fillWidth: true; text: "Show camera self-view"; checked: launcher.selfViewEnabled; onToggled: launcher.selfViewEnabled = checked }
-            OmToggle { Layout.fillWidth: true; text: "Hide self-view while recording"; checked: launcher.hideSelfViewViaPortal; onToggled: launcher.hideSelfViewViaPortal = checked }
             Label { text: "Self-view size"; color: theme.textMuted; font.pixelSize: theme.font.caption }
             OmButtonGroup {
                 Layout.fillWidth: true

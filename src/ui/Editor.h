@@ -10,6 +10,7 @@
 #include <QJsonObject>
 #include <QMediaPlayer>
 #include <QObject>
+#include <QPointer>
 #include <QTimer>
 #include <QSet>
 #include <QVariantList>
@@ -18,12 +19,12 @@
 
 class QVideoSink;
 class QAudioOutput;
+class QQuickWindow;
 
 namespace OmaRecord {
 
 class Exporter;
 class FrameSource;
-class PreviewSink;
 
 // QML receives a QVariantMap snapshot because style panels naturally address nested
 // JSON fields. All writes return through setProjectValue()/timeline methods, keeping
@@ -137,8 +138,8 @@ public:
     void setSelectedZoomIds(const QStringList &ids);
     void setPickingZoomTarget(bool value);
 
-    Q_INVOKABLE void attachFrameSource(QObject *source);
-    Q_INVOKABLE void attachCameraFrameSource(QObject *source);
+    Q_INVOKABLE void attachVideoOutput(QObject *output);
+    Q_INVOKABLE void attachCameraVideoOutput(QObject *output);
     Q_INVOKABLE void setProjectValue(const QString &path, const QVariant &value, bool coalesce = false);
     Q_INVOKABLE void applyGradientPreset(int index);
     Q_INVOKABLE void beginCoalescedEdit(const QString &key);
@@ -215,6 +216,8 @@ private:
     void applyMotionResult();
     void updatePreview();
     void handlePlayerPosition(qint64 milliseconds);
+    void handlePreviewStats();
+    void attachPreviewWindow(QQuickWindow *window);
     void syncCamera(double screenSourceTime, bool force = false);
     void startWaveformBuild();
     QString presetsDirectory() const;
@@ -245,15 +248,22 @@ private:
     QMediaPlayer m_player;
     QMediaPlayer m_cameraPlayer;
     std::unique_ptr<QAudioOutput> m_audioOutput;
-    std::unique_ptr<QVideoSink> m_videoSink;
-    std::unique_ptr<PreviewSink> m_previewSink;
-    std::unique_ptr<QVideoSink> m_cameraVideoSink;
-    std::unique_ptr<PreviewSink> m_cameraPreviewSink;
+    QPointer<QVideoSink> m_videoSink;
+    QPointer<QVideoSink> m_cameraVideoSink;
+    QPointer<QQuickWindow> m_previewWindow;
+    QMetaObject::Connection m_previewFrameConnection;
+    QMetaObject::Connection m_previewWindowConnection;
     double m_outputPosition = 0.0;
     int m_activeClip = 0;
     bool m_internalSeek = false;
     bool m_warmingPreview = false;
     bool m_warmingCameraPreview = false;
+    bool m_previewStatsEnabled = false;
+    int m_previewStatsFrames = 0;
+    qint64 m_previewStatsCostNs = 0;
+    QElapsedTimer m_previewStatsClock;
+    QTimer m_previewTimer;
+    QTimer m_previewStatsTimer;
     QTimer m_autosaveTimer;
     QTimer m_motionTimer;
     QVector<QJsonObject> m_undo;

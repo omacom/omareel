@@ -1,5 +1,6 @@
 #include "record/Recorder.h"
 #include "record/CameraCapture.h"
+#include "record/ScreenCapture.h"
 #include "core/RecordingPreferences.h"
 
 #include <QtTest>
@@ -102,6 +103,48 @@ private slots:
         QCOMPARE(camera.value(QStringLiteral("first_frame_us")).toVariant().toLongLong(), qint64(1234567));
         QCOMPARE(camera.value(QStringLiteral("rotation")).toInt(), 90);
         QVERIFY(camera.value(QStringLiteral("flipHorizontal")).toBool());
+    }
+
+    void captureRingTracksSlotsAndDrops()
+    {
+        CaptureRingBookkeeping ring(3);
+        const int first = ring.acquire();
+        const int second = ring.acquire();
+        const int third = ring.acquire();
+        QCOMPARE(first, 0);
+        QCOMPARE(second, 1);
+        QCOMPARE(third, 2);
+        QCOMPARE(ring.count(CaptureRingBookkeeping::State::Capturing), 3);
+        QCOMPARE(ring.acquire(), -1);
+        QCOMPARE(ring.drops(), 1);
+
+        QVERIFY(ring.markQueued(second));
+        QVERIFY(ring.markQueued(first));
+        QCOMPARE(ring.takeQueued(), second);
+        QCOMPARE(ring.takeQueued(), first);
+        QCOMPARE(ring.state(second), CaptureRingBookkeeping::State::Writing);
+        QVERIFY(ring.release(second));
+        QCOMPARE(ring.state(second), CaptureRingBookkeeping::State::Available);
+        QCOMPARE(ring.acquire(), second);
+        QVERIFY(!ring.markQueued(first + 8));
+    }
+
+    void captureRegionRowCropMath()
+    {
+        const QVector<CaptureRowCopy> rows = captureCropRows(
+            QSize(3840, 2160), 3840 * 4, QRect(320, 240, 1280, 960));
+        QCOMPARE(rows.size(), 960);
+        QCOMPARE(rows.first().sourceOffset, qsizetype(240 * 3840 * 4 + 320 * 4));
+        QCOMPARE(rows.first().destinationOffset, qsizetype(0));
+        QCOMPARE(rows.first().bytes, qsizetype(1280 * 4));
+        QCOMPARE(rows.last().sourceOffset, qsizetype((240 + 959) * 3840 * 4 + 320 * 4));
+        QCOMPARE(rows.last().destinationOffset, qsizetype(959 * 1280 * 4));
+
+        const QVector<CaptureRowCopy> full = captureCropRows(
+            QSize(3840, 2160), 3840 * 4, QRect(0, 0, 3840, 2160));
+        QCOMPARE(full.size(), 1);
+        QCOMPARE(full.first().sourceOffset, qsizetype(0));
+        QCOMPARE(full.first().bytes, qsizetype(3840) * 2160 * 4);
     }
 };
 
