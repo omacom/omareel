@@ -30,10 +30,16 @@ Button {
     icon.height: 14
     icon.color: destructive ? theme.record : theme.foreground
 
-    contentItem: RowLayout {
+    // Centre the icon+text cluster without spacer items: spacers add layout
+    // spacing to implicitWidth, which made grouped buttons overflow when squeezed.
+    contentItem: Item {
+        implicitWidth: contentRow.implicitWidth
+        implicitHeight: contentRow.implicitHeight
+        RowLayout {
         id: contentRow
+        anchors.centerIn: parent
+        width: Math.min(implicitWidth, parent.width)
         spacing: control.spacing
-        Item { Layout.fillWidth: true }
         Item {
             visible: control.icon.source.toString() !== ""
             Layout.preferredWidth: control.icon.width
@@ -53,6 +59,10 @@ Button {
                  : control.destructive ? theme.record
                  : theme.foreground
             font: control.font
+            elide: Text.ElideRight
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            Layout.fillWidth: true
             Layout.alignment: Qt.AlignVCenter
         }
         Item {
@@ -67,7 +77,7 @@ Button {
                 color: control.destructive ? theme.record : theme.foreground
             }
         }
-        Item { Layout.fillWidth: true }
+        }
     }
 
     background: Rectangle {
