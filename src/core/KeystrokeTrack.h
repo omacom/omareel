@@ -7,7 +7,7 @@
 #include <QStringList>
 #include <QVector>
 
-namespace OmaRecord {
+namespace Omareel {
 
 struct KeystrokePill {
     QStringList keys;
@@ -33,4 +33,4 @@ private:
     QVector<Group> m_groups;
 };
 
-} // namespace OmaRecord
+} // namespace Omareel

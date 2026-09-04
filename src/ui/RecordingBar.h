@@ -5,7 +5,7 @@
 #include <QTimer>
 #include <memory>
 
-namespace OmaRecord {
+namespace Omareel {
 
 class CameraCapture;
 
@@ -84,4 +84,4 @@ private:
     QTimer m_timer;
 };
 
-} // namespace OmaRecord
+} // namespace Omareel

@@ -2,7 +2,7 @@
 
 #include <QFileInfo>
 
-using namespace OmaRecord;
+using namespace Omareel;
 
 FfmpegDecoder::~FfmpegDecoder()
 {

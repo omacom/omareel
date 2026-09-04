@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
-import Omarecord.Ui
+import Omareel.Ui
 
 ColumnLayout {
     id: root
@@ -63,7 +63,7 @@ ColumnLayout {
         checked: root.background.type === "none"
         selected: checked
         text: "None"
-        icon.source: "qrc:/omarecord/assets/icons/lucide/x.svg"
+        icon.source: "qrc:/omareel/assets/icons/lucide/x.svg"
         onClicked: root.choose("none", "", null)
     }
 
@@ -111,7 +111,7 @@ ColumnLayout {
                 OmIconButton {
                     anchors.centerIn: parent
                     visible: wallpaperTile.picker
-                    icon.source: "qrc:/omarecord/assets/icons/lucide/plus.svg"
+                    icon.source: "qrc:/omareel/assets/icons/lucide/plus.svg"
                     icon.color: theme.foreground
                     tooltipText: "Pick file…"
                     Accessible.name: "Pick file"
@@ -139,7 +139,7 @@ ColumnLayout {
         bordered: true
         text: root.showAllWallpapers ? "Show less"
             : "Show more (" + root.hiddenWallpaperCount() + ")"
-        trailingIconSource: "qrc:/omarecord/assets/icons/lucide/chevron-down.svg"
+        trailingIconSource: "qrc:/omareel/assets/icons/lucide/chevron-down.svg"
         onClicked: root.showAllWallpapers = !root.showAllWallpapers
     }
 
@@ -196,7 +196,7 @@ ColumnLayout {
         bordered: true
         text: root.showAllGradients ? "Show less"
             : "Show more (" + (editor.gradients.length - 10) + ")"
-        trailingIconSource: "qrc:/omarecord/assets/icons/lucide/chevron-down.svg"
+        trailingIconSource: "qrc:/omareel/assets/icons/lucide/chevron-down.svg"
         onClicked: root.showAllGradients = !root.showAllGradients
     }
     PanelSlider {
@@ -240,7 +240,7 @@ ColumnLayout {
                 OmIconButton {
                     anchors.centerIn: parent
                     visible: colourTile.custom
-                    icon.source: "qrc:/omarecord/assets/icons/lucide/palette.svg"
+                    icon.source: "qrc:/omareel/assets/icons/lucide/palette.svg"
                     icon.color: theme.foreground
                     tooltipText: "Custom color"
                     Accessible.name: "Custom color"

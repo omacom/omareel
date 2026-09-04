@@ -2,7 +2,7 @@
 
 #include <QtTest>
 
-using namespace OmaRecord;
+using namespace Omareel;
 
 class CameraTimelineTest : public QObject
 {

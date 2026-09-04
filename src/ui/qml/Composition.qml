@@ -1,6 +1,6 @@
 import QtQuick
 import QtQuick.Effects
-import Omarecord
+import Omareel
 
 Item {
     id: composition

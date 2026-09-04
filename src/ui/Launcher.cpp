@@ -15,7 +15,7 @@
 #include <QUrl>
 #include <ctime>
 
-using namespace OmaRecord;
+using namespace Omareel;
 
 static qint64 monotonicUs()
 {
@@ -162,8 +162,8 @@ QVariant Launcher::webcamCameraDevice() const
 
 bool Launcher::webcamPreviewAvailable() const
 {
-    if (!qEnvironmentVariableIsEmpty("OMARECORD_SCREENSHOT")
-        && qEnvironmentVariableIsEmpty("OMARECORD_SCREENSHOT_LIVE")) return false;
+    if (!qEnvironmentVariableIsEmpty("OMAREEL_SCREENSHOT")
+        && qEnvironmentVariableIsEmpty("OMAREEL_SCREENSHOT_LIVE")) return false;
     return webcamCameraDevice().isValid();
 }
 
@@ -251,7 +251,10 @@ void Launcher::openBundle(const QString &pathValue)
 {
     const QUrl url(pathValue);
     const QString path = url.isLocalFile() ? url.toLocalFile() : pathValue;
-    if (!QFileInfo(path).isDir()) { emit errorOccurred(QStringLiteral("Choose an .omarecord bundle directory")); return; }
+    if (!QFileInfo(path).isDir()) {
+        emit errorOccurred(QStringLiteral("Choose an .omareel or legacy .omarecord bundle directory"));
+        return;
+    }
     if (!QProcess::startDetached(QCoreApplication::applicationFilePath(), {QStringLiteral("edit"), path})) {
         emit errorOccurred(QStringLiteral("Could not launch editor"));
         return;

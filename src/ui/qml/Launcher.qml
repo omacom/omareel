@@ -5,7 +5,7 @@ import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtQuick.Effects
 import QtMultimedia
-import Omarecord.Ui
+import Omareel.Ui
 
 ApplicationWindow {
     id: window
@@ -16,13 +16,13 @@ ApplicationWindow {
     maximumWidth: 380
     minimumHeight: desiredHeight - 40
     maximumHeight: desiredHeight
-    title: "omarecord"
+    title: "omareel"
     color: theme.surface
     font.family: theme.fontFamily
     font.pixelSize: theme.font.body
 
-    readonly property int desiredHeight: launcher.webcam && !showingRecording ? 596 : 460
-    readonly property string iconRoot: "qrc:/omarecord/assets/icons/" + "luc" + "ide/"
+    readonly property int desiredHeight: launcher.webcam && !showingRecording ? 580 : 460
+    readonly property string iconRoot: "qrc:/omareel/assets/icons/" + "luc" + "ide/"
     readonly property bool cameraQuarterTurn: launcher.webcamRotation === 90
                                                || launcher.webcamRotation === 270
     property bool screenshotRecording: false
@@ -90,14 +90,14 @@ ApplicationWindow {
                 Layout.preferredWidth: 14; Layout.preferredHeight: 14
                 source: window.iconRoot + row.iconFile
                 sourceSize: Qt.size(14, 14)
-                color: row.enabled ? theme.foreground : theme.textFaint
+                color: row.selected ? theme.foreground : theme.textMuted
             }
             Label {
                 Layout.fillWidth: true
                 text: row.text
-                color: row.enabled ? theme.foreground : theme.textFaint
+                color: row.selected ? theme.foreground : theme.textMuted
                 font.pixelSize: theme.font.bodySmall
-                font.weight: row.selected ? Font.DemiBold : Font.Normal
+                font.weight: Font.Normal
                 verticalAlignment: Text.AlignVCenter
             }
             Rectangle {
@@ -109,15 +109,15 @@ ApplicationWindow {
                 Layout.preferredWidth: 14; Layout.preferredHeight: 14
                 source: window.iconRoot + "chevron-down.svg"
                 sourceSize: Qt.size(14, 14)
-                color: row.enabled ? theme.foreground : theme.textFaint
+                color: row.selected ? theme.foreground : theme.textMuted
             }
         }
         background: Rectangle {
             radius: theme.radius
             color: row.down ? theme.pressedFill
                  : row.hovered || row.visualFocus ? theme.hoverFill : theme.normalFill
-            border.width: theme.controlBorderWidth(row.visualFocus, row.hovered, row.selected)
-            border.color: theme.controlBorder(row.visualFocus, row.hovered, row.selected)
+            border.width: 1
+            border.color: theme.normalBorder
         }
         MouseArea {
             visible: row.hasMenu
@@ -155,11 +155,20 @@ ApplicationWindow {
             Layout.minimumWidth: window.width - 48
             Layout.maximumWidth: window.width - 48
             Layout.preferredHeight: 44
-            ColumnLayout {
+            RowLayout {
                 Layout.fillWidth: true
-                spacing: 0
+                spacing: 8
+                IconImage {
+                    Layout.preferredWidth: 20; Layout.preferredHeight: 20
+                    source: "qrc:/omareel/assets/icons/reel.svg"
+                    sourceSize: Qt.size(20, 20)
+                    color: theme.foreground
+                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 0
                 Label {
-                    text: "omarecord"
+                    text: "omareel"
                     color: theme.foreground
                     font.pixelSize: theme.font.heading
                     font.weight: Font.DemiBold
@@ -170,6 +179,7 @@ ApplicationWindow {
                     font.pixelSize: theme.font.caption
                     font.bold: true
                     font.letterSpacing: 1.2
+                }
                 }
             }
             OmIconButton {
@@ -332,33 +342,36 @@ ApplicationWindow {
             ColumnLayout {
                 anchors.horizontalCenter: parent.horizontalCenter
                 spacing: 0
-                Rectangle {
+                Item {
                     Layout.alignment: Qt.AlignHCenter
-                    Layout.preferredWidth: 96; Layout.preferredHeight: 96
-                    radius: 48
-                    color: theme.normalFill
-                    border.width: 2; border.color: theme.normalBorder
-                    clip: true
-                    VideoOutput {
-                        id: cameraSource
+                    Layout.preferredWidth: 160; Layout.preferredHeight: 96
+                    Rectangle {
+                        visible: launcher.webcamPreviewAvailable
                         anchors.centerIn: parent
-                        width: window.cameraQuarterTurn ? parent.height : parent.width
-                        height: window.cameraQuarterTurn ? parent.width : parent.height
-                        fillMode: VideoOutput.PreserveAspectCrop
-                        rotation: launcher.webcamRotation
-                        transform: Scale {
-                            origin.x: cameraSource.width / 2
-                            origin.y: cameraSource.height / 2
-                            xScale: launcher.webcamFlipHorizontal ? -1 : 1
+                        width: 96; height: 96; radius: 48
+                        color: theme.normalFill
+                        border.width: 2; border.color: theme.normalBorder
+                        clip: true
+                        VideoOutput {
+                            id: cameraSource
+                            anchors.centerIn: parent
+                            width: window.cameraQuarterTurn ? parent.height : parent.width
+                            height: window.cameraQuarterTurn ? parent.width : parent.height
+                            fillMode: VideoOutput.PreserveAspectCrop
+                            rotation: launcher.webcamRotation
+                            transform: Scale {
+                                origin.x: cameraSource.width / 2
+                                origin.y: cameraSource.height / 2
+                                xScale: launcher.webcamFlipHorizontal ? -1 : 1
+                            }
                         }
                     }
-                    IconImage {
+                    Label {
                         visible: !launcher.webcamPreviewAvailable
                         anchors.centerIn: parent
-                        width: 24; height: 24
-                        source: window.iconRoot + "video.svg"
-                        sourceSize: Qt.size(24, 24)
-                        color: theme.textFaint
+                        text: "Starting camera…"
+                        color: theme.textMuted
+                        font.pixelSize: theme.font.caption
                     }
                 }
                 Item { Layout.preferredHeight: 8 }
@@ -389,7 +402,7 @@ ApplicationWindow {
 
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: 0
+            spacing: 6
             CaptureRow {
                 text: "System audio"; iconFile: "volume-2.svg"; selected: launcher.systemAudio
                 onClicked: launcher.systemAudio = !launcher.systemAudio
@@ -422,7 +435,7 @@ ApplicationWindow {
         Label {
             Layout.fillWidth: true
             Layout.preferredHeight: 20
-            text: "Recordings are saved to ~/Videos/omarecord"
+            text: "Recordings are saved to ~/Videos/omareel"
             color: folderMouse.containsMouse ? theme.foreground : theme.textMuted
             font.pixelSize: theme.font.caption
             horizontalAlignment: Text.AlignHCenter
@@ -523,7 +536,7 @@ ApplicationWindow {
 
     FolderDialog {
         id: folderDialog
-        title: "Open an omarecord bundle"
+        title: "Open an omareel bundle"
         onAccepted: launcher.openBundle(selectedFolder)
     }
 }

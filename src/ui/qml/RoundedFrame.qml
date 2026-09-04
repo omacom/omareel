@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Effects
 import QtMultimedia
-import Omarecord
+import Omareel
 
 Item {
     id: root

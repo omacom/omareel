@@ -7,7 +7,7 @@
 #include <QPainterPath>
 #include <algorithm>
 
-using namespace OmaRecord;
+using namespace Omareel;
 
 FrameSource::FrameSource(QQuickItem *parent): QQuickItem(parent)
 {

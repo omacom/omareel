@@ -15,7 +15,7 @@
 #include <functional>
 #include <QtTest>
 
-using namespace OmaRecord;
+using namespace Omareel;
 
 class EditorTest : public QObject
 {
@@ -29,7 +29,7 @@ private slots:
         QVERIFY(m_temporary.isValid());
         const QString fixture = QFINDTESTDATA("fixtures/synthetic");
         QVERIFY(!fixture.isEmpty());
-        m_bundle = m_temporary.filePath(QStringLiteral("editor.omarecord"));
+        m_bundle = m_temporary.filePath(QStringLiteral("editor.omareel"));
         QVERIFY(QDir().mkpath(m_bundle));
         QVERIFY(QFile::copy(QDir(fixture).filePath(QStringLiteral("capture.json")), QDir(m_bundle).filePath(QStringLiteral("capture.json"))));
         QVERIFY(QFile::copy(QDir(fixture).filePath(QStringLiteral("input.jsonl")), QDir(m_bundle).filePath(QStringLiteral("input.jsonl"))));
@@ -66,6 +66,19 @@ private slots:
         QCOMPARE(editor.outputToSource(1.2), 1.6);
         QCOMPARE(editor.sourceToOutput(1.6, 1), 1.2);
         QTRY_VERIFY_WITH_TIMEOUT(QFileInfo(QDir(m_bundle).filePath(QStringLiteral("project.json"))).size() > 0, 2000);
+    }
+
+    void opensLegacyBundleExtension()
+    {
+        const QString legacyBundle = m_temporary.filePath(QStringLiteral("legacy.omarecord"));
+        QVERIFY(QDir().mkpath(legacyBundle));
+        for (const QString &file : {QStringLiteral("capture.json"), QStringLiteral("input.jsonl"),
+                                    QStringLiteral("screen.mp4")})
+            QVERIFY(QFile::copy(QDir(m_bundle).filePath(file), QDir(legacyBundle).filePath(file)));
+
+        Editor editor(legacyBundle);
+        QVERIFY2(editor.isValid(), qPrintable(editor.errorString()));
+        QCOMPARE(editor.bundleName(), QStringLiteral("legacy"));
     }
 
     void zoomConstraints()
@@ -123,7 +136,7 @@ private slots:
         component.setData(R"(
             import QtQuick
             import QtQuick.Window
-            import Omarecord
+            import Omareel
             Window {
                 width: 284; height: 900; visible: true
                 BackgroundPanel { anchors.fill: parent }
@@ -186,7 +199,7 @@ private slots:
         component.setData(R"(
             import QtQuick
             import QtQuick.Window
-            import Omarecord
+            import Omareel
             Window {
                 width: 600; height: 80; visible: true
                 Item { id: focusItem; anchors.fill: parent }
@@ -237,7 +250,7 @@ private slots:
         component.setData(R"(
             import QtQuick
             import QtQuick.Window
-            import Omarecord
+            import Omareel
             Window {
                 width: 600; height: 80; visible: true
                 Item { id: focusItem; anchors.fill: parent }
@@ -267,7 +280,7 @@ private slots:
         QQmlComponent component(&engine);
         component.setData(R"(
             import QtQuick
-            import Omarecord
+            import Omareel
             CameraOverlay {
                 settings: ({
                     enabled: true, position: "bottom-right", size: .25,
@@ -301,7 +314,7 @@ private slots:
 
     void newProjectUsesCapturedCameraOrientation()
     {
-        const QString bundle = m_temporary.filePath(QStringLiteral("camera-default.omarecord"));
+        const QString bundle = m_temporary.filePath(QStringLiteral("camera-default.omareel"));
         QVERIFY(QDir().mkpath(bundle));
         QVERIFY(QFile::copy(QDir(m_bundle).filePath(QStringLiteral("screen.mp4")),
                             QDir(bundle).filePath(QStringLiteral("screen.mp4"))));

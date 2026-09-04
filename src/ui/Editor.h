@@ -21,7 +21,7 @@ class QVideoSink;
 class QAudioOutput;
 class QQuickWindow;
 
-namespace OmaRecord {
+namespace Omareel {
 
 class Exporter;
 class FrameSource;
@@ -300,4 +300,4 @@ private:
     QElapsedTimer m_exportTimer;
 };
 
-} // namespace OmaRecord
+} // namespace Omareel

@@ -1,4 +1,4 @@
-# omarecord — engineering spec
+# omareel — engineering spec
 
 A polished screen recorder + editor for Omarchy (Hyprland, Wayland, Arch).
 Records the screen **without** the cursor, records raw mouse/keyboard input separately, then
@@ -11,7 +11,7 @@ This document is the frozen contract. Implementation runs are scoped to it.
 
 - **Language/UI:** C++17, Qt 6.11 (Quick/QML, Controls Material dark, Multimedia, Effects,
   Svg). Same stack as omacut/omasnap so it feels native on Omarchy. Build with **CMake + Ninja**.
-  Single binary `omarecord` with subcommands.
+  Single binary `omareel` with subcommands.
 - **Capture:** prefer an in-process `ext-image-copy-capture-v1` output session when advertised.
   Create the session with options `0` so cursors are omitted, negotiate XRGB8888 shared memory,
   and rotate four buffers through capturing, queued, writing, and available states. A dedicated
@@ -43,29 +43,32 @@ This document is the frozen contract. Implementation runs are scoped to it.
 ## 1. CLI
 
 ```
-omarecord                       # open launcher (recent projects / open / record)
-omarecord record [opts]         # toggle: start if not recording, else stop
+omareel                       # open launcher (recent projects / open / record)
+omareel record [opts]         # toggle: start if not recording, else stop
     --fullscreen                # focused monitor
     --region                    # slurp pick (default: omarchy-capture-region smart if available, else slurp)
     --window                    # slurp with window rects (hyprctl clients) snapping
     --with-desktop-audio --with-microphone-audio
     --with-webcam [--webcam-device=/dev/videoN] --no-webcam
-    --fps N (default 60)  --dir PATH (default $XDG_VIDEOS_DIR/omarecord)
+    --fps N (default 60)  --dir PATH (default $XDG_VIDEOS_DIR/omareel)
     --no-open                   # don't launch editor after stop
     --stop                      # only stop; exit 1 if not recording
-omarecord edit <bundle.omarecord>
-omarecord export <bundle> -o out.mp4|out.gif [--preset ...] [--fps] [--width] [--quality]
-omarecord probe <bundle>        # print json summary (duration, samples, clicks, zooms)
+omareel edit <bundle.omareel>
+omareel export <bundle> -o out.mp4|out.gif [--preset ...] [--fps] [--width] [--quality]
+omareel probe <bundle>        # print json summary (duration, samples, clicks, zooms)
 ```
 
+Compatibility is intentionally narrow: the legacy command remains an alias, first-run settings
+are copied from the legacy config directory, and legacy bundle directories remain readable.
+
 `record` is designed to be bound to a Hyprland key (toggle semantics, like
-`omarchy-capture-screenrecording`). Recording state file: `$XDG_RUNTIME_DIR/omarecord/recording.json`
+`omarchy-capture-screenrecording`). Recording state file: `$XDG_RUNTIME_DIR/omareel/recording.json`
 (pid, bundle path, started_us). On stop: SIGINT gsr, wait ≤5 s, finalize, write bundle,
-notify via `omarchy-notification-send "Recording saved" --exec omarecord edit <bundle>` when
-available, and (unless `--no-open`) spawn `omarecord edit <bundle>` detached.
+notify via `omarchy-notification-send "Recording saved" --exec omareel edit <bundle>` when
+available, and (unless `--no-open`) spawn `omareel edit <bundle>` detached.
 Also call `omarchy-shell -q omarchy.indicators refresh` if present (it watches gsr pid).
 
-## 2. Bundle format (`Name.omarecord/` directory)
+## 2. Bundle format (`Name.omareel/` directory)
 
 ```
 screen.mp4          raw capture (no cursor), cfr
@@ -219,13 +222,13 @@ Exporter pipeline (`render/Exporter`):
 - Encode GIF: two-pass palette: write frames to a temp raw file, then
   `ffmpeg -i raw -vf "fps,scale,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" -loop 0 out.gif`.
 - Progress callbacks (frames done/total), cancel support.
-- Headless `omarecord export` must work with `QT_QPA_PLATFORM=offscreen` fallback if no Wayland.
+- Headless `omareel export` must work with `QT_QPA_PLATFORM=offscreen` fallback if no Wayland.
 
 ## 5. Editor UI (matches the the reference app layout in the reference screenshot)
 
 - Window: dark, `Material.accent` = Omarchy accent. Min 1100×700.
 - **Top bar:** project name (editable), undo/redo, "Presets" (save/load style presets to
-  `~/.config/omarecord/presets/*.json`), **Export** button (accent).
+  `~/.config/omareel/presets/*.json`), **Export** button (accent).
 - **Center:** preview canvas (Composition, letterboxed, keeps output aspect).
 - **Right panel:** icon rail + panel. Sections: Background (Wallpaper | Gradient | Color |
   Image tabs, blur slider), Shape (padding, roundness, shadow, inset), Cursor (visible, size,
@@ -275,17 +278,17 @@ src/ui/     Editor.{h,cpp} QObject facade exposed to QML (project, playback, tim
 assets/     cursors/arrow.svg, icons (Lucide-style inline SVG), gradients.json
 tests/      QtTest: test_zoomtimeline, test_cursorpath, test_cliptimeline, test_project,
             test_inputlog (fixtures in tests/fixtures)
-pkg/        PKGBUILD, omarecord.desktop, omarecord.svg, install-omarchy script
+pkg/        PKGBUILD, omareel.desktop, omareel.svg, install-omarchy script
 docs/
 ```
 
 ## 7. Definition of done per phase
 
 - **Phase 1 (core + recorder):** `cmake -B build -G Ninja && ninja -C build && ctest` green.
-  `omarecord record --fullscreen` then `omarecord record` again produces a bundle with
+  `omareel record --fullscreen` then `omareel record` again produces a bundle with
   screen.mp4 (no cursor visible), capture.json, input.jsonl containing move + click samples in
-  video px coords; `omarecord probe` prints counts and generated zoom count.
-- **Phase 2 (renderer + export):** `omarecord export bundle -o out.mp4` renders padding,
+  video px coords; `omareel probe` prints counts and generated zoom count.
+- **Phase 2 (renderer + export):** `omareel export bundle -o out.mp4` renders padding,
   rounded frame, shadow, wallpaper background, smooth cursor, ripple, animated auto-zooms.
   `-o out.gif` works. Export of a 10 s 1080p60 clip finishes in < 30 s on NVENC.
 - **Phase 3 (editor):** full UI above, trim/split, zoom editing, preview parity with export.

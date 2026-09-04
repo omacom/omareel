@@ -3,7 +3,7 @@
 #include "InputLog.h"
 #include "Project.h"
 
-namespace OmaRecord {
+namespace Omareel {
 
 struct MotionSample {
     double zoomScale = 1.0;
@@ -37,4 +37,4 @@ private:
     QVector<Click> m_clicks;
 };
 
-} // namespace OmaRecord
+} // namespace Omareel

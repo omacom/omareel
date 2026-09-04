@@ -7,7 +7,7 @@
 #include <QTemporaryDir>
 #include <limits>
 
-using namespace OmaRecord;
+using namespace Omareel;
 
 class RecorderTest : public QObject
 {
@@ -75,6 +75,25 @@ private slots:
         QVERIFY(loaded.webcamFlipHorizontal);
     }
 
+    void migratesLegacyRecordingPreferencesByCopy()
+    {
+        QTemporaryDir config;
+        QVERIFY(config.isValid());
+        qputenv("XDG_CONFIG_HOME", config.path().toUtf8());
+        const QString legacyPath = config.filePath(QStringLiteral("omarecord/settings.json"));
+        QVERIFY(QDir().mkpath(QFileInfo(legacyPath).absolutePath()));
+        QFile legacy(legacyPath);
+        QVERIFY(legacy.open(QIODevice::WriteOnly));
+        legacy.write("{\"systemAudio\":false,\"microphone\":false}");
+        legacy.close();
+
+        const RecordingPreferences loaded = RecordingPreferences::load();
+        QVERIFY(!loaded.systemAudio);
+        QVERIFY(!loaded.microphone);
+        QVERIFY(QFileInfo::exists(legacyPath));
+        QVERIFY(QFileInfo::exists(config.filePath(QStringLiteral("omareel/settings.json"))));
+    }
+
     void firstCameraFrameWritesTimestampOnce()
     {
         QTemporaryDir directory;
@@ -103,6 +122,37 @@ private slots:
         QCOMPARE(camera.value(QStringLiteral("first_frame_us")).toVariant().toLongLong(), qint64(1234567));
         QCOMPARE(camera.value(QStringLiteral("rotation")).toInt(), 90);
         QVERIFY(camera.value(QStringLiteral("flipHorizontal")).toBool());
+    }
+
+    void discardTimelineNeverDrains()
+    {
+        QStringList calls;
+        int cameraWaitMs = -1;
+        const bool removed = Recorder::discardTimeline(Recorder::DiscardActions{
+            [&] { calls << QStringLiteral("abort-capture"); },
+            [&] { calls << QStringLiteral("kill-audio"); },
+            [&] { calls << QStringLiteral("request-camera-stop"); },
+            [&](int timeoutMs) {
+                cameraWaitMs = timeoutMs;
+                calls << QStringLiteral("wait-camera");
+            },
+            [&] {
+                calls << QStringLiteral("remove-bundle");
+                return true;
+            },
+            [&] { calls << QStringLiteral("remove-state"); }
+        });
+
+        QVERIFY(removed);
+        QCOMPARE(cameraWaitMs, 1000);
+        QCOMPARE(calls, QStringList({QStringLiteral("abort-capture"),
+                                    QStringLiteral("kill-audio"),
+                                    QStringLiteral("request-camera-stop"),
+                                    QStringLiteral("wait-camera"),
+                                    QStringLiteral("remove-bundle"),
+                                    QStringLiteral("remove-state")}));
+        QVERIFY(!calls.contains(QStringLiteral("drain-capture")));
+        QVERIFY(!calls.contains(QStringLiteral("mux-audio")));
     }
 
     void captureRingTracksSlotsAndDrops()

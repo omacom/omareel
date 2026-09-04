@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import Omarecord.Ui
+import Omareel.Ui
 
 Rectangle {
     id: root
@@ -58,7 +58,7 @@ Rectangle {
                 EditorButton {
                     Layout.preferredWidth: 76
                     text: "Crop"
-                    icon.source: "qrc:/omarecord/assets/icons/lucide/crop.svg"
+                    icon.source: "qrc:/omareel/assets/icons/lucide/crop.svg"
                     checkable: true
                     checked: root.cropMode
                     selected: checked
@@ -71,7 +71,7 @@ Rectangle {
             Layout.alignment: Qt.AlignHCenter
             spacing: 12
             IconToolButton {
-                icon.source: "qrc:/omarecord/assets/icons/lucide/skip-back.svg"
+                icon.source: "qrc:/omareel/assets/icons/lucide/skip-back.svg"
                 icon.width: 19
                 icon.height: 19
                 Accessible.name: "Go to start"
@@ -89,8 +89,8 @@ Rectangle {
                 bordered: true
                 active: true
                 icon.source: editor.playing
-                    ? "qrc:/omarecord/assets/icons/lucide/pause.svg"
-                    : "qrc:/omarecord/assets/icons/lucide/play.svg"
+                    ? "qrc:/omareel/assets/icons/lucide/pause.svg"
+                    : "qrc:/omareel/assets/icons/lucide/play.svg"
                 icon.width: 20
                 icon.height: 20
                 icon.color: theme.foreground
@@ -98,7 +98,7 @@ Rectangle {
                 onClicked: editor.playPause()
             }
             IconToolButton {
-                icon.source: "qrc:/omarecord/assets/icons/lucide/skip-forward.svg"
+                icon.source: "qrc:/omareel/assets/icons/lucide/skip-forward.svg"
                 icon.width: 19
                 icon.height: 19
                 Accessible.name: "Go to end"
@@ -106,7 +106,7 @@ Rectangle {
             }
             IconToolButton {
                 Layout.leftMargin: 4
-                icon.source: "qrc:/omarecord/assets/icons/lucide/scissors.svg"
+                icon.source: "qrc:/omareel/assets/icons/lucide/scissors.svg"
                 icon.width: 19
                 icon.height: 19
                 Accessible.name: "Split clip"
@@ -128,7 +128,7 @@ Rectangle {
                     Layout.preferredHeight: 20
                     width: 20
                     height: 20
-                    icon.source: "qrc:/omarecord/assets/icons/lucide/zoom-out.svg"
+                    icon.source: "qrc:/omareel/assets/icons/lucide/zoom-out.svg"
                     icon.width: 16
                     icon.height: 16
                     Accessible.name: "Zoom timeline out"
@@ -148,7 +148,7 @@ Rectangle {
                     Layout.preferredHeight: 20
                     width: 20
                     height: 20
-                    icon.source: "qrc:/omarecord/assets/icons/lucide/zoom-in.svg"
+                    icon.source: "qrc:/omareel/assets/icons/lucide/zoom-in.svg"
                     icon.width: 16
                     icon.height: 16
                     Accessible.name: "Zoom timeline in"

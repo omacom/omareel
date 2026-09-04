@@ -4,7 +4,7 @@
 #include <QStringList>
 #include <QVariantList>
 
-namespace OmaRecord::OmarchyPaths {
+namespace Omareel::OmarchyPaths {
 
 QString stateRoot();
 QStringList themeBackgrounds();
@@ -15,4 +15,4 @@ QString recordingsDirectory();
 QString wallpaperThumbnailPath(const QString &wallpaperPath);
 bool generateWallpaperThumbnail(const QString &wallpaperPath, const QString &thumbnailPath);
 
-} // namespace OmaRecord::OmarchyPaths
+} // namespace Omareel::OmarchyPaths

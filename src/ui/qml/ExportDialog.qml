@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
-import Omarecord.Ui
+import Omareel.Ui
 
 Dialog {
     id: root
@@ -87,7 +87,7 @@ Dialog {
             Item { Layout.fillWidth: true }
             IconToolButton {
                 enabled: !editor.exporting
-                icon.source: "qrc:/omarecord/assets/icons/lucide/x.svg"
+                icon.source: "qrc:/omareel/assets/icons/lucide/x.svg"
                 Accessible.name: "Close export"
                 onClicked: root.close()
             }
@@ -159,7 +159,7 @@ Dialog {
             Layout.fillWidth: true
             spacing: 7
             IconToolButton {
-                icon.source: "qrc:/omarecord/assets/icons/lucide/folder-open.svg"
+                icon.source: "qrc:/omareel/assets/icons/lucide/folder-open.svg"
                 Accessible.name: "Choose output path"
                 onClicked: outputDialog.open()
             }
@@ -214,7 +214,7 @@ Dialog {
         RowLayout {
             Layout.fillWidth: true
             visible: root.successPath.length > 0
-            EditorButton { text: "Open folder"; icon.source: "qrc:/omarecord/assets/icons/lucide/folder-open.svg"; onClicked: editor.openContainingFolder(root.successPath) }
+            EditorButton { text: "Open folder"; icon.source: "qrc:/omareel/assets/icons/lucide/folder-open.svg"; onClicked: editor.openContainingFolder(root.successPath) }
             EditorButton { text: "Copy path"; onClicked: editor.copyPath(root.successPath) }
             Item { Layout.fillWidth: true }
         }
@@ -232,7 +232,7 @@ Dialog {
                 Layout.preferredWidth: 112
                 primary: true
                 text: "Export"
-                icon.source: "qrc:/omarecord/assets/icons/lucide/download.svg"
+                icon.source: "qrc:/omareel/assets/icons/lucide/download.svg"
                 font.weight: Font.DemiBold
                 onClicked: editor.exportTo(root.outputPath, {
                     fps: root.fpsValue, height: root.heightValue, quality: root.qualityValue

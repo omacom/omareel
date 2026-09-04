@@ -3,7 +3,7 @@
 #include <QJsonObject>
 #include <QString>
 
-namespace OmaRecord {
+namespace Omareel {
 
 struct RecordingPreferences {
     bool systemAudio = true;
@@ -43,4 +43,4 @@ struct RecordingPreferences {
     bool save(QString *error = nullptr) const;
 };
 
-} // namespace OmaRecord
+} // namespace Omareel

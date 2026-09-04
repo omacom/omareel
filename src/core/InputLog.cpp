@@ -5,7 +5,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
-using namespace OmaRecord;
+using namespace Omareel;
 
 static InputKind kindFor(const QString &kind)
 {

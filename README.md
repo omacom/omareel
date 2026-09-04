@@ -1,6 +1,6 @@
-# omarecord
+# Omareel
 
-OmaRecord is a native screen recorder and editor for Omarchy and Hyprland. It captures the
+Omareel is a native screen recorder and editor for Omarchy and Hyprland. It captures the
 screen without the system cursor, records pointer and keyboard activity separately, and then
 renders a smooth synthetic cursor, click effects, rounded framing, backgrounds, and automatic
 cursor-following zooms. Finished projects export to MP4 or GIF.
@@ -18,7 +18,7 @@ cursor-following zooms. Finished projects export to MP4 or GIF.
 - Aspect presets, padding, rounded corners, inset borders, and configurable shadows.
 - Camera rotation, horizontal flip, independent shadow/border styling, and 720p/1080p capture.
 - Hardware-accelerated MP4 export with CPU fallback, plus GIF export.
-- Self-contained `.omarecord` project bundles that preserve the source and editor state.
+- Self-contained `.omareel` project bundles that preserve the source and editor state.
 
 ## Install
 
@@ -40,17 +40,17 @@ On Omarchy, the installer adds any missing runtime/build packages with `omarchy-
 
 ## Usage
 
-Run `omarecord` to open the launcher, or bind the smart recording toggle:
+Run `omareel` to open the launcher, or bind the smart recording toggle:
 
 ```lua
-o.bind("SUPER + ALT + R", "Record with omarecord", "omarecord record")
+o.bind("SUPER + ALT + R", "Record with omareel", "omareel record")
 ```
 
-The launcher's app id is `omarecord-launcher`. To keep its compact 380×460 window floating and
+The launcher's app id is `omareel`. To keep its compact 380×460 window floating and
 centred, add this optional Omarchy window rule:
 
 ```lua
-o.window("^omarecord-launcher$", { float = true, center = true, size = "380 460" })
+o.window("^omareel$", { float = true, center = true, size = "380 460" })
 ```
 
 The default command uses one gesture: drag to select an area, click a window to snap to it, or
@@ -58,19 +58,23 @@ click the desktop to record the whole screen. Explicit modes remain available fo
 keybinds. For focused-monitor capture:
 
 ```lua
-o.bind("SUPER + ALT + R", "Record with omarecord", "omarecord record --fullscreen")
+o.bind("SUPER + ALT + R", "Record with omareel", "omareel record --fullscreen")
 ```
 
 The same command stops an active recording, finalizes its bundle, and opens it in the editor.
 Useful commands include:
 
 ```sh
-omarecord record --region --with-desktop-audio
-omarecord edit ~/Videos/omarecord/Recording.omarecord
-omarecord export Recording.omarecord -o recording.mp4
-omarecord probe Recording.omarecord
-omarecord help
+omareel record --region --with-desktop-audio
+omareel edit ~/Videos/omareel/Recording.omareel
+omareel export Recording.omareel -o recording.mp4
+omareel probe Recording.omareel
+omareel help
 ```
+
+Existing installations can keep using the legacy `omarecord` command alias. On first run,
+settings are copied from `~/.config/omarecord/settings.json` when the new settings file does not
+exist, and existing `.omarecord` bundles remain editable in place.
 
 ### Stopping a recording
 
@@ -78,9 +82,9 @@ While recording, use any of these stop paths:
 
 - Click **Stop** on the recording bar.
 - Click the REC indicator in the Omarchy bar.
-- Run `omarecord record` or `omarecord record --stop` again. This is especially useful for a
+- Run `omareel record` or `omareel record --stop` again. This is especially useful for a
   keybind.
-- Run `omarecord record --cancel` to stop and permanently discard the recording bundle.
+- Run `omareel record --cancel` to stop and permanently discard the recording bundle.
 
 With two monitors, the recording bar appears at the top center of the monitor that is not being
 recorded, along with the camera self-view when webcam capture is enabled. Region and window
@@ -88,7 +92,7 @@ recordings place the self-view outside the captured rectangle when it fits. With
 monitor and a full-screen capture, launcher settings can use the one-time share picker so the
 self-view is omitted; otherwise a one-time warning explains that it will be visible. Pass
 `--no-selfview` to suppress only the camera bubble. Pass `--no-bar` or set
-`OMARECORD_NO_BAR=1` before starting if you do not want the bar to appear.
+`OMAREEL_NO_BAR=1` before starting if you do not want the bar to appear.
 
 ### Editor shortcuts
 
@@ -106,7 +110,7 @@ self-view is omitted; otherwise a one-time warning explains that it will be visi
 
 ## Bundle format
 
-An `.omarecord` bundle is a directory. `screen.mp4` is the cursor-free source recording;
+An `.omareel` bundle is a directory. `screen.mp4` is the cursor-free source recording;
 `screen.mp4.ts` anchors input timestamps to the first video frame; `capture.json` describes the
 region, scale, dimensions, frame rate, and audio; `input.jsonl` stores pointer, button, scroll,
 and key events; `project.json` contains non-destructive editor choices; and `thumb.jpg` is the
@@ -125,10 +129,10 @@ data when input devices cannot be opened.
 
 If `gpu-screen-recorder` fails, first try Omarchy's own screen recorder to confirm the GPU and
 capture backend work, then check that the selected monitor/region is valid. Run the toggle with
-debug logging enabled to append GSR stderr to `/tmp/omarecord.log`:
+debug logging enabled to append GSR stderr to `/tmp/omareel.log`:
 
 ```sh
-OMARECORD_DEBUG=1 omarecord record --region
+OMAREEL_DEBUG=1 omareel record --region
 ```
 
 Set the variable on the start invocation so the detached recorder inherits it. For the full CLI

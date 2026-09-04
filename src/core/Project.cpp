@@ -6,7 +6,7 @@
 #include <QSaveFile>
 #include <algorithm>
 
-using namespace OmaRecord;
+using namespace Omareel;
 
 static QColor parseColor(const QJsonValue &value, const QColor &fallback)
 {
@@ -14,24 +14,24 @@ static QColor parseColor(const QJsonValue &value, const QColor &fallback)
     return parsed.isValid() ? parsed : fallback;
 }
 
-QJsonObject OmaRecord::springToJson(const Spring &s)
+QJsonObject Omareel::springToJson(const Spring &s)
 {
     return {{"mass", s.mass}, {"stiffness", s.stiffness}, {"damping", s.damping}};
 }
 
-Spring OmaRecord::springFromJson(const QJsonObject &json, const Spring &fallback)
+Spring Omareel::springFromJson(const QJsonObject &json, const Spring &fallback)
 {
     return {json.value("mass").toDouble(fallback.mass),
             json.value("stiffness").toDouble(fallback.stiffness),
             json.value("damping").toDouble(fallback.damping)};
 }
 
-QVector<double> OmaRecord::allowedClipSpeeds()
+QVector<double> Omareel::allowedClipSpeeds()
 {
     return {0.5, 0.75, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 3.0, 4.0, 8.0, 16.0, 24.0};
 }
 
-QStringList OmaRecord::allowedAspects()
+QStringList Omareel::allowedAspects()
 {
     return {QStringLiteral("auto"), QStringLiteral("16:9"), QStringLiteral("1:1"),
             QStringLiteral("4:3"), QStringLiteral("9:16"), QStringLiteral("3:4"),

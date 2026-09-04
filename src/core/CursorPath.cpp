@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-using namespace OmaRecord;
+using namespace Omareel;
 
 QVector<CursorSample> CursorPath::decimate(const QVector<CursorSample> &raw, double fps,
                                            double minDistance)

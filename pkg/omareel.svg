@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Omareel">
+  <defs>
+    <linearGradient id="background" x1="84" y1="64" x2="430" y2="452" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2c2c2f"/>
+      <stop offset="1" stop-color="#161618"/>
+    </linearGradient>
+  </defs>
+  <rect x="24" y="24" width="464" height="464" rx="112" fill="url(#background)"/>
+  <path d="M294 300c41 31 104 19 119 60 9 25-9 53-42 47" fill="none" stroke="#ffd60a" stroke-width="30" stroke-linecap="round"/>
+  <circle cx="232" cy="222" r="142" fill="#e6e6ea"/>
+  <g fill="#161618">
+    <circle cx="232" cy="140" r="31"/>
+    <circle cx="310" cy="197" r="31"/>
+    <circle cx="280" cy="289" r="31"/>
+    <circle cx="184" cy="289" r="31"/>
+    <circle cx="154" cy="197" r="31"/>
+  </g>
+  <circle cx="232" cy="222" r="27" fill="#ff5a5f"/>
+</svg>

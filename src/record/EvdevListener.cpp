@@ -9,7 +9,7 @@
 #include <poll.h>
 #include <unistd.h>
 
-using namespace OmaRecord;
+using namespace Omareel;
 
 struct EvdevListener::Device {
     int fd = -1;

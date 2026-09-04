@@ -2,9 +2,9 @@
 
 #include <algorithm>
 
-using namespace OmaRecord;
+using namespace Omareel;
 
-CameraTime OmaRecord::mapCameraTime(double screenTime, double cameraOffset,
+CameraTime Omareel::mapCameraTime(double screenTime, double cameraOffset,
                                     double cameraDuration)
 {
     const double raw = screenTime - cameraOffset;

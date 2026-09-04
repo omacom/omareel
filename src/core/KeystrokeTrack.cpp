@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-using namespace OmaRecord;
+using namespace Omareel;
 
 namespace {
 

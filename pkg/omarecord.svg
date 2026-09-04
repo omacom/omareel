@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" color="#f4f4f5">
-  <rect x="13" y="20" width="102" height="76" rx="15" stroke="currentColor" stroke-width="9"/>
-  <path d="M51 45v48l12-11 9 22 12-5-9-21 17-1-41-32Z" fill="currentColor"/>
-  <circle cx="98" cy="38" r="10" fill="#ef4444"/>
-</svg>

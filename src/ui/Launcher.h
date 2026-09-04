@@ -5,7 +5,7 @@
 #include <QTimer>
 #include <QVariantList>
 
-namespace OmaRecord {
+namespace Omareel {
 
 class Launcher : public QObject
 {
@@ -97,4 +97,4 @@ private:
     bool m_startingRecording = false;
 };
 
-} // namespace OmaRecord
+} // namespace Omareel

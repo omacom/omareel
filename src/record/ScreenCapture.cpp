@@ -28,7 +28,7 @@
 #include <vector>
 #include <wayland-client.h>
 
-using namespace OmaRecord;
+using namespace Omareel;
 
 extern char **environ;
 
@@ -85,7 +85,7 @@ int CaptureRingBookkeeping::count(State state) const
     return int(std::count(m_states.cbegin(), m_states.cend(), state));
 }
 
-QVector<CaptureRowCopy> OmaRecord::captureCropRows(const QSize &sourceSize, int sourceStride,
+QVector<CaptureRowCopy> Omareel::captureCropRows(const QSize &sourceSize, int sourceStride,
                                                    const QRect &requestedCrop)
 {
     QVector<CaptureRowCopy> result;
@@ -516,7 +516,8 @@ bool ScreenCapture::Private::stopEncoder(bool drain, QString *error)
     QElapsedTimer wait;
     wait.start();
     pid_t result = 0;
-    while (wait.elapsed() < 15000) {
+    const int timeoutMs = drain ? 15000 : 1000;
+    while (wait.elapsed() < timeoutMs) {
         readEncoderError();
         result = waitpid(encoderPid, &status, WNOHANG);
         if (result == encoderPid || result < 0) break;
@@ -642,7 +643,7 @@ bool ScreenCapture::start(const ScreenCaptureConfig &config, QString *error)
     constexpr int slotCount = 4;
     d->slotBytes = qsizetype(d->stride) * d->height;
     d->memorySize = d->slotBytes * slotCount;
-    d->memoryFd = memfd_create("omarecord-capture", MFD_CLOEXEC);
+    d->memoryFd = memfd_create("omareel-capture", MFD_CLOEXEC);
     if (d->memoryFd < 0 || ftruncate(d->memoryFd, off_t(d->memorySize)) != 0) {
         if (error) *error = QString::fromLocal8Bit(std::strerror(errno));
         return false;
@@ -665,7 +666,7 @@ bool ScreenCapture::start(const ScreenCaptureConfig &config, QString *error)
     }
 
     const bool preferred = preferredEncoderAvailable();
-    const QString requestedConversion = qEnvironmentVariable("OMARECORD_NATIVE_CONVERSION").toLower();
+    const QString requestedConversion = qEnvironmentVariable("OMAREEL_NATIVE_CONVERSION").toLower();
     const bool useGpuConversion = preferred && requestedConversion != QLatin1String("cpu")
         && gpuConversionAvailable();
     d->conversion = useGpuConversion ? QStringLiteral("gpu") : QStringLiteral("cpu");
@@ -684,9 +685,9 @@ bool ScreenCapture::start(const ScreenCaptureConfig &config, QString *error)
     // generous ceiling scaled to the frame size, plus a 1-second GOP for clean seeking.
     const double megapixels = d->encodedSize.width() * double(d->encodedSize.height()) / 1e6;
     const int maxrateKbps = int(std::clamp(megapixels * 12000.0 * (d->config.fps / 60.0), 8000.0, 120000.0));
-    // Debug aid: OMARECORD_NATIVE_ENCODER=lossless stores the raw capture losslessly so capture
+    // Debug aid: OMAREEL_NATIVE_ENCODER=lossless stores the raw capture losslessly so capture
     // problems can be told apart from encoder artefacts.
-    const bool lossless = qEnvironmentVariable("OMARECORD_NATIVE_ENCODER") == QLatin1String("lossless");
+    const bool lossless = qEnvironmentVariable("OMAREEL_NATIVE_ENCODER") == QLatin1String("lossless");
     // Small captures (regions, windows) are cheap enough to store losslessly, and NVENC's lossy
     // modes smear high-contrast edges into visible macroblocks at these sizes. Larger frames use
     // a high-quality VBR tier instead.
@@ -835,6 +836,11 @@ bool ScreenCapture::finish(QString *error)
     }
     const bool encoded = d->stopEncoder(true, error);
     return encoded && d->firstUs > 0;
+}
+
+void ScreenCapture::abort()
+{
+    d->stopEncoder(false, nullptr);
 }
 
 qint64 ScreenCapture::firstFrameUs() const { return d->firstUs; }

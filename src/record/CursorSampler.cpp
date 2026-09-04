@@ -11,7 +11,7 @@
 #include <time.h>
 #include <unistd.h>
 
-using namespace OmaRecord;
+using namespace Omareel;
 
 CursorSampler::~CursorSampler() { stop(); }
 

@@ -44,9 +44,9 @@
 #include <mutex>
 #include <thread>
 
-using namespace OmaRecord;
+using namespace Omareel;
 
-QSize OmaRecord::paddedEvenSize(int width, int height)
+QSize Omareel::paddedEvenSize(int width, int height)
 {
     return {width + std::abs(width % 2), height + std::abs(height % 2)};
 }
@@ -383,7 +383,7 @@ bool Exporter::run(const ExportOptions &options, QString *error)
         {QStringLiteral("opacity"), project.cursor.visible ? 1.0 : 0.0}, {QStringLiteral("rotation"), 0.0}};
     QQmlEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("comp"), &state);
-    QQmlComponent component(&engine, QUrl(QStringLiteral("qrc:/qt/qml/Omarecord/Composition.qml")));
+    QQmlComponent component(&engine, QUrl(QStringLiteral("qrc:/qt/qml/Omareel/Composition.qml")));
     if (component.status() != QQmlComponent::Ready) {
         if (error) *error = component.errorString();
         return false;
@@ -400,10 +400,10 @@ bool Exporter::run(const ExportOptions &options, QString *error)
 
     QString runtime = qEnvironmentVariable("XDG_RUNTIME_DIR");
     if (runtime.isEmpty() || !QFileInfo(runtime).isWritable()) runtime = QDir::tempPath();
-    QTemporaryFile rawFile(QDir(runtime).filePath(QStringLiteral("omarecord-export-XXXXXX.rgba")));
-    QTemporaryFile clickFile(QDir(runtime).filePath(QStringLiteral("omarecord-click-XXXXXX.wav")));
+    QTemporaryFile rawFile(QDir(runtime).filePath(QStringLiteral("omareel-export-XXXXXX.rgba")));
+    QTemporaryFile clickFile(QDir(runtime).filePath(QStringLiteral("omareel-click-XXXXXX.wav")));
     QTemporaryFile encodedFile(QFileInfo(options.outputPath).absoluteDir().filePath(
-        QStringLiteral(".omarecord-export-XXXXXX.mp4")));
+        QStringLiteral(".omareel-export-XXXXXX.mp4")));
     QString encodedPath = options.outputPath;
     if (!gif) {
         if (!encodedFile.open()) { if (error) *error = encodedFile.errorString(); return false; }
@@ -430,7 +430,7 @@ bool Exporter::run(const ExportOptions &options, QString *error)
             encoderArgs << QStringLiteral("-i") << videoPath;
         }
         if (useClicks) {
-            QFile resource(QStringLiteral(":/omarecord/assets/sounds/click.wav"));
+            QFile resource(QStringLiteral(":/omareel/assets/sounds/click.wav"));
             if (!resource.open(QIODevice::ReadOnly) || !clickFile.open()) {
                 if (error) *error = QStringLiteral("Could not prepare the click sound");
                 return false;
@@ -458,7 +458,7 @@ bool Exporter::run(const ExportOptions &options, QString *error)
             encoderArgs << QStringLiteral("-vf") << QStringLiteral("vflip");
         const QString quality = normalizedQuality(options.quality.isEmpty() ? project.exportSettings.quality : options.quality);
         const qint64 bitrate = qint64(std::floor(width * double(height) * fps * bitrateMultiplier(quality)));
-        if (!qEnvironmentVariableIsSet("OMARECORD_DISABLE_NVENC") && nvencWorks()) {
+        if (!qEnvironmentVariableIsSet("OMAREEL_DISABLE_NVENC") && nvencWorks()) {
             encoderArgs << QStringLiteral("-c:v") << QStringLiteral("h264_nvenc")
                  << QStringLiteral("-preset") << QStringLiteral("p5")
                  << QStringLiteral("-b:v") << QString::number(bitrate)

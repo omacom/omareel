@@ -3,7 +3,7 @@
 #include <QJsonObject>
 #include <algorithm>
 
-using namespace OmaRecord;
+using namespace Omareel;
 
 QVector<ZoomSegment> ZoomTimeline::generate(const QVector<double> &clickDownTimes, double duration)
 {

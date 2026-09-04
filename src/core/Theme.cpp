@@ -13,7 +13,7 @@
 #include <QTimer>
 #include <QtMath>
 
-using namespace OmaRecord;
+using namespace Omareel;
 
 static QString configuredFontFamily;
 

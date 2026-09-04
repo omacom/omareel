@@ -1,5 +1,5 @@
 import QtQuick
-import Omarecord.Ui
+import Omareel.Ui
 
 OmIconButton {
     id: control

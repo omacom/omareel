@@ -1,3 +1,3 @@
-import Omarecord.Ui
+import Omareel.Ui
 
 OmSectionHeader { font.bold: false }

@@ -12,7 +12,7 @@ class QTimer;
 class QVideoFrame;
 class QVideoFrameInput;
 
-namespace OmaRecord {
+namespace Omareel {
 
 class FirstFrameTimestamp
 {
@@ -88,4 +88,4 @@ private:
     qint64 m_recordedFrameCount = 0;
 };
 
-} // namespace OmaRecord
+} // namespace Omareel

@@ -5,7 +5,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
-double OmaRecord::RecordingMetadata::captureDuration(const QString &bundlePath)
+double Omareel::RecordingMetadata::captureDuration(const QString &bundlePath)
 {
     QFile file(QDir(bundlePath).filePath(QStringLiteral("capture.json")));
     if (!file.open(QIODevice::ReadOnly)) return 0.0;

@@ -1,10 +1,10 @@
 # Feature parity
 
-This once-over compares omarecord with the documented feature sets of reference app A and
+This once-over compares omareel with the documented feature sets of reference app A and
 reference app B. “Done” means the editor exposes the feature and the shared preview/export
 composition supports it. “Partial” calls out a narrower implementation than either reference.
 
-| Feature | Status in omarecord (Done / Partial / Missing) | Notes/effort |
+| Feature | Status in omareel (Done / Partial / Missing) | Notes/effort |
 |---|---|---|
 | Automatic zooms from clicks | Done | Click grouping and generated zoom ranges are implemented in `src/core/ZoomTimeline.cpp`; spring evaluation is in `src/core/MotionTrack.cpp`. |
 | Show or hide cursor | Done | `cursor.visible` is persisted by `src/core/Project.cpp`, exposed in `src/ui/qml/CursorPanel.qml`, and respected by `CursorOverlay.qml`. |

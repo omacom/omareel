@@ -7,7 +7,7 @@
 #include <mutex>
 #include <thread>
 
-namespace OmaRecord {
+namespace Omareel {
 
 enum class DeviceEventKind { ButtonDown, ButtonUp, Scroll, KeyDown, KeyUp };
 
@@ -42,4 +42,4 @@ private:
     std::thread m_thread;
 };
 
-} // namespace OmaRecord
+} // namespace Omareel

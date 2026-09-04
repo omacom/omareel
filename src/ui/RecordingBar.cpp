@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <ctime>
 
-using namespace OmaRecord;
+using namespace Omareel;
 
 static qint64 barMonotonicUs()
 {
@@ -89,6 +89,11 @@ void RecordingBar::poll()
         return;
     }
     const QJsonObject state = Recorder::recordingState();
+    const bool requestedSelfView = state.value(QStringLiteral("selfview")).toBool(false);
+    if (requestedSelfView != m_selfViewVisible) {
+        m_selfViewVisible = requestedSelfView;
+        emit selfViewVisibilityChanged();
+    }
     if (m_cameraCapture && state.value(QStringLiteral("camera_record")).toBool(false)
         && !m_cameraRecordRequested) {
         m_cameraRecordRequested = true;

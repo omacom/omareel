@@ -2,7 +2,7 @@
 
 #include "Project.h"
 
-namespace OmaRecord {
+namespace Omareel {
 
 class ClipTimeline
 {
@@ -21,4 +21,4 @@ private:
     int m_nextId = 1;
 };
 
-} // namespace OmaRecord
+} // namespace Omareel

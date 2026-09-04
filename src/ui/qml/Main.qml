@@ -12,7 +12,7 @@ ApplicationWindow {
     font.family: theme.fontFamily
     font.pixelSize: theme.font.body
     color: theme.surface
-    title: editor.bundleName + " — omarecord"
+    title: editor.bundleName + " — omareel"
     property real timelineScale: 1
     property bool cropMode: false
     readonly property bool singleKeyShortcutsBlocked: activeFocusItem !== null

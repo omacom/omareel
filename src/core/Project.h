@@ -8,7 +8,7 @@
 #include <QStringList>
 #include <QVector>
 
-namespace OmaRecord {
+namespace Omareel {
 
 struct Spring { double mass = 1.0; double stiffness = 100.0; double damping = 20.0; };
 struct GradientStop { QColor color; double position = 0.0; };
@@ -128,4 +128,4 @@ Spring springFromJson(const QJsonObject &json, const Spring &defaults);
 QVector<double> allowedClipSpeeds();
 QStringList allowedAspects();
 
-} // namespace OmaRecord
+} // namespace Omareel

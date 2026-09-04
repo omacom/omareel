@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
-import Omarecord.Ui
+import Omareel.Ui
 
 ColumnLayout {
     id: root
@@ -84,7 +84,7 @@ ColumnLayout {
             PanelLabel { text: "Rotation"; Layout.fillWidth: true }
             OmIconButton {
                 enabled: false; opacity: 1; background: null
-                icon.source: "qrc:/omarecord/assets/icons/lucide/rotate-cw.svg"
+                icon.source: "qrc:/omareel/assets/icons/lucide/rotate-cw.svg"
                 icon.color: theme.foreground
                 icon.width: 15; icon.height: 15
             }

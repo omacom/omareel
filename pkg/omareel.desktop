@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Omareel
+Comment=Screen recordings that look great
+Exec=omareel
+Icon=omareel
+Terminal=false
+Categories=AudioVideo;Recorder;
+StartupNotify=true
+StartupWMClass=omareel

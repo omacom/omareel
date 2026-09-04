@@ -20,7 +20,7 @@
 #include <ctime>
 #include <limits>
 
-using namespace OmaRecord;
+using namespace Omareel;
 
 namespace {
 

@@ -4,8 +4,9 @@
 
 #include <QJsonObject>
 #include <QString>
+#include <functional>
 
-namespace OmaRecord {
+namespace Omareel {
 
 struct RecordOptions {
     CaptureMode mode = CaptureMode::Region;
@@ -29,6 +30,14 @@ struct RecordOptions {
 class Recorder
 {
 public:
+    struct DiscardActions {
+        std::function<void()> abortCapture;
+        std::function<void()> killAudio;
+        std::function<void()> requestCameraStop;
+        std::function<void(int)> waitForCameraStop;
+        std::function<bool()> removeBundle;
+        std::function<void()> removeState;
+    };
     enum class GsrExitClassification { UserStop, ExternalStop, Failure };
 
     static QString stateFilePath();
@@ -45,9 +54,10 @@ public:
                                           int width, int height, double fps,
                                           qint64 firstFrameUs, const QString &backend,
                                           int rotation, bool flipHorizontal);
+    static bool discardTimeline(const DiscardActions &actions);
     static int startDetached(const RecordOptions &options, QString *message);
     static int stopExisting(bool cancel, QString *bundlePath, QString *error);
     static int daemonMain(const QStringList &arguments);
 };
 
-} // namespace OmaRecord
+} // namespace Omareel

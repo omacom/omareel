@@ -6,7 +6,7 @@
 #include <QVector>
 #include <memory>
 
-namespace OmaRecord {
+namespace Omareel {
 
 struct ScreenCaptureConfig {
     QString monitor;
@@ -56,6 +56,7 @@ public:
     bool start(const ScreenCaptureConfig &config, QString *error = nullptr);
     bool captureFrame(QString *error = nullptr);
     bool finish(QString *error = nullptr);
+    void abort();
     qint64 firstFrameUs() const;
     qint64 lastFrameUs() const;
     QSize outputSize() const;
@@ -68,4 +69,4 @@ private:
     std::unique_ptr<Private> d;
 };
 
-} // namespace OmaRecord
+} // namespace Omareel

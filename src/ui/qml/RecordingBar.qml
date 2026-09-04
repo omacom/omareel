@@ -1,9 +1,10 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.impl
 import QtQuick.Layouts
 import QtQuick.Effects
 import QtMultimedia
-import Omarecord.Ui
+import Omareel.Ui
 
 ApplicationWindow {
     id: barWindow
@@ -26,8 +27,10 @@ ApplicationWindow {
             anchors.rightMargin: 7
             spacing: 7
 
-            Rectangle {
-                width: 9; height: 9; radius: 5
+            IconImage {
+                Layout.preferredWidth: 18; Layout.preferredHeight: 18
+                source: "qrc:/omareel/assets/icons/reel.svg"
+                sourceSize: Qt.size(18, 18)
                 color: theme.record
                 SequentialAnimation on opacity {
                     loops: Animation.Infinite
@@ -49,7 +52,7 @@ ApplicationWindow {
                 visible: recordingBar.webcam
                 Layout.preferredWidth: 24; Layout.preferredHeight: 24
                 focusPolicy: Qt.NoFocus
-                icon.source: "qrc:/omarecord/assets/icons/lucide/rotate-cw.svg"
+                icon.source: "qrc:/omareel/assets/icons/lucide/rotate-cw.svg"
                 icon.color: theme.foreground
                 icon.width: 15; icon.height: 15
                 onClicked: recordingBar.rotateCamera()
@@ -60,7 +63,7 @@ ApplicationWindow {
                 visible: recordingBar.webcam
                 Layout.preferredWidth: 24; Layout.preferredHeight: 24
                 focusPolicy: Qt.NoFocus
-                icon.source: "qrc:/omarecord/assets/icons/lucide/flip-horizontal-2.svg"
+                icon.source: "qrc:/omareel/assets/icons/lucide/flip-horizontal-2.svg"
                 icon.color: theme.foreground
                 icon.width: 15; icon.height: 15
                 selected: recordingBar.cameraFlipHorizontal
@@ -121,7 +124,11 @@ ApplicationWindow {
         flags: Qt.FramelessWindowHint | Qt.Tool
 
         Item {
+            id: selfViewContent
             anchors.fill: parent
+            opacity: recordingBar.selfViewVisible ? 1 : 0
+            enabled: recordingBar.selfViewVisible
+            Behavior on opacity { NumberAnimation { duration: 100 } }
 
             VideoOutput {
                 id: cameraOutput

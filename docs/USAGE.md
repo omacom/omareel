@@ -1,24 +1,24 @@
-# omarecord(1)
+# omareel(1)
 
 ## Name
 
-`omarecord` — record and edit polished Omarchy screen videos.
+`omareel` — record and edit polished Omarchy screen videos.
 
 ## Synopsis
 
 ```text
-omarecord
-omarecord record [--region|--fullscreen|--window] [options]
-omarecord edit BUNDLE.omarecord
-omarecord export BUNDLE.omarecord -o OUTPUT.mp4|OUTPUT.gif [options]
-omarecord probe BUNDLE.omarecord
-omarecord help
-omarecord --version
+omareel
+omareel record [--region|--fullscreen|--window] [options]
+omareel edit BUNDLE.omareel
+omareel export BUNDLE.omareel -o OUTPUT.mp4|OUTPUT.gif [options]
+omareel probe BUNDLE.omareel
+omareel help
+omareel --version
 ```
 
 ## Description
 
-With no command, OmaRecord opens its launcher. `record` is a toggle: it starts a recording when
+With no command, Omareel opens its launcher. `record` is a toggle: it starts a recording when
 idle and stops the current recording when one is active. Capture omits the system cursor and
 stores raw input events beside the video so the editor and exporter can render cursor motion,
 clicks, and zooms non-destructively.
@@ -27,7 +27,7 @@ clicks, and zooms non-destructively.
 
 ### `record`
 
-With no capture mode, `omarecord record` uses one smart gesture: drag to select an area, click
+With no capture mode, `omareel record` uses one smart gesture: drag to select an area, click
 a window to snap to it, or click the desktop to record the whole screen. The explicit
 `--region`, `--window`, and `--fullscreen` modes remain available for dedicated keybinds. Only
 one mode may be supplied.
@@ -42,14 +42,14 @@ one mode may be supplied.
 - `--webcam-height 720|1080` sets webcam capture resolution; the saved launcher preference
   defaults to 1080p.
 - `--no-selfview` records the webcam without showing the live camera self-view.
-- `--dir PATH` changes the bundle directory; the default is the `omarecord` directory under
+- `--dir PATH` changes the bundle directory; the default is the `omareel` directory under
   the user's XDG Videos directory.
 - `--no-open` does not open the editor after the recording is finalized.
 - `--no-bar` does not show the recording bar.
 - `--stop` only stops; it returns status 1 when no recording is active.
 - `--cancel` stops and permanently discards the in-progress bundle.
 
-The shell's live REC indicator recognizes the fallback capture process. OmaRecord refreshes the
+The shell's live REC indicator recognizes the fallback capture process. Omareel refreshes the
 indicator on both start and stop and always maintains its own recording state. On installations
 where the indicator only checks that process name, it may remain off during in-process capture.
 A stop that cannot finalize sends a critical notification.
@@ -60,21 +60,21 @@ An active recording can be stopped in any of these ways:
 
 - Click **Stop** on the recording bar.
 - Click the REC indicator in the Omarchy bar.
-- Run `omarecord record` or `omarecord record --stop` again; the toggle form is intended for
+- Run `omareel record` or `omareel record --stop` again; the toggle form is intended for
   keybinds.
-- Run `omarecord record --cancel` to stop and discard the recording instead of saving it.
+- Run `omareel record --cancel` to stop and discard the recording instead of saving it.
 
 The recording bar is placed at the top center of the recorded monitor. In-process capture omits
-the bar from the video. Use `--no-bar` or set `OMARECORD_NO_BAR=1` to suppress it.
+the bar from the video. Use `--no-bar` or set `OMAREEL_NO_BAR=1` to suppress it.
 
 ## Launcher window
 
-The launcher opens at 380×460 and grows to 380×596 while its webcam preview is visible. Its
-Wayland app id is `omarecord-launcher`. This optional Omarchy rule keeps it floating, centred,
+The launcher opens at 380×460 and grows to 380×580 while its webcam preview is visible. Its
+Wayland app id is `omareel`. This optional Omarchy rule keeps it floating, centred,
 and at the intended default size:
 
 ```lua
-o.window("^omarecord-launcher$", { float = true, center = true, size = "380 460" })
+o.window("^omareel$", { float = true, center = true, size = "380 460" })
 ```
 
 ## Camera self-view
@@ -87,14 +87,19 @@ can hide or show the self-view while recording.
 
 The native backend is selected automatically when its display protocol is available. It uses four
 shared-memory capture slots and a bounded encoder queue, and crops regions on its writer thread.
-Set `OMARECORD_CAPTURE=native` to require this selection or `OMARECORD_CAPTURE=gsr` to force the
+Set `OMAREEL_CAPTURE=native` to require this selection or `OMAREEL_CAPTURE=gsr` to force the
 fallback backend for one invocation. The same values may be stored as `captureBackend` in the
 settings file. The fallback cannot omit overlays placed inside its capture area.
 
 ### `edit BUNDLE`
 
-Opens an `.omarecord` bundle. Changes autosave to `project.json` after 500 ms and may also be
+Opens an `.omareel` bundle. Changes autosave to `project.json` after 500 ms and may also be
 saved immediately with `Ctrl+S`.
+
+Legacy `.omarecord` bundles remain supported, including bundles under
+`~/Videos/omarecord`. The legacy command name is installed as a compatibility alias. If only
+legacy settings exist, they are copied to `~/.config/omareel/settings.json` on first run and the
+original file is retained.
 
 ### `export BUNDLE -o OUTPUT`
 
@@ -131,43 +136,43 @@ clip, style, cursor, and zoom edits are stored in `project.json`.
 
 ## Environment
 
-- `OMARECORD_DEBUG=1` appends `gpu-screen-recorder` stderr to `/tmp/omarecord.log`.
-- `OMARECORD_PREVIEW_STATS=1` plays an opened recording and logs preview frame rate, average
+- `OMAREEL_DEBUG=1` appends `gpu-screen-recorder` stderr to `/tmp/omareel.log`.
+- `OMAREEL_PREVIEW_STATS=1` plays an opened recording and logs preview frame rate, average
   frame handling cost, and drops once per second.
-- `OMARECORD_CAPTURE=gsr` forces the fallback screen capture backend.
-- `OMARECORD_CAPTURE=native` selects the native screen capture backend when supported.
-- `OMARECORD_NATIVE_CONVERSION=cpu` forces CPU colour conversion for native capture. By default,
+- `OMAREEL_CAPTURE=gsr` forces the fallback screen capture backend.
+- `OMAREEL_CAPTURE=native` selects the native screen capture backend when supported.
+- `OMAREEL_NATIVE_CONVERSION=cpu` forces CPU colour conversion for native capture. By default,
   the hardware conversion filter is exercised with a BGRA frame first and CPU conversion is used
   automatically when that exact conversion is unsupported.
-- `OMARECORD_NO_BAR=1` suppresses the recording bar.
-- `OMARECORD_SCREENSHOT=/path/out.png` makes `omarecord edit` capture its own window with
+- `OMAREEL_NO_BAR=1` suppresses the recording bar.
+- `OMAREEL_SCREENSHOT=/path/out.png` makes `omareel edit` capture its own window with
   `QQuickWindow::grabWindow()` three seconds after loading, save the PNG, and quit. The launcher
   supports the same capture flag.
-- `OMARECORD_SCREENSHOT_PANEL=background|shape|cursor|zoom|clip|camera|keystrokes|audio` selects an editor inspector
+- `OMAREEL_SCREENSHOT_PANEL=background|shape|cursor|zoom|clip|camera|keystrokes|audio` selects an editor inspector
   before the debug capture.
-- `OMARECORD_SCREENSHOT_SIZE=1440x900` sets the debug-capture window dimensions.
-- `OMARECORD_SCREENSHOT_SEEK=SECONDS` seeks the editor before capture
-  (`OMARECORD_SCREENSHOT_TIME` remains accepted for compatibility).
-- `OMARECORD_SCREENSHOT_PROJECT_VALUES=JSON` applies path/value pairs through the editor before
+- `OMAREEL_SCREENSHOT_SIZE=1440x900` sets the debug-capture window dimensions.
+- `OMAREEL_SCREENSHOT_SEEK=SECONDS` seeks the editor before capture
+  (`OMAREEL_SCREENSHOT_TIME` remains accepted for compatibility).
+- `OMAREEL_SCREENSHOT_PROJECT_VALUES=JSON` applies path/value pairs through the editor before
   capture, for example `{"camera.rotation":180}`.
-- `OMARECORD_SCREENSHOT_VIEW=export|aspect|background-expanded|background-gradient-3|background-gradient-7|rail-tooltip|camera-proof` opens a transient
+- `OMAREEL_SCREENSHOT_VIEW=export|aspect|background-expanded|background-gradient-3|background-gradient-7|rail-tooltip|camera-proof` opens a transient
   editor surface before capture.
 
 Example:
 
 ```sh
-OMARECORD_SCREENSHOT=/tmp/editor.png \
-OMARECORD_SCREENSHOT_PANEL=cursor \
-OMARECORD_SCREENSHOT_SIZE=1440x900 \
-omarecord edit Recording.omarecord
+OMAREEL_SCREENSHOT=/tmp/editor.png \
+OMAREEL_SCREENSHOT_PANEL=cursor \
+OMAREEL_SCREENSHOT_SIZE=1440x900 \
+omareel edit Recording.omareel
 ```
 
 ## Files
 
-- `${XDG_RUNTIME_DIR}/omarecord/recording.json` stores active recording state.
-- `${XDG_CONFIG_HOME}/omarecord/settings.json` stores launcher recording preferences.
-- `${XDG_VIDEOS_DIR}/omarecord/` is the default bundle location.
-- `/tmp/omarecord.log` is the opt-in recorder diagnostic log.
+- `${XDG_RUNTIME_DIR}/omareel/recording.json` stores active recording state.
+- `${XDG_CONFIG_HOME}/omareel/settings.json` stores launcher recording preferences.
+- `${XDG_VIDEOS_DIR}/omareel/` is the default bundle location.
+- `/tmp/omareel.log` is the opt-in recorder diagnostic log.
 
 ## Exit status
 

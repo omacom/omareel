@@ -11,7 +11,7 @@
 #include <QTimer>
 #include <QtTest>
 
-using namespace OmaRecord;
+using namespace Omareel;
 
 class ExporterSmokeTest : public QObject
 {
@@ -32,7 +32,7 @@ private slots:
         QVERIFY(temporary.isValid());
         const QString fixture = QFINDTESTDATA("fixtures/synthetic");
         QVERIFY(!fixture.isEmpty());
-        const QString bundle = temporary.filePath(QStringLiteral("synthetic.omarecord"));
+        const QString bundle = temporary.filePath(QStringLiteral("synthetic.omareel"));
         QVERIFY(QDir().mkpath(bundle));
         QVERIFY(QFile::copy(QDir(fixture).filePath(QStringLiteral("capture.json")), QDir(bundle).filePath(QStringLiteral("capture.json"))));
         QVERIFY(QFile::copy(QDir(fixture).filePath(QStringLiteral("input.jsonl")), QDir(bundle).filePath(QStringLiteral("input.jsonl"))));
@@ -203,7 +203,7 @@ private slots:
         QVERIFY(cancellationFailure.contains(QStringLiteral("cancelled"), Qt::CaseInsensitive));
         QVERIFY(sentinel.open(QIODevice::ReadOnly));
         QCOMPARE(sentinel.readAll(), QByteArray("keep"));
-        QCOMPARE(QDir(temporary.path()).entryList({QStringLiteral(".omarecord-export-*.mp4")},
+        QCOMPARE(QDir(temporary.path()).entryList({QStringLiteral(".omareel-export-*.mp4")},
                                                   QDir::Files), QStringList());
     }
 };

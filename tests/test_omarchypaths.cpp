@@ -9,7 +9,7 @@
 #include <QTemporaryDir>
 #include <QtTest>
 
-using namespace OmaRecord;
+using namespace Omareel;
 
 class OmarchyPathsTest : public QObject
 {
@@ -28,13 +28,13 @@ private slots:
             QVERIFY(file.open(QIODevice::WriteOnly));
             QVERIFY(file.write("image") > 0);
         }
-        qputenv("OMARECORD_OMARCHY_STATE_DIR", state.path().toUtf8());
+        qputenv("OMAREEL_OMARCHY_STATE_DIR", state.path().toUtf8());
         const QString link = state.filePath(QStringLiteral("background"));
         QVERIFY(QFile::link(current, link));
         QCOMPARE(OmarchyPaths::currentBackground(), current);
         QVERIFY(QFile::remove(link));
         QCOMPARE(OmarchyPaths::currentBackground(), first);
-        qunsetenv("OMARECORD_OMARCHY_STATE_DIR");
+        qunsetenv("OMAREEL_OMARCHY_STATE_DIR");
     }
 
     void themeDerivesShadesAndMode()
@@ -46,7 +46,7 @@ private slots:
         QVERIFY(colors.open(QIODevice::WriteOnly | QIODevice::Text));
         colors.write("background = \"#faf4ed\"\nforeground = \"#575279\"\naccent = \"#907aa9\"\n");
         colors.close();
-        qputenv("OMARECORD_OMARCHY_STATE_DIR", state.path().toUtf8());
+        qputenv("OMAREEL_OMARCHY_STATE_DIR", state.path().toUtf8());
         Theme inferred;
         QCOMPARE(inferred.lighterBackground(), QColor(QStringLiteral("#faf4ed")).lighter(106));
         QCOMPARE(inferred.darkBackground(), QColor(qRound(250 * .75), qRound(244 * .75), qRound(237 * .75)));
@@ -57,7 +57,7 @@ private slots:
         colors.close();
         Theme explicitMode;
         QVERIFY(explicitMode.dark());
-        qunsetenv("OMARECORD_OMARCHY_STATE_DIR");
+        qunsetenv("OMAREEL_OMARCHY_STATE_DIR");
     }
 
     void readsCaptureDuration()

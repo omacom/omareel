@@ -6,7 +6,7 @@
 
 class QVideoSink;
 
-namespace OmaRecord {
+namespace Omareel {
 
 class FrameSource;
 
@@ -22,4 +22,4 @@ private:
     QVideoFrame m_lastFrame;
 };
 
-} // namespace OmaRecord
+} // namespace Omareel

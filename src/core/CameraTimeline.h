@@ -1,6 +1,6 @@
 #pragma once
 
-namespace OmaRecord {
+namespace Omareel {
 
 struct CameraTime {
     double seconds = 0.0;
@@ -10,4 +10,4 @@ struct CameraTime {
 
 CameraTime mapCameraTime(double screenTime, double cameraOffset, double cameraDuration);
 
-} // namespace OmaRecord
+} // namespace Omareel

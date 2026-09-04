@@ -37,9 +37,9 @@ Item {
     Image {
         id: arrow
         source: root.style === "dark-arrow"
-            ? "qrc:/omarecord/assets/cursors/arrow-dark.svg"
-            : root.handStyle ? "qrc:/omarecord/assets/cursors/pointer.svg"
-            : "qrc:/omarecord/assets/cursors/arrow.svg"
+            ? "qrc:/omareel/assets/cursors/arrow-dark.svg"
+            : root.handStyle ? "qrc:/omareel/assets/cursors/pointer.svg"
+            : "qrc:/omareel/assets/cursors/arrow.svg"
         sourceSize: Qt.size(Math.round(24 * root.settings.size * root.ref * 4),
                             Math.round(24 * root.settings.size * root.ref * 4))
         width: 24 * root.settings.size * root.ref

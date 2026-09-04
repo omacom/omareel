@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-using namespace OmaRecord;
+using namespace Omareel;
 
 static double duration(const Clip &clip)
 {

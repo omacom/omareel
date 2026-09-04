@@ -31,7 +31,7 @@
 #include <algorithm>
 #include <cmath>
 
-using namespace OmaRecord;
+using namespace Omareel;
 
 namespace {
 
@@ -145,7 +145,7 @@ Editor::Editor(const QString &bundlePath, QObject *parent)
         emit waveformChanged();
     });
 
-    QFile gradientsFile(QStringLiteral(":/omarecord/assets/gradients.json"));
+    QFile gradientsFile(QStringLiteral(":/omareel/assets/gradients.json"));
     if (gradientsFile.open(QIODevice::ReadOnly))
         m_gradients = QJsonDocument::fromJson(gradientsFile.readAll()).array().toVariantList();
 
@@ -158,7 +158,7 @@ Editor::Editor(const QString &bundlePath, QObject *parent)
     connect(&m_previewTimer, &QTimer::timeout, this, [this] {
         handlePlayerPosition(m_player.position());
     });
-    m_previewStatsEnabled = qEnvironmentVariableIntValue("OMARECORD_PREVIEW_STATS") == 1;
+    m_previewStatsEnabled = qEnvironmentVariableIntValue("OMAREEL_PREVIEW_STATS") == 1;
     if (m_previewStatsEnabled) QTextStream(stderr) << "preview stats enabled\n";
     m_previewStatsTimer.setInterval(1000);
     connect(&m_previewStatsTimer, &QTimer::timeout, this, &Editor::handlePreviewStats);
@@ -237,8 +237,9 @@ bool Editor::loadBundle()
         m_project = Project::load(m_projectPath, &m_error);
         if (!m_error.isEmpty()) return false;
     } else {
-        QString name = QFileInfo(m_bundlePath).completeBaseName();
-        if (name.endsWith(QLatin1String(".omarecord"))) name.chop(10);
+        QString name = QFileInfo(m_bundlePath).fileName();
+        if (name.endsWith(QLatin1String(".omareel"))) name.chop(9);
+        else if (name.endsWith(QLatin1String(".omarecord"))) name.chop(10);
         m_project = Project::defaults(name, m_sourceDuration);
         m_project.camera.enabled = m_hasCamera;
         const int rotation = cameraCapture.value(QStringLiteral("rotation")).toInt(0);
@@ -1020,7 +1021,7 @@ void Editor::startWaveformBuild()
 
 QString Editor::presetsDirectory() const
 {
-    return QDir(QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)).filePath(QStringLiteral("omarecord/presets"));
+    return QDir(QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)).filePath(QStringLiteral("omareel/presets"));
 }
 
 QStringList Editor::presetNames() const

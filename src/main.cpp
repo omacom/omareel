@@ -34,17 +34,18 @@
 #include <QTextStream>
 #include <QTimer>
 #include <QRegularExpression>
+#include <QRegion>
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
 #include <unistd.h>
 #include <vector>
 
-#ifndef OMARECORD_VERSION
-#define OMARECORD_VERSION "unknown"
+#ifndef OMAREEL_VERSION
+#define OMAREEL_VERSION "unknown"
 #endif
 
-using namespace OmaRecord;
+using namespace Omareel;
 
 struct ResolvedFonts {
     QString ui;
@@ -69,7 +70,7 @@ static ResolvedFonts resolveFonts()
     if (match.waitForFinished(1500) && match.exitCode() == 0)
         family = QString::fromUtf8(match.readAllStandardOutput()).trimmed();
     if (family.isEmpty()) family = QFontDatabase::systemFont(QFontDatabase::FixedFont).family();
-    qInfo().noquote() << "omarecord: fontconfig monospace ->" << family;
+    qInfo().noquote() << "omareel: fontconfig monospace ->" << family;
     return {family, family};
 }
 
@@ -93,8 +94,8 @@ static int shellFontBaseSize()
 static int usage(const QString &error = {})
 {
     QTextStream stream(error.isEmpty() ? stdout : stderr);
-    if (!error.isEmpty()) stream << "omarecord: " << error << '\n';
-    stream << "usage: omarecord [command]\n\n"
+    if (!error.isEmpty()) stream << "omareel: " << error << '\n';
+    stream << "usage: omareel [command]\n\n"
               "commands:\n"
               "  record [--region|--fullscreen|--window] [options]\n"
               "      Toggle recording (smart gesture is the default: drag an area, click a\n"
@@ -104,7 +105,7 @@ static int usage(const QString &error = {})
               "      --with-webcam, --webcam-device PATH, --webcam-height 720|1080,\n"
               "      --no-webcam, --no-selfview, --no-open, --no-bar,\n"
               "      --stop, --cancel.\n"
-              "  edit <bundle.omarecord>\n"
+              "  edit <bundle.omareel>\n"
               "      Open a recording bundle in the editor.\n"
               "  export <bundle> -o <file.mp4|file.gif> [options]\n"
               "      Export with --fps N, --width W, --quality LEVEL, --gif-fps N,\n"
@@ -113,20 +114,21 @@ static int usage(const QString &error = {})
               "      Print a JSON summary of a recording bundle.\n"
               "  help\n"
               "      Show this help.\n\n"
-              "Running omarecord without a command opens the launcher.\n";
+              "Running omareel without a command opens the launcher.\n"
+              "The legacy omarecord command remains available as a compatibility alias.\n";
     return error.isEmpty() ? 0 : 2;
 }
 
 static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplication &app)
 {
-    QString path = qEnvironmentVariable("OMARECORD_SCREENSHOT_LIVE");
-    if (path.isEmpty()) path = qEnvironmentVariable("OMARECORD_SCREENSHOT");
+    QString path = qEnvironmentVariable("OMAREEL_SCREENSHOT_LIVE");
+    if (path.isEmpty()) path = qEnvironmentVariable("OMAREEL_SCREENSHOT");
     if (path.isEmpty() || engine.rootObjects().isEmpty()) return;
 
     auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
     if (!window) return;
 
-    const QString size = qEnvironmentVariable("OMARECORD_SCREENSHOT_SIZE");
+    const QString size = qEnvironmentVariable("OMAREEL_SCREENSHOT_SIZE");
     const QStringList dimensions = size.toLower().split(QLatin1Char('x'));
     bool widthOk = false;
     bool heightOk = false;
@@ -141,7 +143,7 @@ static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplicat
         {QStringLiteral("clip"), 4}, {QStringLiteral("camera"), 5},
         {QStringLiteral("keystrokes"), 6}, {QStringLiteral("audio"), 7}
     };
-    const QString panel = qEnvironmentVariable("OMARECORD_SCREENSHOT_PANEL").toLower();
+    const QString panel = qEnvironmentVariable("OMAREEL_SCREENSHOT_PANEL").toLower();
     if (panels.contains(panel)) {
         if (QObject *sidePanel = window->findChild<QObject *>(QStringLiteral("sidePanel")))
             sidePanel->setProperty("section", panels.value(panel));
@@ -157,20 +159,20 @@ static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplicat
             }
         }
     }
-    if (qEnvironmentVariable("OMARECORD_SCREENSHOT_PICK_ZOOM") == QLatin1String("1"))
+    if (qEnvironmentVariable("OMAREEL_SCREENSHOT_PICK_ZOOM") == QLatin1String("1"))
         if (QObject *editor = engine.rootContext()->contextProperty(QStringLiteral("editor")).value<QObject *>())
             editor->setProperty("pickingZoomTarget", true);
 
     bool screenshotTimeOk = false;
-    QString screenshotSeek = qEnvironmentVariable("OMARECORD_SCREENSHOT_SEEK");
-    if (screenshotSeek.isEmpty()) screenshotSeek = qEnvironmentVariable("OMARECORD_SCREENSHOT_TIME");
+    QString screenshotSeek = qEnvironmentVariable("OMAREEL_SCREENSHOT_SEEK");
+    if (screenshotSeek.isEmpty()) screenshotSeek = qEnvironmentVariable("OMAREEL_SCREENSHOT_TIME");
     const double screenshotTime = screenshotSeek.toDouble(&screenshotTimeOk);
     if (screenshotTimeOk)
         if (QObject *editor = engine.rootContext()->contextProperty(QStringLiteral("editor")).value<QObject *>())
             QMetaObject::invokeMethod(editor, "seek", Q_ARG(double, screenshotTime));
 
     const QJsonObject projectValues = QJsonDocument::fromJson(
-        qEnvironmentVariable("OMARECORD_SCREENSHOT_PROJECT_VALUES").toUtf8()).object();
+        qEnvironmentVariable("OMAREEL_SCREENSHOT_PROJECT_VALUES").toUtf8()).object();
     if (!projectValues.isEmpty()) {
         if (QObject *editor = engine.rootContext()->contextProperty(QStringLiteral("editor")).value<QObject *>()) {
             for (auto it = projectValues.constBegin(); it != projectValues.constEnd(); ++it) {
@@ -182,7 +184,7 @@ static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplicat
         }
     }
 
-    const QString screenshotView = qEnvironmentVariable("OMARECORD_SCREENSHOT_VIEW");
+    const QString screenshotView = qEnvironmentVariable("OMAREEL_SCREENSHOT_VIEW");
     if (!screenshotView.isEmpty()) {
         QTimer::singleShot(250, window, [window, screenshotView] {
             QMetaObject::invokeMethod(window, "prepareScreenshot",
@@ -194,7 +196,7 @@ static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplicat
         QDir().mkpath(QFileInfo(path).absolutePath());
         const QImage image = window->grabWindow();
         const bool saved = !image.isNull() && image.save(path);
-        if (!saved) QTextStream(stderr) << "omarecord: could not save UI screenshot to " << path << '\n';
+        if (!saved) QTextStream(stderr) << "omareel: could not save UI screenshot to " << path << '\n';
         app.exit(saved ? 0 : 2);
     });
 }
@@ -255,7 +257,7 @@ static int exportCommand(const QStringList &arguments)
     QObject::connect(&exporter, &Exporter::failed, [&](const QString &message) { failure = message; });
     exporter.exportBundle(options);
     if (!success) {
-        QTextStream(stderr) << '\n' << "omarecord: " << failure << '\n';
+        QTextStream(stderr) << '\n' << "omareel: " << failure << '\n';
         return 1;
     }
     return 0;
@@ -271,11 +273,11 @@ static int recordCommand(const QStringList &arguments)
         const int result = Recorder::stopExisting(cancel, &bundle, &error);
         if (result == 0)
             QTextStream(stdout) << (cancel ? QStringLiteral("Recording discarded") : bundle) << '\n';
-        else QTextStream(stderr) << "omarecord: " << error << '\n';
+        else QTextStream(stderr) << "omareel: " << error << '\n';
         return result;
     }
     if (arguments.contains(QStringLiteral("--stop")) || arguments.contains(QStringLiteral("--cancel"))) {
-        QTextStream(stderr) << "omarecord: no recording is active\n";
+        QTextStream(stderr) << "omareel: no recording is active\n";
         return 1;
     }
     if (arguments.contains(QStringLiteral("--with-webcam"))
@@ -355,7 +357,7 @@ static int recordCommand(const QStringList &arguments)
         return usage(QStringLiteral("webcam device must be a /dev/video device"));
     if (options.webcamHeight != 720 && options.webcamHeight != 1080)
         return usage(QStringLiteral("webcam height must be 720 or 1080"));
-    if (qEnvironmentVariable("OMARECORD_NO_BAR") == QLatin1String("1")) options.noBar = true;
+    if (qEnvironmentVariable("OMAREEL_NO_BAR") == QLatin1String("1")) options.noBar = true;
     QString message;
     const int result = Recorder::startDetached(options, &message);
     QTextStream(result == 0 ? stdout : stderr) << message << '\n';
@@ -431,7 +433,7 @@ int main(int argc, char **argv)
         for (int i = 2; i < argc; ++i) gsrArguments.push_back(argv[i]);
         gsrArguments.push_back(nullptr);
         ::execvp("gpu-screen-recorder", gsrArguments.data());
-        std::fprintf(stderr, "omarecord: could not exec gpu-screen-recorder: %s\n", std::strerror(errno));
+        std::fprintf(stderr, "omareel: could not exec gpu-screen-recorder: %s\n", std::strerror(errno));
         return 127;
     }
     const bool exporting = argc > 1 && QByteArray(argv[1]) == "export";
@@ -444,7 +446,7 @@ int main(int argc, char **argv)
     }
     // Screenshot mode must be independent of compositor capture and GPU backend quirks.
     // It still exercises the real QML window and QQuickWindow::grabWindow().
-    if (!qEnvironmentVariableIsEmpty("OMARECORD_SCREENSHOT")) {
+    if (!qEnvironmentVariableIsEmpty("OMAREEL_SCREENSHOT")) {
         qputenv("QT_QPA_PLATFORM", "offscreen");
         qputenv("QT_QPA_PLATFORMTHEME", QByteArray());
     }
@@ -465,19 +467,19 @@ int main(int argc, char **argv)
         else QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
     }
     QGuiApplication app(argc, argv);
-    app.setApplicationName(QStringLiteral("omarecord"));
-    app.setOrganizationName(QStringLiteral("omarecord"));
+    app.setApplicationName(QStringLiteral("omareel"));
+    app.setOrganizationName(QStringLiteral("omareel"));
     const ResolvedFonts resolvedFonts = resolveFonts();
     QFont applicationFont(resolvedFonts.ui);
     applicationFont.setPixelSize(shellFontBaseSize());
     QGuiApplication::setFont(applicationFont);
     Theme::setFontFamilies(resolvedFonts.ui, resolvedFonts.mono);
     if (graphical)
-        QTextStream(stderr) << "omarecord: application font " << resolvedFonts.ui
+        QTextStream(stderr) << "omareel: application font " << resolvedFonts.ui
                             << " at " << applicationFont.pixelSize() << " px\n";
     const QStringList args = app.arguments();
     if (args.size() < 2) {
-        app.setDesktopFileName(QStringLiteral("omarecord-launcher"));
+        app.setDesktopFileName(QStringLiteral("omareel"));
         Theme theme;
         Launcher launcher;
         QQmlApplicationEngine engine;
@@ -485,13 +487,25 @@ int main(int argc, char **argv)
         engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
         engine.rootContext()->setContextProperty(QStringLiteral("launcher"), &launcher);
         QObject::connect(&launcher, &Launcher::quitRequested, &app, &QCoreApplication::quit);
-        engine.load(QUrl(QStringLiteral("qrc:/qt/qml/Omarecord/Launcher.qml")));
+        engine.load(QUrl(QStringLiteral("qrc:/qt/qml/Omareel/Launcher.qml")));
         if (engine.rootObjects().isEmpty()) return 2;
         configureDebugScreenshot(engine, app);
         return app.exec();
     }
     const QString command = args[1];
     if (command == QLatin1String("__record-daemon")) return Recorder::daemonMain(args.mid(2));
+    if (command == QLatin1String("__record-bar-ipc")) {
+        if (args.size() != 4 || args[2] != QLatin1String("selfview")
+            || (args[3] != QLatin1String("hide") && args[3] != QLatin1String("show")))
+            return usage(QStringLiteral("__record-bar-ipc requires selfview hide|show"));
+        QString error;
+        if (!Recorder::updateRecordingState(
+                QJsonObject{{QStringLiteral("selfview"), args[3] == QLatin1String("show")}}, &error)) {
+            QTextStream(stderr) << "omareel: " << error << '\n';
+            return 2;
+        }
+        return 0;
+    }
     if (command == QLatin1String("__record-bar")) {
         Theme theme;
         RecordingBar recordingBar(hiddenRecordBar);
@@ -500,7 +514,7 @@ int main(int argc, char **argv)
         engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
         engine.rootContext()->setContextProperty(QStringLiteral("recordingBar"), &recordingBar);
         QObject::connect(&recordingBar, &RecordingBar::finished, &app, &QCoreApplication::quit);
-        engine.load(QUrl(QStringLiteral("qrc:/qt/qml/Omarecord/RecordingBar.qml")));
+        engine.load(QUrl(QStringLiteral("qrc:/qt/qml/Omareel/RecordingBar.qml")));
         if (engine.rootObjects().isEmpty()) return 2;
         auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
         if (!window) return 2;
@@ -508,16 +522,16 @@ int main(int argc, char **argv)
         if (screen) window->setScreen(screen);
         QProcess barRule;
         barRule.start(QStringLiteral("hyprctl"), {QStringLiteral("eval"),
-            QStringLiteral("hl.layer_rule({ name = 'omarecord-record-bar-private', match = { namespace = 'omarecord-record-bar' }, no_screen_share = true })")});
+            QStringLiteral("hl.layer_rule({ name = 'omareel-record-bar-private', match = { namespace = 'omareel-record-bar' }, no_screen_share = true })")});
         if (!barRule.waitForFinished(3000) || barRule.exitCode() != 0)
-            qWarning().noquote() << "omarecord: could not apply the recording bar privacy rule";
+            qWarning().noquote() << "omareel: could not apply the recording bar privacy rule";
         auto *layerWindow = LayerShellQt::Window::get(window);
         layerWindow->setLayer(LayerShellQt::Window::LayerOverlay);
         layerWindow->setAnchors(LayerShellQt::Window::AnchorTop);
         layerWindow->setExclusiveZone(0);
         layerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
         layerWindow->setMargins(QMargins(0, 12, 0, 0));
-        layerWindow->setScope(QStringLiteral("omarecord-record-bar"));
+        layerWindow->setScope(QStringLiteral("omareel-record-bar"));
         layerWindow->setActivateOnShow(false);
         if (screen) layerWindow->setScreen(screen);
         if (!hiddenRecordBar) window->show();
@@ -542,16 +556,16 @@ int main(int argc, char **argv)
             }
             QProcess layerRule;
             layerRule.start(QStringLiteral("hyprctl"), {QStringLiteral("eval"),
-                QStringLiteral("hl.layer_rule({ name = 'omarecord-selfview-private', match = { namespace = 'omarecord-selfview' }, no_screen_share = true })")});
+                QStringLiteral("hl.layer_rule({ name = 'omareel-selfview-private', match = { namespace = 'omareel-selfview' }, no_screen_share = true })")});
             if (!layerRule.waitForFinished(3000) || layerRule.exitCode() != 0)
-                qWarning().noquote() << "omarecord: could not apply the self-view privacy rule";
+                qWarning().noquote() << "omareel: could not apply the self-view privacy rule";
             auto *selfViewLayer = LayerShellQt::Window::get(selfViewWindow);
             selfViewLayer->setLayer(LayerShellQt::Window::LayerOverlay);
             selfViewLayer->setAnchors(LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorTop)
                                       | LayerShellQt::Window::AnchorLeft);
             selfViewLayer->setExclusiveZone(0);
             selfViewLayer->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
-            selfViewLayer->setScope(QStringLiteral("omarecord-selfview"));
+            selfViewLayer->setScope(QStringLiteral("omareel-selfview"));
             selfViewLayer->setActivateOnShow(false);
             if (selfViewScreen) selfViewLayer->setScreen(selfViewScreen);
             const auto updateSelfViewPlacement = [&recordingBar, selfViewLayer] {
@@ -561,11 +575,15 @@ int main(int argc, char **argv)
             updateSelfViewPlacement();
             QObject::connect(&recordingBar, &RecordingBar::selfViewPlacementChanged,
                              selfViewWindow, updateSelfViewPlacement);
+            const auto updateSelfViewInput = [&recordingBar, selfViewWindow] {
+                selfViewWindow->setMask(recordingBar.selfViewVisible()
+                    ? QRegion(0, 0, selfViewWindow->width(), selfViewWindow->height())
+                    : QRegion());
+            };
             QObject::connect(&recordingBar, &RecordingBar::selfViewVisibilityChanged,
-                             selfViewWindow, [&recordingBar, selfViewWindow] {
-                selfViewWindow->setVisible(recordingBar.selfViewVisible());
-            });
-            selfViewWindow->setVisible(recordingBar.selfViewVisible());
+                             selfViewWindow, updateSelfViewInput);
+            updateSelfViewInput();
+            selfViewWindow->show();
         }
         configureDebugScreenshot(engine, app);
         return app.exec();
@@ -580,7 +598,7 @@ int main(int argc, char **argv)
         if (args.size() != 3) return usage(QStringLiteral("edit requires a bundle"));
         Editor editor(QDir(args[2]).absolutePath());
         if (!editor.isValid()) {
-            QTextStream(stderr) << "omarecord: " << editor.errorString() << '\n';
+            QTextStream(stderr) << "omareel: " << editor.errorString() << '\n';
             return 1;
         }
         Theme theme;
@@ -590,15 +608,15 @@ int main(int argc, char **argv)
         engine.rootContext()->setContextProperty(QStringLiteral("editor"), &editor);
         engine.rootContext()->setContextProperty(QStringLiteral("comp"), &editor);
         QObject::connect(&theme, &Theme::sourceChanged, &editor, &Editor::refreshOmarchyTheme);
-        engine.load(QUrl(QStringLiteral("qrc:/qt/qml/Omarecord/Main.qml")));
+        engine.load(QUrl(QStringLiteral("qrc:/qt/qml/Omareel/Main.qml")));
         if (engine.rootObjects().isEmpty()) return 2;
-        if (qEnvironmentVariableIntValue("OMARECORD_PREVIEW_STATS") == 1)
+        if (qEnvironmentVariableIntValue("OMAREEL_PREVIEW_STATS") == 1)
             QTimer::singleShot(1500, &editor, &Editor::play);
         configureDebugScreenshot(engine, app);
         return app.exec();
     }
     if (command == QLatin1String("--version") || command == QLatin1String("-V")) {
-        QTextStream(stdout) << "omarecord " << OMARECORD_VERSION << '\n';
+        QTextStream(stdout) << "omareel " << OMAREEL_VERSION << '\n';
         return 0;
     }
     if (command == QLatin1String("--help") || command == QLatin1String("-h")

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(omarecord VERSION 0.1.0 LANGUAGES C CXX)
+project(omareel VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -35,7 +35,7 @@ generate_wayland_protocol(ext-foreign-toplevel-list-v1
 qt_standard_project_setup()
 qt_policy(SET QTP0004 NEW)
 
-add_library(omarecord_core STATIC
+add_library(omareel_core STATIC
     src/core/Project.cpp
     src/core/InputLog.cpp
     src/core/CursorPath.cpp
@@ -56,18 +56,18 @@ add_library(omarecord_core STATIC
     src/record/ScreenCapture.cpp
     ${GENERATED_WAYLAND_SOURCES}
 )
-target_include_directories(omarecord_core PUBLIC src PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
-target_link_libraries(omarecord_core
+target_include_directories(omareel_core PUBLIC src PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
+target_link_libraries(omareel_core
     PUBLIC Qt6::Core Qt6::Gui Qt6::Quick Qt6::Multimedia Qt6::Svg
     PRIVATE PkgConfig::LIBEVDEV PkgConfig::WAYLAND_CLIENT
 )
 
-add_library(omarecord_render STATIC)
-qt_add_qml_module(omarecord_ui STATIC
-    URI Omarecord.Ui
+add_library(omareel_render STATIC)
+qt_add_qml_module(omareel_ui STATIC
+    URI Omareel.Ui
     VERSION 1.0
     RESOURCE_PREFIX /qt/qml
-    OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/Omarecord/Ui
+    OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/Omareel/Ui
     QML_FILES
         src/ui/qml/ui/OmButton.qml
         src/ui/qml/ui/OmIconButton.qml
@@ -83,7 +83,7 @@ qt_add_qml_module(omarecord_ui STATIC
         src/ui/qml/ui/OmListRow.qml
         src/ui/qml/ui/OmConfirm.qml
 )
-target_link_libraries(omarecord_ui PUBLIC Qt6::Quick Qt6::QuickControls2)
+target_link_libraries(omareel_ui PUBLIC Qt6::Quick Qt6::QuickControls2)
 set_source_files_properties(
     src/ui/qml/Composition.qml
     src/ui/qml/Background.qml
@@ -129,11 +129,11 @@ set_source_files_properties(src/ui/qml/CameraOverlay.qml PROPERTIES QT_RESOURCE_
 foreach(qml_name IN ITEMS Main TopBar PreviewPane BottomBar SidePanel PanelSlider PanelLabel PanelHeading PanelValue IconToolButton EditorButton EditorSlider EditorSwitch EditorComboBox BackgroundPanel ShapePanel CursorPanel ZoomPanel AudioPanel ClipPanel CameraPanel KeystrokesPanel ExportDialog Timeline ClipTrack ZoomTrack Launcher RecordingBar)
     set_source_files_properties(src/ui/qml/${qml_name}.qml PROPERTIES QT_RESOURCE_ALIAS "${qml_name}.qml")
 endforeach()
-qt_add_qml_module(omarecord_render
-    URI Omarecord
+qt_add_qml_module(omareel_render
+    URI Omareel
     VERSION 1.0
     RESOURCE_PREFIX /qt/qml
-    OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/Omarecord
+    OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/Omareel
     SOURCES
         src/render/FrameSource.h src/render/FrameSource.cpp
         src/render/FfmpegDecoder.h src/render/FfmpegDecoder.cpp
@@ -178,8 +178,8 @@ qt_add_qml_module(omarecord_render
         src/ui/qml/Launcher.qml
         src/ui/qml/RecordingBar.qml
 )
-qt_add_resources(omarecord_render "omarecord_assets"
-    PREFIX "/omarecord"
+qt_add_resources(omareel_render "omareel_assets"
+    PREFIX "/omareel"
     FILES
         assets/cursors/arrow.svg assets/cursors/arrow-dark.svg assets/cursors/pointer.svg
         assets/gradients.json
@@ -200,29 +200,40 @@ qt_add_resources(omarecord_render "omarecord_assets"
         assets/icons/lucide/circle.svg assets/icons/lucide/square-dashed.svg
         assets/icons/lucide/layers.svg
         assets/icons/lucide/keyboard.svg
+        assets/icons/reel.svg
         assets/sounds/click.wav
 )
-target_include_directories(omarecord_render PUBLIC src src/render)
-target_link_libraries(omarecord_render PUBLIC omarecord_core omarecord_ui Qt6::Concurrent Qt6::Quick Qt6::QuickControls2 Qt6::Multimedia Qt6::OpenGL)
+target_include_directories(omareel_render PUBLIC src src/render)
+target_link_libraries(omareel_render PUBLIC omareel_core omareel_ui Qt6::Concurrent Qt6::Quick Qt6::QuickControls2 Qt6::Multimedia Qt6::OpenGL)
 
-qt_add_executable(omarecord src/main.cpp)
-target_link_libraries(omarecord PRIVATE omarecord_render Qt6::Quick Qt6::Multimedia LayerShellQt::Interface)
-target_compile_definitions(omarecord PRIVATE OMARECORD_VERSION="${PROJECT_VERSION}")
+qt_add_executable(omareel src/main.cpp)
+target_link_libraries(omareel PRIVATE omareel_render Qt6::Quick Qt6::Multimedia LayerShellQt::Interface)
+target_compile_definitions(omareel PRIVATE OMAREEL_VERSION="${PROJECT_VERSION}")
+add_custom_command(TARGET omareel POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E rm -f $<TARGET_FILE_DIR:omareel>/omarecord
+    COMMAND ${CMAKE_COMMAND} -E create_symlink omareel $<TARGET_FILE_DIR:omareel>/omarecord)
 
 include(CTest)
 if(BUILD_TESTING)
     foreach(test_name IN ITEMS zoomtimeline cursorpath cliptimeline cameratimeline keystroketrack project inputlog regionpicker omarchypaths recorder)
         qt_add_executable(test_${test_name} tests/test_${test_name}.cpp)
-        target_link_libraries(test_${test_name} PRIVATE omarecord_core Qt6::Test)
+        target_link_libraries(test_${test_name} PRIVATE omareel_core Qt6::Test)
         add_test(NAME ${test_name} COMMAND test_${test_name})
     endforeach()
     qt_add_executable(test_exporter_smoke tests/test_exporter_smoke.cpp)
-    target_link_libraries(test_exporter_smoke PRIVATE omarecord_render Qt6::Test)
+    target_link_libraries(test_exporter_smoke PRIVATE omareel_render Qt6::Test)
     add_test(NAME exporter_smoke COMMAND test_exporter_smoke)
     qt_add_executable(test_editor tests/test_editor.cpp)
-    target_link_libraries(test_editor PRIVATE omarecord_render Qt6::Test)
+    target_link_libraries(test_editor PRIVATE omareel_render Qt6::Test)
     add_test(NAME editor COMMAND test_editor)
 endif()
 
-install(TARGETS omarecord RUNTIME DESTINATION bin)
-install(FILES pkg/omarecord.desktop DESTINATION share/applications)
+install(TARGETS omareel RUNTIME DESTINATION bin)
+install(FILES pkg/omareel.desktop DESTINATION share/applications)
+install(FILES pkg/omareel.svg DESTINATION share/icons/hicolor/scalable/apps)
+foreach(icon_size IN ITEMS 16 32 48 64 128 256)
+    install(FILES pkg/icons/omareel-${icon_size}.png
+            DESTINATION share/icons/hicolor/${icon_size}x${icon_size}/apps
+            RENAME omareel.png)
+endforeach()
+install(CODE "execute_process(COMMAND \"${CMAKE_COMMAND}\" -E create_symlink omareel \"\$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/omarecord\")")

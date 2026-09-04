@@ -13,7 +13,7 @@
 #include <cmath>
 #include <algorithm>
 
-using namespace OmaRecord;
+using namespace Omareel;
 
 struct Monitor {
     QString name;
@@ -87,7 +87,7 @@ static QStringList captureOptions()
 static const Monitor *capturableMonitor(const QVector<Monitor> &values, const Monitor *requested,
                                         QString *note)
 {
-    const QString backend = qEnvironmentVariable("OMARECORD_CAPTURE").toLower();
+    const QString backend = qEnvironmentVariable("OMAREEL_CAPTURE").toLower();
     if (backend != QLatin1String("gsr")
         && RecordingPreferences::load().captureBackend != QLatin1String("gsr")
         && ScreenCapture::isSupported()) return requested;

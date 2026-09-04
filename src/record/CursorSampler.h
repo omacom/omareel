@@ -6,7 +6,7 @@
 #include <mutex>
 #include <thread>
 
-namespace OmaRecord {
+namespace Omareel {
 
 struct RawCursorSample {
     qint64 monotonicUs = 0;
@@ -32,4 +32,4 @@ private:
     std::thread m_thread;
 };
 
-} // namespace OmaRecord
+} // namespace Omareel

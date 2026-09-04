@@ -3,7 +3,7 @@
 #include <QString>
 #include <QStringList>
 
-namespace OmaRecord {
+namespace Omareel {
 
 enum class CaptureMode { Fullscreen, Region, Window };
 
@@ -27,4 +27,4 @@ public:
     static bool pick(CaptureMode mode, CaptureRegion *region, QString *error = nullptr);
 };
 
-} // namespace OmaRecord
+} // namespace Omareel

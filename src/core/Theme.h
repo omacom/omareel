@@ -5,7 +5,7 @@
 #include <QObject>
 #include <QVariantMap>
 
-namespace OmaRecord {
+namespace Omareel {
 
 class Theme : public QObject
 {
@@ -141,4 +141,4 @@ private:
     bool m_dark = true;
 };
 
-} // namespace OmaRecord
+} // namespace Omareel

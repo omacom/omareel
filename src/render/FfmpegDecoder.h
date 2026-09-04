@@ -5,7 +5,7 @@
 #include <QString>
 #include <atomic>
 
-namespace OmaRecord {
+namespace Omareel {
 
 class FfmpegDecoder
 {
@@ -34,4 +34,4 @@ private:
     std::atomic_bool m_cancelled{false};
 };
 
-} // namespace OmaRecord
+} // namespace Omareel

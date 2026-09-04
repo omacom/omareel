@@ -1,7 +1,8 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.impl
 import QtQuick.Layouts
-import Omarecord.Ui
+import Omareel.Ui
 
 Rectangle {
     id: root
@@ -53,11 +54,20 @@ Rectangle {
         anchors.rightMargin: 12
         spacing: 8
 
-        Label {
-            text: "omarecord"
-            font.weight: Font.DemiBold
-            font.pixelSize: theme.font.title
-            color: theme.foreground
+        RowLayout {
+            spacing: 6
+            IconImage {
+                Layout.preferredWidth: 20; Layout.preferredHeight: 20
+                source: "qrc:/omareel/assets/icons/reel.svg"
+                sourceSize: Qt.size(20, 20)
+                color: theme.foreground
+            }
+            Label {
+                text: "omareel"
+                font.weight: Font.DemiBold
+                font.pixelSize: theme.font.title
+                color: theme.foreground
+            }
         }
         Rectangle {
             Layout.preferredWidth: 1
@@ -104,7 +114,7 @@ Rectangle {
 
         IconToolButton {
             enabled: editor.canUndo
-            icon.source: "qrc:/omarecord/assets/icons/lucide/undo-2.svg"
+            icon.source: "qrc:/omareel/assets/icons/lucide/undo-2.svg"
             Accessible.name: "Undo"
             ToolTip.visible: hovered
             ToolTip.text: "Undo"
@@ -112,7 +122,7 @@ Rectangle {
         }
         IconToolButton {
             enabled: editor.canRedo
-            icon.source: "qrc:/omarecord/assets/icons/lucide/redo-2.svg"
+            icon.source: "qrc:/omareel/assets/icons/lucide/redo-2.svg"
             Accessible.name: "Redo"
             ToolTip.visible: hovered
             ToolTip.text: "Redo"
@@ -120,7 +130,7 @@ Rectangle {
         }
         IconToolButton {
             enabled: editor.dirty
-            icon.source: "qrc:/omarecord/assets/icons/lucide/save.svg"
+            icon.source: "qrc:/omareel/assets/icons/lucide/save.svg"
             Accessible.name: "Save project"
             ToolTip.visible: hovered
             ToolTip.text: "Save project (Ctrl+S)"
@@ -137,14 +147,14 @@ Rectangle {
             id: presetButton
             Layout.preferredWidth: 92
             text: "Presets"
-            trailingIconSource: "qrc:/omarecord/assets/icons/lucide/chevron-down.svg"
+            trailingIconSource: "qrc:/omareel/assets/icons/lucide/chevron-down.svg"
             onClicked: presetsMenu.open()
         }
         EditorButton {
             Layout.preferredWidth: 104
             primary: true
             text: "Export"
-            icon.source: "qrc:/omarecord/assets/icons/lucide/download.svg"
+            icon.source: "qrc:/omareel/assets/icons/lucide/download.svg"
             onClicked: root.showExport()
         }
     }

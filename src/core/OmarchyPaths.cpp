@@ -10,11 +10,11 @@
 #include <QSet>
 #include <QStandardPaths>
 
-using namespace OmaRecord;
+using namespace Omareel;
 
 QString OmarchyPaths::stateRoot()
 {
-    const QString overridePath = qEnvironmentVariable("OMARECORD_OMARCHY_STATE_DIR");
+    const QString overridePath = qEnvironmentVariable("OMAREEL_OMARCHY_STATE_DIR");
     return overridePath.isEmpty()
         ? QDir::home().filePath(QStringLiteral(".local/state/omarchy/current"))
         : QDir(overridePath).absolutePath();
@@ -102,10 +102,10 @@ QString OmarchyPaths::currentBackground()
 
 QString OmarchyPaths::recordingsDirectory()
 {
-    const QString overridePath = qEnvironmentVariable("OMARECORD_RECENTS_DIR");
+    const QString overridePath = qEnvironmentVariable("OMAREEL_RECENTS_DIR");
     return overridePath.isEmpty()
         ? QDir(QStandardPaths::writableLocation(QStandardPaths::MoviesLocation))
-              .filePath(QStringLiteral("omarecord"))
+              .filePath(QStringLiteral("omareel"))
         : QDir(overridePath).absolutePath();
 }
 
@@ -118,7 +118,7 @@ QString OmarchyPaths::wallpaperThumbnailPath(const QString &wallpaperPath)
     const QString hash = QString::fromLatin1(
         QCryptographicHash::hash(identity, QCryptographicHash::Sha256).toHex());
     const QString directory = QDir(QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation))
-                                  .filePath(QStringLiteral("omarecord/wallpapers"));
+                                  .filePath(QStringLiteral("omareel/wallpapers"));
     return QDir(directory).filePath(hash + QStringLiteral(".jpg"));
 }
 

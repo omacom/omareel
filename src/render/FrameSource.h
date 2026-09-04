@@ -7,7 +7,7 @@
 #include <QVideoFrame>
 #include <QtQml/qqmlregistration.h>
 
-namespace OmaRecord {
+namespace Omareel {
 
 class FrameSource : public QQuickItem
 {
@@ -43,4 +43,4 @@ private:
     quint64 m_renderedRevision = 0;
 };
 
-} // namespace OmaRecord
+} // namespace Omareel

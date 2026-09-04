@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import Omarecord.Ui
+import Omareel.Ui
 
 Rectangle {
     id: root
@@ -79,7 +79,7 @@ Rectangle {
                         checked: root.section === index
                         icon.width: 14
                         icon.height: 14
-                        icon.source: "qrc:/omarecord/assets/icons/lucide/" + modelData.icon
+                        icon.source: "qrc:/omareel/assets/icons/lucide/" + modelData.icon
                         icon.color: checked ? theme.accent : theme.textMuted
                         Accessible.name: modelData.name
                         onClicked: root.section = index
@@ -156,7 +156,7 @@ Rectangle {
                     Item { Layout.preferredHeight: theme.space.lg }
                     OmHero {
                         Layout.fillWidth: true
-                        iconSource: "qrc:/omarecord/assets/icons/lucide/" + root.sections[root.section].icon
+                        iconSource: "qrc:/omareel/assets/icons/lucide/" + root.sections[root.section].icon
                         title: root.sections[root.section].name
                         meta: root.panelMeta(root.section)
                     }

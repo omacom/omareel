@@ -3,7 +3,7 @@
 #include <QPointF>
 #include <QVector>
 
-namespace OmaRecord {
+namespace Omareel {
 
 struct CursorSample { double time = 0.0; QPointF position; };
 
@@ -18,4 +18,4 @@ public:
     static QPointF positionAt(const QVector<CursorSample> &samples, double time);
 };
 
-} // namespace OmaRecord
+} // namespace Omareel

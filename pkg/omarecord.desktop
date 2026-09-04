@@ -1,9 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=OmaRecord
-Comment=Record and edit polished screen videos
-Exec=omarecord
-Icon=omarecord
-Terminal=false
-Categories=AudioVideo;Recorder;
-StartupNotify=true

@@ -6,18 +6,26 @@
 #include <QSaveFile>
 #include <QStandardPaths>
 
-using namespace OmaRecord;
+using namespace Omareel;
 
 QString RecordingPreferences::path()
 {
     return QDir(QStandardPaths::writableLocation(QStandardPaths::ConfigLocation))
-        .filePath(QStringLiteral("omarecord/settings.json"));
+        .filePath(QStringLiteral("omareel/settings.json"));
 }
 
 RecordingPreferences RecordingPreferences::load()
 {
     RecordingPreferences preferences;
-    QFile file(path());
+    const QString currentPath = path();
+    const QString legacyPath = QDir(QStandardPaths::writableLocation(QStandardPaths::ConfigLocation))
+                                   .filePath(QStringLiteral("omarecord/settings.json"));
+    QString readPath = currentPath;
+    if (!QFileInfo::exists(currentPath) && QFileInfo::exists(legacyPath)) {
+        QDir().mkpath(QFileInfo(currentPath).absolutePath());
+        if (!QFile::copy(legacyPath, currentPath)) readPath = legacyPath;
+    }
+    QFile file(readPath);
     if (!file.open(QIODevice::ReadOnly)) return preferences;
     const QJsonObject root = QJsonDocument::fromJson(file.readAll()).object();
     preferences.systemAudio = root.value(QStringLiteral("systemAudio")).toBool(true);

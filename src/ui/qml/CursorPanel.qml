@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
-import Omarecord.Ui
+import Omareel.Ui
 
 ColumnLayout {
     id: root
@@ -71,7 +71,7 @@ ColumnLayout {
                             anchors.centerIn: parent
                             width: 26; height: 26
                             visible: modelData.value !== "dot"
-                            source: visible ? "qrc:/omarecord/assets/cursors/" + modelData.asset : ""
+                            source: visible ? "qrc:/omareel/assets/cursors/" + modelData.asset : ""
                             sourceSize: Qt.size(104, 104)
                             smooth: true
                         }

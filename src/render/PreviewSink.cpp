@@ -4,7 +4,7 @@
 
 #include <QVideoSink>
 
-using namespace OmaRecord;
+using namespace Omareel;
 
 PreviewSink::PreviewSink(QVideoSink *sink, QObject *parent): QObject(parent)
 {

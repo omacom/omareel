@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <cmath>
 
-using namespace OmaRecord;
+using namespace Omareel;
 
 struct SpringState { double x = 0.0; double velocity = 0.0; };
 

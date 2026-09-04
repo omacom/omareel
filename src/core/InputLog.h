@@ -5,7 +5,7 @@
 #include <QStringList>
 #include <QVector>
 
-namespace OmaRecord {
+namespace Omareel {
 
 enum class InputKind { Move, ButtonDown, ButtonUp, Scroll, KeyDown, KeyUp };
 
@@ -39,4 +39,4 @@ private:
     QVector<InputEvent> m_events;
 };
 
-} // namespace OmaRecord
+} // namespace Omareel

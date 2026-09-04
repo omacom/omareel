@@ -6,7 +6,7 @@
 #include <QVariantMap>
 #include <atomic>
 
-namespace OmaRecord {
+namespace Omareel {
 
 QSize paddedEvenSize(int width, int height);
 
@@ -83,4 +83,4 @@ private:
     std::atomic_bool m_cancelled{false};
 };
 
-} // namespace OmaRecord
+} // namespace Omareel

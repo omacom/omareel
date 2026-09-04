@@ -5,7 +5,7 @@
 
 #include <QJsonValue>
 
-namespace OmaRecord {
+namespace Omareel {
 
 struct ZoomFrame {
     double scale = 1.0;
@@ -24,4 +24,4 @@ public:
     static QJsonValue targetToJson(const ZoomSegment &segment);
 };
 
-} // namespace OmaRecord
+} // namespace Omareel

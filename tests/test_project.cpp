@@ -3,7 +3,7 @@
 #include <QTemporaryDir>
 #include <QtTest>
 
-using namespace OmaRecord;
+using namespace Omareel;
 
 class ProjectTest : public QObject
 {
