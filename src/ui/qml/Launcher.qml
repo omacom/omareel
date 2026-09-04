@@ -2,7 +2,6 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.impl
 import QtQuick.Dialogs
-import QtQuick.Effects
 import QtQuick.Layouts
 import QtMultimedia
 import Omarecord.Ui
@@ -10,27 +9,26 @@ import Omarecord.Ui
 ApplicationWindow {
     id: window
     visible: true
-    width: 880
-    height: 600
-    minimumWidth: 720
-    minimumHeight: 520
+    width: 380
+    height: desiredHeight
+    minimumWidth: 340
+    maximumWidth: 380
+    minimumHeight: desiredHeight - 40
+    maximumHeight: desiredHeight
     title: "omarecord"
     color: theme.surface
     font.family: theme.fontFamily
     font.pixelSize: theme.font.body
 
+    readonly property int desiredHeight: launcher.webcam && !showingRecording ? 580 : 460
     readonly property string iconRoot: "qrc:/omarecord/assets/icons/" + "luc" + "ide/"
     readonly property bool cameraQuarterTurn: launcher.webcamRotation === 90
                                                || launcher.webcamRotation === 270
-    property bool motionReady: false
-    property string pendingDeletePath: ""
-    property string pendingDeleteName: ""
-    property string pendingRenamePath: ""
-    property string errorMessage: ""
     property bool screenshotRecording: false
+    property string errorMessage: ""
     readonly property bool showingRecording: launcher.recording || screenshotRecording
 
-    Component.onCompleted: Qt.callLater(function() { window.motionReady = true })
+    Behavior on height { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
 
     function beginRecording() {
         if (!launcher.recording)
@@ -38,66 +36,21 @@ ApplicationWindow {
     }
 
     function prepareScreenshot(view) {
-        if (view === "webcam-menu")
-            webcamMenu.popup(webcamChip, webcamChip.width - webcamMenu.width,
-                             webcamChip.height + 8)
-        else if (view === "webcam-on")
-            launcher.webcam = true
-        else if (view === "recording")
-            window.screenshotRecording = true
-        else if (view === "settings")
-            settingsPopover.open()
+        if (view === "webcam-menu") webcamMenu.popup(webcamRow, 28, webcamRow.height + 4)
+        else if (view === "webcam-on") launcher.webcam = true
+        else if (view === "recording") screenshotRecording = true
+        else if (view === "settings") settingsPopover.open()
     }
 
-    component GhostIconButton: OmIconButton {
-        property string iconFile: ""
-        property string tip: ""
-        tooltipText: tip
-        icon.color: enabled ? theme.foreground : theme.textFaint
-        icon.source: window.iconRoot + iconFile
-    }
-
-    component QuietButton: OmButton {
-        bordered: true
-        primary: highlighted
-    }
-
-    component CaptureChip: OmButton {
-        id: chip
-        property string iconFile: ""
-        property bool hasMenu: false
-        signal toggleRequested()
-        signal menuRequested()
-        bordered: true
-        icon.source: window.iconRoot + iconFile
-        trailingIconSource: hasMenu ? window.iconRoot + "chevron-down.svg" : ""
-        onClicked: toggleRequested()
-        MouseArea {
-            visible: chip.hasMenu
-            anchors.top: parent.top
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            width: 28
-            z: 2
-            cursorShape: Qt.PointingHandCursor
-            onClicked: chip.menuRequested()
-        }
-    }
-
-    component StyledMenuItem: MenuItem {
+    component LauncherMenuItem: MenuItem {
         id: menuItem
-        implicitHeight: theme.space.popupRowHeight
-        height: theme.space.popupRowHeight
-        leftPadding: 32
-        rightPadding: 10
-        topPadding: 0
-        bottomPadding: 0
-        hoverEnabled: true
+        implicitHeight: 32
+        leftPadding: 28
+        rightPadding: 8
         indicator: Item {
-            x: 10
+            x: 8
             anchors.verticalCenter: parent.verticalCenter
-            width: 14
-            height: 14
+            width: 14; height: 14
             visible: menuItem.checkable && menuItem.checked
             IconImage {
                 anchors.fill: parent
@@ -108,40 +61,79 @@ ApplicationWindow {
         }
         contentItem: Label {
             text: menuItem.text
-            color: menuItem.checked ? theme.menuSelectedText
-                                    : menuItem.enabled ? theme.menuText : theme.textMuted
-            font.pixelSize: theme.font.body
-            font.weight: Font.Medium
-            elide: Text.ElideRight
+            color: menuItem.enabled ? theme.foreground : theme.textFaint
+            font.pixelSize: theme.font.bodySmall
             verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
         }
         background: Rectangle {
             radius: theme.radius
             color: menuItem.highlighted || menuItem.checked ? theme.menuSelectedBackground : "transparent"
-            Behavior on color {
-                enabled: window.motionReady
-                ColorAnimation { duration: 120; easing.type: Easing.OutCubic }
-            }
         }
     }
 
-    component MenuDivider: MenuSeparator {
-        implicitHeight: 9
-        contentItem: Rectangle {
-            implicitHeight: 1
-            color: theme.hairline
+    component CaptureRow: Button {
+        id: row
+        property string iconFile: ""
+        property bool selected: false
+        property bool hasMenu: false
+        signal menuRequested()
+        Layout.fillWidth: true
+        Layout.preferredHeight: 28
+        enabled: !window.showingRecording
+        hoverEnabled: true
+        leftPadding: 8; rightPadding: 8; topPadding: 0; bottomPadding: 0
+        contentItem: RowLayout {
+            spacing: 8
+            IconImage {
+                Layout.preferredWidth: 14; Layout.preferredHeight: 14
+                source: window.iconRoot + row.iconFile
+                sourceSize: Qt.size(14, 14)
+                color: row.enabled ? theme.foreground : theme.textFaint
+            }
+            Label {
+                Layout.fillWidth: true
+                text: row.text
+                color: row.enabled ? theme.foreground : theme.textFaint
+                font.pixelSize: theme.font.bodySmall
+                font.weight: row.selected ? Font.DemiBold : Font.Normal
+                verticalAlignment: Text.AlignVCenter
+            }
+            Rectangle {
+                width: 7; height: 7; radius: 4
+                color: row.selected ? theme.accent : theme.textFaint
+            }
+            IconImage {
+                visible: row.hasMenu
+                Layout.preferredWidth: 14; Layout.preferredHeight: 14
+                source: window.iconRoot + "chevron-down.svg"
+                sourceSize: Qt.size(14, 14)
+                color: row.enabled ? theme.foreground : theme.textFaint
+            }
+        }
+        background: Rectangle {
+            radius: theme.radius
+            color: row.down ? theme.pressedFill
+                 : row.hovered || row.visualFocus ? theme.hoverFill : theme.normalFill
+            border.width: theme.controlBorderWidth(row.visualFocus, row.hovered, row.selected)
+            border.color: theme.controlBorder(row.visualFocus, row.hovered, row.selected)
+        }
+        MouseArea {
+            visible: row.hasMenu
+            anchors.top: parent.top; anchors.right: parent.right; anchors.bottom: parent.bottom
+            width: 36
+            cursorShape: Qt.PointingHandCursor
+            onClicked: row.menuRequested()
         }
     }
 
     Camera {
         id: previewCamera
         cameraDevice: launcher.webcamCameraDevice
-        active: launcher.webcam && launcher.webcamPreviewAvailable && !launcher.recording
+        active: launcher.webcam && launcher.webcamPreviewAvailable && !window.showingRecording
     }
-    CaptureSession {
-        camera: previewCamera
-        videoOutput: cameraSource
-    }
+    CaptureSession { camera: previewCamera; videoOutput: cameraSource }
+
     Connections {
         target: launcher
         function onRecordingStarting() { previewCamera.stop() }
@@ -150,514 +142,108 @@ ApplicationWindow {
             errorTimer.restart()
         }
     }
-    Timer {
-        id: errorTimer
-        interval: 5000
-        onTriggered: window.errorMessage = ""
-    }
+    Timer { id: errorTimer; interval: 5000; onTriggered: window.errorMessage = "" }
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 28
+        anchors.margins: 24
         spacing: 0
 
         RowLayout {
             Layout.fillWidth: true
-            Layout.preferredHeight: 40
-            spacing: 12
-            Label {
-                text: "omarecord"
-                font.pixelSize: theme.font.heading
-                font.weight: Font.DemiBold
-                color: theme.foreground
-                lineHeight: 1.35
-                Layout.alignment: Qt.AlignVCenter
+            Layout.minimumWidth: window.width - 48
+            Layout.maximumWidth: window.width - 48
+            Layout.preferredHeight: 44
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 0
+                Label {
+                    text: "omarecord"
+                    color: theme.foreground
+                    font.pixelSize: theme.font.heading
+                    font.weight: Font.DemiBold
+                }
+                Label {
+                    text: "SCREEN RECORDING"
+                    color: theme.textMuted
+                    font.pixelSize: theme.font.caption
+                    font.bold: true
+                    font.letterSpacing: 1.2
+                }
             }
-            Rectangle {
-                Layout.preferredWidth: 1
-                Layout.preferredHeight: 16
-                color: theme.hairlineStrong
-                Layout.alignment: Qt.AlignVCenter
-            }
-            Label {
-                text: "SCREEN RECORDING · " + theme.themeName.toUpperCase()
-                font.pixelSize: theme.font.caption
-                font.bold: true
-                font.letterSpacing: 1.2
-                color: theme.textMuted
-                lineHeight: 1.35
-                Layout.alignment: Qt.AlignVCenter
-            }
-            Item { Layout.fillWidth: true }
-            GhostIconButton {
-                iconFile: "folder-open.svg"
-                tip: "Open…"
-                Accessible.name: "Open…"
-                onClicked: folderDialog.open()
-            }
-            GhostIconButton {
+            OmIconButton {
                 id: settingsButton
-                iconFile: "settings-2.svg"
-                tip: "Settings"
+                icon.source: window.iconRoot + "settings-2.svg"
+                icon.color: theme.foreground
+                tooltipText: "Settings"
                 Accessible.name: "Settings"
                 onClicked: settingsPopover.visible ? settingsPopover.close() : settingsPopover.open()
             }
         }
 
-        Item { Layout.preferredHeight: 28 }
+        Item { Layout.fillHeight: true; Layout.minimumHeight: 8; Layout.maximumHeight: 28 }
 
         Item {
             Layout.fillWidth: true
-            Layout.preferredHeight: 64
+            Layout.preferredHeight: 132
 
-            RowLayout {
-                anchors.fill: parent
-                spacing: 0
+            Button {
+                id: recordControl
                 visible: !window.showingRecording
-                OmButton {
-                    id: recordButton
-                    Layout.preferredWidth: 112
-                    Layout.preferredHeight: theme.space.controlHeight
-                    Layout.alignment: Qt.AlignVCenter
-                    primary: true
-                    bordered: true
-                    text: "Record"
-                    icon.source: window.iconRoot + "circle.svg"
-                    icon.color: theme.record
-                    onClicked: window.beginRecording()
-                    Accessible.name: "Record"
-                }
-
-                Item { Layout.fillWidth: true; Layout.minimumWidth: 8 }
-
-                RowLayout {
-                    Layout.alignment: Qt.AlignVCenter
-                    spacing: 8
-                    CaptureChip {
-                        Layout.preferredWidth: implicitWidth
-                        text: "System audio"
-                        iconFile: "volume-2.svg"
-                        selected: launcher.systemAudio
-                        onToggleRequested: launcher.systemAudio = !launcher.systemAudio
-                    }
-                    CaptureChip {
-                        id: microphoneChip
-                        Layout.preferredWidth: implicitWidth
-                        text: "Microphone"
-                        iconFile: "mic.svg"
-                        hasMenu: true
-                        selected: launcher.microphone
-                        onToggleRequested: launcher.microphone = !launcher.microphone
-                        onMenuRequested: microphoneMenu.popup(microphoneChip, 0, microphoneChip.height + 8)
-                    }
-                    CaptureChip {
-                        id: webcamChip
-                        Layout.preferredWidth: implicitWidth
-                        text: "Webcam"
-                        iconFile: "video.svg"
-                        hasMenu: true
-                        enabled: launcher.webcam || launcher.webcamDevices.length > 0
-                        selected: launcher.webcam
-                        onToggleRequested: launcher.webcam = !launcher.webcam
-                        onMenuRequested: webcamMenu.popup(webcamChip, webcamChip.width - webcamMenu.width,
-                                                         webcamChip.height + 8)
-                    }
-                }
-
-                Item {
-                    id: previewSlot
-                    Layout.preferredWidth: width
-                    Layout.preferredHeight: 64
-                    width: launcher.webcam ? 76 : 0
-                    opacity: launcher.webcam ? 1 : 0
-                    Behavior on width {
-                        enabled: window.motionReady
-                        NumberAnimation { duration: 160; easing.type: Easing.OutCubic }
-                    }
-                    Behavior on opacity {
-                        enabled: window.motionReady
-                        NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
-                    }
-                    Item {
-                        id: previewBubble
-                        x: 12
-                        width: 64
-                        height: 64
-                        visible: previewSlot.width > 8
-                        VideoOutput {
-                            id: cameraSource
+                anchors.centerIn: parent
+                width: 236; height: 132
+                hoverEnabled: true
+                Accessible.name: "Record"
+                onClicked: window.beginRecording()
+                background: Item {}
+                contentItem: ColumnLayout {
+                    spacing: 4
+                    Rectangle {
+                        Layout.alignment: Qt.AlignHCenter
+                        width: 72; height: 72; radius: 36
+                        color: recordControl.down ? Qt.darker(theme.record, 1.12) : theme.record
+                        scale: recordControl.hovered ? 1.04 : 1
+                        Behavior on scale { NumberAnimation { duration: 120 } }
+                        Rectangle {
                             anchors.centerIn: parent
-                            width: window.cameraQuarterTurn ? parent.height : parent.width
-                            height: window.cameraQuarterTurn ? parent.width : parent.height
-                            fillMode: VideoOutput.PreserveAspectCrop
-                            rotation: launcher.webcamRotation
-                            visible: false
-                            transform: Scale {
-                                origin.x: cameraSource.width / 2
-                                origin.y: cameraSource.height / 2
-                                xScale: launcher.webcamFlipHorizontal ? -1 : 1
-                            }
-                        }
-                        Rectangle {
-                            id: cameraMask
-                            anchors.fill: parent
-                            radius: width / 2
-                            color: Qt.rgba(1, 1, 1, 1)
-                            visible: false
-                            layer.enabled: true
-                        }
-                        MultiEffect {
-                            anchors.fill: parent
-                            source: cameraSource
-                            maskEnabled: true
-                            maskSource: cameraMask
-                            visible: launcher.webcamPreviewAvailable
-                        }
-                        Rectangle {
-                            anchors.fill: parent
-                            radius: width / 2
-                            color: theme.surfaceRaised
-                            visible: !launcher.webcamPreviewAvailable
-                            OmIconButton {
-                                anchors.centerIn: parent
-                                width: 20
-                                height: 20
-                                enabled: false
-                                opacity: 1
-                                icon.width: 20
-                                icon.height: 20
-                                icon.source: window.iconRoot + "video.svg"
-                                icon.color: theme.textFaint
-                                background: null
-                            }
-                        }
-                        Rectangle {
-                            anchors.fill: parent
-                            radius: width / 2
+                            width: 48; height: 48; radius: 24
                             color: "transparent"
-                            border.width: 1
-                            border.color: theme.hairlineStrong
-                        }
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: webcamMenu.popup(previewBubble, previewBubble.width - webcamMenu.width,
-                                                       previewBubble.height + 8)
-                        }
-                    }
-                }
-            }
-
-            RowLayout {
-                anchors.fill: parent
-                visible: window.showingRecording
-                spacing: 12
-                Rectangle {
-                    Layout.preferredWidth: 12
-                    Layout.preferredHeight: 12
-                    radius: width / 2
-                    color: theme.record
-                    SequentialAnimation on opacity {
-                        running: window.showingRecording
-                        loops: Animation.Infinite
-                        NumberAnimation { from: 1; to: .35; duration: 700; easing.type: Easing.InOutSine }
-                        NumberAnimation { from: .35; to: 1; duration: 700; easing.type: Easing.InOutSine }
-                    }
-                }
-                RowLayout {
-                    spacing: 5
-                    Label {
-                        text: "Recording ·"
-                        font.pixelSize: theme.font.title
-                        font.weight: Font.DemiBold
-                        color: theme.foreground
-                    }
-                    Label {
-                        text: window.screenshotRecording ? "00:12" : launcher.recordingElapsed
-                        font.family: theme.monoFamily
-                        font.pixelSize: theme.font.title
-                        font.weight: Font.DemiBold
-                        color: theme.foreground
-                    }
-                }
-                Item { Layout.fillWidth: true }
-                QuietButton {
-                    text: "Stop"
-                    highlighted: true
-                    onClicked: launcher.stopRecording()
-                }
-                QuietButton {
-                    id: discardButton
-                    text: armed ? "Discard?" : "Discard"
-                    property bool armed: false
-                    onClicked: {
-                        if (armed) launcher.cancelRecording()
-                        else {
-                            armed = true
-                            discardTimer.restart()
-                        }
-                    }
-                }
-                Timer {
-                    id: discardTimer
-                    interval: 3000
-                    onTriggered: discardButton.armed = false
-                }
-            }
-        }
-
-        Item { Layout.preferredHeight: 28 }
-        Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: theme.hairline }
-        Item { Layout.preferredHeight: 24 }
-
-        RowLayout {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 24
-            spacing: 8
-            Label {
-                text: "Recent"
-                font.pixelSize: theme.font.title
-                font.weight: Font.DemiBold
-                color: theme.foreground
-                lineHeight: 1.35
-            }
-            Label {
-                text: launcher.recentBundles.length
-                font.pixelSize: theme.font.caption
-                font.bold: true
-                font.letterSpacing: 1.2
-                color: theme.textFaint
-                lineHeight: 1.35
-            }
-            Item { Layout.fillWidth: true }
-            QuietButton {
-                text: "Show in folder"
-                onClicked: launcher.showRecordingsFolder()
-            }
-        }
-
-        Item { Layout.preferredHeight: 16 }
-
-        Item {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            GridView {
-                id: recentGrid
-                anchors.top: parent.top
-                anchors.bottom: parent.bottom
-                anchors.left: parent.left
-                width: parent.width + 16
-                visible: launcher.recentBundles.length > 0
-                model: launcher.recentBundles
-                clip: true
-                activeFocusOnTab: true
-                focus: false
-                keyNavigationEnabled: true
-                keyNavigationWraps: false
-                boundsBehavior: Flickable.StopAtBounds
-                currentIndex: -1
-                readonly property real availableWidth: width - 16
-                readonly property int columns: Math.max(1, Math.floor((availableWidth + 16) / 212))
-                readonly property real cardWidth: (availableWidth - (columns - 1) * 16) / columns
-                readonly property real cardHeight: cardWidth * 9 / 16 + 49
-                cellWidth: cardWidth + 16
-                cellHeight: cardHeight + 16
-                onActiveFocusChanged: {
-                    if (activeFocus && currentIndex < 0 && count > 0)
-                        currentIndex = 0
-                }
-                Keys.onReturnPressed: function(event) {
-                    if (currentIndex >= 0) launcher.openBundle(model[currentIndex].path)
-                    event.accepted = true
-                }
-                Keys.onEnterPressed: function(event) {
-                    if (currentIndex >= 0) launcher.openBundle(model[currentIndex].path)
-                    event.accepted = true
-                }
-                ScrollBar.vertical: ScrollBar {
-                    width: 6
-                    x: recentGrid.availableWidth - width
-                    policy: ScrollBar.AlwaysOn
-                    opacity: recentGrid.moving ? 1 : 0
-                    padding: 0
-                    background: null
-                    contentItem: Rectangle {
-                        implicitWidth: 6
-                        radius: theme.radius
-                        color: theme.textFaint
-                    }
-                    Behavior on opacity {
-                        enabled: window.motionReady
-                        NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
-                    }
-                }
-                delegate: Item {
-                    id: recentDelegate
-                    required property int index
-                    required property var modelData
-                    width: recentGrid.cardWidth
-                    height: recentGrid.cardHeight
-                    Column {
-                        anchors.fill: parent
-                        spacing: 0
-                        Item {
-                            id: thumbnail
-                            width: parent.width
-                            height: width * 9 / 16
-                            Rectangle {
-                                anchors.fill: parent
-                                radius: theme.radius
-                                color: theme.surfaceRaised
-                                clip: true
-                                Image {
-                                    anchors.fill: parent
-                                    source: recentDelegate.modelData.thumbnail
-                                    fillMode: Image.PreserveAspectCrop
-                                    asynchronous: true
-                                    sourceSize: Qt.size(Math.ceil(thumbnail.width * 2),
-                                                        Math.ceil(thumbnail.height * 2))
-                                    visible: source.toString() !== ""
-                                }
-                                OmIconButton {
-                                    anchors.centerIn: parent
-                                    width: 24
-                                    height: 24
-                                    visible: recentDelegate.modelData.thumbnail === ""
-                                    enabled: false
-                                    opacity: 1
-                                    icon.width: 24
-                                    icon.height: 24
-                                    icon.source: window.iconRoot + "film.svg"
-                                    icon.color: theme.textFaint
-                                    background: null
-                                }
-                            }
-                            Rectangle {
-                                anchors.fill: parent
-                                radius: theme.radius
-                                color: "transparent"
-                                border.width: 1
-                                border.color: recentMouse.containsMouse || recentGrid.currentIndex === recentDelegate.index
-                                              ? theme.hoverBorder : theme.normalBorder
-                                Behavior on border.color {
-                                    enabled: window.motionReady
-                                    ColorAnimation { duration: 120; easing.type: Easing.OutCubic }
-                                }
-                            }
-                            Rectangle {
-                                anchors.right: parent.right
-                                anchors.bottom: parent.bottom
-                                anchors.margins: 8
-                                width: durationLabel.implicitWidth + 12
-                                height: durationLabel.implicitHeight + 8
-                                radius: theme.radius
-                                color: Qt.alpha(theme.surface, .80)
-                                Label {
-                                    id: durationLabel
-                                    anchors.centerIn: parent
-                                    text: recentDelegate.modelData.durationText
-                                    font.family: theme.monoFamily
-                                    font.pixelSize: theme.font.bodySmall
-                                    color: theme.foreground
-                                }
-                            }
-                            Rectangle {
-                                anchors.centerIn: parent
-                                width: 36
-                                height: 36
-                                radius: theme.radius
-                                color: Qt.alpha(theme.surface, .60)
-                                opacity: recentMouse.containsMouse ? 1 : 0
-                                Behavior on opacity {
-                                    enabled: window.motionReady
-                                    NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
-                                }
-                                OmIconButton {
-                                    anchors.centerIn: parent
-                                    anchors.horizontalCenterOffset: 1
-                                    width: 17
-                                    height: 17
-                                    enabled: false
-                                    opacity: 1
-                                    icon.width: 17
-                                    icon.height: 17
-                                    icon.source: window.iconRoot + "play.svg"
-                                    icon.color: Qt.rgba(1, 1, 1, .90)
-                                    background: null
-                                }
-                            }
-                            MouseArea {
-                                id: recentMouse
-                                anchors.fill: parent
-                                acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: function(mouse) {
-                                    recentGrid.currentIndex = recentDelegate.index
-                                    recentGrid.forceActiveFocus(Qt.MouseFocusReason)
-                                    if (mouse.button === Qt.RightButton)
-                                        itemMenu.popup(thumbnail, mouse.x, mouse.y)
-                                    else
-                                        launcher.openBundle(recentDelegate.modelData.path)
-                                }
-                            }
-                        }
-                        Item { width: 1; height: 10 }
-                        Label {
-                            width: parent.width
-                            height: 16
-                            text: recentDelegate.modelData.titleText
-                            elide: Text.ElideRight
-                            font.pixelSize: theme.font.body
-                            font.weight: Font.Medium
-                            color: theme.foreground
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        Item { width: 1; height: 4 }
-                        Label {
-                            width: parent.width
-                            height: 15
-                            text: recentDelegate.modelData.detailText
-                            elide: Text.ElideRight
-                            font.pixelSize: theme.font.caption
-                            color: theme.textMuted
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                    }
-                    Menu {
-                        id: itemMenu
-                        width: 176
-                        padding: 4
-                        background: Rectangle {
-                            radius: theme.radius
-                            color: theme.menuBackground
                             border.width: 2
-                            border.color: theme.popupBorder
+                            border.color: Qt.rgba(1, 1, 1, .30)
                         }
-                        StyledMenuItem {
-                            text: "Open"
-                            onTriggered: launcher.openBundle(recentDelegate.modelData.path)
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 26; height: 26; radius: 13
+                            color: "white"
                         }
-                        StyledMenuItem {
-                            text: "Rename"
-                            onTriggered: {
-                                window.pendingRenamePath = recentDelegate.modelData.path
-                                renameField.text = recentDelegate.modelData.name
-                                renameDialog.open()
-                                renameField.forceActiveFocus()
-                            }
+                    }
+                    Label {
+                        Layout.alignment: Qt.AlignHCenter
+                        text: "Record"
+                        color: theme.foreground
+                        font.pixelSize: theme.font.title
+                        font.bold: true
+                    }
+                    RowLayout {
+                        Layout.alignment: Qt.AlignHCenter
+                        spacing: 6
+                        Label {
+                            text: "Area · Window · Screen"
+                            color: theme.textMuted
+                            font.pixelSize: theme.font.caption
                         }
-                        StyledMenuItem {
-                            text: "Show in folder"
-                            onTriggered: launcher.showBundleInFolder(recentDelegate.modelData.path)
-                        }
-                        MenuDivider {}
-                        StyledMenuItem {
-                            text: "Delete…"
-                            onTriggered: {
-                                window.pendingDeletePath = recentDelegate.modelData.path
-                                window.pendingDeleteName = recentDelegate.modelData.titleText
-                                deleteDialog.open()
+                        Rectangle {
+                            width: shortcutLabel.implicitWidth + 8; height: 18
+                            radius: Math.min(4, theme.radius)
+                            color: theme.normalFill
+                            border.width: 1; border.color: theme.normalBorder
+                            Label {
+                                id: shortcutLabel
+                                anchors.centerIn: parent
+                                text: "Ctrl R"
+                                color: theme.textMuted
+                                font.family: theme.monoFamily
+                                font.pixelSize: theme.font.caption
                             }
                         }
                     }
@@ -665,59 +251,178 @@ ApplicationWindow {
             }
 
             ColumnLayout {
+                visible: window.showingRecording
                 anchors.centerIn: parent
-                visible: launcher.recentBundles.length === 0
-                spacing: 6
+                spacing: 12
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 10
+                    Rectangle {
+                        width: 16; height: 16; radius: 8
+                        color: theme.record
+                        SequentialAnimation on opacity {
+                            loops: Animation.Infinite
+                            NumberAnimation { from: 1; to: .35; duration: 700 }
+                            NumberAnimation { from: .35; to: 1; duration: 700 }
+                        }
+                    }
+                    Label {
+                        text: window.screenshotRecording ? "00:12" : launcher.recordingElapsed
+                        color: theme.foreground
+                        font.family: theme.monoFamily
+                        font.pixelSize: theme.font.heading
+                        font.weight: Font.DemiBold
+                    }
+                }
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 8
+                    OmButton {
+                        width: 104; height: 32
+                        text: "Stop"
+                        primary: true; bordered: true
+                        onClicked: launcher.stopRecording()
+                    }
+                    OmButton {
+                        id: discardButton
+                        width: 104; height: 32
+                        property bool armed: false
+                        text: armed ? "Discard?" : "Discard"
+                        destructive: armed; bordered: true
+                        onClicked: {
+                            if (armed) launcher.cancelRecording()
+                            else { armed = true; discardTimer.restart() }
+                        }
+                        Timer { id: discardTimer; interval: 3000; onTriggered: discardButton.armed = false }
+                    }
+                }
+            }
+        }
+
+        Item { Layout.preferredHeight: 8 }
+
+        Item {
+            Layout.fillWidth: true
+            Layout.preferredHeight: launcher.webcam && !window.showingRecording ? 120 : 0
+            opacity: launcher.webcam && !window.showingRecording ? 1 : 0
+            clip: true
+            Behavior on Layout.preferredHeight { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+            Behavior on opacity { NumberAnimation { duration: 120 } }
+
+            Rectangle {
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: 0
+                width: 96; height: 96; radius: 48
+                color: theme.normalFill
+                border.width: 2; border.color: theme.normalBorder
+                clip: true
+                VideoOutput {
+                    id: cameraSource
+                    anchors.centerIn: parent
+                    width: window.cameraQuarterTurn ? parent.height : parent.width
+                    height: window.cameraQuarterTurn ? parent.width : parent.height
+                    fillMode: VideoOutput.PreserveAspectCrop
+                    rotation: launcher.webcamRotation
+                    transform: Scale {
+                        origin.x: cameraSource.width / 2
+                        origin.y: cameraSource.height / 2
+                        xScale: launcher.webcamFlipHorizontal ? -1 : 1
+                    }
+                }
+                IconImage {
+                    visible: !launcher.webcamPreviewAvailable
+                    anchors.centerIn: parent
+                    width: 24; height: 24
+                    source: window.iconRoot + "video.svg"
+                    sourceSize: Qt.size(24, 24)
+                    color: theme.textFaint
+                }
+            }
+            RowLayout {
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: 92
+                spacing: 8
                 OmIconButton {
-                    Layout.preferredWidth: 28
-                    Layout.preferredHeight: 28
-                    Layout.alignment: Qt.AlignHCenter
-                    enabled: false
-                    opacity: 1
-                    icon.width: 28
-                    icon.height: 28
-                    icon.source: window.iconRoot + "film.svg"
-                    icon.color: theme.textFaint
-                    background: null
+                    width: 28; height: 28
+                    bordered: true
+                    icon.source: window.iconRoot + "rotate-cw.svg"
+                    icon.color: theme.foreground
+                    tooltipText: "Rotate camera"
+                    onClicked: launcher.webcamRotation = (launcher.webcamRotation + 90) % 360
                 }
-                Label {
-                    text: "No recordings yet"
-                    font.pixelSize: theme.font.body
-                    font.weight: Font.Medium
-                    color: theme.foreground
-                    Layout.alignment: Qt.AlignHCenter
+                OmIconButton {
+                    width: 28; height: 28
+                    bordered: true
+                    selected: launcher.webcamFlipHorizontal
+                    icon.source: window.iconRoot + "flip-horizontal-2.svg"
+                    icon.color: theme.foreground
+                    tooltipText: "Flip camera"
+                    onClicked: launcher.webcamFlipHorizontal = !launcher.webcamFlipHorizontal
                 }
-                Label {
-                    text: "Your recordings appear here after you stop."
-                    font.pixelSize: theme.font.bodySmall
-                    color: theme.textMuted
-                    Layout.alignment: Qt.AlignHCenter
-                }
+            }
+        }
+
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 0
+            CaptureRow {
+                text: "System audio"; iconFile: "volume-2.svg"; selected: launcher.systemAudio
+                onClicked: launcher.systemAudio = !launcher.systemAudio
+            }
+            CaptureRow {
+                id: microphoneRow
+                text: "Microphone"; iconFile: "mic.svg"; selected: launcher.microphone; hasMenu: true
+                onClicked: launcher.microphone = !launcher.microphone
+                onMenuRequested: microphoneMenu.popup(microphoneRow, 28, microphoneRow.height + 4)
+            }
+            CaptureRow {
+                id: webcamRow
+                text: "Webcam"; iconFile: "video.svg"; selected: launcher.webcam; hasMenu: true
+                enabled: !window.showingRecording && (launcher.webcam || launcher.webcamDevices.length > 0)
+                onClicked: launcher.webcam = !launcher.webcam
+                onMenuRequested: webcamMenu.popup(webcamRow, 28, webcamRow.height + 4)
+            }
+        }
+
+        Item { Layout.fillHeight: true; Layout.minimumHeight: 8; Layout.maximumHeight: 28 }
+
+        OmButton {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 32
+            text: "Open recording…"
+            icon.source: window.iconRoot + "folder-open.svg"
+            bordered: true
+            onClicked: folderDialog.open()
+        }
+        Label {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 20
+            text: "Recordings are saved to ~/Videos/omarecord"
+            color: folderMouse.containsMouse ? theme.foreground : theme.textMuted
+            font.pixelSize: theme.font.caption
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            MouseArea {
+                id: folderMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: launcher.showRecordingsFolder()
             }
         }
     }
 
     Menu {
         id: microphoneMenu
-        width: 280
-        padding: 4
-        background: Rectangle {
-            radius: theme.radius
-            color: theme.menuBackground
-            border.width: 2
-            border.color: theme.popupBorder
-        }
+        width: 280; padding: 4
+        background: Rectangle { radius: theme.radius; color: theme.menuBackground; border.width: 1; border.color: theme.popupBorder }
         Instantiator {
             model: launcher.audioDevices
-            delegate: StyledMenuItem {
+            delegate: LauncherMenuItem {
                 required property var modelData
-                text: modelData.text
-                checkable: true
+                text: modelData.text; checkable: true
                 checked: modelData.value === launcher.microphoneDevice
-                onTriggered: {
-                    launcher.microphoneDevice = modelData.value
-                    launcher.microphone = true
-                }
+                onTriggered: { launcher.microphoneDevice = modelData.value; launcher.microphone = true }
             }
             onObjectAdded: function(index, object) { microphoneMenu.insertItem(index, object) }
             onObjectRemoved: function(index, object) { microphoneMenu.removeItem(object) }
@@ -726,263 +431,71 @@ ApplicationWindow {
 
     Menu {
         id: webcamMenu
-        width: 300
-        padding: 4
-        background: Rectangle {
-            radius: theme.radius
-            color: theme.menuBackground
-            border.width: 2
-            border.color: theme.popupBorder
-        }
+        width: 300; padding: 4
+        background: Rectangle { radius: theme.radius; color: theme.menuBackground; border.width: 1; border.color: theme.popupBorder }
         Instantiator {
             model: launcher.webcamDevices
-            delegate: StyledMenuItem {
+            delegate: LauncherMenuItem {
                 required property var modelData
-                text: modelData.text
-                checkable: true
+                text: modelData.text; checkable: true
                 checked: modelData.value === launcher.webcamDevice
-                onTriggered: {
-                    launcher.webcamDevice = modelData.value
-                    launcher.webcam = true
-                }
+                onTriggered: { launcher.webcamDevice = modelData.value; launcher.webcam = true }
             }
             onObjectAdded: function(index, object) { webcamMenu.insertItem(index, object) }
             onObjectRemoved: function(index, object) { webcamMenu.removeItem(object) }
-        }
-        MenuDivider {}
-        MenuItem {
-            implicitHeight: 40
-            hoverEnabled: false
-            contentItem: RowLayout {
-                spacing: 4
-                Label { text: "Rotate"; font.pixelSize: theme.font.body; color: theme.textMuted; Layout.fillWidth: true }
-                Repeater {
-                    model: [0, 90, 180, 270]
-                    delegate: OmButton {
-                        required property int modelData
-                        Layout.preferredWidth: 38
-                        Layout.preferredHeight: theme.space.controlHeight
-                        text: modelData + "°"
-                        font.family: theme.monoFamily
-                        font.pixelSize: theme.font.caption
-                        bordered: true
-                        selected: launcher.webcamRotation === modelData
-                        onClicked: launcher.webcamRotation = modelData
-                    }
-                }
-            }
-            background: Rectangle { color: "transparent" }
-        }
-        MenuItem {
-            implicitHeight: 36
-            hoverEnabled: false
-            contentItem: RowLayout {
-                Label { text: "Flip horizontal"; font.pixelSize: theme.font.body; color: theme.textMuted; Layout.fillWidth: true }
-                OmToggle {
-                    Layout.preferredWidth: 42
-                    Layout.preferredHeight: 28
-                    checked: launcher.webcamFlipHorizontal
-                    onToggled: launcher.webcamFlipHorizontal = checked
-                }
-            }
-            background: Rectangle { color: "transparent" }
-        }
-        MenuItem {
-            implicitHeight: 40
-            hoverEnabled: false
-            contentItem: RowLayout {
-                spacing: 4
-                Label { text: "Capture size"; font.pixelSize: theme.font.body; color: theme.textMuted; Layout.fillWidth: true }
-                Repeater {
-                    model: [720, 1080]
-                    delegate: OmButton {
-                        required property int modelData
-                        Layout.preferredWidth: 58
-                        Layout.preferredHeight: theme.space.controlHeight
-                        text: modelData + "p"
-                        font.family: theme.monoFamily
-                        font.pixelSize: theme.font.caption
-                        bordered: true
-                        selected: launcher.webcamHeight === modelData
-                        onClicked: launcher.webcamHeight = modelData
-                    }
-                }
-            }
-            background: Rectangle { color: "transparent" }
         }
     }
 
     Popup {
         id: settingsPopover
         parent: window.contentItem
-        x: window.width - width - 28
-        y: 72
-        width: 288
+        x: window.width - width - 24
+        y: 60
+        width: 292
         padding: 16
-        modal: false
-        focus: true
+        modal: false; focus: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-        background: OmPopupCard { }
+        background: OmPopupCard {}
         contentItem: ColumnLayout {
             spacing: 8
-            Label {
-                text: "Capture settings"
-                font.pixelSize: theme.font.title
-                font.weight: Font.DemiBold
-                color: theme.foreground
-            }
-            Label {
-                Layout.fillWidth: true
-                text: "Defaults for new recordings"
-                font.pixelSize: theme.font.bodySmall
-                color: theme.textMuted
-            }
+            Label { text: "Capture settings"; color: theme.foreground; font.pixelSize: theme.font.title; font.bold: true }
+            Label { text: "Defaults for new recordings"; color: theme.textMuted; font.pixelSize: theme.font.caption }
             Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: theme.hairline }
-            OmToggle {
+            OmToggle { Layout.fillWidth: true; text: "Show camera self-view"; checked: launcher.selfViewEnabled; onToggled: launcher.selfViewEnabled = checked }
+            OmToggle { Layout.fillWidth: true; text: "Hide self-view while recording"; checked: launcher.hideSelfViewViaPortal; onToggled: launcher.hideSelfViewViaPortal = checked }
+            Label { text: "Self-view size"; color: theme.textMuted; font.pixelSize: theme.font.caption }
+            OmButtonGroup {
                 Layout.fillWidth: true
-                text: "System audio"
-                font.pixelSize: theme.font.body
-                checked: launcher.systemAudio
-                onToggled: launcher.systemAudio = checked
-            }
-            OmToggle {
-                Layout.fillWidth: true
-                text: "Microphone"
-                font.pixelSize: theme.font.body
-                checked: launcher.microphone
-                onToggled: launcher.microphone = checked
-            }
-            OmToggle {
-                Layout.fillWidth: true
-                text: "Webcam"
-                font.pixelSize: theme.font.body
-                enabled: launcher.webcam || launcher.webcamDevices.length > 0
-                checked: launcher.webcam
-                onToggled: launcher.webcam = checked
-            }
-        }
-    }
-
-    Dialog {
-        id: renameDialog
-        parent: window.contentItem
-        x: (window.width - width) / 2
-        y: (window.height - height) / 2
-        width: 380
-        modal: true
-        focus: true
-        padding: 20
-        title: "Rename recording"
-        standardButtons: Dialog.NoButton
-        background: OmPopupCard { }
-        contentItem: ColumnLayout {
-            spacing: 16
-            OmTextField {
-                id: renameField
-                Layout.fillWidth: true
-                placeholderText: "Recording name"
-                selectByMouse: true
-                onAccepted: {
-                    if (text.trim() !== "") {
-                        launcher.renameBundle(window.pendingRenamePath, text)
-                        renameDialog.close()
-                    }
-                }
-            }
-            RowLayout {
-                Layout.fillWidth: true
-                Item { Layout.fillWidth: true }
-                QuietButton { text: "Cancel"; onClicked: renameDialog.close() }
-                QuietButton {
-                    text: "Rename"
-                    highlighted: true
-                    enabled: renameField.text.trim() !== ""
-                    onClicked: {
-                        launcher.renameBundle(window.pendingRenamePath, renameField.text)
-                        renameDialog.close()
-                    }
-                }
-            }
-        }
-    }
-
-    Dialog {
-        id: deleteDialog
-        parent: window.contentItem
-        x: (window.width - width) / 2
-        y: (window.height - height) / 2
-        width: 380
-        modal: true
-        focus: true
-        padding: 20
-        title: "Delete recording?"
-        standardButtons: Dialog.NoButton
-        background: OmPopupCard { }
-        contentItem: ColumnLayout {
-            spacing: 16
-            Label {
-                Layout.fillWidth: true
-                text: "“" + window.pendingDeleteName + "” will be permanently deleted."
-                wrapMode: Text.WordWrap
-                font.pixelSize: theme.font.subtitle
-                color: theme.textMuted
-            }
-            RowLayout {
-                Layout.fillWidth: true
-                Item { Layout.fillWidth: true }
-                QuietButton { text: "Cancel"; onClicked: deleteDialog.close() }
-                QuietButton {
-                    text: "Delete"
-                    highlighted: true
-                    destructive: true
-                    onClicked: {
-                        launcher.deleteBundle(window.pendingDeletePath)
-                        deleteDialog.close()
-                    }
-                }
+                options: ["S", "M", "L"]
+                value: launcher.selfViewSize
+                onChanged: value => launcher.selfViewSize = value
             }
         }
     }
 
     Rectangle {
         anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: 18
-        width: Math.min(460, errorLabel.implicitWidth + 32)
-        height: 38
-        radius: theme.radius
+        anchors.bottom: parent.bottom; anchors.bottomMargin: 12
+        width: Math.min(window.width - 32, errorLabel.implicitWidth + 24)
+        height: 36; radius: theme.radius
         visible: window.errorMessage !== ""
         color: theme.foreground
         z: 40
         Label {
             id: errorLabel
             anchors.centerIn: parent
-            width: parent.width - 24
+            width: parent.width - 16
             text: window.errorMessage
             color: theme.surface
-            font.pixelSize: theme.font.body
+            font.pixelSize: theme.font.caption
             elide: Text.ElideRight
             horizontalAlignment: Text.AlignHCenter
         }
     }
 
-    Shortcut {
-        sequence: "Ctrl+R"
-        enabled: !launcher.recording && !deleteDialog.visible && !renameDialog.visible
-        onActivated: window.beginRecording()
-    }
-    Shortcut {
-        sequence: "Return"
-        enabled: !launcher.recording && !deleteDialog.visible && !renameDialog.visible
-                 && !recentGrid.activeFocus
-        onActivated: window.beginRecording()
-    }
-    Shortcut {
-        sequence: "Enter"
-        enabled: !launcher.recording && !deleteDialog.visible && !renameDialog.visible
-                 && !recentGrid.activeFocus
-        onActivated: window.beginRecording()
-    }
+    Shortcut { sequence: "Ctrl+R"; enabled: !window.showingRecording; onActivated: window.beginRecording() }
+    Shortcut { sequence: "Return"; enabled: !window.showingRecording && !settingsPopover.visible; onActivated: window.beginRecording() }
+    Shortcut { sequence: "Enter"; enabled: !window.showingRecording && !settingsPopover.visible; onActivated: window.beginRecording() }
 
     FolderDialog {
         id: folderDialog

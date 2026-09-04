@@ -102,7 +102,7 @@ static int usage(const QString &error = {})
               "      --dir PATH,\n"
               "      --with-desktop-audio, --with-microphone-audio, --no-audio,\n"
               "      --with-webcam, --webcam-device PATH, --webcam-height 720|1080,\n"
-              "      --no-webcam, --no-open, --no-bar,\n"
+              "      --no-webcam, --no-selfview, --no-open, --no-bar,\n"
               "      --stop, --cancel.\n"
               "  edit <bundle.omarecord>\n"
               "      Open a recording bundle in the editor.\n"
@@ -162,11 +162,25 @@ static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplicat
             editor->setProperty("pickingZoomTarget", true);
 
     bool screenshotTimeOk = false;
-    const double screenshotTime = qEnvironmentVariable("OMARECORD_SCREENSHOT_TIME")
-                                      .toDouble(&screenshotTimeOk);
+    QString screenshotSeek = qEnvironmentVariable("OMARECORD_SCREENSHOT_SEEK");
+    if (screenshotSeek.isEmpty()) screenshotSeek = qEnvironmentVariable("OMARECORD_SCREENSHOT_TIME");
+    const double screenshotTime = screenshotSeek.toDouble(&screenshotTimeOk);
     if (screenshotTimeOk)
         if (QObject *editor = engine.rootContext()->contextProperty(QStringLiteral("editor")).value<QObject *>())
             QMetaObject::invokeMethod(editor, "seek", Q_ARG(double, screenshotTime));
+
+    const QJsonObject projectValues = QJsonDocument::fromJson(
+        qEnvironmentVariable("OMARECORD_SCREENSHOT_PROJECT_VALUES").toUtf8()).object();
+    if (!projectValues.isEmpty()) {
+        if (QObject *editor = engine.rootContext()->contextProperty(QStringLiteral("editor")).value<QObject *>()) {
+            for (auto it = projectValues.constBegin(); it != projectValues.constEnd(); ++it) {
+                QMetaObject::invokeMethod(editor, "setProjectValue",
+                                          Q_ARG(QString, it.key()),
+                                          Q_ARG(QVariant, it.value().toVariant()),
+                                          Q_ARG(bool, false));
+            }
+        }
+    }
 
     const QString screenshotView = qEnvironmentVariable("OMARECORD_SCREENSHOT_VIEW");
     if (!screenshotView.isEmpty()) {
@@ -285,6 +299,9 @@ static int recordCommand(const QStringList &arguments)
     options.webcamHeight = preferences.webcamHeight;
     options.webcamRotation = preferences.webcamRotation;
     options.webcamFlipHorizontal = preferences.webcamFlipHorizontal;
+    options.selfView = preferences.selfViewEnabled;
+    options.selfViewSize = preferences.selfViewSize;
+    options.hideSelfViewViaPortal = preferences.hideSelfViewViaPortal;
     int modeCount = 0;
     for (int i = 0; i < arguments.size(); ++i) {
         const QString arg = arguments[i];
@@ -295,6 +312,7 @@ static int recordCommand(const QStringList &arguments)
         else if (arg == QLatin1String("--with-microphone-audio")) options.microphoneAudio = true;
         else if (arg == QLatin1String("--with-webcam")) options.webcam = true;
         else if (arg == QLatin1String("--no-webcam")) options.webcam = false;
+        else if (arg == QLatin1String("--no-selfview")) options.selfView = false;
         else if (arg.startsWith(QLatin1String("--webcam-device="))) {
             options.webcamDevice = arg.section(QLatin1Char('='), 1);
             options.webcam = true;
@@ -356,14 +374,19 @@ static QScreen *recordBarScreen(const QString &recordedMonitor)
     int enabledCount = 0;
     for (const QJsonValue &value : monitors) {
         const QJsonObject monitor = value.toObject();
-        if (monitor.value(QStringLiteral("disabled")).toBool()) continue;
+        if (monitor.value(QStringLiteral("disabled")).toBool()
+            || (monitor.contains(QStringLiteral("dpmsStatus"))
+                && !monitor.value(QStringLiteral("dpmsStatus")).toBool())) continue;
         ++enabledCount;
     }
     if (enabledCount > 1) {
         for (const QJsonValue &value : monitors) {
             const QJsonObject monitor = value.toObject();
             const QString name = monitor.value(QStringLiteral("name")).toString();
-            if (!monitor.value(QStringLiteral("disabled")).toBool() && name != recordedMonitor) {
+            const bool available = !monitor.value(QStringLiteral("disabled")).toBool()
+                && (!monitor.contains(QStringLiteral("dpmsStatus"))
+                    || monitor.value(QStringLiteral("dpmsStatus")).toBool());
+            if (available && name != recordedMonitor) {
                 targetName = name;
                 break;
             }
@@ -443,7 +466,7 @@ int main(int argc, char **argv)
     const bool recordBar = argc > 1 && QByteArray(argv[1]) == "__record-bar";
     const bool hiddenRecordBar = recordBar && argc > 2 && QByteArray(argv[2]) == "--hidden";
     const bool graphical = argc == 1 || recordBar || (argc > 1 && QByteArray(argv[1]) == "edit");
-    if (recordBar && !hiddenRecordBar) LayerShellQt::Shell::useLayerShell();
+    if (recordBar) LayerShellQt::Shell::useLayerShell();
     if (graphical) {
         QQuickStyle::setStyle(QStringLiteral("Basic"));
     }
@@ -482,6 +505,7 @@ int main(int argc, char **argv)
                             << " at " << applicationFont.pixelSize() << " px\n";
     const QStringList args = app.arguments();
     if (args.size() < 2) {
+        app.setDesktopFileName(QStringLiteral("omarecord-launcher"));
         Theme theme;
         Launcher launcher;
         QQmlApplicationEngine engine;
@@ -508,7 +532,6 @@ int main(int argc, char **argv)
         if (engine.rootObjects().isEmpty()) return 2;
         auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
         if (!window) return 2;
-        if (hiddenRecordBar) return app.exec();
         QScreen *screen = recordBarScreen(recordingBar.recordedMonitor());
         if (screen) window->setScreen(screen);
         auto *layerWindow = LayerShellQt::Window::get(window);
@@ -520,7 +543,53 @@ int main(int argc, char **argv)
         layerWindow->setScope(QStringLiteral("omarecord-record-bar"));
         layerWindow->setActivateOnShow(false);
         if (screen) layerWindow->setScreen(screen);
-        window->show();
+        if (!hiddenRecordBar) window->show();
+
+        QQuickWindow *selfViewWindow = window->findChild<QQuickWindow *>(QStringLiteral("selfViewWindow"));
+        if (!selfViewWindow) {
+            for (QWindow *candidate : QGuiApplication::allWindows()) {
+                if (candidate->objectName() == QLatin1String("selfViewWindow")) {
+                    selfViewWindow = qobject_cast<QQuickWindow *>(candidate);
+                    break;
+                }
+            }
+        }
+        if (selfViewWindow && recordingBar.webcam()) {
+            QScreen *selfViewScreen = nullptr;
+            for (QScreen *candidate : QGuiApplication::screens())
+                if (candidate->name() == recordingBar.selfViewMonitor()) selfViewScreen = candidate;
+            if (!selfViewScreen) selfViewScreen = screen;
+            if (selfViewScreen) {
+                selfViewWindow->setScreen(selfViewScreen);
+                recordingBar.setSelfViewScreenSize(selfViewScreen->geometry().size());
+            }
+            QProcess layerRule;
+            layerRule.start(QStringLiteral("hyprctl"), {QStringLiteral("eval"),
+                QStringLiteral("hl.layer_rule({ name = 'omarecord-selfview-private', match = { namespace = 'omarecord-selfview' }, no_screen_share = true })")});
+            if (!layerRule.waitForFinished(3000) || layerRule.exitCode() != 0)
+                qWarning().noquote() << "omarecord: could not apply the self-view privacy rule";
+            auto *selfViewLayer = LayerShellQt::Window::get(selfViewWindow);
+            selfViewLayer->setLayer(LayerShellQt::Window::LayerOverlay);
+            selfViewLayer->setAnchors(LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorTop)
+                                      | LayerShellQt::Window::AnchorLeft);
+            selfViewLayer->setExclusiveZone(0);
+            selfViewLayer->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
+            selfViewLayer->setScope(QStringLiteral("omarecord-selfview"));
+            selfViewLayer->setActivateOnShow(false);
+            if (selfViewScreen) selfViewLayer->setScreen(selfViewScreen);
+            const auto updateSelfViewPlacement = [&recordingBar, selfViewLayer] {
+                selfViewLayer->setMargins(QMargins(recordingBar.selfViewX(),
+                                                   recordingBar.selfViewY(), 0, 0));
+            };
+            updateSelfViewPlacement();
+            QObject::connect(&recordingBar, &RecordingBar::selfViewPlacementChanged,
+                             selfViewWindow, updateSelfViewPlacement);
+            QObject::connect(&recordingBar, &RecordingBar::selfViewVisibilityChanged,
+                             selfViewWindow, [&recordingBar, selfViewWindow] {
+                selfViewWindow->setVisible(recordingBar.selfViewVisible());
+            });
+            selfViewWindow->setVisible(recordingBar.selfViewVisible());
+        }
         configureDebugScreenshot(engine, app);
         return app.exec();
     }

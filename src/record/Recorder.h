@@ -19,6 +19,9 @@ struct RecordOptions {
     int webcamHeight = 1080;
     int webcamRotation = 0;
     bool webcamFlipHorizontal = false;
+    bool selfView = true;
+    QString selfViewSize = QStringLiteral("M");
+    bool hideSelfViewViaPortal = false;
     bool noOpen = false;
     bool noBar = false;
 };

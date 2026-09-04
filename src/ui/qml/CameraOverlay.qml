@@ -37,9 +37,7 @@ Item {
 
     Rectangle {
         id: shadowShape
-        anchors.centerIn: parent
-        width: root.quarterTurn ? parent.height : parent.width
-        height: root.quarterTurn ? parent.width : parent.height
+        anchors.fill: parent
         radius: root.settings.shape === "round" ? width / 2
               : root.settings.shape === "rounded" ? root.settings.radius * root.ref : 0
         color: Qt.rgba(0, 0, 0, 1)
@@ -69,7 +67,9 @@ Item {
         id: cameraVideo
         z: 2
         objectName: "cameraFrameSource"
-        anchors.fill: parent
+        anchors.centerIn: parent
+        width: root.quarterTurn ? parent.height : parent.width
+        height: root.quarterTurn ? parent.width : parent.height
         cropRect: root.sourceCrop()
         cornerRadiusRatio: root.settings.shape === "round" ? .5
             : root.settings.shape === "rounded"

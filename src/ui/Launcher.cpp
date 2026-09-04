@@ -1,21 +1,14 @@
 #include "Launcher.h"
 
-#include "core/Project.h"
 #include "core/OmarchyPaths.h"
-#include "core/RecordingMetadata.h"
 #include "core/RecordingPreferences.h"
 #include "record/Recorder.h"
 
 #include <QCoreApplication>
 #include <QCameraDevice>
-#include <QDateTime>
 #include <QDesktopServices>
 #include <QDir>
-#include <QFile>
 #include <QFileInfo>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QLocale>
 #include <QMediaDevices>
 #include <QProcess>
 #include <QSet>
@@ -23,12 +16,6 @@
 #include <ctime>
 
 using namespace OmaRecord;
-
-static double processDuration(QProcess *process)
-{
-    if (process->exitStatus() != QProcess::NormalExit || process->exitCode() != 0) return 0.0;
-    return QString::fromUtf8(process->readAllStandardOutput()).trimmed().toDouble();
-}
 
 static qint64 monotonicUs()
 {
@@ -48,9 +35,11 @@ Launcher::Launcher(QObject *parent): QObject(parent)
     m_webcamHeight = preferences.webcamHeight;
     m_webcamRotation = preferences.webcamRotation;
     m_webcamFlipHorizontal = preferences.webcamFlipHorizontal;
+    m_selfViewEnabled = preferences.selfViewEnabled;
+    m_selfViewSize = preferences.selfViewSize;
+    m_hideSelfViewViaPortal = preferences.hideSelfViewViaPortal;
     refreshAudioDevices();
     refreshWebcamDevices();
-    refresh();
     connect(&m_recordingTimer, &QTimer::timeout, this, &Launcher::refreshRecording);
     m_recordingTimer.start(1000);
     refreshRecording();
@@ -67,6 +56,9 @@ void Launcher::saveRecordingPreferences()
     preferences.webcamHeight = m_webcamHeight;
     preferences.webcamRotation = m_webcamRotation;
     preferences.webcamFlipHorizontal = m_webcamFlipHorizontal;
+    preferences.selfViewEnabled = m_selfViewEnabled;
+    preferences.selfViewSize = m_selfViewSize;
+    preferences.hideSelfViewViaPortal = m_hideSelfViewViaPortal;
     QString error;
     if (!preferences.save(&error)) emit errorOccurred(error);
 }
@@ -134,6 +126,33 @@ void Launcher::setWebcamFlipHorizontal(bool value)
 {
     if (m_webcamFlipHorizontal == value) return;
     m_webcamFlipHorizontal = value;
+    saveRecordingPreferences();
+    emit recordingPreferencesChanged();
+}
+
+void Launcher::setSelfViewEnabled(bool value)
+{
+    if (m_selfViewEnabled == value) return;
+    m_selfViewEnabled = value;
+    saveRecordingPreferences();
+    emit recordingPreferencesChanged();
+}
+
+void Launcher::setSelfViewSize(const QString &value)
+{
+    const QString normalized = value.toUpper();
+    if (normalized != QLatin1String("S") && normalized != QLatin1String("M")
+        && normalized != QLatin1String("L")) return;
+    if (m_selfViewSize == normalized) return;
+    m_selfViewSize = normalized;
+    saveRecordingPreferences();
+    emit recordingPreferencesChanged();
+}
+
+void Launcher::setHideSelfViewViaPortal(bool value)
+{
+    if (m_hideSelfViewViaPortal == value) return;
+    m_hideSelfViewViaPortal = value;
     saveRecordingPreferences();
     emit recordingPreferencesChanged();
 }
@@ -231,92 +250,11 @@ void Launcher::refreshRecording()
     }
 }
 
-void Launcher::refresh()
-{
-    m_recentBundles.clear();
-    const QDir root(OmarchyPaths::recordingsDirectory());
-    const auto entries = root.entryInfoList({QStringLiteral("*.omarecord")}, QDir::Dirs | QDir::NoDotAndDotDot, QDir::Time);
-    for (const auto &entry : entries.mid(0, 12)) {
-        QString name;
-        const QString projectPath = QDir(entry.absoluteFilePath()).filePath(QStringLiteral("project.json"));
-        if (QFileInfo(projectPath).isFile()) {
-            QString ignored;
-            const Project project = Project::load(projectPath, &ignored);
-            if (ignored.isEmpty()) name = project.name.trimmed();
-        }
-        QJsonObject capture;
-        QFile captureFile(QDir(entry.absoluteFilePath()).filePath(QStringLiteral("capture.json")));
-        if (captureFile.open(QIODevice::ReadOnly))
-            capture = QJsonDocument::fromJson(captureFile.readAll()).object();
-        const int width = capture.value(QStringLiteral("width")).toInt();
-        const int height = capture.value(QStringLiteral("height")).toInt();
-        const QJsonObject region = capture.value(QStringLiteral("region")).toObject();
-        const double scale = capture.value(QStringLiteral("scale")).toDouble(1.0);
-        QString mode = capture.value(QStringLiteral("mode")).toString();
-        if (mode.isEmpty()) {
-            const int regionWidth = qRound(region.value(QStringLiteral("w")).toDouble() * scale);
-            const int regionHeight = qRound(region.value(QStringLiteral("h")).toDouble() * scale);
-            mode = qAbs(regionWidth - width) <= 1 && qAbs(regionHeight - height) <= 1
-                ? QStringLiteral("fullscreen") : QStringLiteral("region");
-        }
-        const QString modeText = mode == QLatin1String("fullscreen") ? QStringLiteral("Screen")
-            : mode == QLatin1String("window") ? QStringLiteral("Window") : QStringLiteral("Area");
-        const QString thumb = QDir(entry.absoluteFilePath()).filePath(QStringLiteral("thumb.jpg"));
-        const double duration = RecordingMetadata::captureDuration(entry.absoluteFilePath());
-        m_recentBundles << QVariantMap{{QStringLiteral("path"), entry.absoluteFilePath()},
-            {QStringLiteral("name"), name},
-            {QStringLiteral("titleText"), name.isEmpty() ? formatDate(entry.lastModified()) : name},
-            {QStringLiteral("detailText"), QStringLiteral("%1×%2 · %3").arg(width).arg(height).arg(modeText)},
-            {QStringLiteral("duration"), duration},
-            {QStringLiteral("durationText"), duration > 0.0 ? formatDuration(duration) : QStringLiteral("--:--")},
-            {QStringLiteral("thumbnail"), QFileInfo(thumb).isFile() ? QUrl::fromLocalFile(thumb).toString() : QString()}};
-        if (duration <= 0.0) probeDurationAsync(entry.absoluteFilePath());
-    }
-    emit recentBundlesChanged();
-}
-
 QString Launcher::formatDuration(double seconds)
 {
     const int total = std::max(0, qRound(seconds));
     return QStringLiteral("%1:%2").arg(total / 60, 2, 10, QLatin1Char('0'))
                                       .arg(total % 60, 2, 10, QLatin1Char('0'));
-}
-
-QString Launcher::formatDate(const QDateTime &dateTime)
-{
-    const QDate date = dateTime.date();
-    const QDate today = QDate::currentDate();
-    const QString time = dateTime.toString(QStringLiteral("HH:mm"));
-    if (date == today) return QStringLiteral("Today, %1").arg(time);
-    if (date == today.addDays(-1)) return QStringLiteral("Yesterday, %1").arg(time);
-    const QLocale english(QLocale::English);
-    if (date.year() == today.year())
-        return QStringLiteral("%1, %2").arg(english.toString(date, QStringLiteral("MMM d")), time);
-    return english.toString(date, QStringLiteral("MMM d, yyyy"));
-}
-
-void Launcher::probeDurationAsync(const QString &bundlePath)
-{
-    auto *process = new QProcess(this);
-    connect(process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
-            [this, process, bundlePath](int, QProcess::ExitStatus) {
-        const double duration = processDuration(process);
-        process->deleteLater();
-        if (duration <= 0.0) return;
-        for (QVariant &value : m_recentBundles) {
-            QVariantMap bundle = value.toMap();
-            if (bundle.value(QStringLiteral("path")).toString() != bundlePath) continue;
-            bundle[QStringLiteral("duration")] = duration;
-            bundle[QStringLiteral("durationText")] = formatDuration(duration);
-            value = bundle;
-            emit recentBundlesChanged();
-            break;
-        }
-    });
-    process->start(QStringLiteral("ffprobe"), {QStringLiteral("-v"), QStringLiteral("error"),
-        QStringLiteral("-show_entries"), QStringLiteral("format=duration"),
-        QStringLiteral("-of"), QStringLiteral("default=noprint_wrappers=1:nokey=1"),
-        QDir(bundlePath).filePath(QStringLiteral("screen.mp4"))});
 }
 
 void Launcher::openBundle(const QString &pathValue)
@@ -331,71 +269,12 @@ void Launcher::openBundle(const QString &pathValue)
     emit quitRequested();
 }
 
-void Launcher::showBundleInFolder(const QString &pathValue)
-{
-    const QUrl url(pathValue);
-    const QString path = url.isLocalFile() ? url.toLocalFile() : pathValue;
-    const QFileInfo bundle(path);
-    if (!bundle.isDir()) {
-        emit errorOccurred(QStringLiteral("Recording bundle no longer exists"));
-        return;
-    }
-    if (!QDesktopServices::openUrl(QUrl::fromLocalFile(bundle.absolutePath())))
-        emit errorOccurred(QStringLiteral("Could not open the recordings folder"));
-}
-
 void Launcher::showRecordingsFolder()
 {
     const QString path = OmarchyPaths::recordingsDirectory();
     QDir().mkpath(path);
     if (!QDesktopServices::openUrl(QUrl::fromLocalFile(path)))
         emit errorOccurred(QStringLiteral("Could not open the recordings folder"));
-}
-
-void Launcher::renameBundle(const QString &pathValue, const QString &nameValue)
-{
-    const QUrl url(pathValue);
-    const QFileInfo bundle(url.isLocalFile() ? url.toLocalFile() : pathValue);
-    const QString name = nameValue.trimmed();
-    if (!bundle.isDir() || name.isEmpty()) {
-        emit errorOccurred(QStringLiteral("Enter a name for the recording"));
-        return;
-    }
-    const QString projectPath = QDir(bundle.absoluteFilePath()).filePath(QStringLiteral("project.json"));
-    QString error;
-    Project project = QFileInfo::exists(projectPath)
-        ? Project::load(projectPath, &error)
-        : Project::defaults(name, RecordingMetadata::captureDuration(bundle.absoluteFilePath()));
-    if (!error.isEmpty()) {
-        emit errorOccurred(error);
-        return;
-    }
-    project.name = name;
-    if (!project.save(projectPath, &error)) {
-        emit errorOccurred(error);
-        return;
-    }
-    refresh();
-}
-
-void Launcher::deleteBundle(const QString &pathValue)
-{
-    const QUrl url(pathValue);
-    const QFileInfo bundle(url.isLocalFile() ? url.toLocalFile() : pathValue);
-    const QDir recordingsRoot(OmarchyPaths::recordingsDirectory());
-    const QString rootPath = QFileInfo(recordingsRoot.absolutePath()).canonicalFilePath();
-    const QString bundlePath = bundle.canonicalFilePath();
-    if (!bundle.isDir() || bundle.suffix() != QLatin1String("omarecord")
-        || rootPath.isEmpty() || bundlePath.isEmpty()
-        || QFileInfo(bundlePath).absolutePath() != rootPath) {
-        emit errorOccurred(QStringLiteral("Could not delete that recording bundle"));
-        return;
-    }
-    if (!QDir(bundlePath).removeRecursively()) {
-        emit errorOccurred(QStringLiteral("Could not delete the recording bundle"));
-        return;
-    }
-    refresh();
 }
 
 void Launcher::record()

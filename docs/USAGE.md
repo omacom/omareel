@@ -41,6 +41,7 @@ one mode may be supplied.
 - `--fps N` sets capture rate from 1 through 240; the default is 60.
 - `--webcam-height 720|1080` sets webcam capture resolution; the saved launcher preference
   defaults to 1080p.
+- `--no-selfview` records the webcam without showing the live camera self-view.
 - `--dir PATH` changes the bundle directory; the default is the `omarecord` directory under
   the user's XDG Videos directory.
 - `--no-open` does not open the editor after the recording is finalized.
@@ -66,6 +67,35 @@ When two monitors are available, the recording bar is placed at the top center o
 that is not being recorded. On a single-monitor setup, the bar remains accessible at the top
 center but is visible inside the recording. Use `--no-bar` or set `OMARECORD_NO_BAR=1` on the
 start command to suppress it.
+
+## Launcher window
+
+The launcher opens at 380×460 and grows to 380×580 while its webcam preview is visible. Its
+Wayland app id is `omarecord-launcher`. This optional Omarchy rule keeps it floating, centred,
+and at the intended default size:
+
+```lua
+o.window("^omarecord-launcher$", { float = true, center = true, size = "380 460" })
+```
+
+## Camera self-view
+
+When webcam capture is enabled, the camera self-view is a separate 160 px overlay by default.
+Choose S, M, or L in launcher settings and drag the bubble to persist its position. Placement is
+chosen when recording starts:
+
+- On a multi-monitor setup, the self-view and recording bar use a monitor that is not recorded.
+- For a region or window, the self-view uses the recorded monitor only when it fits completely
+  outside the captured rectangle; it shrinks to S if necessary.
+- For a single-monitor full-screen capture, the normal capture path shows a one-time warning
+  that the self-view will be visible. The recording bar can hide or show it while recording.
+
+The launcher setting **Hide self-view while recording** uses portal capture for the last case.
+The first run shows Omarchy's share picker once. Accept it and allow its restore token; setting
+`allow_token_by_default = true` in `~/.config/hypr/xdph.conf` avoids re-picking. If portal
+capture encounters the possible EGL DMA-BUF failure noted by Omarchy's capture script, capture
+automatically falls back to the monitor path and sends the notification “Self-view will be
+visible in the recording”.
 
 ### `edit BUNDLE`
 
@@ -115,10 +145,12 @@ clip, style, cursor, and zoom edits are stored in `project.json`.
 - `OMARECORD_SCREENSHOT_PANEL=background|shape|cursor|zoom|clip|camera|keystrokes|audio` selects an editor inspector
   before the debug capture.
 - `OMARECORD_SCREENSHOT_SIZE=1440x900` sets the debug-capture window dimensions.
-- `OMARECORD_SCREENSHOT_TIME=SECONDS` seeks the editor before capture.
+- `OMARECORD_SCREENSHOT_SEEK=SECONDS` seeks the editor before capture
+  (`OMARECORD_SCREENSHOT_TIME` remains accepted for compatibility).
+- `OMARECORD_SCREENSHOT_PROJECT_VALUES=JSON` applies path/value pairs through the editor before
+  capture, for example `{"camera.rotation":180}`.
 - `OMARECORD_SCREENSHOT_VIEW=export|aspect|background-expanded|background-gradient-3|background-gradient-7|rail-tooltip|camera-proof` opens a transient
   editor surface before capture.
-- `OMARECORD_RECENTS_DIR=/path` overrides the launcher recordings directory (useful for UI testing).
 
 Example:
 

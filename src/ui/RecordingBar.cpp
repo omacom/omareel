@@ -23,6 +23,23 @@ RecordingBar::RecordingBar(bool hidden, QObject *parent): QObject(parent),
     const QJsonObject state = Recorder::recordingState();
     m_cameraRotation = state.value(QStringLiteral("camera_rotation")).toInt(0);
     m_cameraFlipHorizontal = state.value(QStringLiteral("camera_flip_horizontal")).toBool(false);
+    m_selfViewVisible = state.value(QStringLiteral("selfview")).toBool(false);
+    m_selfViewSafe = state.value(QStringLiteral("selfview_safe")).toBool(false);
+    m_selfViewMonitor = state.value(QStringLiteral("selfview_monitor")).toString(m_recordedMonitor);
+    m_selfViewPixels = state.value(QStringLiteral("selfview_pixels")).toInt(160);
+    m_selfViewX = state.value(QStringLiteral("selfview_x")).toInt(16);
+    m_selfViewY = state.value(QStringLiteral("selfview_y")).toInt(16);
+    m_saveSelfViewTimer.setSingleShot(true);
+    m_saveSelfViewTimer.setInterval(180);
+    connect(&m_saveSelfViewTimer, &QTimer::timeout, this, [this] {
+        if (m_selfViewScreenSize.isEmpty()) return;
+        RecordingPreferences preferences = RecordingPreferences::load();
+        const int xRange = std::max(1, m_selfViewScreenSize.width() - m_selfViewPixels - 32);
+        const int yRange = std::max(1, m_selfViewScreenSize.height() - m_selfViewPixels - 32);
+        preferences.selfViewX = std::clamp((m_selfViewX - 16.0) / xRange, 0.0, 1.0);
+        preferences.selfViewY = std::clamp((m_selfViewY - 16.0) / yRange, 0.0, 1.0);
+        preferences.save();
+    });
     if (m_webcam) {
         const QString bundle = state.value(QStringLiteral("bundle")).toString();
         m_cameraCapture = std::make_unique<CameraCapture>(
@@ -120,6 +137,38 @@ void RecordingBar::flipCamera()
         {QStringLiteral("camera_flip_horizontal"), m_cameraFlipHorizontal}
     });
     emit cameraSettingsChanged();
+}
+
+void RecordingBar::setSelfViewScreenSize(const QSize &size)
+{
+    m_selfViewScreenSize = size;
+    m_selfViewX = std::clamp(m_selfViewX, 0, std::max(0, size.width() - m_selfViewPixels));
+    m_selfViewY = std::clamp(m_selfViewY, 0, std::max(0, size.height() - m_selfViewPixels));
+    emit selfViewPlacementChanged();
+}
+
+void RecordingBar::moveSelfView(int deltaX, int deltaY)
+{
+    if (m_selfViewScreenSize.isEmpty()) return;
+    const int nextX = std::clamp(m_selfViewX + deltaX, 0,
+                                 std::max(0, m_selfViewScreenSize.width() - m_selfViewPixels));
+    const int nextY = std::clamp(m_selfViewY + deltaY, 0,
+                                 std::max(0, m_selfViewScreenSize.height() - m_selfViewPixels));
+    if (nextX == m_selfViewX && nextY == m_selfViewY) return;
+    m_selfViewX = nextX;
+    m_selfViewY = nextY;
+    Recorder::updateRecordingState(QJsonObject{{QStringLiteral("selfview_x"), m_selfViewX},
+                                                {QStringLiteral("selfview_y"), m_selfViewY}});
+    m_saveSelfViewTimer.start();
+    emit selfViewPlacementChanged();
+}
+
+void RecordingBar::setSelfViewVisible(bool visible)
+{
+    if (!m_webcam || m_selfViewVisible == visible) return;
+    m_selfViewVisible = visible;
+    Recorder::updateRecordingState(QJsonObject{{QStringLiteral("selfview"), visible}});
+    emit selfViewVisibilityChanged();
 }
 
 void RecordingBar::stop()

@@ -134,6 +134,44 @@ private slots:
             + std::abs(cameraPixel.blue() - backgroundPixel.blue());
         QVERIFY2(colorDistance > 60, "The exported camera overlay did not differ from the background");
 
+        project.camera.rotation = 180;
+        QVERIFY2(project.save(QDir(bundle).filePath(QStringLiteral("project.json")), &projectError),
+                 qPrintable(projectError));
+        const QString rotatedOutput = temporary.filePath(QStringLiteral("rotated.mp4"));
+        Exporter rotatedExporter;
+        QString rotatedFailure;
+        bool rotatedFinished = false;
+        connect(&rotatedExporter, &Exporter::finished, this,
+                [&](const QString &) { rotatedFinished = true; });
+        connect(&rotatedExporter, &Exporter::failed, this,
+                [&](const QString &message) { rotatedFailure = message; });
+        rotatedExporter.exportBundle({bundle, rotatedOutput, 30, 640,
+                                      QStringLiteral("low"), 0, 0});
+        QVERIFY2(rotatedFinished, qPrintable(rotatedFailure));
+        const QString rotatedStillPath = temporary.filePath(QStringLiteral("rotated.png"));
+        QProcess rotatedStill;
+        rotatedStill.start(QStringLiteral("ffmpeg"), {QStringLiteral("-y"), QStringLiteral("-v"),
+            QStringLiteral("error"), QStringLiteral("-ss"), QStringLiteral("0.8"),
+            QStringLiteral("-i"), rotatedOutput, QStringLiteral("-frames:v"),
+            QStringLiteral("1"), rotatedStillPath});
+        QVERIFY(rotatedStill.waitForFinished(15000));
+        QCOMPARE(rotatedStill.exitCode(), 0);
+        const QImage rotatedFrame(rotatedStillPath);
+        QVERIFY(!rotatedFrame.isNull());
+        int changedCameraPixels = 0;
+        const QRect cameraRegion(468, 263, 160, 90);
+        for (int y = cameraRegion.top(); y <= cameraRegion.bottom(); ++y) {
+            for (int x = cameraRegion.left(); x <= cameraRegion.right(); ++x) {
+                const QColor a = exportedFrame.pixelColor(x, y);
+                const QColor b = rotatedFrame.pixelColor(x, y);
+                const int distance = std::abs(a.red() - b.red())
+                    + std::abs(a.green() - b.green()) + std::abs(a.blue() - b.blue());
+                if (distance > 30) ++changedCameraPixels;
+            }
+        }
+        QVERIFY2(changedCameraPixels > 500,
+                 "The 640x360 offscreen composition did not react to camera rotation");
+
         const QString earlyStillPath = temporary.filePath(QStringLiteral("before-camera.png"));
         QProcess earlyStill;
         earlyStill.start(QStringLiteral("ffmpeg"), {QStringLiteral("-y"), QStringLiteral("-v"), QStringLiteral("error"),

@@ -287,7 +287,9 @@ private slots:
         auto *source = overlay->findChild<QQuickItem *>(QStringLiteral("cameraFrameSource"));
         QVERIFY(source);
         QCOMPARE(source->rotation(), 90.0);
-        QVERIFY(source->width() < source->height());
+        QVERIFY(source->width() > source->height());
+        QCOMPARE(source->width(), overlay->property("height").toDouble());
+        QCOMPARE(source->height(), overlay->property("width").toDouble());
         QObject *flip = overlay->findChild<QObject *>(QStringLiteral("cameraFlipTransform"));
         QVERIFY(flip);
         QCOMPARE(flip->property("xScale").toDouble(), -1.0);

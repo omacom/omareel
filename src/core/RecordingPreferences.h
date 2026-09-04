@@ -14,6 +14,12 @@ struct RecordingPreferences {
     int webcamHeight = 1080;
     int webcamRotation = 0;
     bool webcamFlipHorizontal = false;
+    bool selfViewEnabled = true;
+    QString selfViewSize = QStringLiteral("M");
+    double selfViewX = 1.0;
+    double selfViewY = 1.0;
+    bool hideSelfViewViaPortal = false;
+    bool selfViewCaptureWarningShown = false;
     QJsonObject webcam{
         {QStringLiteral("enabled"), false},
         {QStringLiteral("position"), QStringLiteral("bottom-right")},

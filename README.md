@@ -46,6 +46,13 @@ Run `omarecord` to open the launcher, or bind the smart recording toggle:
 o.bind("SUPER + ALT + R", "Record with omarecord", "omarecord record")
 ```
 
+The launcher's app id is `omarecord-launcher`. To keep its compact 380×460 window floating and
+centred, add this optional Omarchy window rule:
+
+```lua
+o.window("^omarecord-launcher$", { float = true, center = true, size = "380 460" })
+```
+
 The default command uses one gesture: drag to select an area, click a window to snap to it, or
 click the desktop to record the whole screen. Explicit modes remain available for dedicated
 keybinds. For focused-monitor capture:
@@ -76,7 +83,11 @@ While recording, use any of these stop paths:
 - Run `omarecord record --cancel` to stop and permanently discard the recording bundle.
 
 With two monitors, the recording bar appears at the top center of the monitor that is not being
-recorded. With only one monitor, it appears inside the recording. Pass `--no-bar` or set
+recorded, along with the camera self-view when webcam capture is enabled. Region and window
+recordings place the self-view outside the captured rectangle when it fits. With only one
+monitor and a full-screen capture, launcher settings can use the one-time share picker so the
+self-view is omitted; otherwise a one-time warning explains that it will be visible. Pass
+`--no-selfview` to suppress only the camera bubble. Pass `--no-bar` or set
 `OMARECORD_NO_BAR=1` before starting if you do not want the bar to appear.
 
 ### Editor shortcuts

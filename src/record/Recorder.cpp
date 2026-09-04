@@ -1,6 +1,7 @@
 #include "Recorder.h"
 #include "CursorSampler.h"
 #include "EvdevListener.h"
+#include "core/RecordingPreferences.h"
 
 #include <QCoreApplication>
 #include <QDateTime>
@@ -12,6 +13,7 @@
 #include <QJsonObject>
 #include <QLockFile>
 #include <QProcess>
+#include <QRectF>
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <QTextStream>
@@ -238,6 +240,9 @@ int Recorder::startDetached(const RecordOptions &options, QString *message)
                                  << QStringLiteral("--webcam-rotation") << QString::number(options.webcamRotation);
     if (options.webcam && options.webcamFlipHorizontal)
         arguments << QStringLiteral("--webcam-flip-horizontal");
+    if (!options.selfView) arguments << QStringLiteral("--no-selfview");
+    arguments << QStringLiteral("--selfview-size") << options.selfViewSize;
+    if (options.hideSelfViewViaPortal) arguments << QStringLiteral("--hide-selfview-via-portal");
     if (options.noOpen) arguments << QStringLiteral("--no-open");
     if (options.noBar) arguments << QStringLiteral("--no-bar");
     QProcess daemon;
@@ -369,6 +374,123 @@ static QPointF cursorAt(const QVector<RawCursorSample> &samples, qint64 time)
     return (it - 1)->logicalPosition;
 }
 
+namespace {
+
+struct MonitorLayout {
+    QString name;
+    QRectF geometry;
+};
+
+struct SelfViewPlacement {
+    bool visible = false;
+    bool safe = false;
+    bool portal = false;
+    QString monitor;
+    QString sizeName = QStringLiteral("M");
+    int pixels = 160;
+    QPoint position;
+};
+
+QList<MonitorLayout> monitorLayouts()
+{
+    QProcess process;
+    process.start(QStringLiteral("hyprctl"), {QStringLiteral("-j"), QStringLiteral("monitors")});
+    if (!process.waitForFinished(3000) || process.exitCode() != 0) return {};
+    QList<MonitorLayout> result;
+    for (const QJsonValue &value : QJsonDocument::fromJson(process.readAllStandardOutput()).array()) {
+        const QJsonObject monitor = value.toObject();
+        if (monitor.value(QStringLiteral("disabled")).toBool(false)
+            || (monitor.contains(QStringLiteral("dpmsStatus"))
+                && !monitor.value(QStringLiteral("dpmsStatus")).toBool())) continue;
+        const double scale = std::max(0.01, monitor.value(QStringLiteral("scale")).toDouble(1.0));
+        result << MonitorLayout{
+            monitor.value(QStringLiteral("name")).toString(),
+            QRectF(monitor.value(QStringLiteral("x")).toDouble(),
+                   monitor.value(QStringLiteral("y")).toDouble(),
+                   monitor.value(QStringLiteral("width")).toDouble() / scale,
+                   monitor.value(QStringLiteral("height")).toDouble() / scale)};
+    }
+    return result;
+}
+
+int selfViewPixels(const QString &sizeName)
+{
+    return sizeName == QLatin1String("S") ? 120 : sizeName == QLatin1String("L") ? 220 : 160;
+}
+
+SelfViewPlacement selfViewPlacement(const RecordOptions &options, const CaptureRegion &capture,
+                                    const RecordingPreferences &preferences)
+{
+    SelfViewPlacement placement;
+    placement.visible = options.webcam && options.selfView;
+    placement.sizeName = options.selfViewSize;
+    placement.pixels = selfViewPixels(placement.sizeName);
+    if (!placement.visible) return placement;
+
+    const QList<MonitorLayout> monitors = monitorLayouts();
+    auto recorded = std::find_if(monitors.cbegin(), monitors.cend(), [&](const MonitorLayout &monitor) {
+        return monitor.name == capture.monitorName;
+    });
+    if (recorded == monitors.cend()) return placement;
+
+    auto target = std::find_if(monitors.cbegin(), monitors.cend(), [&](const MonitorLayout &monitor) {
+        return monitor.name != capture.monitorName;
+    });
+    if (target != monitors.cend()) {
+        placement.safe = true;
+    } else {
+        target = recorded;
+    }
+    placement.monitor = target->name;
+
+    const auto persistedPosition = [&](int pixels) {
+        const int xRange = std::max(0, qRound(target->geometry.width()) - pixels - 32);
+        const int yRange = std::max(0, qRound(target->geometry.height()) - pixels - 32);
+        return QPoint(16 + qRound(preferences.selfViewX * xRange),
+                      16 + qRound(preferences.selfViewY * yRange));
+    };
+    if (placement.safe) {
+        placement.position = persistedPosition(placement.pixels);
+        return placement;
+    }
+
+    const QRectF captured(capture.x, capture.y, capture.width, capture.height);
+    const auto outsideCorner = [&](int pixels, QPoint *best) {
+        const int right = std::max(16, qRound(target->geometry.width()) - pixels - 16);
+        const int bottom = std::max(16, qRound(target->geometry.height()) - pixels - 16);
+        const QList<QPoint> candidates{{16, 16}, {right, 16}, {16, bottom}, {right, bottom}};
+        double bestScore = -1.0;
+        bool found = false;
+        for (const QPoint &candidate : candidates) {
+            const QRectF global(target->geometry.x() + candidate.x(),
+                                target->geometry.y() + candidate.y(), pixels, pixels);
+            if (global.intersects(captured)) continue;
+            const QPointF delta = global.center() - captured.center();
+            const double score = delta.x() * delta.x() + delta.y() * delta.y();
+            if (score > bestScore) { bestScore = score; *best = candidate; found = true; }
+        }
+        return found;
+    };
+
+    if (capture.mode != CaptureMode::Fullscreen && outsideCorner(placement.pixels, &placement.position)) {
+        placement.safe = true;
+        return placement;
+    }
+    if (capture.mode != CaptureMode::Fullscreen && placement.sizeName != QLatin1String("S")) {
+        placement.sizeName = QStringLiteral("S");
+        placement.pixels = selfViewPixels(placement.sizeName);
+        if (outsideCorner(placement.pixels, &placement.position)) {
+            placement.safe = true;
+            return placement;
+        }
+    }
+    placement.position = persistedPosition(placement.pixels);
+    placement.portal = capture.mode == CaptureMode::Fullscreen && options.hideSelfViewViaPortal;
+    return placement;
+}
+
+} // namespace
+
 static QJsonObject positionObject(const QPointF &logical, const CaptureRegion &region)
 {
     return QJsonObject{{"x", (logical.x() - region.x) * region.scale},
@@ -494,6 +616,11 @@ int Recorder::daemonMain(const QStringList &arguments)
     if (options.webcamRotation != 90 && options.webcamRotation != 180
         && options.webcamRotation != 270) options.webcamRotation = 0;
     options.webcamFlipHorizontal = arguments.contains(QStringLiteral("--webcam-flip-horizontal"));
+    options.selfView = !arguments.contains(QStringLiteral("--no-selfview"));
+    options.selfViewSize = valueAfter(arguments, QStringLiteral("--selfview-size")).toUpper();
+    if (options.selfViewSize != QLatin1String("S") && options.selfViewSize != QLatin1String("L"))
+        options.selfViewSize = QStringLiteral("M");
+    options.hideSelfViewViaPortal = arguments.contains(QStringLiteral("--hide-selfview-via-portal"));
     CaptureRegion region;
     const QString mode = valueAfter(arguments, QStringLiteral("--mode"));
     region.mode = mode == QLatin1String("fullscreen") ? CaptureMode::Fullscreen
@@ -506,6 +633,8 @@ int Recorder::daemonMain(const QStringList &arguments)
     region.scale = valueAfter(arguments, QStringLiteral("--scale")).toDouble();
     region.physicalWidth = valueAfter(arguments, QStringLiteral("--physical-w")).toInt();
     region.physicalHeight = valueAfter(arguments, QStringLiteral("--physical-h")).toInt();
+    RecordingPreferences preferences = RecordingPreferences::load();
+    const SelfViewPlacement selfView = selfViewPlacement(options, region, preferences);
 
     const QDateTime now = QDateTime::currentDateTime();
     const QString displayName = QStringLiteral("Recording %1").arg(now.toString(QStringLiteral("yyyy-MM-dd HH-mm-ss")));
@@ -529,8 +658,15 @@ int Recorder::daemonMain(const QStringList &arguments)
     const QString video = bundle + QStringLiteral("/screen.mp4");
     const QString cameraVideo = bundle + QStringLiteral("/camera.mp4");
     QStringList gsr;
+    QStringList kmsTarget;
     if (region.mode == CaptureMode::Fullscreen) {
-        gsr << QStringLiteral("-w") << region.monitorName << QStringLiteral("-s") << QStringLiteral("0x0");
+        kmsTarget << QStringLiteral("-w") << region.monitorName
+                  << QStringLiteral("-s") << QStringLiteral("0x0");
+        if (selfView.portal)
+            gsr << QStringLiteral("-w") << QStringLiteral("portal")
+                << QStringLiteral("-restore-portal-session") << QStringLiteral("yes");
+        else
+            gsr << kmsTarget;
     } else {
         const int captureX = int(std::lround(region.x));
         const int captureY = int(std::lround(region.y));
@@ -568,6 +704,14 @@ int Recorder::daemonMain(const QStringList &arguments)
                       {"camera_height", options.webcamHeight},
                       {"camera_rotation", options.webcamRotation},
                       {"camera_flip_horizontal", options.webcamFlipHorizontal},
+                      {"capture_mode", modeName(region.mode)},
+                      {"capture_x", region.x}, {"capture_y", region.y},
+                      {"capture_width", region.width}, {"capture_height", region.height},
+                      {"selfview", selfView.visible}, {"selfview_safe", selfView.safe},
+                      {"selfview_monitor", selfView.monitor},
+                      {"selfview_size", selfView.sizeName}, {"selfview_pixels", selfView.pixels},
+                      {"selfview_x", selfView.position.x()}, {"selfview_y", selfView.position.y()},
+                      {"portal_capture", selfView.portal},
                       {"camera_status", options.webcam ? QStringLiteral("starting")
                                                        : QStringLiteral("disabled")},
                       {"camera_record", false},
@@ -577,6 +721,14 @@ int Recorder::daemonMain(const QStringList &arguments)
             ? QStringLiteral("Could not write recorder state")
             : QStringLiteral("Could not write recorder state: %1").arg(error);
         return failRecorderStartup(reason, bundle, video, &cursorSampler, &evdevListener);
+    }
+    if (selfView.visible && !selfView.safe && !selfView.portal
+        && !preferences.selfViewCaptureWarningShown) {
+        runOptionalDetached(QStringLiteral("omarchy-notification-send"),
+                            {QStringLiteral("Camera self-view"),
+                             QStringLiteral("Self-view will be visible in the recording")});
+        preferences.selfViewCaptureWarningShown = true;
+        preferences.save();
     }
     if (!options.noBar || options.webcam) {
         QStringList barArguments{QStringLiteral("__record-bar")};
@@ -627,6 +779,34 @@ int Recorder::daemonMain(const QStringList &arguments)
         QString reason = lastNonEmptyLine(recorderOutput);
         if (reason.isEmpty()) reason = recorder.errorString();
         return failRecorderStartup(reason, bundle, video, &cursorSampler, &evdevListener);
+    }
+    bool portalActive = selfView.portal;
+    if (portalActive) {
+        QElapsedTimer portalStartup;
+        portalStartup.start();
+        while (portalStartup.elapsed() < 2500 && recorder.state() != QProcess::NotRunning) {
+            recorder.waitForFinished(50);
+            drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
+        }
+        if (recorder.state() == QProcess::NotRunning) {
+            QFile::remove(video);
+            QFile::remove(video + QStringLiteral(".ts"));
+            gsr = kmsTarget + gsr.mid(4);
+            recorderArguments = {QStringLiteral("__record-gsr")};
+            recorderArguments << gsr;
+            recorderOutput.clear();
+            recorder.start(QCoreApplication::applicationFilePath(), recorderArguments);
+            if (!recorder.waitForStarted(5000)) {
+                if (cameraAvailable) updateRecordingState(QJsonObject{{QStringLiteral("camera_stop"), true}});
+                const QString reason = recorder.errorString();
+                return failRecorderStartup(reason, bundle, video, &cursorSampler, &evdevListener);
+            }
+            portalActive = false;
+            updateRecordingState(QJsonObject{{QStringLiteral("portal_capture"), false}});
+            runOptionalDetached(QStringLiteral("omarchy-notification-send"),
+                                {QStringLiteral("Camera self-view"),
+                                 QStringLiteral("Self-view will be visible in the recording")});
+        }
     }
     const qint64 recorderStartedUs = CursorSampler::monotonicUs();
     updateRecordingState(QJsonObject{{QStringLiteral("started_us"), recorderStartedUs}});

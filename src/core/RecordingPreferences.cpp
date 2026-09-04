@@ -24,6 +24,15 @@ RecordingPreferences RecordingPreferences::load()
     preferences.microphone = root.value(QStringLiteral("microphone")).toBool(true);
     preferences.microphoneDevice = root.value(QStringLiteral("microphoneDevice"))
                                        .toString(QStringLiteral("default_input"));
+    preferences.selfViewEnabled = root.value(QStringLiteral("selfViewEnabled")).toBool(true);
+    const QString selfViewSize = root.value(QStringLiteral("selfViewSize")).toString(QStringLiteral("M")).toUpper();
+    preferences.selfViewSize = selfViewSize == QLatin1String("S") || selfViewSize == QLatin1String("L")
+        ? selfViewSize : QStringLiteral("M");
+    const QJsonObject selfViewPosition = root.value(QStringLiteral("selfViewPosition")).toObject();
+    preferences.selfViewX = qBound(0.0, selfViewPosition.value(QStringLiteral("x")).toDouble(1.0), 1.0);
+    preferences.selfViewY = qBound(0.0, selfViewPosition.value(QStringLiteral("y")).toDouble(1.0), 1.0);
+    preferences.hideSelfViewViaPortal = root.value(QStringLiteral("hideSelfViewViaPortal")).toBool(false);
+    preferences.selfViewCaptureWarningShown = root.value(QStringLiteral("selfViewCaptureWarningShown")).toBool(false);
     if (root.value(QStringLiteral("webcam")).isObject()) {
         preferences.webcam = root.value(QStringLiteral("webcam")).toObject();
         preferences.webcamEnabled = preferences.webcam.value(QStringLiteral("enabled")).toBool(false);
@@ -62,6 +71,13 @@ bool RecordingPreferences::save(QString *error) const
         {QStringLiteral("systemAudio"), systemAudio},
         {QStringLiteral("microphone"), microphone},
         {QStringLiteral("microphoneDevice"), microphoneDevice},
+        {QStringLiteral("selfViewEnabled"), selfViewEnabled},
+        {QStringLiteral("selfViewSize"), selfViewSize},
+        {QStringLiteral("selfViewPosition"), QJsonObject{
+            {QStringLiteral("x"), qBound(0.0, selfViewX, 1.0)},
+            {QStringLiteral("y"), qBound(0.0, selfViewY, 1.0)}}},
+        {QStringLiteral("hideSelfViewViaPortal"), hideSelfViewViaPortal},
+        {QStringLiteral("selfViewCaptureWarningShown"), selfViewCaptureWarningShown},
         {QStringLiteral("webcam"), savedWebcam}
     };
     if (file.write(QJsonDocument(root).toJson(QJsonDocument::Indented)) < 0 || !file.commit()) {

@@ -21,10 +21,7 @@ Rectangle {
     ]
 
     function panelMeta(index) {
-        if (index !== 0)
-            return root.sections[index].meta
-        const name = String(theme.themeName).replace(/[-_]+/g, " ").toUpperCase()
-        return ("THEME · " + name).slice(0, 24)
+        return index === 0 ? "CANVAS BEHIND THE VIDEO" : root.sections[index].meta
     }
 
     function setBackgroundExpanded(value) {
