@@ -1,0 +1,100 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: Package ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    container:
+      image: ${{ matrix.image }}
+      options: --privileged
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+            image: archlinux:base-devel
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+            image: menci/archlinuxarm:base-devel
+    steps:
+      - name: Refresh keyring and system
+        run: |
+          pacman-key --init
+          pacman-key --populate
+          pacman -Syu --noconfirm --needed archlinux-keyring 2>/dev/null || true
+          pacman -Syu --noconfirm
+
+      - name: Install build and runtime dependencies
+        run: >-
+          pacman -S --noconfirm --needed
+          git cmake ninja pkgconf wayland wayland-protocols
+          qt6-base qt6-declarative qt6-multimedia qt6-svg qt6-shadertools
+          layer-shell-qt libevdev libjpeg-turbo ffmpeg slurp xdg-desktop-portal
+          gpu-screen-recorder hicolor-icon-theme
+
+      # The capture-exclusion plugin compiles against the compositor headers and
+      # only loads on the exact Hyprland commit it was built for. Build it when
+      # the package repository can install Hyprland; otherwise the package ships
+      # without it and the app uses its overlay fallback.
+      - name: Install Hyprland headers (best effort)
+        run: pacman -S --noconfirm --needed hyprland || echo "::warning::Hyprland is not installable here; packaging without the capture-exclusion plugin"
+
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Create an unprivileged build user
+        run: |
+          useradd -m builder
+          echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+          chown -R builder "$GITHUB_WORKSPACE"
+
+      - name: Build and test
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          su builder -c './bin/build'
+          su builder -c 'QT_QPA_PLATFORM=offscreen ./bin/test'
+
+      - name: Build the Arch package
+        run: |
+          cd pkg
+          su builder -c 'makepkg -f --noconfirm --noextract'
+          ls -la *.pkg.tar.zst
+
+      - name: Stage a plain tarball
+        run: |
+          version="$(sed -n 's/^pkgver=//p' pkg/PKGBUILD)"
+          stage="$(mktemp -d)"
+          tar -C "$stage" -xf pkg/omareel-"$version"-*-${{ matrix.arch }}.pkg.tar.zst --exclude=.BUILDINFO --exclude=.MTREE --exclude=.PKGINFO --exclude=.INSTALL
+          tar -C "$stage" -czf "omareel-$version-${{ matrix.arch }}.tar.gz" .
+          mv pkg/omareel-"$version"-*-${{ matrix.arch }}.pkg.tar.zst .
+          sha256sum omareel-*.pkg.tar.zst omareel-*.tar.gz > SHA256SUMS-${{ matrix.arch }}.txt
+          cat SHA256SUMS-${{ matrix.arch }}.txt
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: omareel-${{ matrix.arch }}
+          path: |
+            omareel-*.pkg.tar.zst
+            omareel-*.tar.gz
+            SHA256SUMS-${{ matrix.arch }}.txt
+          if-no-files-found: error
+
+      - name: Attach to the tagged release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            omareel-*.pkg.tar.zst
+            omareel-*.tar.gz
+            SHA256SUMS-${{ matrix.arch }}.txt

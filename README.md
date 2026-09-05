@@ -22,21 +22,33 @@ cursor-following zooms. Finished projects export to MP4 or GIF.
 
 ## Install
 
-On Arch Linux, build and install the local package from the repository checkout:
+On Omarchy, install from the Omarchy package repository:
+
+```sh
+omarchy-pkg-add omareel
+```
+
+Prebuilt `x86_64` and `aarch64` packages are also attached to every
+[GitHub release](https://github.com/omacom/omareel/releases); install one with
+`sudo pacman -U omareel-<version>-<arch>.pkg.tar.zst`.
+
+To build from a checkout on Arch Linux:
 
 ```sh
 cd pkg
 makepkg -si
 ```
 
-On Omarchy, the installer adds any missing runtime/build packages with `omarchy-pkg-add`
-(falling back to `pacman`) and installs the same PKGBUILD:
-
-```sh
-./install-omarchy
-```
+On Omarchy, `./install-omarchy` first adds any missing runtime/build packages with
+`omarchy-pkg-add` (falling back to `pacman`) and then installs the same PKGBUILD.
 
 `gifsicle` is optional and can be installed for additional GIF optimization.
+
+Omareel keeps its recording bar and camera self-view out of the captured video with a small
+Hyprland plugin that ships in the package and is loaded on demand. The plugin is built for the
+exact Hyprland commit of the package repository; after a Hyprland upgrade it waits for a rebuilt
+omareel package, and until then the overlays move off the recorded screen instead. See
+[docs/USAGE.md](docs/USAGE.md#overlays-and-capture).
 
 ## Usage
 
@@ -143,6 +155,9 @@ and UI debug screenshot flags, see [docs/USAGE.md](docs/USAGE.md).
 ./bin/build
 ./bin/test
 ```
+
+Tagged releases (`v*`) build and test on `x86_64` and `aarch64` and attach Arch packages and
+plain tarballs to the GitHub release through `.github/workflows/release.yml`.
 
 The frozen engineering contract is in [docs/SPEC.md](docs/SPEC.md).
 

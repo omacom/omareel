@@ -3,15 +3,35 @@
 pkgname=omareel
 pkgver=0.1.0
 pkgrel=1
-pkgdesc='Polished screen recorder and editor for Omarchy'
-arch=('x86_64')
-url='https://github.com/heyoodle/omareel'
+pkgdesc='Screen recorder and editor for Omarchy with a synthetic cursor, auto zooms, and a camera bubble'
+arch=('x86_64' 'aarch64')
+url='https://github.com/omacom/omareel'
 license=('MIT')
-depends=('gpu-screen-recorder' 'ffmpeg' 'slurp' 'qt6-base' 'qt6-declarative'
-         'qt6-multimedia' 'libjpeg-turbo' 'qt6-svg' 'layer-shell-qt' 'libevdev' 'xdg-desktop-portal')
-depends+=('hyprland')
+install='omareel.install'
+options=('!debug')
+depends=(
+  'ffmpeg'
+  'gpu-screen-recorder'
+  'hicolor-icon-theme'
+  'hyprland'
+  'layer-shell-qt'
+  'libevdev'
+  'libjpeg-turbo'
+  'qt6-base'
+  'qt6-declarative'
+  'qt6-multimedia'
+  'qt6-svg'
+  'slurp'
+  'xdg-desktop-portal'
+)
+makedepends=(
+  'cmake'
+  'ninja'
+  'pkgconf'
+  'qt6-shadertools'
+  'wayland'
+)
 optdepends=('gifsicle: optimize exported GIF files')
-makedepends=('cmake' 'ninja' 'qt6-shadertools')
 conflicts=('omarecord')
 source=()
 sha256sums=()
@@ -23,16 +43,19 @@ build() {
 
 package() {
   cd "$startdir/.."
-  /usr/bin/install -Dm755 build/omareel "$pkgdir/usr/bin/omareel"
-  /usr/bin/install -Dm755 build/plugin/omareel-capture-exclude.so "$pkgdir/usr/lib/omareel/omareel-capture-exclude.so"
-  /usr/bin/install -Dm644 build/plugin/omareel-capture-exclude.so.hash "$pkgdir/usr/lib/omareel/omareel-capture-exclude.so.hash"
+  install -Dm755 build/omareel "$pkgdir/usr/bin/omareel"
   ln -s omareel "$pkgdir/usr/bin/omarecord"
-  /usr/bin/install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
-  /usr/bin/install -Dm644 "$startdir/omareel.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/omareel.svg"
+  if [[ -f build/plugin/omareel-capture-exclude.so ]]; then
+    install -Dm755 build/plugin/omareel-capture-exclude.so "$pkgdir/usr/lib/omareel/omareel-capture-exclude.so"
+    install -Dm644 build/plugin/omareel-capture-exclude.so.hash "$pkgdir/usr/lib/omareel/omareel-capture-exclude.so.hash"
+  fi
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 LICENSES/lucide.txt "$pkgdir/usr/share/licenses/$pkgname/lucide.txt"
+  install -Dm644 "$startdir/omareel.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/omareel.svg"
   local size
-  for size in 16 32 48 64 128 256; do
-    /usr/bin/install -Dm644 "$startdir/icons/omareel-$size.png" \
+  for size in 16 32 48 64 128 256 512; do
+    install -Dm644 "$startdir/icons/omareel-$size.png" \
       "$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps/omareel.png"
   done
-  /usr/bin/install -Dm644 "$startdir/omareel.desktop" "$pkgdir/usr/share/applications/omareel.desktop"
+  install -Dm644 "$startdir/omareel.desktop" "$pkgdir/usr/share/applications/omareel.desktop"
 }
