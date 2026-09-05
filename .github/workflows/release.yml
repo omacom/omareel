@@ -28,9 +28,11 @@ jobs:
     steps:
       - name: Refresh keyring and system
         run: |
+          # pacman's Landlock sandbox is unavailable inside the runner container.
+          sed -i '/^\[options\]/a DisableSandbox' /etc/pacman.conf
           pacman-key --init
           pacman-key --populate
-          pacman -Syu --noconfirm --needed archlinux-keyring 2>/dev/null || true
+          pacman -Sy --noconfirm --needed archlinux-keyring archlinuxarm-keyring 2>/dev/null || true
           pacman -Syu --noconfirm
 
       - name: Install build and runtime dependencies
