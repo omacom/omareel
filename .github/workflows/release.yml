@@ -44,11 +44,21 @@ jobs:
           gpu-screen-recorder hicolor-icon-theme
 
       # The capture-exclusion plugin compiles against the compositor headers and
-      # only loads on the exact Hyprland commit it was built for. Build it when
-      # the package repository can install Hyprland; otherwise the package ships
-      # without it and the app uses its overlay fallback.
+      # only loads on the exact Hyprland commit it was built for. Omarchy ships
+      # its own Hyprland build for aarch64, so take it from the Omarchy package
+      # repository there; x86_64 uses the Arch package Omarchy also uses. If no
+      # Hyprland is installable, the package ships without the plugin and the
+      # app uses its overlay fallback.
       - name: Install Hyprland headers (best effort)
-        run: pacman -S --noconfirm --needed hyprland || echo "::warning::Hyprland is not installable here; packaging without the capture-exclusion plugin"
+        run: |
+          if [ "${{ matrix.arch }}" = aarch64 ]; then
+            # Omarchy's repository must precede core/extra so its Hyprland stack
+            # (hyprland, hyprland-guiutils, hyprtoolkit) is chosen as a set.
+            sed -i '/^\[core\]$/i [omarchy]\nSigLevel = Optional TrustAll\nServer = https://pkgs.omarchy.org/edge/$arch\n' /etc/pacman.conf
+            pacman -Sy --noconfirm
+          fi
+          pacman -S --noconfirm --needed hyprland && pacman -Q hyprland \
+            || echo "::warning::Hyprland is not installable here; packaging without the capture-exclusion plugin"
 
       - name: Check out source
         uses: actions/checkout@v4
@@ -68,8 +78,12 @@ jobs:
 
       - name: Build the Arch package
         run: |
+          # Arch Linux ARM still defaults PKGEXT to .pkg.tar.xz; publish zst everywhere.
+          sed -i "s|^PKGEXT=.*|PKGEXT='.pkg.tar.zst'|" /etc/makepkg.conf
           cd pkg
-          su builder -c 'makepkg -f --noconfirm --noextract'
+          # Dependencies were installed above; makepkg's own check would refuse
+          # a runtime dependency (hyprland) that this mirror cannot provide.
+          su builder -c 'makepkg -f --noconfirm --noextract --nodeps'
           ls -la *.pkg.tar.zst
 
       - name: Stage a plain tarball

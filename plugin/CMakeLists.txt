@@ -20,6 +20,11 @@ target_include_directories(omareel-capture-exclude BEFORE PRIVATE
     "${CMAKE_CURRENT_BINARY_DIR}/include" "${OMAREEL_HYPRLAND_HEADERS}"
     "${OMAREEL_HYPRLAND_HEADERS}/src" "${OMAREEL_HYPRLAND_HEADERS}/protocols")
 target_compile_definitions(omareel-capture-exclude PRIVATE WLR_USE_UNSTABLE)
+# Hyprland's assertion macros embed header paths; map our private include
+# symlink back to the packaged tree so no build directory leaks into the .so.
+target_compile_options(omareel-capture-exclude PRIVATE
+    "-ffile-prefix-map=${CMAKE_CURRENT_BINARY_DIR}/include/hyprland=${OMAREEL_HYPRLAND_HEADERS}"
+    "-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=plugin")
 target_link_libraries(omareel-capture-exclude PRIVATE PkgConfig::PLUGIN_GL)
 install(TARGETS omareel-capture-exclude LIBRARY DESTINATION lib/omareel)
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/omareel-capture-exclude.so.hash" DESTINATION lib/omareel)
