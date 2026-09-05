@@ -4,6 +4,10 @@
 #include <QPointF>
 #include <QSize>
 #include <QTimer>
+#include <QFileSystemWatcher>
+#include <QLockFile>
+#include <QJsonObject>
+#include <QPointer>
 #include <memory>
 
 namespace Omareel {
@@ -27,10 +31,11 @@ inline QPoint clampedSelfViewDragPosition(const QPointF &pressPointer,
 class RecordingBar : public QObject
 {
     Q_OBJECT
+    Q_PROPERTY(bool bubbleMapped READ bubbleMapped NOTIFY selfViewVisibilityChanged)
     Q_PROPERTY(QString elapsed READ elapsed NOTIFY elapsedChanged)
-    Q_PROPERTY(QString recordedMonitor READ recordedMonitor CONSTANT)
+    Q_PROPERTY(QString recordedMonitor READ recordedMonitor NOTIFY captureStartedChanged)
     Q_PROPERTY(bool webcam READ webcam CONSTANT)
-    Q_PROPERTY(bool hidden READ hidden CONSTANT)
+    Q_PROPERTY(bool hidden READ hidden NOTIFY captureStartedChanged)
     Q_PROPERTY(bool captureStarted READ captureStarted NOTIFY captureStartedChanged)
     Q_PROPERTY(bool countdownActive READ countdownActive NOTIFY countdownChanged)
     Q_PROPERTY(int countdownValue READ countdownValue NOTIFY countdownChanged)
@@ -40,13 +45,14 @@ class RecordingBar : public QObject
     Q_PROPERTY(bool selfViewVisible READ selfViewVisible NOTIFY selfViewVisibilityChanged)
     Q_PROPERTY(bool selfViewSafe READ selfViewSafe CONSTANT)
     Q_PROPERTY(QString selfViewMonitor READ selfViewMonitor CONSTANT)
-    Q_PROPERTY(int selfViewPixels READ selfViewPixels CONSTANT)
+    Q_PROPERTY(int selfViewPixels READ selfViewPixels NOTIFY selfViewPlacementChanged)
     Q_PROPERTY(int selfViewX READ selfViewX NOTIFY selfViewPlacementChanged)
     Q_PROPERTY(int selfViewY READ selfViewY NOTIFY selfViewPlacementChanged)
 public:
-    explicit RecordingBar(bool hidden = false, QObject *parent = nullptr);
+    explicit RecordingBar(bool hidden = false, bool standby = false, qint64 owner = 0, QObject *parent = nullptr);
     ~RecordingBar() override;
 
+    bool bubbleMapped() const { return m_selfViewVisible && !m_suppressed && !m_seedHidden && (m_standby || m_captureStarted); }
     QString elapsed() const { return m_elapsed; }
     QString recordedMonitor() const { return m_recordedMonitor; }
     bool webcam() const { return m_webcam; }
@@ -90,6 +96,23 @@ signals:
 
 private:
     void poll();
+    void publishGeometry();
+    void saveSelfViewPosition();
+    void createCamera(const QJsonObject &state);
+    QPointer<QObject> m_cameraOutput;
+    void publishHost();
+    void cameraState(const QJsonObject &values);
+    void hostCommand(const QString &command);
+    bool m_standby = false;
+    bool m_adopted = false;
+    bool m_suppressed = false;
+    bool m_seedHidden = false;
+    bool m_quit = false;
+    qint64 m_owner = 0;
+    qint64 m_hostSequence = 0;
+    QTimer m_positionWriteTimer;
+    QFileSystemWatcher m_watcher;
+    std::unique_ptr<QLockFile> m_hostLock;
     void scheduleSelfViewPlacementUpdate();
     QString m_elapsed = QStringLiteral("00:00");
     QString m_recordedMonitor;
@@ -109,7 +132,6 @@ private:
     int m_selfViewY = 16;
     QSize m_selfViewScreenSize;
     QTimer m_saveSelfViewTimer;
-    QTimer m_selfViewPlacementTimer;
     QPointF m_dragPressPointer;
     QPoint m_dragPressBubble;
     bool m_dragActive = false;

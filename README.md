@@ -86,13 +86,12 @@ While recording, use any of these stop paths:
   keybind.
 - Run `omareel record --cancel` to stop and permanently discard the recording bundle.
 
-With two monitors, the recording bar appears at the top center of the monitor that is not being
-recorded, along with the camera self-view when webcam capture is enabled. Region and window
-recordings place the self-view outside the captured rectangle when it fits. With only one
-monitor and a full-screen capture, launcher settings can use the one-time share picker so the
-self-view is omitted; otherwise a one-time warning explains that it will be visible. Pass
-`--no-selfview` to suppress only the camera bubble. Pass `--no-bar` or set
-`OMAREEL_NO_BAR=1` before starting if you do not want the bar to appear.
+The recording bar appears at the top center of the recorded monitor. Turning on the webcam in
+the launcher opens a floating camera self-view right away; drag it where you want it and it
+stays there through the recording, using the same warm camera. Native capture keeps both the
+bar and the self-view out of the file, wherever they sit. Pass `--no-selfview` to suppress only
+the camera bubble. Pass `--no-bar` or set `OMAREEL_NO_BAR=1` before starting if you do not
+want the bar to appear.
 
 ### Editor shortcuts
 

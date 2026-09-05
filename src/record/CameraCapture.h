@@ -50,6 +50,7 @@ public:
 
     Q_INVOKABLE void attachVideoOutput(QObject *output);
     Q_INVOKABLE void start();
+    void setRecordingOutput(const QString &videoPath, const QString &timestampPath);
     Q_INVOKABLE void beginRecording();
     Q_INVOKABLE void stop();
 

@@ -62,11 +62,23 @@ static QString lastErrorFilePath()
         + QStringLiteral("/last-error.txt");
 }
 
-static QJsonObject readState()
+QJsonObject Recorder::readStateFile(const QString &path)
 {
-    QFile file(Recorder::stateFilePath());
+    QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) return {};
     return QJsonDocument::fromJson(file.readAll()).object();
+}
+
+static QJsonObject readState() { return Recorder::readStateFile(Recorder::stateFilePath()); }
+
+QString Recorder::selfViewHostPath()
+{
+    return QFileInfo(stateFilePath()).absolutePath() + QStringLiteral("/selfview-host.json");
+}
+
+bool Recorder::sendHostCommand(const QString &command)
+{
+    return updateStateFile(selfViewHostPath(), {{"command", command}});
 }
 
 QJsonObject Recorder::recordingState()
@@ -76,16 +88,24 @@ QJsonObject Recorder::recordingState()
 
 bool Recorder::updateRecordingState(const QJsonObject &values, QString *error)
 {
-    QLockFile lock(stateFilePath() + QStringLiteral(".lock"));
+    return updateStateFile(stateFilePath(), values, error);
+}
+
+bool Recorder::updateStateFile(const QString &path, const QJsonObject &values, QString *error)
+{
+    QDir().mkpath(QFileInfo(path).absolutePath());
+    QLockFile lock(path + QStringLiteral(".lock"));
     lock.setStaleLockTime(10000);
     if (!lock.tryLock(1000)) {
         if (error) *error = lock.error() == QLockFile::LockFailedError
             ? QStringLiteral("Recording state is busy") : QStringLiteral("Could not lock recording state");
         return false;
     }
-    QJsonObject state = readState();
+    QJsonObject state = readStateFile(path);
+    if (values.contains("command") && !values.contains("command_sequence"))
+        state.insert("command_sequence", state.value("command_sequence").toVariant().toLongLong() + 1);
     for (auto it = values.begin(); it != values.end(); ++it) state.insert(it.key(), it.value());
-    QSaveFile file(stateFilePath());
+    QSaveFile file(path);
     if (!file.open(QIODevice::WriteOnly)) {
         if (error) *error = file.errorString();
         return false;
@@ -871,6 +891,12 @@ int Recorder::daemonMain(const QStringList &arguments)
                                                        : QStringLiteral("disabled")},
                       {"camera_record", false},
                       {"camera_stop", false}};
+    const QJsonObject host = readStateFile(selfViewHostPath());
+    const qint64 hostPid = host.value("pid").toVariant().toLongLong();
+    const bool adoptHost = options.webcam && hostPid > 0 && ::kill(pid_t(hostPid), 0) == 0;
+    const bool hideHostForSeed = adoptHost && host.value("visible").toBool()
+        && host.value("monitor").toString() == region.monitorName;
+    if (adoptHost) state.insert("host_pid", hostPid);
     if (!writeJson(stateFilePath(), state, &error)) {
         const QString reason = error.isEmpty()
             ? QStringLiteral("Could not write recorder state")
@@ -878,7 +904,7 @@ int Recorder::daemonMain(const QStringList &arguments)
         return failRecorderStartup(reason, bundle, video, &cursorSampler, &evdevListener);
     }
     std::future<bool> barLaunch;
-    if (!options.noBar || options.webcam || options.countdown) {
+    if (!adoptHost && (!options.noBar || options.webcam || options.countdown)) {
         QStringList barArguments{QStringLiteral("__record-bar")};
         if (options.noBar) barArguments << QStringLiteral("--hidden");
         const QString application = QCoreApplication::applicationFilePath();
@@ -886,9 +912,21 @@ int Recorder::daemonMain(const QStringList &arguments)
             return QProcess::startDetached(application, barArguments);
         });
     }
+    if (adoptHost) {
+        debugStartStage(QStringLiteral("host_adopted"), daemonStartUs, QStringLiteral("pid=%1").arg(hostPid));
+        QElapsedTimer hideTimer;
+        hideTimer.start();
+        for (int attempt = 0; attempt < 250 && hideTimer.elapsed() < 250; ++attempt) {
+            const auto current = readState();
+            if (current.value("host_acknowledged").toBool()) break;
+            QThread::msleep(1);
+        }
+    }
     ScreenCapture screenCapture;
     MonitorLayout recordedMonitorLayout{
         region.monitorName, QRectF(region.x, region.y, region.width, region.height), {}};
+    for (const auto &layout : monitorLayouts())
+        if (layout.name == region.monitorName) recordedMonitorLayout = layout;
     if (nativeCapture) {
         QRect crop;
         if (region.mode != CaptureMode::Fullscreen) {
@@ -949,6 +987,17 @@ int Recorder::daemonMain(const QStringList &arguments)
         QThread::msleep(80);
         debugStartStage(QStringLiteral("countdown_end"), daemonStartUs);
     }
+    if (hideHostForSeed) {
+        updateRecordingState({{"selfview_seed_hide", true}});
+        QElapsedTimer hideTimer;
+        hideTimer.start();
+        for (int attempt = 0; attempt < 250 && hideTimer.elapsed() < 250; ++attempt) {
+            if (readState().value("selfview_hidden").toBool()) break;
+            QThread::msleep(1);
+        }
+        debugStartStage(readState().value("selfview_hidden").toBool()
+            ? QStringLiteral("selfview_hidden") : QStringLiteral("selfview_hide_timeout"), daemonStartUs);
+    }
     const qint64 recorderStartedUs = CursorSampler::monotonicUs();
     updateRecordingState(QJsonObject{{QStringLiteral("started_us"), recorderStartedUs}});
     debugStartStage(QStringLiteral("capture_start"), daemonStartUs);
@@ -984,7 +1033,8 @@ int Recorder::daemonMain(const QStringList &arguments)
             captureLoopFailed = true;
     }
     if (!captureLoopFailed) {
-        updateRecordingState(QJsonObject{{QStringLiteral("capture_started"), true}});
+        updateRecordingState(QJsonObject{{QStringLiteral("capture_started"), true},
+                                         {QStringLiteral("camera_record"), options.webcam}});
         const qint64 firstUs = nativeCapture ? screenCapture.firstFrameUs()
                                              : firstFrameTimestamp(video + QStringLiteral(".ts"));
         debugStartStage(QStringLiteral("first_frame"), daemonStartUs,
@@ -993,8 +1043,6 @@ int Recorder::daemonMain(const QStringList &arguments)
     QString warning;
     if (!cursorSampler.start(&warning)) qWarning().noquote() << warning;
     if (!evdevListener.start(&warning)) qWarning().noquote() << warning;
-    if (options.webcam)
-        updateRecordingState(QJsonObject{{QStringLiteral("camera_record"), true}});
     if (!captureLoopFailed)
         runOptionalDetached(QStringLiteral("omarchy-notification-send"),
                             {QStringLiteral("-t"), QStringLiteral("3000"),
@@ -1105,6 +1153,7 @@ int Recorder::daemonMain(const QStringList &arguments)
             QThread::msleep(20);
         }
     }
+    if (QFileInfo(cameraVideo).exists() && QFileInfo(cameraVideo).size() == 0) QFile::remove(cameraVideo);
     if (!nativeCapture) drainRecorderOutput(&recorder, &recorderOutput, &debugLog);
     const QString recorderErrorLine = nativeCapture ? error : lastNonEmptyLine(recorderOutput);
     const bool recorderFailed = nativeCapture ? captureLoopFailed

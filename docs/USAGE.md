@@ -69,7 +69,7 @@ the bar from the video. Use `--no-bar` or set `OMAREEL_NO_BAR=1` to suppress it.
 
 ## Launcher window
 
-The launcher opens at 380×460 and grows to 380×580 while its webcam preview is visible. Its
+The launcher opens at 380×460 and grows to 380×520 while its floating self-view controls are visible. Its
 Wayland app id is `omareel`. This optional Omarchy rule keeps it floating, centred,
 and at the intended default size:
 
@@ -79,11 +79,16 @@ o.window("^omareel$", { float = true, center = true, size = "380 460" })
 
 ## Camera self-view
 
-When webcam capture is enabled, the camera self-view is a separate 160 px overlay by default.
-Choose S, M, or L in launcher settings and drag the bubble to persist its position. It starts at
-the bottom-right of the recorded monitor and may be moved anywhere on that monitor. In-process
-capture omits both the self-view and recording bar without showing a picker. The recording bar
-can hide or show the self-view while recording.
+Turning on the webcam in the launcher immediately opens a floating camera self-view on the
+focused monitor. Choose S, M, or L in launcher settings and drag the bubble to place it before
+recording; its position is saved. Rotate, flip, resize, or hide it from the launcher. The same
+warm camera and bubble stay through recording, with no camera reconnect. A brief blink at
+capture start lets the recorder save the desktop underneath the bubble. Closing the launcher
+closes its idle self-view; after recording starts, the host stays until the recording ends.
+
+The bubble is 160 px by default and starts at the saved position (bottom-right initially).
+Native capture omits both the self-view and recording bar. The recording bar can hide or show
+the self-view while recording; a standby bubble hides during recordings that do not adopt it.
 
 The native backend is selected automatically when its display protocol is available. It uses four
 shared-memory capture slots and a bounded encoder queue, and crops regions on its writer thread.
@@ -188,3 +193,8 @@ omareel edit Recording.omareel
 
 Status 0 means success, 1 is an expected no-recording/cancel condition or runtime failure, and
 2 indicates invalid CLI usage, startup failure, or incomplete recording finalization.
+
+`OMAREEL_SCREENSHOT_SELFVIEW=/tmp/selfview.png` and `OMAREEL_SCREENSHOT_BAR=/tmp/bar.png`
+grab the corresponding overlay window directly, preserving transparency. Use
+`OMAREEL_SCREENSHOT_DELAY_MS` to override the default 4000 ms overlay delay.
+`OMAREEL_SCREENSHOT_KEEP_OPEN=1` keeps a launcher or editor open after its debug grab.

@@ -28,7 +28,7 @@ composition supports it. “Partial” calls out a narrower implementation than 
 | Frame shadow | Done | Direction, distance, blur, and intensity are rendered by `src/ui/qml/RoundedFrame.qml`. |
 | Frame inset | Done | Width, colour, and alpha are persisted in `src/core/Project.cpp` and rendered by `RoundedFrame.qml`. |
 | Device mockups | Missing | Add a licensed frame-asset catalog, content-safe-area metadata, a Shape panel picker, and an outer composition layer around `RoundedFrame.qml`. |
-| Camera bubble | Done | Capture, timestamp alignment, preview/export rendering, positions, shapes, crop, rotation, and mirroring span `src/record/CameraCapture.cpp`, `src/core/CameraTimeline.cpp`, and `src/ui/qml/CameraOverlay.qml`. |
+| Camera bubble | Done | Persistent floating self-view from webcam enable through recording, draggable placement, warm camera adoption, private overlay masking, capture, timestamp alignment, preview/export rendering, positions, shapes, crop, rotation, and mirroring span `src/record/CameraCapture.cpp`, `src/core/CameraTimeline.cpp`, and `src/ui/qml/CameraOverlay.qml`. |
 | Camera layouts | Partial | `src/ui/qml/CameraPanel.qml` provides six positions, sizing, and shapes. Time-ranged layout tracks and full screen/camera layout presets are missing. |
 | Shrink camera during zoom | Done | `camera.scaleDuringZoom` is applied by `src/ui/qml/CameraOverlay.qml`. |
 | Keystroke overlay / show shortcuts | Done | `src/core/KeystrokeTrack.cpp` groups recorded key-down events and calculates hold/fade samples; `KeystrokeOverlay.qml` is shared by preview and export and configured in `KeystrokesPanel.qml`. |

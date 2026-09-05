@@ -164,40 +164,61 @@ ApplicationWindow {
             enabled: recordingBar.selfViewVisible
             Behavior on opacity { NumberAnimation { duration: 100 } }
 
-            VideoOutput {
-                id: cameraOutput
-                anchors.fill: parent
-                fillMode: VideoOutput.PreserveAspectCrop
-                Component.onCompleted: recordingBar.attachCameraOutput(cameraOutput)
-            }
-            ShaderEffectSource {
-                id: cameraTexture
-                anchors.fill: parent
-                sourceItem: cameraOutput
-                hideSource: true
-                live: true
-            }
-            Rectangle {
-                id: cameraMask
-                anchors.fill: parent
-                radius: width / 2
-                color: "white"
-                visible: false
+            Item {
+                id: cameraClip
+                anchors.centerIn: parent
+                width: parent.width - 10
+                height: width
+                states: [
+                    State { name: "pressed"; when: dragArea.pressed
+                        PropertyChanges { target: cameraClip; scale: .98 } },
+                    State { name: "hovered"; when: dragArea.containsMouse
+                        PropertyChanges { target: cameraClip; scale: 1.03 } }
+                ]
+                transitions: [
+                    Transition { from: "pressed"
+                        SpringAnimation { property: "scale"; spring: 4; damping: .35 } },
+                    Transition {
+                        NumberAnimation { property: "scale"; duration: 120; easing.type: Easing.OutCubic } }
+                ]
+                clip: true
                 layer.enabled: true
-            }
-            MultiEffect {
-                id: transformedCamera
-                anchors.fill: parent
-                source: cameraTexture
-                maskEnabled: true
-                maskSource: cameraMask
-                maskSpreadAtMin: 1
-                maskThresholdMin: .5
-                rotation: recordingBar.cameraRotation
-                transform: Scale {
-                    origin.x: transformedCamera.width / 2
-                    origin.y: transformedCamera.height / 2
-                    xScale: recordingBar.cameraFlipHorizontal ? -1 : 1
+                layer.effect: MultiEffect {
+                    maskEnabled: true
+                    maskSource: cameraMask
+                }
+                Rectangle {
+                    id: cameraMask
+                    anchors.fill: parent
+                    radius: width / 2
+                    color: "white"
+                    visible: false
+                    layer.enabled: true
+                }
+                Item {
+                    id: cameraRotated
+                    anchors.centerIn: parent
+                    width: parent.width
+                    height: parent.height
+                    rotation: recordingBar.cameraRotation
+                    transform: Scale {
+                        origin.x: cameraRotated.width / 2
+                        origin.y: cameraRotated.height / 2
+                        xScale: recordingBar.cameraFlipHorizontal ? -1 : 1
+                    }
+                    VideoOutput {
+                        id: cameraOutput
+                        anchors.fill: parent
+                        fillMode: VideoOutput.PreserveAspectCrop
+                        Component.onCompleted: recordingBar.attachCameraOutput(cameraOutput)
+                    }
+                }
+                Rectangle {
+                    anchors.fill: parent
+                    radius: width / 2
+                    color: "transparent"
+                    border.width: dragArea.pressed ? 2 : 0
+                    border.color: Qt.alpha(theme.accent, .4)
                 }
             }
             Label {
@@ -211,7 +232,9 @@ ApplicationWindow {
                 font.pixelSize: theme.font.caption
             }
             MouseArea {
+                id: dragArea
                 anchors.fill: parent
+                hoverEnabled: true
                 cursorShape: Qt.SizeAllCursor
                 onPressed: function(mouse) {
                     recordingBar.beginDrag(recordingBar.globalCursorPos())
@@ -220,7 +243,7 @@ ApplicationWindow {
                     if (!pressed) return
                     recordingBar.dragTo(recordingBar.globalCursorPos())
                 }
-                onReleased: recordingBar.endDrag()
+                onReleased: { recordingBar.dragTo(recordingBar.globalCursorPos()); recordingBar.endDrag() }
                 onCanceled: recordingBar.endDrag()
             }
         }

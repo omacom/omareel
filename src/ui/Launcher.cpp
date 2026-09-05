@@ -11,9 +11,12 @@
 #include <QFileInfo>
 #include <QMediaDevices>
 #include <QProcess>
+#include <QProcessEnvironment>
 #include <QSet>
 #include <QUrl>
 #include <ctime>
+#include <csignal>
+#include <unistd.h>
 
 using namespace Omareel;
 
@@ -43,6 +46,7 @@ Launcher::Launcher(QObject *parent): QObject(parent)
     connect(&m_recordingTimer, &QTimer::timeout, this, &Launcher::refreshRecording);
     m_recordingTimer.start(50);
     refreshRecording();
+    if (m_webcam && !Recorder::isRecording()) startSelfViewHost();
 }
 
 void Launcher::saveRecordingPreferences()
@@ -92,6 +96,8 @@ void Launcher::setWebcam(bool value)
     if (m_webcam == value) return;
     m_webcam = value;
     saveRecordingPreferences();
+    if (value) startSelfViewHost();
+    else Recorder::sendHostCommand("quit");
     emit recordingPreferencesChanged();
 }
 
@@ -100,6 +106,7 @@ void Launcher::setWebcamDevice(const QString &value)
     if (value.isEmpty() || m_webcamDevice == value) return;
     m_webcamDevice = value;
     saveRecordingPreferences();
+    if (m_webcam) Recorder::sendHostCommand("configure");
     emit recordingPreferencesChanged();
 }
 
@@ -109,6 +116,7 @@ void Launcher::setWebcamHeight(int value)
     if (m_webcamHeight == value) return;
     m_webcamHeight = value;
     saveRecordingPreferences();
+    if (m_webcam) Recorder::sendHostCommand("configure");
     emit recordingPreferencesChanged();
 }
 
@@ -118,7 +126,7 @@ void Launcher::setWebcamRotation(int value)
     if (value != 0 && value != 90 && value != 180 && value != 270) value = 0;
     if (m_webcamRotation == value) return;
     m_webcamRotation = value;
-    saveRecordingPreferences();
+    Recorder::sendHostCommand("rotate");
     emit recordingPreferencesChanged();
 }
 
@@ -126,7 +134,7 @@ void Launcher::setWebcamFlipHorizontal(bool value)
 {
     if (m_webcamFlipHorizontal == value) return;
     m_webcamFlipHorizontal = value;
-    saveRecordingPreferences();
+    Recorder::sendHostCommand("flip");
     emit recordingPreferencesChanged();
 }
 
@@ -135,6 +143,7 @@ void Launcher::setSelfViewEnabled(bool value)
     if (m_selfViewEnabled == value) return;
     m_selfViewEnabled = value;
     saveRecordingPreferences();
+    Recorder::sendHostCommand(value ? "show" : "hide");
     emit recordingPreferencesChanged();
 }
 
@@ -146,6 +155,7 @@ void Launcher::setSelfViewSize(const QString &value)
     if (m_selfViewSize == normalized) return;
     m_selfViewSize = normalized;
     saveRecordingPreferences();
+    Recorder::sendHostCommand(normalized);
     emit recordingPreferencesChanged();
 }
 
@@ -232,8 +242,33 @@ void Launcher::refreshWebcamDevices()
     emit webcamDevicesChanged();
 }
 
+void Launcher::startSelfViewHost()
+{
+    const auto host = Recorder::readStateFile(Recorder::selfViewHostPath());
+    const qint64 existing = host.value("pid").toVariant().toLongLong();
+    if (existing > 0 && ::kill(pid_t(existing), 0) == 0) { m_hostPid = existing; return; }
+    QProcess process;
+    process.setProgram(QCoreApplication::applicationFilePath());
+    process.setArguments({"__record-bar", "--standby", "--owner", QString::number(QCoreApplication::applicationPid())});
+    auto environment = QProcessEnvironment::systemEnvironment();
+    environment.remove(QStringLiteral("OMAREEL_SCREENSHOT"));
+    environment.remove(QStringLiteral("OMAREEL_SCREENSHOT_LIVE"));
+    process.setProcessEnvironment(environment);
+    process.startDetached(&m_hostPid);
+}
+
 void Launcher::refreshRecording()
 {
+    if (m_webcam) {
+        const auto host = Recorder::readStateFile(Recorder::selfViewHostPath());
+        QString status = QStringLiteral("Starting camera…");
+        if (m_hostPid > 0 && ::kill(pid_t(m_hostPid), 0) != 0) status = QStringLiteral("Camera preview closed");
+        else if (!host.value("camera_error").toString().isEmpty()) status = host.value("camera_error").toString();
+        else if (host.value("camera_status").toString() == "ready")
+            status = host.value("visible").toBool() ? QStringLiteral("Self-view floating on %1 — drag it where you want it").arg(host.value("monitor").toString())
+                                                    : QStringLiteral("Camera ready — self-view hidden");
+        if (status != m_selfViewStatus) { m_selfViewStatus = status; emit selfViewStatusChanged(); }
+    }
     const bool active = Recorder::isRecording();
     const bool captureStarted = active && Recorder::recordingState()
                                             .value(QStringLiteral("capture_started")).toBool(false);
@@ -297,7 +332,16 @@ void Launcher::record()
     m_quitWhenStarted = true;
     emit startingRecordingChanged();
     emit recordingStarting();
-    QTimer::singleShot(150, this, [this] {
+    auto *startTimer = new QTimer(this);
+    startTimer->setInterval(50);
+    connect(startTimer, &QTimer::timeout, this, [this, startTimer, attempts = 0]() mutable {
+        if (m_webcam && attempts++ < 60) {
+            const auto host = Recorder::readStateFile(Recorder::selfViewHostPath());
+            if (host.value("pid").toVariant().toLongLong() != m_hostPid
+                || host.value("camera_status").toString() == "starting") return;
+        }
+        startTimer->stop();
+        startTimer->deleteLater();
         QStringList arguments{QStringLiteral("record")};
         if (!m_systemAudio && !m_microphone) arguments << QStringLiteral("--no-audio");
         else {
@@ -326,6 +370,7 @@ void Launcher::record()
         });
         m_recordingProcess->start(QCoreApplication::applicationFilePath(), arguments);
     });
+    startTimer->start();
 }
 
 void Launcher::stopRecording()

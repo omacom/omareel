@@ -1,3 +1,5 @@
+#include <qpa/qplatformnativeinterface.h>
+#include <wayland-client.h>
 #include "core/InputLog.h"
 #include "core/ZoomTimeline.h"
 #include "record/Recorder.h"
@@ -144,7 +146,9 @@ static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplicat
     QString path = qEnvironmentVariable("OMAREEL_SCREENSHOT_LIVE");
     if (path.isEmpty()) path = qEnvironmentVariable("OMAREEL_SCREENSHOT");
     if (path.isEmpty() || engine.rootObjects().isEmpty()) return;
-    const int captureDelay = qEnvironmentVariableIsEmpty("OMAREEL_SCREENSHOT_LIVE") ? 3000 : 30000;
+    const int captureDelay = qEnvironmentVariableIsSet("OMAREEL_SCREENSHOT_DELAY_MS")
+        ? qEnvironmentVariableIntValue("OMAREEL_SCREENSHOT_DELAY_MS")
+        : qEnvironmentVariableIsEmpty("OMAREEL_SCREENSHOT_LIVE") ? 3000 : 30000;
 
     auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
     if (!window) return;
@@ -266,7 +270,7 @@ static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplicat
         const QImage image = window->grabWindow();
         const bool saved = !image.isNull() && image.save(path);
         if (!saved) QTextStream(stderr) << "omareel: could not save UI screenshot to " << path << '\n';
-        app.exit(saved ? 0 : 2);
+        if (!qEnvironmentVariableIsSet("OMAREEL_SCREENSHOT_KEEP_OPEN")) app.exit(saved ? 0 : 2);
     });
 }
 
@@ -488,6 +492,7 @@ static int probeCommand(const QString &bundle)
                        {"click_count", input.clickDowns().size()},
                        {"key_count", input.keyCount()},
                        {"generated_zoom_count", zooms.size()}, {"zooms", zoomJson}};
+    if (QFileInfo::exists(bundle + "/camera.mp4")) output.insert("camera", videoInfo(bundle + "/camera.mp4"));
     QTextStream(stdout) << QJsonDocument(output).toJson(QJsonDocument::Indented);
     return 0;
 }
@@ -565,6 +570,9 @@ int main(int argc, char **argv)
     }
     const QString command = args[1];
     if (command == QLatin1String("__record-daemon")) return Recorder::daemonMain(args.mid(2));
+    if (command == QLatin1String("__selfview-ipc")) {
+        return args.size() == 3 && Recorder::sendHostCommand(args[2]) ? 0 : 2;
+    }
     if (command == QLatin1String("__record-bar-ipc")) {
         if (args.size() < 3)
             return usage(QStringLiteral("__record-bar-ipc requires rotate|flip|selfview hide|show|move|drag-sim"));
@@ -619,7 +627,12 @@ int main(int argc, char **argv)
     }
     if (command == QLatin1String("__record-bar")) {
         Theme theme;
-        RecordingBar recordingBar(hiddenRecordBar);
+        const int ownerIndex = args.indexOf(QStringLiteral("--owner"));
+        RecordingBar recordingBar(hiddenRecordBar, args.contains(QStringLiteral("--standby")),
+                                  ownerIndex >= 0 ? args.value(ownerIndex + 1).toLongLong() : 0);
+        if (args.contains(QStringLiteral("--standby"))
+            && Recorder::readStateFile(Recorder::selfViewHostPath()).value("pid").toVariant().toLongLong()
+                   != QCoreApplication::applicationPid()) return 0;
         QQmlApplicationEngine engine;
         reportQmlWarnings(engine);
         engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
@@ -645,10 +658,12 @@ int main(int argc, char **argv)
         layerWindow->setScope(QStringLiteral("omareel-record-bar"));
         layerWindow->setActivateOnShow(false);
         if (screen) layerWindow->setScreen(screen);
-        Recorder::updateRecordingState(QJsonObject{
+        if (!args.contains(QStringLiteral("--standby"))) Recorder::updateRecordingState(QJsonObject{
             {QStringLiteral("bar_width"), window->width()},
             {QStringLiteral("bar_height"), window->height()}});
-        const auto updateBarVisibility = [&recordingBar, window] {
+        const auto updateBarVisibility = [&recordingBar, window, layerWindow] {
+            QScreen *target = recordBarScreen(recordingBar.recordedMonitor());
+            if (target && window->screen() != target) { window->hide(); window->setScreen(target); layerWindow->setScreen(target); }
             if (recordingBar.captureStarted() && !recordingBar.hidden()) window->show();
             else window->hide();
         };
@@ -687,11 +702,15 @@ int main(int argc, char **argv)
             countdownLayer->setScope(QStringLiteral("omareel-record-bar"));
             countdownLayer->setActivateOnShow(false);
             if (screen) countdownLayer->setScreen(screen);
-            Recorder::updateRecordingState(QJsonObject{
+            if (!args.contains(QStringLiteral("--standby"))) Recorder::updateRecordingState(QJsonObject{
                 {QStringLiteral("countdown_width"), countdownWindow->width()},
                 {QStringLiteral("countdown_height"), countdownWindow->height()},
                 {QStringLiteral("countdown_ready"), true}});
-            const auto updateCountdownVisibility = [&recordingBar, countdownWindow] {
+            const auto updateCountdownVisibility = [&recordingBar, countdownWindow, countdownLayer] {
+                QScreen *target = recordBarScreen(recordingBar.recordedMonitor());
+                if (target && target != countdownWindow->screen()) {
+                    countdownWindow->hide(); countdownWindow->setScreen(target); countdownLayer->setScreen(target);
+                }
                 if (recordingBar.countdownActive() && !recordingBar.captureStarted())
                     countdownWindow->show();
                 else
@@ -741,15 +760,25 @@ int main(int argc, char **argv)
             selfViewLayer->setScope(QStringLiteral("omareel-selfview"));
             selfViewLayer->setActivateOnShow(false);
             if (selfViewScreen) selfViewLayer->setScreen(selfViewScreen);
-            const auto updateSelfViewPlacement = [&recordingBar, selfViewLayer] {
+            const auto updateSelfViewPlacement = [&recordingBar, selfViewLayer, selfViewWindow] {
                 selfViewLayer->setMargins(QMargins(recordingBar.selfViewX(),
                                                    recordingBar.selfViewY(), 0, 0));
+                selfViewWindow->resize(recordingBar.selfViewPixels(), recordingBar.selfViewPixels());
+                selfViewWindow->requestUpdate();
+                // Margins are double-buffered Wayland state. Commit geometry immediately,
+                // including when the camera has stopped delivering frames.
+                if (QGuiApplication::platformName().startsWith(QLatin1String("wayland"))) {
+                    auto *native = QGuiApplication::platformNativeInterface();
+                    auto *surface = static_cast<wl_surface *>(native->nativeResourceForWindow("surface", selfViewWindow));
+                    auto *display = static_cast<wl_display *>(native->nativeResourceForIntegration("display"));
+                    if (surface && display) { wl_surface_commit(surface); wl_display_flush(display); }
+                }
             };
             updateSelfViewPlacement();
             QObject::connect(&recordingBar, &RecordingBar::selfViewPlacementChanged,
                              selfViewWindow, updateSelfViewPlacement);
             const auto updateSelfViewVisibility = [&recordingBar, selfViewWindow] {
-                const bool visible = recordingBar.captureStarted() && recordingBar.selfViewVisible();
+                const bool visible = recordingBar.bubbleMapped();
                 selfViewWindow->setMask(visible
                     ? QRegion(0, 0, selfViewWindow->width(), selfViewWindow->height())
                     : QRegion());
@@ -762,6 +791,15 @@ int main(int argc, char **argv)
                              selfViewWindow, updateSelfViewVisibility);
             updateSelfViewVisibility();
         }
+        const auto grabHook = [](QQuickWindow *target, const char *variable) {
+            const QString path = qEnvironmentVariable(variable);
+            if (!target || path.isEmpty()) return;
+            const int delay = qEnvironmentVariableIsSet("OMAREEL_SCREENSHOT_DELAY_MS")
+                ? qEnvironmentVariableIntValue("OMAREEL_SCREENSHOT_DELAY_MS") : 4000;
+            QTimer::singleShot(qMax(0, delay), target, [target, path] { target->grabWindow().save(path); });
+        };
+        grabHook(selfViewWindow, "OMAREEL_SCREENSHOT_SELFVIEW");
+        grabHook(window, "OMAREEL_SCREENSHOT_BAR");
         configureDebugScreenshot(engine, app);
         return app.exec();
     }

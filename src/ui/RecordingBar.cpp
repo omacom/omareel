@@ -6,7 +6,15 @@
 
 #include <algorithm>
 #include <ctime>
-#include <QCursor>
+#include "record/CursorSampler.h"
+#include <QCoreApplication>
+#include <QDir>
+#include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QProcess>
+#include <csignal>
+#include <unistd.h>
 #include <QDebug>
 #include <QFile>
 
@@ -36,11 +44,40 @@ static void debugBarStage(const QString &stage, const QString &detail = {})
     file.write((line + QLatin1Char('\n')).toUtf8());
 }
 
-RecordingBar::RecordingBar(bool hidden, QObject *parent): QObject(parent),
+RecordingBar::RecordingBar(bool hidden, bool standby, qint64 owner, QObject *parent): QObject(parent),
+    m_standby(standby), m_owner(owner),
     m_recordedMonitor(Recorder::recordedMonitor()), m_webcam(Recorder::recordingHasWebcam()),
     m_hidden(hidden)
 {
-    const QJsonObject state = Recorder::recordingState();
+    QJsonObject state = Recorder::recordingState();
+    if (m_standby) {
+        QDir().mkpath(QFileInfo(Recorder::selfViewHostPath()).absolutePath());
+        m_hostLock = std::make_unique<QLockFile>(Recorder::selfViewHostPath() + ".host-lock");
+        if (!m_hostLock->tryLock(0)) {
+            QTimer::singleShot(0, this, &RecordingBar::finished);
+            return;
+        }
+        const auto prefs = RecordingPreferences::load();
+        QProcess monitors;
+        monitors.start("hyprctl", {"-j", "monitors"});
+        QJsonObject monitor;
+        if (monitors.waitForFinished(1000)) {
+            for (const auto &value : QJsonDocument::fromJson(monitors.readAllStandardOutput()).array()) {
+                if (monitor.isEmpty() || value.toObject().value("focused").toBool()) monitor = value.toObject();
+                if (value.toObject().value("focused").toBool()) break;
+            }
+        }
+        const double scale = qMax(.01, monitor.value("scale").toDouble(1));
+        const int pixels = prefs.selfViewSize == "S" ? 120 : prefs.selfViewSize == "L" ? 220 : 160;
+        m_recordedMonitor = monitor.value("name").toString();
+        m_webcam = true;
+        state = {{"camera_rotation", prefs.webcamRotation}, {"camera_flip_horizontal", prefs.webcamFlipHorizontal},
+                 {"selfview", prefs.selfViewEnabled}, {"selfview_safe", true}, {"selfview_monitor", m_recordedMonitor},
+                 {"selfview_pixels", pixels}, {"camera_device", prefs.webcamDevice}, {"camera_height", prefs.webcamHeight},
+                 {"selfview_x", 16 + qRound(prefs.selfViewX * qMax(0, qRound(monitor.value("width").toDouble()/scale) - pixels - 32))},
+                 {"selfview_y", 16 + qRound(prefs.selfViewY * qMax(0, qRound(monitor.value("height").toDouble()/scale) - pixels - 32))}};
+        Recorder::updateStateFile(Recorder::selfViewHostPath(), {{"command", ""}, {"command_sequence", 0}});
+    }
     m_cameraRotation = state.value(QStringLiteral("camera_rotation")).toInt(0);
     m_cameraFlipHorizontal = state.value(QStringLiteral("camera_flip_horizontal")).toBool(false);
     m_selfViewVisible = state.value(QStringLiteral("selfview")).toBool(false);
@@ -55,72 +92,82 @@ RecordingBar::RecordingBar(bool hidden, QObject *parent): QObject(parent),
                             .toVariant().toLongLong();
     m_saveSelfViewTimer.setSingleShot(true);
     m_saveSelfViewTimer.setInterval(180);
-    connect(&m_saveSelfViewTimer, &QTimer::timeout, this, [this] {
-        if (m_selfViewScreenSize.isEmpty()) return;
-        RecordingPreferences preferences = RecordingPreferences::load();
-        const int xRange = std::max(1, m_selfViewScreenSize.width() - m_selfViewPixels - 32);
-        const int yRange = std::max(1, m_selfViewScreenSize.height() - m_selfViewPixels - 32);
-        preferences.selfViewX = std::clamp((m_selfViewX - 16.0) / xRange, 0.0, 1.0);
-        preferences.selfViewY = std::clamp((m_selfViewY - 16.0) / yRange, 0.0, 1.0);
-        preferences.save();
-    });
-    m_selfViewPlacementTimer.setSingleShot(true);
-    m_selfViewPlacementTimer.setInterval(0);
-    connect(&m_selfViewPlacementTimer, &QTimer::timeout,
-            this, &RecordingBar::selfViewPlacementChanged);
-    if (m_webcam) {
-        const QString bundle = state.value(QStringLiteral("bundle")).toString();
-        m_cameraCapture = std::make_unique<CameraCapture>(
-            state.value(QStringLiteral("camera_device")).toString(),
-            state.value(QStringLiteral("camera_height")).toInt(1080),
-            bundle + QStringLiteral("/camera.mp4"),
-            bundle + QStringLiteral("/camera.mp4.ts"), this);
-        connect(m_cameraCapture.get(), &CameraCapture::readyChanged, this, [this] {
-            if (!m_cameraCapture->ready()) return;
-            Recorder::updateRecordingState(QJsonObject{
-                {QStringLiteral("camera_status"), QStringLiteral("ready")},
-                {QStringLiteral("camera_backend"), QStringLiteral("qt-multimedia")},
-                {QStringLiteral("camera_width"), m_cameraCapture->captureSize().width()},
-                {QStringLiteral("camera_height_actual"), m_cameraCapture->captureSize().height()},
-                {QStringLiteral("camera_fps"), m_cameraCapture->frameRate()}
-            });
-            debugBarStage(QStringLiteral("camera_ready"));
-        });
-        connect(m_cameraCapture.get(), &CameraCapture::errorOccurred, this,
-                [this](const QString &message) {
-            m_cameraFailed = true;
-            m_cameraError = message;
-            emit cameraErrorChanged();
-            Recorder::updateRecordingState(QJsonObject{
-                {QStringLiteral("camera_status"), QStringLiteral("releasing")},
-                {QStringLiteral("camera_error"), message}
-            });
-        });
-        connect(m_cameraCapture.get(), &CameraCapture::stopped, this, [this] {
-            Recorder::updateRecordingState(QJsonObject{
-                {QStringLiteral("camera_status"), m_cameraFailed
-                    ? QStringLiteral("failed") : QStringLiteral("stopped")}
-            });
-        });
-    }
+    connect(&m_saveSelfViewTimer, &QTimer::timeout, this, &RecordingBar::saveSelfViewPosition);
+    if (m_webcam) createCamera(state);
+    m_positionWriteTimer.setSingleShot(true);
+    m_positionWriteTimer.setInterval(34);
+    connect(&m_positionWriteTimer, &QTimer::timeout, this, &RecordingBar::publishGeometry);
+    m_watcher.addPath(QFileInfo(Recorder::stateFilePath()).absolutePath());
+    connect(&m_watcher, &QFileSystemWatcher::directoryChanged, this, &RecordingBar::poll);
+    if (m_standby) publishHost();
     connect(&m_timer, &QTimer::timeout, this, &RecordingBar::poll);
     m_timer.start(50);
     poll();
 }
 
-RecordingBar::~RecordingBar() = default;
+RecordingBar::~RecordingBar()
+{
+    if (m_standby && m_hostLock && m_hostLock->isLocked()) QFile::remove(Recorder::selfViewHostPath());
+}
 
 void RecordingBar::poll()
 {
-    if (!Recorder::isRecording()) {
+    const bool active = Recorder::isRecording();
+    QJsonObject state = Recorder::recordingState();
+    if (m_standby) {
+        const auto host = Recorder::readStateFile(Recorder::selfViewHostPath());
+        const auto sequence = host.value("command_sequence").toVariant().toLongLong();
+        if (sequence != m_hostSequence) {
+            m_hostSequence = sequence;
+            hostCommand(host.value("command").toString());
+        }
+        const bool ours = active && state.value("host_pid").toVariant().toLongLong() == QCoreApplication::applicationPid();
+        if (ours && !m_adopted) {
+            m_adopted = true;
+            m_recordedMonitor = state.value("monitor").toString();
+            m_hidden = !state.value("bar_visible").toBool(true);
+            const QString bundle = state.value("bundle").toString();
+            m_cameraCapture->setRecordingOutput(bundle + "/camera.mp4", bundle + "/camera.mp4.ts");
+            publishGeometry();
+            Recorder::updateRecordingState({{"host_acknowledged", true}, {"countdown_ready", true},
+                {"camera_rotation", m_cameraRotation}, {"camera_flip_horizontal", m_cameraFlipHorizontal},
+                {"camera_status", m_cameraCapture->ready() ? "ready" : "starting"},
+                {"camera_width", m_cameraCapture->captureSize().width()},
+                {"camera_height_actual", m_cameraCapture->captureSize().height()},
+                {"camera_fps", m_cameraCapture->frameRate()}});
+            state = Recorder::recordingState();
+            emit captureStartedChanged();
+        }
+        const bool suppressed = active && !ours;
+        if (suppressed != m_suppressed) {
+            m_suppressed = suppressed;
+            emit selfViewVisibilityChanged();
+        }
+        if (ours && state.value("selfview_seed_hide").toBool() && !m_seedHidden
+            && !state.value("capture_started").toBool()) {
+            m_seedHidden = true;
+            emit selfViewVisibilityChanged();
+            // Unmapping is committed by Qt on hide; allow two refresh periods even at 60 Hz.
+            QTimer::singleShot(34, this, [this] {
+                if (m_adopted) Recorder::updateRecordingState({{"selfview_hidden", true}});
+            });
+        }
+        if (!active && (m_adopted || m_quit || m_owner <= 0 || ::kill(pid_t(m_owner), 0) != 0)) {
+            m_timer.stop();
+            emit finished();
+            return;
+        }
+        if (!ours) return;
+    } else if (!active) {
         m_timer.stop();
         emit finished();
         return;
     }
-    const QJsonObject state = Recorder::recordingState();
     const bool captureStarted = state.value(QStringLiteral("capture_started")).toBool(false);
     if (captureStarted != m_captureStarted) {
         m_captureStarted = captureStarted;
+        if (captureStarted) m_seedHidden = false;
+        emit selfViewVisibilityChanged();
         emit captureStartedChanged();
     }
     if (captureStarted && qEnvironmentVariable("OMAREEL_DEBUG") == QLatin1String("1")
@@ -149,7 +196,8 @@ void RecordingBar::poll()
         : std::clamp(requestedX, 0, std::max(0, m_selfViewScreenSize.width() - m_selfViewPixels));
     const int nextY = m_selfViewScreenSize.isEmpty() ? requestedY
         : std::clamp(requestedY, 0, std::max(0, m_selfViewScreenSize.height() - m_selfViewPixels));
-    if (nextX != m_selfViewX || nextY != m_selfViewY) {
+    if (!m_dragActive && !m_positionWriteTimer.isActive()
+        && (nextX != m_selfViewX || nextY != m_selfViewY)) {
         m_selfViewX = nextX;
         m_selfViewY = nextY;
         scheduleSelfViewPlacementUpdate();
@@ -174,6 +222,7 @@ void RecordingBar::poll()
     if (m_cameraCapture && state.value(QStringLiteral("camera_record")).toBool(false)
         && !m_cameraRecordRequested) {
         m_cameraRecordRequested = true;
+        debugBarStage(QStringLiteral("camera_record_begin"));
         m_cameraCapture->beginRecording();
     }
     if (m_cameraCapture && state.value(QStringLiteral("camera_stop")).toBool(false)
@@ -193,6 +242,7 @@ void RecordingBar::poll()
 void RecordingBar::attachCameraOutput(QObject *output)
 {
     if (!m_cameraCapture) return;
+    m_cameraOutput = output;
     m_cameraCapture->attachVideoOutput(output);
     m_cameraCapture->start();
 }
@@ -204,7 +254,8 @@ void RecordingBar::rotateCamera()
     preferences.webcamRotation = m_cameraRotation;
     preferences.webcam.insert(QStringLiteral("rotation"), m_cameraRotation);
     preferences.save();
-    Recorder::updateRecordingState(QJsonObject{{QStringLiteral("camera_rotation"), m_cameraRotation}});
+    if (!m_standby || m_adopted) Recorder::updateRecordingState({{"camera_rotation", m_cameraRotation}});
+    publishHost();
     if (qEnvironmentVariableIsSet("OMAREEL_CAMERA_SETTINGS_LOG"))
         qInfo().nospace() << "camera rotation=" << m_cameraRotation
                           << " flip=" << m_cameraFlipHorizontal;
@@ -218,9 +269,8 @@ void RecordingBar::flipCamera()
     preferences.webcamFlipHorizontal = m_cameraFlipHorizontal;
     preferences.webcam.insert(QStringLiteral("flipHorizontal"), m_cameraFlipHorizontal);
     preferences.save();
-    Recorder::updateRecordingState(QJsonObject{
-        {QStringLiteral("camera_flip_horizontal"), m_cameraFlipHorizontal}
-    });
+    if (!m_standby || m_adopted) Recorder::updateRecordingState({{"camera_flip_horizontal", m_cameraFlipHorizontal}});
+    publishHost();
     if (qEnvironmentVariableIsSet("OMAREEL_CAMERA_SETTINGS_LOG"))
         qInfo().nospace() << "camera rotation=" << m_cameraRotation
                           << " flip=" << m_cameraFlipHorizontal;
@@ -229,7 +279,9 @@ void RecordingBar::flipCamera()
 
 QPointF RecordingBar::globalCursorPos() const
 {
-    return QPointF(QCursor::pos());
+    QPointF point = m_dragPressPointer;
+    CursorSampler::cursorPosition(&point);
+    return point;
 }
 
 void RecordingBar::beginDrag(const QPointF &globalPosition)
@@ -257,6 +309,10 @@ void RecordingBar::dragTo(const QPointF &globalPosition)
 void RecordingBar::endDrag()
 {
     m_dragActive = false;
+    m_positionWriteTimer.stop();
+    publishGeometry();
+    m_saveSelfViewTimer.stop();
+    saveSelfViewPosition();
 }
 
 void RecordingBar::setSelfViewScreenSize(const QSize &size)
@@ -282,22 +338,24 @@ void RecordingBar::setSelfViewPosition(int x, int y)
     if (nextX == m_selfViewX && nextY == m_selfViewY) return;
     m_selfViewX = nextX;
     m_selfViewY = nextY;
-    Recorder::updateRecordingState(QJsonObject{{QStringLiteral("selfview_x"), m_selfViewX},
-                                                {QStringLiteral("selfview_y"), m_selfViewY}});
+    if (!m_positionWriteTimer.isActive()) m_positionWriteTimer.start();
     m_saveSelfViewTimer.start();
     scheduleSelfViewPlacementUpdate();
 }
 
 void RecordingBar::scheduleSelfViewPlacementUpdate()
 {
-    if (!m_selfViewPlacementTimer.isActive()) m_selfViewPlacementTimer.start();
+    emit selfViewPlacementChanged();
 }
 
 void RecordingBar::setSelfViewVisible(bool visible)
 {
     if (!m_webcam || m_selfViewVisible == visible) return;
     m_selfViewVisible = visible;
-    Recorder::updateRecordingState(QJsonObject{{QStringLiteral("selfview"), visible}});
+    auto prefs = RecordingPreferences::load();
+    prefs.selfViewEnabled = visible;
+    prefs.save();
+    publishGeometry();
     emit selfViewVisibilityChanged();
 }
 
@@ -309,4 +367,106 @@ void RecordingBar::stop()
 void RecordingBar::cancel()
 {
     Recorder::signalExisting(true);
+}
+
+void RecordingBar::publishGeometry()
+{
+    if (!m_standby || m_adopted)
+        Recorder::updateRecordingState({{"selfview_monitor", m_selfViewMonitor},
+            {"selfview_x", m_selfViewX}, {"selfview_y", m_selfViewY},
+            {"selfview_pixels", m_selfViewPixels}, {"selfview", m_selfViewVisible}});
+    publishHost();
+}
+
+void RecordingBar::publishHost()
+{
+    if (!m_standby) return;
+    Recorder::updateStateFile(Recorder::selfViewHostPath(), {
+        {"pid", QCoreApplication::applicationPid()}, {"owner_pid", m_owner},
+        {"monitor", m_selfViewMonitor}, {"x", m_selfViewX}, {"y", m_selfViewY},
+        {"pixels", m_selfViewPixels}, {"visible", m_selfViewVisible},
+        {"rotation", m_cameraRotation}, {"flip_horizontal", m_cameraFlipHorizontal},
+        {"camera_status", m_cameraFailed ? "failed" : m_cameraCapture && m_cameraCapture->ready() ? "ready" : "starting"},
+        {"camera_error", m_cameraError}});
+}
+
+void RecordingBar::cameraState(const QJsonObject &values)
+{
+    if (!m_standby || m_adopted) Recorder::updateRecordingState(values);
+    publishHost();
+}
+
+void RecordingBar::hostCommand(const QString &command)
+{
+    if (command == "quit") m_quit = true;
+    else if (command == "configure" && !m_adopted) {
+        const auto prefs = RecordingPreferences::load();
+        if (m_cameraCapture) disconnect(m_cameraCapture.get(), nullptr, this, nullptr);
+        m_cameraCapture.reset();
+        m_cameraFailed = false;
+        m_cameraError.clear();
+        emit cameraErrorChanged();
+        createCamera({{"camera_device", prefs.webcamDevice}, {"camera_height", prefs.webcamHeight}});
+        attachCameraOutput(m_cameraOutput);
+        publishHost();
+    }
+    else if (command == "rotate") rotateCamera();
+    else if (command == "flip") flipCamera();
+    else if (command == "show" || command == "hide") setSelfViewVisible(command == "show");
+    else if (command == "S" || command == "M" || command == "L") {
+        m_selfViewPixels = command == "S" ? 120 : command == "L" ? 220 : 160;
+        auto prefs = RecordingPreferences::load();
+        prefs.selfViewSize = command;
+        prefs.save();
+        setSelfViewScreenSize(m_selfViewScreenSize);
+        publishGeometry();
+    }
+}
+
+void RecordingBar::saveSelfViewPosition()
+{
+    if (m_selfViewScreenSize.isEmpty()) return;
+    RecordingPreferences preferences = RecordingPreferences::load();
+    const int xRange = std::max(1, m_selfViewScreenSize.width() - m_selfViewPixels - 32);
+    const int yRange = std::max(1, m_selfViewScreenSize.height() - m_selfViewPixels - 32);
+    preferences.selfViewX = std::clamp((m_selfViewX - 16.0) / xRange, 0.0, 1.0);
+    preferences.selfViewY = std::clamp((m_selfViewY - 16.0) / yRange, 0.0, 1.0);
+    preferences.save();
+}
+
+void RecordingBar::createCamera(const QJsonObject &state)
+{
+    const QString bundle = state.value(QStringLiteral("bundle")).toString();
+    m_cameraCapture = std::make_unique<CameraCapture>(
+        state.value(QStringLiteral("camera_device")).toString(),
+        state.value(QStringLiteral("camera_height")).toInt(1080),
+        bundle.isEmpty() ? QString() : bundle + QStringLiteral("/camera.mp4"),
+        bundle.isEmpty() ? QString() : bundle + QStringLiteral("/camera.mp4.ts"), this);
+    connect(m_cameraCapture.get(), &CameraCapture::readyChanged, this, [this] {
+        if (!m_cameraCapture->ready()) return;
+        cameraState(QJsonObject{
+            {QStringLiteral("camera_status"), QStringLiteral("ready")},
+            {QStringLiteral("camera_backend"), QStringLiteral("qt-multimedia")},
+            {QStringLiteral("camera_width"), m_cameraCapture->captureSize().width()},
+            {QStringLiteral("camera_height_actual"), m_cameraCapture->captureSize().height()},
+            {QStringLiteral("camera_fps"), m_cameraCapture->frameRate()}
+        });
+        debugBarStage(QStringLiteral("camera_ready"));
+    });
+    connect(m_cameraCapture.get(), &CameraCapture::errorOccurred, this,
+            [this](const QString &message) {
+        m_cameraFailed = true;
+        m_cameraError = message;
+        emit cameraErrorChanged();
+        cameraState(QJsonObject{
+            {QStringLiteral("camera_status"), QStringLiteral("releasing")},
+            {QStringLiteral("camera_error"), message}
+        });
+    });
+    connect(m_cameraCapture.get(), &CameraCapture::stopped, this, [this] {
+        cameraState(QJsonObject{
+            {QStringLiteral("camera_status"), m_cameraFailed
+                ? QStringLiteral("failed") : QStringLiteral("stopped")}
+        });
+    });
 }

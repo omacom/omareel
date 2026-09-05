@@ -115,24 +115,20 @@ QVector<CaptureRowCopy> Omareel::captureCropRows(const QSize &sourceSize, int so
     return result;
 }
 
-bool Omareel::captureRectIsBlack(const uchar *frame, const QSize &size, int stride,
-                                 const QRect &requestedRect)
+bool Omareel::captureRectMostlyBlack(const uchar *frame, const QSize &size, int stride,
+                                      const QRect &requestedRect)
 {
     if (!frame || size.isEmpty() || stride < size.width() * 4) return false;
     const QRect rect = requestedRect.intersected(QRect(QPoint(), size));
-    if (!rect.isValid()) return false;
-    // Layer-surface logical coordinates can land between capture pixels. Ignore the one-pixel
-    // rounding fringe while classifying, but replace the complete requested rectangle.
-    const QRect samples = rect.width() > 2 && rect.height() > 2
-        ? rect.adjusted(1, 1, -1, -1) : rect;
-    for (int y = samples.top(); y <= samples.bottom(); y += 8) {
-        const uchar *row = frame + qsizetype(y) * stride;
-        for (int x = samples.left(); x <= samples.right(); x += 8) {
-            const uchar *pixel = row + qsizetype(x) * 4;
-            if (pixel[0] > 2 || pixel[1] > 2 || pixel[2] > 2) return false;
+    int black = 0, samples = 0;
+    for (int y = rect.top(); y <= rect.bottom(); ++y) {
+        for (int x = rect.left(); x <= rect.right(); ++x) {
+            const uchar *p = frame + qsizetype(y) * stride + x * 4;
+            ++samples;
+            if (p[0] <= 2 && p[1] <= 2 && p[2] <= 2) ++black;
         }
     }
-    return true;
+    return samples > 0 && black * 10 >= samples * 9;
 }
 
 void Omareel::applyCaptureMasks(uchar *frame, const QSize &size, int stride,
@@ -140,18 +136,18 @@ void Omareel::applyCaptureMasks(uchar *frame, const QSize &size, int stride,
 {
     if (!frame || !underlay || size.isEmpty() || stride < size.width() * 4) return;
     const qsizetype bytes = qsizetype(stride) * size.height();
-    if (underlay->size() != bytes) {
-        *underlay = QByteArray(reinterpret_cast<const char *>(frame), bytes);
-        return;
-    }
+    if (underlay->size() != bytes) *underlay = QByteArray(bytes, 0);
+    const auto black = [](const uchar *p) { return p[0] <= 2 && p[1] <= 2 && p[2] <= 2; };
     for (const QRect &requestedRect : rects) {
-        const QRect rect = requestedRect.intersected(QRect(QPoint(), size));
-        if (!rect.isValid() || !captureRectIsBlack(frame, size, stride, rect)) continue;
-        const qsizetype rowBytes = qsizetype(rect.width()) * 4;
-        for (int y = rect.top(); y <= rect.bottom(); ++y)
-            std::memcpy(frame + qsizetype(y) * stride + qsizetype(rect.x()) * 4,
-                        underlay->constData() + qsizetype(y) * stride + qsizetype(rect.x()) * 4,
-                        size_t(rowBytes));
+        const QRect rect = requestedRect.adjusted(-4, -4, 4, 4).intersected(QRect(QPoint(), size));
+        for (int y = rect.top(); y <= rect.bottom(); ++y) {
+            for (int x = rect.left(); x <= rect.right(); ++x) {
+                const qsizetype offset = qsizetype(y) * stride + x * 4;
+                uchar *pixel = frame + offset;
+                const auto *saved = reinterpret_cast<const uchar *>(underlay->constData()) + offset;
+                if (black(pixel) && !black(saved)) std::memcpy(pixel, saved, 4);
+            }
+        }
     }
     std::memcpy(underlay->data(), frame, size_t(bytes));
 }
@@ -484,7 +480,7 @@ struct ScreenCapture::Private {
     int encoderErrorFd = -1;
     QByteArray encoderError;
     QString conversion = QStringLiteral("cpu");
-    qint64 firstUs = 0;
+    std::atomic<qint64> firstUs{0};
     qint64 lastUs = 0;
     qint64 lastCaptureRequestUs = 0;
     std::atomic_int frames{0};
@@ -557,6 +553,9 @@ bool dispatchOnce(ScreenCapture::Private *d, int timeoutMs)
 void ScreenCapture::Private::writerLoop()
 {
     QByteArray cropped;
+    qint64 seedStartUs = 0;
+    bool seeded = false;
+    int skipped = 0;
     if (cropRows.size() > 1)
         cropped.resize(encodedSize.width() * encodedSize.height() * 4);
     for (;;) {
@@ -585,6 +584,36 @@ void ScreenCapture::Private::writerLoop()
         {
             std::lock_guard<std::mutex> lock(maskMutex);
             masks = maskedRects;
+        }
+        if (!seeded) {
+            if (!seedStartUs) seedStartUs = monotonicUs();
+            const bool dirty = std::any_of(masks.cbegin(), masks.cend(), [&](const QRect &rect) {
+                return captureRectMostlyBlack(reinterpret_cast<const uchar *>(output), encodedSize,
+                                              encodedSize.width() * 4, rect);
+            });
+            if (dirty && monotonicUs() - seedStartUs < 250000) {
+                ++skipped;
+                std::lock_guard<std::mutex> lock(ringMutex);
+                ring.release(index);
+                continue;
+            }
+            seeded = true;
+            firstUs = captureSlots[size_t(index)].presentationUs;
+            if (firstUs <= 0) firstUs = monotonicUs();
+            QString timestampError;
+            if (!writeTimestamp(config.timestampPath, firstUs, &timestampError)) {
+                std::lock_guard<std::mutex> lock(ringMutex);
+                ring.release(index);
+                writerError = timestampError;
+                writerFailed.store(true);
+                break;
+            }
+            if (qEnvironmentVariable("OMAREEL_DEBUG") == QLatin1String("1")) {
+                QFile log(QStringLiteral("/tmp/omareel.log"));
+                if (log.open(QIODevice::WriteOnly | QIODevice::Append))
+                    log.write("OMAREEL_START stage=seed_clean monotonic_us=" + QByteArray::number(monotonicUs())
+                              + " skipped=" + QByteArray::number(skipped) + '\n');
+            }
         }
         if (!masks.isEmpty() || !maskUnderlay.isEmpty()) {
             if (cropRows.size() == 1) {
@@ -935,10 +964,6 @@ bool ScreenCapture::captureFrame(QString *error)
             std::lock_guard<std::mutex> lock(d->ringMutex);
             d->ring.release(slot.index);
             continue;
-        }
-        if (d->firstUs == 0) {
-            d->firstUs = slot.presentationUs > 0 ? slot.presentationUs : monotonicUs();
-            if (!writeTimestamp(d->config.timestampPath, d->firstUs, error)) return false;
         }
         d->lastUs = slot.presentationUs > 0 ? slot.presentationUs : monotonicUs();
         {

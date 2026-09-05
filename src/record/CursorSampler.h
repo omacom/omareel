@@ -22,6 +22,7 @@ public:
     void stop();
     QVector<RawCursorSample> samples() const;
     static qint64 monotonicUs();
+    static bool cursorPosition(QPointF *point);
 
 private:
     void run();

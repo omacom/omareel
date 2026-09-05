@@ -53,6 +53,9 @@ static bool queryCursor(const QByteArray &path, QPointF *point)
 {
     const int fd = ::socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (fd < 0) return false;
+    const timeval timeout{0, 20000};
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
     sockaddr_un address{};
     address.sun_family = AF_UNIX;
     if (path.size() >= int(sizeof(address.sun_path))) { ::close(fd); return false; }
@@ -69,12 +72,22 @@ static bool queryCursor(const QByteArray &path, QPointF *point)
     QByteArray reply;
     char buffer[256];
     ssize_t count = 0;
-    while ((count = ::read(fd, buffer, sizeof(buffer))) > 0) reply.append(buffer, count);
+    for (int attempt = 0; attempt < 16; ++attempt) {
+        count = ::read(fd, buffer, sizeof(buffer));
+        if (count <= 0) break;
+        reply.append(buffer, count);
+    }
     ::close(fd);
     const auto object = QJsonDocument::fromJson(reply).object();
     if (!object.contains("x") || !object.contains("y")) return false;
     *point = QPointF(object.value("x").toDouble(), object.value("y").toDouble());
     return true;
+}
+
+bool CursorSampler::cursorPosition(QPointF *point)
+{
+    return queryCursor(QFile::encodeName(qEnvironmentVariable("XDG_RUNTIME_DIR")
+        + "/hypr/" + qEnvironmentVariable("HYPRLAND_INSTANCE_SIGNATURE") + "/.socket.sock"), point);
 }
 
 void CursorSampler::run()

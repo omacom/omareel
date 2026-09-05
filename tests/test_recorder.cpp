@@ -201,37 +201,67 @@ private slots:
         QCOMPARE(full.first().bytes, qsizetype(3840) * 2160 * 4);
     }
 
-    void blackCaptureRectUsesPersistentUnderlay()
+    void cleanSeedUsesNinetyPercentThreshold()
+    {
+        QByteArray frame(10 * 10 * 4, char(0));
+        for (int pixel = 0; pixel < 10; ++pixel) frame[pixel * 4] = 3;
+        QVERIFY(captureRectMostlyBlack(reinterpret_cast<const uchar *>(frame.constData()),
+                                       QSize(10, 10), 40, QRect(0, 0, 10, 10)));
+        frame[10 * 4] = 3;
+        QVERIFY(!captureRectMostlyBlack(reinterpret_cast<const uchar *>(frame.constData()),
+                                        QSize(10, 10), 40, QRect(0, 0, 10, 10)));
+    }
+
+    void offsetBlackBlockUsesUnderlay()
     {
         const QSize size(64, 64);
-        const int stride = size.width() * 4;
-        QByteArray frame(stride * size.height(), char(0));
-        QByteArray underlay(stride * size.height(), char(0));
-        const QRect masked(16, 16, 24, 24);
-        for (int y = 0; y < size.height(); ++y) {
-            for (int x = 0; x < size.width(); ++x) {
-                uchar *saved = reinterpret_cast<uchar *>(underlay.data()) + y * stride + x * 4;
-                saved[0] = uchar(20 + x); saved[1] = uchar(30 + y); saved[2] = 90; saved[3] = 255;
-                uchar *current = reinterpret_cast<uchar *>(frame.data()) + y * stride + x * 4;
-                current[0] = 110; current[1] = 120; current[2] = 130; current[3] = 255;
-            }
-        }
-        // Logical layer geometry can leave a one-pixel compositor rounding fringe around the
-        // black exclusion rectangle; classification ignores that fringe and replaces it too.
-        const QRect black = masked.adjusted(1, 1, -1, -1);
-        for (int y = black.top(); y <= black.bottom(); ++y)
-            std::memset(frame.data() + y * stride + black.x() * 4, 0,
-                        size_t(black.width() * 4));
-
-        QVERIFY(captureRectIsBlack(reinterpret_cast<const uchar *>(frame.constData()),
-                                   size, stride, masked));
-        const QByteArray expected = underlay;
-        applyCaptureMasks(reinterpret_cast<uchar *>(frame.data()), size, stride,
-                          QVector<QRect>{masked}, &underlay);
-        for (int y = masked.top(); y <= masked.bottom(); ++y)
-            QCOMPARE(frame.mid(y * stride + masked.x() * 4, masked.width() * 4),
-                     expected.mid(y * stride + masked.x() * 4, masked.width() * 4));
+        const int stride = 256;
+        QByteArray frame(stride * 64, char(100));
+        QByteArray underlay(stride * 64, char(80));
+        const QRect mask(16, 16, 24, 24);
+        const QRect block = mask.translated(2, 2);
+        for (int y = block.top(); y <= block.bottom(); ++y)
+            std::memset(frame.data() + y * stride + block.x() * 4, 0, size_t(block.width() * 4));
+        frame[0] = frame[1] = frame[2] = 0;
+        applyCaptureMasks(reinterpret_cast<uchar *>(frame.data()), size, stride, {mask}, &underlay);
+        for (int y = 0; y < 64; ++y)
+            for (int x = 0; x < 64; ++x)
+                QCOMPARE(uchar(frame[y * stride + x * 4]),
+                         uchar(x == 0 && y == 0 ? 0 : block.contains(x, y) ? 80 : 100));
         QCOMPARE(underlay, frame);
+    }
+
+    void unknownUnderlayHealsWhenBlockMoves()
+    {
+        const QSize size(64, 64);
+        const int stride = 256;
+        const QRect first(8, 8, 16, 16), second(40, 40, 16, 16);
+        QByteArray underlay;
+        const auto makeFrame = [&](const QRect &block) {
+            QByteArray frame(stride * 64, char(90));
+            for (int y = block.top(); y <= block.bottom(); ++y)
+                std::memset(frame.data() + y * stride + block.x() * 4, 0, size_t(block.width() * 4));
+            return frame;
+        };
+        auto frame = makeFrame(first);
+        applyCaptureMasks(reinterpret_cast<uchar *>(frame.data()), size, stride, {first}, &underlay);
+        QCOMPARE(uchar(frame[10 * stride + 10 * 4]), uchar(0));
+        frame = makeFrame(second);
+        applyCaptureMasks(reinterpret_cast<uchar *>(frame.data()), size, stride, {second}, &underlay);
+        QCOMPARE(uchar(underlay[10 * stride + 10 * 4]), uchar(90));
+        frame = makeFrame(first);
+        applyCaptureMasks(reinterpret_cast<uchar *>(frame.data()), size, stride, {first}, &underlay);
+        QCOMPARE(frame, QByteArray(stride * 64, char(90)));
+    }
+
+    void maskMarginIsClippedAndOutsideUntouched()
+    {
+        const QSize size(16, 16);
+        QByteArray frame(16 * 16 * 4, char(0)), underlay(frame.size(), char(90));
+        applyCaptureMasks(reinterpret_cast<uchar *>(frame.data()), size, 64, {QRect(0, 0, 4, 4)}, &underlay);
+        QCOMPARE(uchar(frame[7 * 64 + 7 * 4]), uchar(90));
+        QCOMPARE(uchar(frame[8 * 64 + 7 * 4]), uchar(0));
+        QCOMPARE(uchar(frame[7 * 64 + 8 * 4]), uchar(0));
     }
 
     void selfViewDragUsesStableGlobalCoordinates()

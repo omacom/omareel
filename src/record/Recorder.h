@@ -42,6 +42,10 @@ public:
     enum class GsrExitClassification { UserStop, ExternalStop, Failure };
 
     static QString stateFilePath();
+    static QString selfViewHostPath();
+    static QJsonObject readStateFile(const QString &path);
+    static bool updateStateFile(const QString &path, const QJsonObject &values, QString *error = nullptr);
+    static bool sendHostCommand(const QString &command);
     static bool isRecording();
     static qint64 recordingStartedUs();
     static QString recordedMonitor();

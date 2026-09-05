@@ -4,7 +4,6 @@ import QtQuick.Controls.impl
 import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtQuick.Effects
-import QtMultimedia
 import Omareel.Ui
 
 ApplicationWindow {
@@ -21,10 +20,8 @@ ApplicationWindow {
     font.family: theme.fontFamily
     font.pixelSize: theme.font.body
 
-    readonly property int desiredHeight: launcher.webcam && !showingRecording ? 580 : 460
+    readonly property int desiredHeight: launcher.webcam && !showingRecording ? 520 : 460
     readonly property string iconRoot: "qrc:/omareel/assets/icons/" + "luc" + "ide/"
-    readonly property bool cameraQuarterTurn: launcher.webcamRotation === 90
-                                               || launcher.webcamRotation === 270
     property bool screenshotRecording: false
     property string errorMessage: ""
     readonly property bool showingRecording: launcher.recording || screenshotRecording
@@ -129,16 +126,8 @@ ApplicationWindow {
         }
     }
 
-    Camera {
-        id: previewCamera
-        cameraDevice: launcher.webcamCameraDevice
-        active: launcher.webcam && launcher.webcamPreviewAvailable && !window.busy
-    }
-    CaptureSession { camera: previewCamera; videoOutput: cameraSource }
-
     Connections {
         target: launcher
-        function onRecordingStarting() { previewCamera.stop() }
         function onErrorOccurred(message) {
             window.errorMessage = message
             errorTimer.restart()
@@ -345,7 +334,7 @@ ApplicationWindow {
 
         Item {
             Layout.fillWidth: true
-            Layout.preferredHeight: launcher.webcam && !window.showingRecording ? 136 : 0
+            Layout.preferredHeight: launcher.webcam && !window.showingRecording ? 76 : 0
             opacity: launcher.webcam && !window.showingRecording ? 1 : 0
             clip: true
             Behavior on Layout.preferredHeight { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
@@ -354,36 +343,14 @@ ApplicationWindow {
             ColumnLayout {
                 anchors.horizontalCenter: parent.horizontalCenter
                 spacing: 0
-                Item {
-                    Layout.alignment: Qt.AlignHCenter
-                    Layout.preferredWidth: 160; Layout.preferredHeight: 96
-                    Rectangle {
-                        visible: launcher.webcamPreviewAvailable
-                        anchors.centerIn: parent
-                        width: 96; height: 96; radius: 48
-                        color: theme.normalFill
-                        clip: true
-                        VideoOutput {
-                            id: cameraSource
-                            anchors.centerIn: parent
-                            width: window.cameraQuarterTurn ? parent.height : parent.width
-                            height: window.cameraQuarterTurn ? parent.width : parent.height
-                            fillMode: VideoOutput.PreserveAspectCrop
-                            rotation: launcher.webcamRotation
-                            transform: Scale {
-                                origin.x: cameraSource.width / 2
-                                origin.y: cameraSource.height / 2
-                                xScale: launcher.webcamFlipHorizontal ? -1 : 1
-                            }
-                        }
-                    }
-                    Label {
-                        visible: !launcher.webcamPreviewAvailable
-                        anchors.centerIn: parent
-                        text: "Starting camera…"
-                        color: theme.textMuted
-                        font.pixelSize: theme.font.caption
-                    }
+                Label {
+                    Layout.preferredWidth: 310
+                    Layout.preferredHeight: 36
+                    text: launcher.selfViewStatus
+                    wrapMode: Text.WordWrap
+                    horizontalAlignment: Text.AlignHCenter
+                    color: theme.textMuted
+                    font.pixelSize: theme.font.caption
                 }
                 Item { Layout.preferredHeight: 8 }
                 RowLayout {

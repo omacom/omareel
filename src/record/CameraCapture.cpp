@@ -169,7 +169,7 @@ void CameraCapture::start()
     m_recorder->setEncodingMode(QMediaRecorder::ConstantQualityEncoding);
     m_recorder->setVideoResolution(m_captureSize);
     m_recorder->setVideoFrameRate(30.0);
-    m_recorder->setOutputLocation(QUrl::fromLocalFile(m_videoPath));
+    if (!m_videoPath.isEmpty()) m_recorder->setOutputLocation(QUrl::fromLocalFile(m_videoPath));
     m_frameInput = std::make_unique<QVideoFrameInput>();
     connect(m_frameInput.get(), &QVideoFrameInput::readyToSendVideoFrame, this, [this] {
         m_inputReady = true;
@@ -184,7 +184,8 @@ void CameraCapture::start()
     m_stopping = false;
     emit runningChanged();
     m_startTimer->start();
-    m_recorder->record();
+    m_camera->start();
+    if (m_recordingFrames) m_recorder->record();
 }
 
 void CameraCapture::stop()
@@ -197,14 +198,29 @@ void CameraCapture::stop()
     m_startTimer->stop();
     m_recordTimer->stop();
     m_stopping = true;
+    if (m_recorder->recorderState() == QMediaRecorder::StoppedState) {
+        if (m_camera) m_camera->stop();
+        m_running = false;
+        emit runningChanged();
+        emit stopped();
+        return;
+    }
     if (m_frameInput) m_frameInput->sendVideoFrame({});
     m_recorder->stop();
 }
 
+void CameraCapture::setRecordingOutput(const QString &videoPath, const QString &timestampPath)
+{
+    m_videoPath = videoPath;
+    m_timestamp.setPath(timestampPath);
+    m_recorder->setOutputLocation(QUrl::fromLocalFile(videoPath));
+}
+
 void CameraCapture::beginRecording()
 {
-    if (!m_running || m_stopping || m_recordingFrames) return;
+    if (m_stopping || m_recordingFrames) return;
     m_recordingFrames = true;
+    if (m_running) m_recorder->record();
 }
 
 void CameraCapture::handleFrame(const QVideoFrame &frame)
@@ -218,12 +234,18 @@ void CameraCapture::handleFrame(const QVideoFrame &frame)
     }
     m_latestFrame = std::make_unique<QVideoFrame>(frame);
     if (!m_recordingFrames) return;
-    if (m_timestamp.firstFrameUs() == 0
+    const bool first = m_timestamp.firstFrameUs() == 0;
+    if (first
         && !m_timestamp.recordFrameArrival(timestamp, QDateTime::currentMSecsSinceEpoch() * 1000)) {
         fail(QStringLiteral("Could not write camera timestamp"));
         return;
     }
-    if (!m_recordTimer->isActive()) m_recordTimer->start();
+    if (first && qEnvironmentVariable("OMAREEL_DEBUG") == QLatin1String("1")) {
+        QFile log(QStringLiteral("/tmp/omareel.log"));
+        if (log.open(QIODevice::WriteOnly | QIODevice::Append))
+            log.write("OMAREEL_START stage=camera_first_frame monotonic_us=" + QByteArray::number(timestamp) + '\n');
+    }
+    if (!m_recordTimer->isActive()) { sendLatestFrame(); m_recordTimer->start(); }
 }
 
 void CameraCapture::sendLatestFrame()
@@ -233,8 +255,13 @@ void CameraCapture::sendLatestFrame()
     const qint64 startTime = m_recordedFrameCount * 1000000 / 30;
     recordedFrame.setStartTime(startTime);
     recordedFrame.setEndTime(startTime + 1000000 / 30);
+    m_inputReady = false;
     if (m_frameInput->sendVideoFrame(recordedFrame)) {
-        m_inputReady = false;
+        if (m_recordedFrameCount == 0 && qEnvironmentVariable("OMAREEL_DEBUG") == QLatin1String("1")) {
+            QFile log(QStringLiteral("/tmp/omareel.log"));
+            if (log.open(QIODevice::WriteOnly | QIODevice::Append))
+                log.write("OMAREEL_START stage=camera_frame_submitted monotonic_us=" + QByteArray::number(monotonicUs()) + '\n');
+        }
         ++m_recordedFrameCount;
     }
 }
