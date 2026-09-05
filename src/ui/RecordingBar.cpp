@@ -46,7 +46,7 @@ static void debugBarStage(const QString &stage, const QString &detail = {})
 
 RecordingBar::RecordingBar(bool hidden, bool standby, qint64 owner, QObject *parent): QObject(parent),
     m_standby(standby), m_owner(owner),
-    m_recordedMonitor(Recorder::recordedMonitor()), m_webcam(Recorder::recordingHasWebcam()),
+    m_recordedMonitor(Recorder::recordingState().value("overlay_monitor").toString(Recorder::recordedMonitor())), m_webcam(Recorder::recordingHasWebcam()),
     m_hidden(hidden)
 {
     QJsonObject state = Recorder::recordingState();
@@ -124,14 +124,22 @@ void RecordingBar::poll()
         const bool ours = active && state.value("host_pid").toVariant().toLongLong() == QCoreApplication::applicationPid();
         if (ours && !m_adopted) {
             m_adopted = true;
-            m_recordedMonitor = state.value("monitor").toString();
+            m_standbyMonitor = m_selfViewMonitor;
+            m_standbyPosition = QPoint(m_selfViewX, m_selfViewY);
+            m_recordedMonitor = state.value("overlay_monitor").toString();
+            if (state.value("overlay_exclusion").toString() == "fallback") {
+                m_selfViewMonitor = state.value("selfview_monitor").toString();
+                m_selfViewSafe = state.value("selfview_safe").toBool();
+                emit selfViewPlacementChanged();
+                emit selfViewVisibilityChanged();
+            }
             m_hidden = !state.value("bar_visible").toBool(true);
             const QString bundle = state.value("bundle").toString();
             m_cameraCapture->setRecordingOutput(bundle + "/camera.mp4", bundle + "/camera.mp4.ts");
             publishGeometry();
             Recorder::updateRecordingState({{"host_acknowledged", true}, {"countdown_ready", true},
                 {"camera_rotation", m_cameraRotation}, {"camera_flip_horizontal", m_cameraFlipHorizontal},
-                {"camera_status", m_cameraCapture->ready() ? "ready" : "starting"},
+                {"camera_status", m_cameraFailed ? "failed" : m_cameraCapture->ready() ? "ready" : "starting"},
                 {"camera_width", m_cameraCapture->captureSize().width()},
                 {"camera_height_actual", m_cameraCapture->captureSize().height()},
                 {"camera_fps", m_cameraCapture->frameRate()}});
@@ -143,16 +151,23 @@ void RecordingBar::poll()
             m_suppressed = suppressed;
             emit selfViewVisibilityChanged();
         }
-        if (ours && state.value("selfview_seed_hide").toBool() && !m_seedHidden
-            && !state.value("capture_started").toBool()) {
-            m_seedHidden = true;
+        if (!active && m_adopted) {
+            m_adopted = false;
+            m_completedRecording = true;
+            m_captureStarted = false;
+            m_hidden = true;
+            m_selfViewSafe = true;
+            m_selfViewMonitor = m_standbyMonitor;
+            m_selfViewX = m_standbyPosition.x();
+            m_selfViewY = m_standbyPosition.y();
+            m_cameraRecordRequested = m_cameraStopRequested = false;
+            emit captureStartedChanged();
+            emit selfViewPlacementChanged();
             emit selfViewVisibilityChanged();
-            // Unmapping is committed by Qt on hide; allow two refresh periods even at 60 Hz.
-            QTimer::singleShot(34, this, [this] {
-                if (m_adopted) Recorder::updateRecordingState({{"selfview_hidden", true}});
-            });
+            hostCommand("configure");
+            publishHost();
         }
-        if (!active && (m_adopted || m_quit || m_owner <= 0 || ::kill(pid_t(m_owner), 0) != 0)) {
+        if (!active && (m_quit || (!m_completedRecording && (m_owner <= 0 || ::kill(pid_t(m_owner), 0) != 0)))) {
             m_timer.stop();
             emit finished();
             return;
@@ -163,10 +178,24 @@ void RecordingBar::poll()
         emit finished();
         return;
     }
+    const QString barMonitor = state.value("overlay_monitor").toString(m_recordedMonitor);
+    const bool hidden = !state.value("bar_visible").toBool(!m_hidden);
+    if (m_recordedMonitor != barMonitor || m_hidden != hidden) {
+        m_recordedMonitor = barMonitor;
+        m_hidden = hidden;
+        emit captureStartedChanged();
+    }
+    const bool safe = state.value("selfview_safe").toBool(m_selfViewSafe);
+    const QString bubbleMonitor = state.value("selfview_monitor").toString(m_selfViewMonitor);
+    if (safe != m_selfViewSafe || bubbleMonitor != m_selfViewMonitor) {
+        m_selfViewSafe = safe;
+        m_selfViewMonitor = bubbleMonitor;
+        emit selfViewPlacementChanged();
+        emit selfViewVisibilityChanged();
+    }
     const bool captureStarted = state.value(QStringLiteral("capture_started")).toBool(false);
     if (captureStarted != m_captureStarted) {
         m_captureStarted = captureStarted;
-        if (captureStarted) m_seedHidden = false;
         emit selfViewVisibilityChanged();
         emit captureStartedChanged();
     }
@@ -425,6 +454,7 @@ void RecordingBar::hostCommand(const QString &command)
 
 void RecordingBar::saveSelfViewPosition()
 {
+    if (m_adopted && Recorder::recordingState().value("overlay_exclusion").toString() == "fallback") return;
     if (m_selfViewScreenSize.isEmpty()) return;
     RecordingPreferences preferences = RecordingPreferences::load();
     const int xRange = std::max(1, m_selfViewScreenSize.width() - m_selfViewPixels - 32);

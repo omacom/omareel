@@ -12,6 +12,7 @@ namespace Omareel {
 class Launcher : public QObject
 {
     Q_OBJECT
+    Q_PROPERTY(QString captureExclusionNote READ captureExclusionNote CONSTANT)
     Q_PROPERTY(QString selfViewStatus READ selfViewStatus NOTIFY selfViewStatusChanged)
     Q_PROPERTY(bool recording READ recording NOTIFY recordingChanged)
     Q_PROPERTY(bool startingRecording READ startingRecording NOTIFY startingRecordingChanged)
@@ -33,6 +34,7 @@ class Launcher : public QObject
     Q_PROPERTY(QVariantList webcamDevices READ webcamDevices NOTIFY webcamDevicesChanged)
 public:
     explicit Launcher(QObject *parent = nullptr);
+    QString captureExclusionNote() const { return m_captureExclusionNote; }
     QString selfViewStatus() const { return m_selfViewStatus; }
     bool recording() const { return m_recording; }
     bool startingRecording() const { return m_startingRecording; }
@@ -87,6 +89,7 @@ private:
     static QString formatDuration(double seconds);
     void refreshRecording();
     void startSelfViewHost();
+    QString m_captureExclusionNote;
     QString m_selfViewStatus = QStringLiteral("Starting camera…");
     qint64 m_hostPid = 0;
     void saveRecordingPreferences();

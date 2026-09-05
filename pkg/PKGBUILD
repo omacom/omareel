@@ -9,6 +9,7 @@ url='https://github.com/heyoodle/omareel'
 license=('MIT')
 depends=('gpu-screen-recorder' 'ffmpeg' 'slurp' 'qt6-base' 'qt6-declarative'
          'qt6-multimedia' 'qt6-svg' 'layer-shell-qt' 'libevdev' 'xdg-desktop-portal')
+depends+=('hyprland')
 optdepends=('gifsicle: optimize exported GIF files')
 makedepends=('cmake' 'ninja' 'qt6-shadertools')
 conflicts=('omarecord')
@@ -23,6 +24,8 @@ build() {
 package() {
   cd "$startdir/.."
   /usr/bin/install -Dm755 build/omareel "$pkgdir/usr/bin/omareel"
+  /usr/bin/install -Dm755 build/plugin/omareel-capture-exclude.so "$pkgdir/usr/lib/omareel/omareel-capture-exclude.so"
+  /usr/bin/install -Dm644 build/plugin/omareel-capture-exclude.so.hash "$pkgdir/usr/lib/omareel/omareel-capture-exclude.so.hash"
   ln -s omareel "$pkgdir/usr/bin/omarecord"
   /usr/bin/install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
   /usr/bin/install -Dm644 "$startdir/omareel.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/omareel.svg"

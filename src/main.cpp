@@ -1,3 +1,4 @@
+#include "ui/CaptureTestClient.h"
 #include <qpa/qplatformnativeinterface.h>
 #include <wayland-client.h>
 #include "core/InputLog.h"
@@ -443,7 +444,19 @@ static QScreen *recordBarScreen(const QString &recordedMonitor)
     for (QScreen *screen : QGuiApplication::screens()) {
         if (screen->name() == recordedMonitor) return screen;
     }
-    return QGuiApplication::primaryScreen();
+    return nullptr;
+}
+
+static void configureOverlayRule(const QString &scope)
+{
+    QProcess rule;
+    // Named Lua rules merge effects. Retire the previous rule before adding ours.
+    const QString expression = QStringLiteral(
+        "hl.layer_rule({ name = '%1-private', enabled = false }); "
+        "hl.layer_rule({ name = '%1-display', match = { namespace = '%1' }, no_anim = true })").arg(scope);
+    rule.start(QStringLiteral("hyprctl"), {QStringLiteral("eval"), expression});
+    if (!rule.waitForFinished(3000) || rule.exitCode() != 0)
+        qWarning().noquote() << "omareel: could not apply the overlay animation rule";
 }
 
 static QJsonObject videoInfo(const QString &path)
@@ -484,7 +497,9 @@ static int probeCommand(const QString &bundle)
         zoomJson << QJsonObject{{"id", zoom.id}, {"start", zoom.start}, {"end", zoom.end},
                                 {"level", zoom.level}, {"target", ZoomTimeline::targetToJson(zoom)}};
     }
-    QJsonObject output{{"duration", duration},
+    const auto metadata = Recorder::readStateFile(bundle + "/capture.json");
+    QJsonObject output{{"overlay_exclusion", metadata.value("overlay_exclusion").toString("fallback")},
+                       {"duration", duration},
                        {"fps", fraction(stream.value("r_frame_rate").toString())},
                        {"size", QJsonObject{{"width", stream.value("width").toInt()},
                                              {"height", stream.value("height").toInt()}}},
@@ -512,10 +527,12 @@ int main(int argc, char **argv)
         return 127;
     }
     const bool exporting = argc > 1 && QByteArray(argv[1]) == "export";
+    const bool layerTest = argc > 1 && QByteArray(argv[1]) == "__layer-test";
+    const bool windowTest = argc > 1 && QByteArray(argv[1]) == "__window-test";
     const bool recordBar = argc > 1 && QByteArray(argv[1]) == "__record-bar";
     const bool hiddenRecordBar = recordBar && argc > 2 && QByteArray(argv[2]) == "--hidden";
-    const bool graphical = argc == 1 || recordBar || (argc > 1 && QByteArray(argv[1]) == "edit");
-    if (recordBar) LayerShellQt::Shell::useLayerShell();
+    const bool graphical = argc == 1 || layerTest || windowTest || recordBar || (argc > 1 && QByteArray(argv[1]) == "edit");
+    if (recordBar || layerTest) LayerShellQt::Shell::useLayerShell();
     if (graphical) {
         QQuickStyle::setStyle(QStringLiteral("Basic"));
     }
@@ -569,6 +586,7 @@ int main(int argc, char **argv)
         return app.exec();
     }
     const QString command = args[1];
+    if (layerTest || windowTest) return runCaptureTestClient(app, args, layerTest);
     if (command == QLatin1String("__record-daemon")) return Recorder::daemonMain(args.mid(2));
     if (command == QLatin1String("__selfview-ipc")) {
         return args.size() == 3 && Recorder::sendHostCommand(args[2]) ? 0 : 2;
@@ -644,11 +662,7 @@ int main(int argc, char **argv)
         if (!window) return 2;
         QScreen *screen = recordBarScreen(recordingBar.recordedMonitor());
         if (screen) window->setScreen(screen);
-        QProcess barRule;
-        barRule.start(QStringLiteral("hyprctl"), {QStringLiteral("eval"),
-            QStringLiteral("hl.layer_rule({ name = 'omareel-record-bar-private', match = { namespace = 'omareel-record-bar' }, no_screen_share = true })")});
-        if (!barRule.waitForFinished(3000) || barRule.exitCode() != 0)
-            qWarning().noquote() << "omareel: could not apply the recording bar privacy rule";
+        configureOverlayRule(QStringLiteral("omareel-record-bar"));
         auto *layerWindow = LayerShellQt::Window::get(window);
         layerWindow->setLayer(LayerShellQt::Window::LayerOverlay);
         layerWindow->setAnchors(LayerShellQt::Window::AnchorTop);
@@ -663,8 +677,8 @@ int main(int argc, char **argv)
             {QStringLiteral("bar_height"), window->height()}});
         const auto updateBarVisibility = [&recordingBar, window, layerWindow] {
             QScreen *target = recordBarScreen(recordingBar.recordedMonitor());
-            if (target && window->screen() != target) { window->hide(); window->setScreen(target); layerWindow->setScreen(target); }
-            if (recordingBar.captureStarted() && !recordingBar.hidden()) window->show();
+            if (target && layerWindow->screen() != target) { window->hide(); window->destroy(); window->setScreen(target); layerWindow->setScreen(target); }
+            if (target && recordingBar.captureStarted() && !recordingBar.hidden()) window->show();
             else window->hide();
         };
         QObject::connect(&recordingBar, &RecordingBar::captureStartedChanged,
@@ -679,6 +693,7 @@ int main(int argc, char **argv)
                 debugUiStage(QStringLiteral("bar_mapped"));
             });
         });
+        QObject::connect(&app, &QGuiApplication::screenRemoved, window, updateBarVisibility);
         updateBarVisibility();
 
         QQuickWindow *countdownWindow = window->findChild<QQuickWindow *>(
@@ -708,10 +723,10 @@ int main(int argc, char **argv)
                 {QStringLiteral("countdown_ready"), true}});
             const auto updateCountdownVisibility = [&recordingBar, countdownWindow, countdownLayer] {
                 QScreen *target = recordBarScreen(recordingBar.recordedMonitor());
-                if (target && target != countdownWindow->screen()) {
-                    countdownWindow->hide(); countdownWindow->setScreen(target); countdownLayer->setScreen(target);
+                if (target && target != countdownLayer->screen()) {
+                    countdownWindow->hide(); countdownWindow->destroy(); countdownWindow->setScreen(target); countdownLayer->setScreen(target);
                 }
-                if (recordingBar.countdownActive() && !recordingBar.captureStarted())
+                if (target && recordingBar.countdownActive() && !recordingBar.captureStarted())
                     countdownWindow->show();
                 else
                     countdownWindow->hide();
@@ -746,11 +761,7 @@ int main(int argc, char **argv)
                                       << selfViewScreen->geometry().height()
                                       << " scale=" << selfViewScreen->devicePixelRatio();
             }
-            QProcess layerRule;
-            layerRule.start(QStringLiteral("hyprctl"), {QStringLiteral("eval"),
-                QStringLiteral("hl.layer_rule({ name = 'omareel-selfview-private', match = { namespace = 'omareel-selfview' }, no_screen_share = true })")});
-            if (!layerRule.waitForFinished(3000) || layerRule.exitCode() != 0)
-                qWarning().noquote() << "omareel: could not apply the self-view privacy rule";
+            configureOverlayRule(QStringLiteral("omareel-selfview"));
             auto *selfViewLayer = LayerShellQt::Window::get(selfViewWindow);
             selfViewLayer->setLayer(LayerShellQt::Window::LayerOverlay);
             selfViewLayer->setAnchors(LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorTop)
@@ -761,6 +772,14 @@ int main(int argc, char **argv)
             selfViewLayer->setActivateOnShow(false);
             if (selfViewScreen) selfViewLayer->setScreen(selfViewScreen);
             const auto updateSelfViewPlacement = [&recordingBar, selfViewLayer, selfViewWindow] {
+                for (QScreen *target : QGuiApplication::screens()) {
+                    if (target->name() != recordingBar.selfViewMonitor() || target == selfViewLayer->screen()) continue;
+                    selfViewWindow->hide();
+                    selfViewWindow->destroy();
+                    selfViewWindow->setScreen(target);
+                    selfViewLayer->setScreen(target);
+                    recordingBar.setSelfViewScreenSize(target->geometry().size());
+                }
                 selfViewLayer->setMargins(QMargins(recordingBar.selfViewX(),
                                                    recordingBar.selfViewY(), 0, 0));
                 selfViewWindow->resize(recordingBar.selfViewPixels(), recordingBar.selfViewPixels());
@@ -778,7 +797,7 @@ int main(int argc, char **argv)
             QObject::connect(&recordingBar, &RecordingBar::selfViewPlacementChanged,
                              selfViewWindow, updateSelfViewPlacement);
             const auto updateSelfViewVisibility = [&recordingBar, selfViewWindow] {
-                const bool visible = recordingBar.bubbleMapped();
+                const bool visible = recordingBar.bubbleMapped() && recordBarScreen(recordingBar.selfViewMonitor());
                 selfViewWindow->setMask(visible
                     ? QRegion(0, 0, selfViewWindow->width(), selfViewWindow->height())
                     : QRegion());
@@ -789,6 +808,9 @@ int main(int argc, char **argv)
                              selfViewWindow, updateSelfViewVisibility);
             QObject::connect(&recordingBar, &RecordingBar::captureStartedChanged,
                              selfViewWindow, updateSelfViewVisibility);
+            QObject::connect(&recordingBar, &RecordingBar::selfViewPlacementChanged,
+                             selfViewWindow, updateSelfViewVisibility);
+            QObject::connect(&app, &QGuiApplication::screenRemoved, selfViewWindow, updateSelfViewVisibility);
             updateSelfViewVisibility();
         }
         const auto grabHook = [](QQuickWindow *target, const char *variable) {

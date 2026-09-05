@@ -1,3 +1,4 @@
+#include "record/CaptureExclusion.h"
 #include "record/Recorder.h"
 #include "record/CameraCapture.h"
 #include "record/ScreenCapture.h"
@@ -6,6 +7,7 @@
 
 #include <QtTest>
 #include <QTemporaryDir>
+#include <QScopeGuard>
 #include <limits>
 
 using namespace Omareel;
@@ -201,67 +203,74 @@ private slots:
         QCOMPARE(full.first().bytes, qsizetype(3840) * 2160 * 4);
     }
 
-    void cleanSeedUsesNinetyPercentThreshold()
+    void captureExclusionRequiresExactValidHash()
     {
-        QByteArray frame(10 * 10 * 4, char(0));
-        for (int pixel = 0; pixel < 10; ++pixel) frame[pixel * 4] = 3;
-        QVERIFY(captureRectMostlyBlack(reinterpret_cast<const uchar *>(frame.constData()),
-                                       QSize(10, 10), 40, QRect(0, 0, 10, 10)));
-        frame[10 * 4] = 3;
-        QVERIFY(!captureRectMostlyBlack(reinterpret_cast<const uchar *>(frame.constData()),
-                                        QSize(10, 10), 40, QRect(0, 0, 10, 10)));
+        const QString hash(40, 'a');
+        QVERIFY(CaptureExclusion::compatibleHash(hash, hash));
+        QVERIFY(!CaptureExclusion::compatibleHash("", ""));
+        QVERIFY(!CaptureExclusion::compatibleHash("unknown", "unknown"));
+        QVERIFY(!CaptureExclusion::compatibleHash(hash, QString(40, 'b')));
     }
 
-    void offsetBlackBlockUsesUnderlay()
+    void captureExclusionPlacesOverlaysAwayInFallback()
     {
-        const QSize size(64, 64);
-        const int stride = 256;
-        QByteArray frame(stride * 64, char(100));
-        QByteArray underlay(stride * 64, char(80));
-        const QRect mask(16, 16, 24, 24);
-        const QRect block = mask.translated(2, 2);
-        for (int y = block.top(); y <= block.bottom(); ++y)
-            std::memset(frame.data() + y * stride + block.x() * 4, 0, size_t(block.width() * 4));
-        frame[0] = frame[1] = frame[2] = 0;
-        applyCaptureMasks(reinterpret_cast<uchar *>(frame.data()), size, stride, {mask}, &underlay);
-        for (int y = 0; y < 64; ++y)
-            for (int x = 0; x < 64; ++x)
-                QCOMPARE(uchar(frame[y * stride + x * 4]),
-                         uchar(x == 0 && y == 0 ? 0 : block.contains(x, y) ? 80 : 100));
-        QCOMPARE(underlay, frame);
+        const QStringList monitors{"DP-3", "DP-5"};
+        QCOMPARE(CaptureExclusion::overlayMonitor(true, "DP-3", monitors), "DP-3");
+        QCOMPARE(CaptureExclusion::overlayMonitor(false, "DP-3", monitors), "DP-5");
+        QCOMPARE(CaptureExclusion::overlayMonitor(false, "DP-5", monitors), "DP-3");
+        QVERIFY(CaptureExclusion::overlayMonitor(false, "DP-3", {"DP-3"}).isEmpty());
+        QVERIFY(CaptureExclusion::overlayMonitor(false, "DP-3", {}).isEmpty());
     }
 
-    void unknownUnderlayHealsWhenBlockMoves()
+    void captureExclusionChecksHashBeforeLoading()
     {
-        const QSize size(64, 64);
-        const int stride = 256;
-        const QRect first(8, 8, 16, 16), second(40, 40, 16, 16);
-        QByteArray underlay;
-        const auto makeFrame = [&](const QRect &block) {
-            QByteArray frame(stride * 64, char(90));
-            for (int y = block.top(); y <= block.bottom(); ++y)
-                std::memset(frame.data() + y * stride + block.x() * 4, 0, size_t(block.width() * 4));
-            return frame;
-        };
-        auto frame = makeFrame(first);
-        applyCaptureMasks(reinterpret_cast<uchar *>(frame.data()), size, stride, {first}, &underlay);
-        QCOMPARE(uchar(frame[10 * stride + 10 * 4]), uchar(0));
-        frame = makeFrame(second);
-        applyCaptureMasks(reinterpret_cast<uchar *>(frame.data()), size, stride, {second}, &underlay);
-        QCOMPARE(uchar(underlay[10 * stride + 10 * 4]), uchar(90));
-        frame = makeFrame(first);
-        applyCaptureMasks(reinterpret_cast<uchar *>(frame.data()), size, stride, {first}, &underlay);
-        QCOMPARE(frame, QByteArray(stride * 64, char(90)));
-    }
-
-    void maskMarginIsClippedAndOutsideUntouched()
-    {
-        const QSize size(16, 16);
-        QByteArray frame(16 * 16 * 4, char(0)), underlay(frame.size(), char(90));
-        applyCaptureMasks(reinterpret_cast<uchar *>(frame.data()), size, 64, {QRect(0, 0, 4, 4)}, &underlay);
-        QCOMPARE(uchar(frame[7 * 64 + 7 * 4]), uchar(90));
-        QCOMPARE(uchar(frame[8 * 64 + 7 * 4]), uchar(0));
-        QCOMPARE(uchar(frame[7 * 64 + 8 * 4]), uchar(0));
+        QTemporaryDir temporary;
+        QVERIFY(temporary.isValid());
+        const QByteArray oldPath = qgetenv("PATH");
+        const QByteArray oldPlugin = qgetenv("OMAREEL_PLUGIN_PATH");
+        const auto restore = qScopeGuard([&] {
+            qputenv("PATH", oldPath);
+            if (oldPlugin.isNull()) qunsetenv("OMAREEL_PLUGIN_PATH");
+            else qputenv("OMAREEL_PLUGIN_PATH", oldPlugin);
+        });
+        const QString plugin = temporary.filePath("plugin.so");
+        QFile binary(plugin);
+        QVERIFY(binary.open(QIODevice::WriteOnly));
+        binary.write("fixture");
+        binary.close();
+        const QString logPath = temporary.filePath("calls");
+        QFile mock(temporary.filePath("hyprctl"));
+        QVERIFY(mock.open(QIODevice::WriteOnly));
+        mock.write(("#!/bin/sh\nprintf '%s\\n' \"$*\" >> '" + logPath + "'\n"
+                    "case \"$*\" in\n"
+                    " '-j plugin list') printf '[]';;\n"
+                    " '-j version') printf '{\"commit\":\"" + QString(40, 'a') + "\"}';;\n"
+                    " *) printf 'Plugin could not be loaded';;\nesac\n").toUtf8());
+        mock.close();
+        QVERIFY(mock.setPermissions(QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner));
+        qputenv("PATH", temporary.path().toUtf8());
+        qputenv("OMAREEL_PLUGIN_PATH", plugin.toUtf8());
+        QFile sidecar(plugin + ".hash");
+        QVERIFY(sidecar.open(QIODevice::WriteOnly));
+        sidecar.write(QByteArray(40, 'b'));
+        sidecar.close();
+        const auto mismatch = CaptureExclusion::ensureLoaded();
+        QVERIFY(!mismatch.loaded);
+        QVERIFY(mismatch.reason.contains("rebuilding"));
+        QFile log(logPath);
+        QVERIFY(log.open(QIODevice::ReadOnly));
+        QVERIFY(!log.readAll().contains("plugin load"));
+        log.close();
+        QVERIFY(sidecar.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        sidecar.write(QByteArray(40, 'a'));
+        sidecar.close();
+        const auto refused = CaptureExclusion::ensureLoaded();
+        QVERIFY(!refused.loaded);
+        QVERIFY(refused.reason.contains("refused"));
+        QVERIFY(log.open(QIODevice::ReadOnly));
+        QVERIFY(log.readAll().contains("plugin load"));
+        qputenv("OMAREEL_PLUGIN_PATH", temporary.filePath("absent.so").toUtf8());
+        QVERIFY(CaptureExclusion::ensureLoaded().reason.contains("does not exist"));
     }
 
     void selfViewDragUsesStableGlobalCoordinates()

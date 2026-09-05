@@ -43,8 +43,8 @@ class RecordingBar : public QObject
     Q_PROPERTY(bool cameraFlipHorizontal READ cameraFlipHorizontal NOTIFY cameraSettingsChanged)
     Q_PROPERTY(QString cameraError READ cameraError NOTIFY cameraErrorChanged)
     Q_PROPERTY(bool selfViewVisible READ selfViewVisible NOTIFY selfViewVisibilityChanged)
-    Q_PROPERTY(bool selfViewSafe READ selfViewSafe CONSTANT)
-    Q_PROPERTY(QString selfViewMonitor READ selfViewMonitor CONSTANT)
+    Q_PROPERTY(bool selfViewSafe READ selfViewSafe NOTIFY selfViewVisibilityChanged)
+    Q_PROPERTY(QString selfViewMonitor READ selfViewMonitor NOTIFY selfViewPlacementChanged)
     Q_PROPERTY(int selfViewPixels READ selfViewPixels NOTIFY selfViewPlacementChanged)
     Q_PROPERTY(int selfViewX READ selfViewX NOTIFY selfViewPlacementChanged)
     Q_PROPERTY(int selfViewY READ selfViewY NOTIFY selfViewPlacementChanged)
@@ -52,7 +52,7 @@ public:
     explicit RecordingBar(bool hidden = false, bool standby = false, qint64 owner = 0, QObject *parent = nullptr);
     ~RecordingBar() override;
 
-    bool bubbleMapped() const { return m_selfViewVisible && !m_suppressed && !m_seedHidden && (m_standby || m_captureStarted); }
+    bool bubbleMapped() const { return m_selfViewVisible && !m_suppressed && m_selfViewSafe && (m_standby || m_captureStarted); }
     QString elapsed() const { return m_elapsed; }
     QString recordedMonitor() const { return m_recordedMonitor; }
     bool webcam() const { return m_webcam; }
@@ -106,7 +106,9 @@ private:
     bool m_standby = false;
     bool m_adopted = false;
     bool m_suppressed = false;
-    bool m_seedHidden = false;
+    QString m_standbyMonitor;
+    QPoint m_standbyPosition;
+    bool m_completedRecording = false;
     bool m_quit = false;
     qint64 m_owner = 0;
     qint64 m_hostSequence = 0;

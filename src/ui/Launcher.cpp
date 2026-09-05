@@ -3,6 +3,8 @@
 #include "core/OmarchyPaths.h"
 #include "core/RecordingPreferences.h"
 #include "record/Recorder.h"
+#include "record/CaptureExclusion.h"
+#include <QGuiApplication>
 
 #include <QCoreApplication>
 #include <QCameraDevice>
@@ -29,6 +31,10 @@ static qint64 monotonicUs()
 
 Launcher::Launcher(QObject *parent): QObject(parent)
 {
+    if (!CaptureExclusion::ensureLoaded().loaded)
+        m_captureExclusionNote = QGuiApplication::screens().size() > 1
+            ? QStringLiteral("Overlays move off the recorded screen while recording")
+            : QStringLiteral("Self-view hides while recording");
     const RecordingPreferences preferences = RecordingPreferences::load();
     m_systemAudio = preferences.systemAudio;
     m_microphone = preferences.microphone;

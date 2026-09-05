@@ -115,43 +115,6 @@ QVector<CaptureRowCopy> Omareel::captureCropRows(const QSize &sourceSize, int so
     return result;
 }
 
-bool Omareel::captureRectMostlyBlack(const uchar *frame, const QSize &size, int stride,
-                                      const QRect &requestedRect)
-{
-    if (!frame || size.isEmpty() || stride < size.width() * 4) return false;
-    const QRect rect = requestedRect.intersected(QRect(QPoint(), size));
-    int black = 0, samples = 0;
-    for (int y = rect.top(); y <= rect.bottom(); ++y) {
-        for (int x = rect.left(); x <= rect.right(); ++x) {
-            const uchar *p = frame + qsizetype(y) * stride + x * 4;
-            ++samples;
-            if (p[0] <= 2 && p[1] <= 2 && p[2] <= 2) ++black;
-        }
-    }
-    return samples > 0 && black * 10 >= samples * 9;
-}
-
-void Omareel::applyCaptureMasks(uchar *frame, const QSize &size, int stride,
-                                const QVector<QRect> &rects, QByteArray *underlay)
-{
-    if (!frame || !underlay || size.isEmpty() || stride < size.width() * 4) return;
-    const qsizetype bytes = qsizetype(stride) * size.height();
-    if (underlay->size() != bytes) *underlay = QByteArray(bytes, 0);
-    const auto black = [](const uchar *p) { return p[0] <= 2 && p[1] <= 2 && p[2] <= 2; };
-    for (const QRect &requestedRect : rects) {
-        const QRect rect = requestedRect.adjusted(-4, -4, 4, 4).intersected(QRect(QPoint(), size));
-        for (int y = rect.top(); y <= rect.bottom(); ++y) {
-            for (int x = rect.left(); x <= rect.right(); ++x) {
-                const qsizetype offset = qsizetype(y) * stride + x * 4;
-                uchar *pixel = frame + offset;
-                const auto *saved = reinterpret_cast<const uchar *>(underlay->constData()) + offset;
-                if (black(pixel) && !black(saved)) std::memcpy(pixel, saved, 4);
-            }
-        }
-    }
-    std::memcpy(underlay->data(), frame, size_t(bytes));
-}
-
 namespace {
 
 qint64 monotonicUs()
@@ -466,9 +429,6 @@ struct ScreenCapture::Private {
     std::vector<Slot> captureSlots;
     CaptureRingBookkeeping ring{4};
     std::mutex ringMutex;
-    std::mutex maskMutex;
-    QVector<QRect> maskedRects;
-    QByteArray maskUnderlay;
     std::condition_variable queuedFrame;
     std::thread writer;
     bool writerStopping = false;
@@ -553,9 +513,6 @@ bool dispatchOnce(ScreenCapture::Private *d, int timeoutMs)
 void ScreenCapture::Private::writerLoop()
 {
     QByteArray cropped;
-    qint64 seedStartUs = 0;
-    bool seeded = false;
-    int skipped = 0;
     if (cropRows.size() > 1)
         cropped.resize(encodedSize.width() * encodedSize.height() * 4);
     for (;;) {
@@ -580,24 +537,7 @@ void ScreenCapture::Private::writerLoop()
             output = cropped.constData();
             outputBytes = cropped.size();
         }
-        QVector<QRect> masks;
-        {
-            std::lock_guard<std::mutex> lock(maskMutex);
-            masks = maskedRects;
-        }
-        if (!seeded) {
-            if (!seedStartUs) seedStartUs = monotonicUs();
-            const bool dirty = std::any_of(masks.cbegin(), masks.cend(), [&](const QRect &rect) {
-                return captureRectMostlyBlack(reinterpret_cast<const uchar *>(output), encodedSize,
-                                              encodedSize.width() * 4, rect);
-            });
-            if (dirty && monotonicUs() - seedStartUs < 250000) {
-                ++skipped;
-                std::lock_guard<std::mutex> lock(ringMutex);
-                ring.release(index);
-                continue;
-            }
-            seeded = true;
+        if (firstUs == 0) {
             firstUs = captureSlots[size_t(index)].presentationUs;
             if (firstUs <= 0) firstUs = monotonicUs();
             QString timestampError;
@@ -608,22 +548,6 @@ void ScreenCapture::Private::writerLoop()
                 writerFailed.store(true);
                 break;
             }
-            if (qEnvironmentVariable("OMAREEL_DEBUG") == QLatin1String("1")) {
-                QFile log(QStringLiteral("/tmp/omareel.log"));
-                if (log.open(QIODevice::WriteOnly | QIODevice::Append))
-                    log.write("OMAREEL_START stage=seed_clean monotonic_us=" + QByteArray::number(monotonicUs())
-                              + " skipped=" + QByteArray::number(skipped) + '\n');
-            }
-        }
-        if (!masks.isEmpty() || !maskUnderlay.isEmpty()) {
-            if (cropRows.size() == 1) {
-                cropped = QByteArray(output, outputBytes);
-                output = cropped.constData();
-            }
-            applyCaptureMasks(reinterpret_cast<uchar *>(cropped.data()), encodedSize,
-                              encodedSize.width() * 4, masks, &maskUnderlay);
-            output = cropped.constData();
-            outputBytes = cropped.size();
         }
         QString error;
         const bool wrote = writeAll(encoderFd, output, outputBytes, writerAbort, &error);
@@ -995,11 +919,7 @@ bool ScreenCapture::captureFrame(QString *error)
     return true;
 }
 
-void ScreenCapture::setMaskedRects(const QVector<QRect> &rects)
-{
-    std::lock_guard<std::mutex> lock(d->maskMutex);
-    d->maskedRects = rects;
-}
+
 
 bool ScreenCapture::finish(QString *error)
 {

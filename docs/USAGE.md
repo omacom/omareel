@@ -82,9 +82,9 @@ o.window("^omareel$", { float = true, center = true, size = "380 460" })
 Turning on the webcam in the launcher immediately opens a floating camera self-view on the
 focused monitor. Choose S, M, or L in launcher settings and drag the bubble to place it before
 recording; its position is saved. Rotate, flip, resize, or hide it from the launcher. The same
-warm camera and bubble stay through recording, with no camera reconnect. A brief blink at
-capture start lets the recorder save the desktop underneath the bubble. Closing the launcher
-closes its idle self-view; after recording starts, the host stays until the recording ends.
+warm camera stays through recording, with no camera reconnect. With the exclusion plugin, the
+bubble stays in place without a startup blink. Closing the launcher closes its idle self-view;
+an adopted host returns to standby after recording. See “Overlays and capture” for fallback placement.
 
 The bubble is 160 px by default and starts at the saved position (bottom-right initially).
 Native capture omits both the self-view and recording bar. The recording bar can hide or show
@@ -149,8 +149,8 @@ clip, style, cursor, and zoom edits are stored in `project.json`.
   frame handling cost, and drops once per second.
 - `OMAREEL_CAPTURE=gsr` forces the fallback screen capture backend.
 - `OMAREEL_CAPTURE=native` selects the native screen capture backend when supported.
-- Native recordings mask the private recording bar and self-view rectangles with desktop pixels
-  captured before those overlays appear. The fallback backend records overlays normally.
+- `OMAREEL_PLUGIN_PATH` selects the capture-exclusion plugin file. An explicit missing path
+  forces overlay fallback placement.
 - `OMAREEL_NATIVE_CONVERSION=cpu` forces CPU colour conversion for native capture. By default,
   the hardware conversion filter is exercised with a BGRA frame first and CPU conversion is used
   automatically when that exact conversion is unsupported.
@@ -198,3 +198,28 @@ Status 0 means success, 1 is an expected no-recording/cancel condition or runtim
 grab the corresponding overlay window directly, preserving transparency. Use
 `OMAREEL_SCREENSHOT_DELAY_MS` to override the default 4000 ms overlay delay.
 `OMAREEL_SCREENSHOT_KEEP_OPEN=1` keeps a launcher or editor open after its debug grab.
+
+## Overlays and capture
+
+Omareel automatically loads its matching Hyprland capture-exclusion plugin when
+the launcher opens or a recording starts. The self-view can stay where you put
+it, and the recording bar stays on the recorded monitor, while capture sees the
+live content underneath. No pixel patching or hidden-frame handshake is needed.
+
+The plugin must be rebuilt for the installed Hyprland commit. Omareel checks its
+adjacent `.so.hash` file before loading it. `OMAREEL_PLUGIN_PATH` selects an
+explicit plugin file; otherwise Omareel checks the build-tree `plugin/` directory
+and `/usr/lib/omareel/`. With Hyprland's `ecosystem:enforce_permissions` enabled,
+the first load shows a one-time permission dialog.
+
+If the plugin is missing, mismatched, or refused, overlays move to another
+monitor during recording. With one monitor, the bar stays hidden and self-view
+unmaps; stop with `omareel record --stop`, the REC indicator, or your keybind.
+The standby self-view returns to its previous monitor and position after stop.
+The launcher displays a short fallback note. The gsr backend also uses this
+fallback because it does not use Hyprland's capture path.
+
+`omareel probe <bundle>` reports `overlay_exclusion` as `plugin` or `fallback`;
+the same value is saved in recording metadata. The countdown uses the recording
+bar's namespace. Omareel disables layer animations before mapping its overlays
+so fading snapshots cannot appear in capture.

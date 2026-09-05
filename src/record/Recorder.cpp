@@ -2,6 +2,7 @@
 #include "CursorSampler.h"
 #include "EvdevListener.h"
 #include "ScreenCapture.h"
+#include "CaptureExclusion.h"
 #include "core/RecordingPreferences.h"
 
 #include <QCoreApplication>
@@ -156,7 +157,14 @@ static QString readLastError()
 
 static bool processAlive(qint64 pid)
 {
-    return pid > 1 && (::kill(pid_t(pid), 0) == 0 || errno == EPERM);
+    if (pid <= 1 || (::kill(pid_t(pid), 0) != 0 && errno != EPERM)) return false;
+    // Detached children can remain zombies until their parent reaps them.
+    QFile stat(QStringLiteral("/proc/%1/stat").arg(pid));
+    if (!stat.open(QIODevice::ReadOnly)) return false;
+    const QByteArray fields = stat.readAll();
+    const int stateOffset = fields.lastIndexOf(')') + 2;
+    return stateOffset > 1 && stateOffset < fields.size()
+        && fields[stateOffset] != 'Z' && fields[stateOffset] != 'X';
 }
 
 static bool recorderDaemonAlive(qint64 pid)
@@ -333,7 +341,9 @@ int Recorder::startDetached(const RecordOptions &options, QString *message)
                 return 0;
             }
         }
-        if (!recorderDaemonAlive(pid)) {
+        // exec can temporarily expose an empty cmdline. We own this newly
+        // spawned PID, so check its process state rather than its argv here.
+        if (!processAlive(pid)) {
             QString reason = readLastError();
             if (reason.isEmpty()) reason = QStringLiteral("Recorder daemon exited during startup");
             QFile::remove(lastErrorFilePath());
@@ -599,53 +609,6 @@ SelfViewPlacement selfViewPlacement(const RecordOptions &options, const CaptureR
     return placement;
 }
 
-QVector<QRect> maskedCaptureRects(const QJsonObject &state, const CaptureRegion &capture,
-                                  const MonitorLayout &monitor)
-{
-    QVector<QRect> result;
-    const double scale = std::max(0.01, capture.scale);
-    const QPointF captureOrigin(capture.x - monitor.geometry.x(),
-                                capture.y - monitor.geometry.y());
-    const auto pixelRect = [&](const QRectF &logical) {
-        const int left = qFloor((logical.x() - captureOrigin.x()) * scale);
-        const int top = qFloor((logical.y() - captureOrigin.y()) * scale);
-        const int right = qCeil((logical.x() + logical.width() - captureOrigin.x()) * scale);
-        const int bottom = qCeil((logical.y() + logical.height() - captureOrigin.y()) * scale);
-        return QRect(left, top, right - left, bottom - top)
-            .intersected(QRect(0, 0, capture.physicalWidth, capture.physicalHeight));
-    };
-    if (state.value(QStringLiteral("bar_visible")).toBool(true)) {
-        const int width = state.value(QStringLiteral("bar_width")).toInt(
-            state.value(QStringLiteral("webcam")).toBool(false) ? 520 : 276);
-        const int height = state.value(QStringLiteral("bar_height")).toInt(40);
-        const double usableWidth = monitor.geometry.width() - monitor.reserved.left()
-                                   - monitor.reserved.right();
-        const QRect bar = pixelRect(QRectF(monitor.reserved.left()
-                                               + (usableWidth - width) / 2.0,
-                                           monitor.reserved.top() + 12.0, width, height));
-        if (bar.isValid()) result << bar;
-    }
-    if (state.value(QStringLiteral("countdown_active")).toBool(false)) {
-        const int width = state.value(QStringLiteral("countdown_width")).toInt(240);
-        const int height = state.value(QStringLiteral("countdown_height")).toInt(240);
-        const QRect countdown = pixelRect(QRectF(
-            monitor.geometry.width() / 2.0 - width / 2.0,
-            monitor.geometry.height() / 2.0 - height / 2.0, width, height));
-        if (countdown.isValid()) result << countdown;
-    }
-    if (state.value(QStringLiteral("selfview")).toBool(false)
-        && state.value(QStringLiteral("selfview_monitor")).toString() == capture.monitorName) {
-        const int pixels = state.value(QStringLiteral("selfview_pixels")).toInt(160);
-        const QRect selfView = pixelRect(QRectF(monitor.reserved.left()
-                                                    + state.value(QStringLiteral("selfview_x")).toInt(16),
-                                                monitor.reserved.top()
-                                                    + state.value(QStringLiteral("selfview_y")).toInt(16),
-                                                pixels, pixels));
-        if (selfView.isValid()) result << selfView;
-    }
-    return result;
-}
-
 } // namespace
 
 static QJsonObject positionObject(const QPointF &logical, const CaptureRegion &region)
@@ -795,7 +758,7 @@ int Recorder::daemonMain(const QStringList &arguments)
     region.physicalWidth = valueAfter(arguments, QStringLiteral("--physical-w")).toInt();
     region.physicalHeight = valueAfter(arguments, QStringLiteral("--physical-h")).toInt();
     RecordingPreferences preferences = RecordingPreferences::load();
-    const SelfViewPlacement selfView = selfViewPlacement(options, region, preferences);
+    SelfViewPlacement selfView = selfViewPlacement(options, region, preferences);
 
     const QDateTime now = QDateTime::currentDateTime();
     const QString displayName = QStringLiteral("Recording %1").arg(now.toString(QStringLiteral("yyyy-MM-dd HH-mm-ss")));
@@ -854,6 +817,14 @@ int Recorder::daemonMain(const QStringList &arguments)
         && options.captureBackend != QLatin1String("gsr");
     QString captureBackend = nativeCapture ? QStringLiteral("ext-image-copy-capture")
                                            : QStringLiteral("gsr");
+    bool pluginExclusion = CaptureExclusion::ensureLoaded().loaded && nativeCapture;
+    QStringList outputNames;
+    for (const auto &layout : monitorLayouts()) outputNames << layout.name;
+    QString overlayMonitor = CaptureExclusion::overlayMonitor(pluginExclusion, region.monitorName, outputNames);
+    if (!pluginExclusion) {
+        selfView.monitor = overlayMonitor;
+        selfView.safe = !overlayMonitor.isEmpty();
+    }
     const bool audioRequested = options.desktopAudio || options.microphoneAudio;
     const QString nativeVideo = audioRequested
         ? bundle + QStringLiteral("/screen-video.mp4") : video;
@@ -875,13 +846,15 @@ int Recorder::daemonMain(const QStringList &arguments)
                       {"capture_x", region.x}, {"capture_y", region.y},
                       {"capture_width", region.width}, {"capture_height", region.height},
                       {"capture_backend", captureBackend},
+                      {"overlay_exclusion", pluginExclusion ? "plugin" : "fallback"},
+                      {"overlay_monitor", overlayMonitor},
                       {"capture_started", false},
                       {"countdown_requested", options.countdown},
                       {"countdown_active", false},
                       {"countdown_ready", false},
                       {"countdown_end_us", countdownEndUs},
                       {"countdown_width", 240}, {"countdown_height", 240},
-                      {"bar_visible", !options.noBar},
+                      {"bar_visible", !options.noBar && !overlayMonitor.isEmpty()},
                       {"bar_width", options.webcam ? 520 : 276}, {"bar_height", 40},
                       {"selfview", selfView.visible}, {"selfview_safe", selfView.safe},
                       {"selfview_monitor", selfView.monitor},
@@ -894,8 +867,6 @@ int Recorder::daemonMain(const QStringList &arguments)
     const QJsonObject host = readStateFile(selfViewHostPath());
     const qint64 hostPid = host.value("pid").toVariant().toLongLong();
     const bool adoptHost = options.webcam && hostPid > 0 && ::kill(pid_t(hostPid), 0) == 0;
-    const bool hideHostForSeed = adoptHost && host.value("visible").toBool()
-        && host.value("monitor").toString() == region.monitorName;
     if (adoptHost) state.insert("host_pid", hostPid);
     if (!writeJson(stateFilePath(), state, &error)) {
         const QString reason = error.isEmpty()
@@ -922,11 +893,19 @@ int Recorder::daemonMain(const QStringList &arguments)
             QThread::msleep(1);
         }
     }
+    const auto waitForFallbackPlacement = [&] {
+        if (pluginExclusion) return true;
+        QElapsedTimer timer;
+        timer.start();
+        for (int attempt = 0; attempt < 100 && timer.elapsed() < 2000 && !stopRequested; ++attempt) {
+            if (CaptureExclusion::overlaysOffMonitor(region.monitorName)) return true;
+            QThread::msleep(10);
+        }
+        return false;
+    };
+    if (!waitForFallbackPlacement())
+        return failRecorderStartup(QStringLiteral("Overlays could not leave the recorded output"), bundle, video, &cursorSampler, &evdevListener);
     ScreenCapture screenCapture;
-    MonitorLayout recordedMonitorLayout{
-        region.monitorName, QRectF(region.x, region.y, region.width, region.height), {}};
-    for (const auto &layout : monitorLayouts())
-        if (layout.name == region.monitorName) recordedMonitorLayout = layout;
     if (nativeCapture) {
         QRect crop;
         if (region.mode != CaptureMode::Fullscreen) {
@@ -935,7 +914,6 @@ int Recorder::daemonMain(const QStringList &arguments)
                 return layout.name == region.monitorName;
             });
             if (monitor != layouts.cend()) {
-                recordedMonitorLayout = *monitor;
                 crop = QRect(qRound((region.x - monitor->geometry.x()) * region.scale),
                              qRound((region.y - monitor->geometry.y()) * region.scale),
                              region.physicalWidth, region.physicalHeight);
@@ -949,10 +927,13 @@ int Recorder::daemonMain(const QStringList &arguments)
         if (!screenCapture.start(config, &error)) {
             nativeCapture = false;
             captureBackend = QStringLiteral("gsr");
-            updateRecordingState(QJsonObject{{QStringLiteral("capture_backend"), captureBackend}});
-        } else {
-            screenCapture.setMaskedRects(maskedCaptureRects(readState(), region,
-                                                              recordedMonitorLayout));
+            pluginExclusion = false;
+            overlayMonitor = CaptureExclusion::overlayMonitor(false, region.monitorName, outputNames);
+            updateRecordingState({{"capture_backend", captureBackend}, {"overlay_exclusion", "fallback"},
+                {"overlay_monitor", overlayMonitor}, {"bar_visible", !options.noBar && !overlayMonitor.isEmpty()},
+                {"selfview_monitor", overlayMonitor}, {"selfview_safe", !overlayMonitor.isEmpty()}});
+            if (!waitForFallbackPlacement())
+                return failRecorderStartup(QStringLiteral("Overlays could not leave the recorded output"), bundle, video, &cursorSampler, &evdevListener);
         }
     }
     if (!nativeCapture) {
@@ -987,25 +968,14 @@ int Recorder::daemonMain(const QStringList &arguments)
         QThread::msleep(80);
         debugStartStage(QStringLiteral("countdown_end"), daemonStartUs);
     }
-    if (hideHostForSeed) {
-        updateRecordingState({{"selfview_seed_hide", true}});
-        QElapsedTimer hideTimer;
-        hideTimer.start();
-        for (int attempt = 0; attempt < 250 && hideTimer.elapsed() < 250; ++attempt) {
-            if (readState().value("selfview_hidden").toBool()) break;
-            QThread::msleep(1);
-        }
-        debugStartStage(readState().value("selfview_hidden").toBool()
-            ? QStringLiteral("selfview_hidden") : QStringLiteral("selfview_hide_timeout"), daemonStartUs);
-    }
     const qint64 recorderStartedUs = CursorSampler::monotonicUs();
     updateRecordingState(QJsonObject{{QStringLiteral("started_us"), recorderStartedUs}});
     debugStartStage(QStringLiteral("capture_start"), daemonStartUs);
     bool captureLoopFailed = false;
     if (nativeCapture) {
-        QElapsedTimer seedTimer;
-        seedTimer.start();
-        while (screenCapture.encodedFrames() == 0 && seedTimer.elapsed() < 2500
+        QElapsedTimer firstFrameTimer;
+        firstFrameTimer.start();
+        while (screenCapture.encodedFrames() == 0 && firstFrameTimer.elapsed() < 2500
                && !stopRequested) {
             if (!screenCapture.captureFrame(&error)) {
                 captureLoopFailed = true;
@@ -1050,7 +1020,6 @@ int Recorder::daemonMain(const QStringList &arguments)
                              QStringLiteral("Stop with the bar, the REC indicator, or your keybind")});
     runOptionalDetached(QStringLiteral("omarchy-shell"),
                         {QStringLiteral("-q"), QStringLiteral("omarchy.indicators"), QStringLiteral("refresh")});
-    QVector<QRect> currentMasks;
     while (!stopRequested && !captureLoopFailed) {
         if (options.webcam && !cameraAvailable) {
             const QString cameraStatus = readState().value(QStringLiteral("camera_status")).toString();
@@ -1060,12 +1029,6 @@ int Recorder::daemonMain(const QStringList &arguments)
             }
         }
         if (nativeCapture) {
-            const QVector<QRect> nextMasks = maskedCaptureRects(readState(), region,
-                                                                 recordedMonitorLayout);
-            if (nextMasks != currentMasks) {
-                screenCapture.setMaskedRects(nextMasks);
-                currentMasks = nextMasks;
-            }
             if (!screenCapture.captureFrame(&error)) { captureLoopFailed = true; break; }
         } else {
             if (recorder.state() == QProcess::NotRunning) { captureLoopFailed = true; break; }
@@ -1201,6 +1164,7 @@ int Recorder::daemonMain(const QStringList &arguments)
                        recordedRegion, &error) && ok;
     QJsonObject capture{
         {"version", 1}, {"backend", captureBackend}, {"fps", recordedFps},
+        {"overlay_exclusion", pluginExclusion ? "plugin" : "fallback"},
         {"width", nativeCapture ? screenCapture.outputSize().width() : region.physicalWidth},
         {"height", nativeCapture ? screenCapture.outputSize().height() : region.physicalHeight},
         {"mode", modeName(region.mode)},
@@ -1268,6 +1232,8 @@ int Recorder::daemonMain(const QStringList &arguments)
         }
     }
     ok = writeJson(bundle + QStringLiteral("/capture.json"), capture, &error) && ok;
+    ok = writeJson(bundle + QStringLiteral("/recording.json"),
+                   {{"overlay_exclusion", pluginExclusion ? "plugin" : "fallback"}}, &error) && ok;
 
     QProcess ffmpeg;
     ffmpeg.start(QStringLiteral("ffmpeg"), {QStringLiteral("-y"), QStringLiteral("-loglevel"),

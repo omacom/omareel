@@ -20,7 +20,8 @@ ApplicationWindow {
     font.family: theme.fontFamily
     font.pixelSize: theme.font.body
 
-    readonly property int desiredHeight: launcher.webcam && !showingRecording ? 520 : 460
+    readonly property int desiredHeight: (launcher.webcam && !showingRecording ? 520 : 460)
+                                         + (launcher.captureExclusionNote.length > 0 ? 32 : 0)
     readonly property string iconRoot: "qrc:/omareel/assets/icons/" + "luc" + "ide/"
     property bool screenshotRecording: false
     property string errorMessage: ""
@@ -376,6 +377,15 @@ ApplicationWindow {
                 }
                 Item { Layout.preferredHeight: 4 }
             }
+        }
+
+        Label {
+            Layout.fillWidth: true
+            visible: launcher.captureExclusionNote.length > 0
+            text: launcher.captureExclusionNote
+            color: theme.textMuted
+            font.pixelSize: theme.font.caption
+            wrapMode: Text.WordWrap
         }
 
         ColumnLayout {
