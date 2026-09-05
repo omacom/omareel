@@ -9,6 +9,9 @@
 
 namespace Omareel {
 
+// Read the shared, validated probe cache without starting a new probe.
+bool cachedPreferredEncoderAvailable();
+
 struct ScreenCaptureConfig {
     QString monitor;
     QString outputPath;

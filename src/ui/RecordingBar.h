@@ -14,6 +14,12 @@ namespace Omareel {
 
 class CameraCapture;
 
+inline bool selfViewHostShouldExit(bool recordingActive, bool quitRequested,
+                                   qint64 ownerPid, bool ownerAlive)
+{
+    return !recordingActive && (quitRequested || ownerPid <= 0 || !ownerAlive);
+}
+
 inline QPoint clampedSelfViewDragPosition(const QPointF &pressPointer,
                                           const QPoint &pressBubble,
                                           const QPointF &pointer,
@@ -108,7 +114,6 @@ private:
     bool m_suppressed = false;
     QString m_standbyMonitor;
     QPoint m_standbyPosition;
-    bool m_completedRecording = false;
     bool m_quit = false;
     qint64 m_owner = 0;
     qint64 m_hostSequence = 0;

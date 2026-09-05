@@ -1,16 +1,17 @@
 #pragma once
 
 #include <QObject>
+#include <QByteArray>
+#include <QPointer>
 #include <QSize>
 #include <QString>
 #include <memory>
 
 class QCamera;
 class QMediaCaptureSession;
-class QMediaRecorder;
+class QVideoSink;
 class QTimer;
 class QVideoFrame;
-class QVideoFrameInput;
 
 namespace Omareel {
 
@@ -27,6 +28,16 @@ private:
     QString m_path;
     qint64 m_firstFrameUs = 0;
 };
+
+// Maps and repacks camera planes on the encoder worker, never on the UI thread.
+struct CameraRawFrame {
+    QByteArray pixels;
+    QString pixelFormat;
+    QSize size;
+};
+CameraRawFrame packCameraFrame(QVideoFrame frame);
+qint64 cameraFrameDeadlineUs(qint64 firstFrameUs, qint64 frameNumber);
+class CameraEncoder;
 
 class CameraCapture : public QObject
 {
@@ -63,7 +74,7 @@ signals:
 
 private:
     void handleFrame(const QVideoFrame &frame);
-    void sendLatestFrame();
+    void finishStop();
     void fail(const QString &message);
 
     QString m_devicePath;
@@ -71,22 +82,19 @@ private:
     QString m_videoPath;
     FirstFrameTimestamp m_timestamp;
     std::unique_ptr<QMediaCaptureSession> m_session;
-    std::unique_ptr<QMediaCaptureSession> m_recordSession;
     std::unique_ptr<QCamera> m_camera;
-    std::unique_ptr<QMediaRecorder> m_recorder;
-    std::unique_ptr<QVideoFrameInput> m_frameInput;
-    std::unique_ptr<QVideoFrame> m_latestFrame;
+    std::unique_ptr<QVideoSink> m_sink;
+    QPointer<QVideoSink> m_previewSink;
+    std::unique_ptr<CameraEncoder> m_encoder;
     std::unique_ptr<QTimer> m_startTimer;
-    std::unique_ptr<QTimer> m_recordTimer;
     QSize m_captureSize;
     qreal m_frameRate = 30.0;
     QString m_errorString;
     bool m_ready = false;
     bool m_running = false;
     bool m_stopping = false;
-    bool m_inputReady = false;
     bool m_recordingFrames = false;
-    qint64 m_recordedFrameCount = 0;
+    bool m_formatLogged = false;
 };
 
 } // namespace Omareel

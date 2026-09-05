@@ -223,3 +223,7 @@ fallback because it does not use Hyprland's capture path.
 the same value is saved in recording metadata. The countdown uses the recording
 bar's namespace. Omareel disables layer animations before mapping its overlays
 so fading snapshots cannot appear in capture.
+
+If a self-view bubble is ever left behind, run `omareel __selfview-ipc quit`.
+The host exits once any active recording finishes. Reopen the launcher to bring
+the self-view back.

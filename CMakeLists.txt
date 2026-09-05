@@ -16,6 +16,7 @@ if(OMAREEL_BUILD_HYPRLAND_PLUGIN)
         add_subdirectory(plugin)
     endif()
 endif()
+pkg_check_modules(TURBOJPEG REQUIRED IMPORTED_TARGET libturbojpeg)
 pkg_check_modules(LIBEVDEV REQUIRED IMPORTED_TARGET libevdev)
 pkg_check_modules(WAYLAND_CLIENT REQUIRED IMPORTED_TARGET wayland-client)
 find_program(WAYLAND_SCANNER REQUIRED NAMES wayland-scanner)
@@ -67,7 +68,7 @@ add_library(omareel_core STATIC
 target_include_directories(omareel_core PUBLIC src PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
 target_link_libraries(omareel_core
     PUBLIC Qt6::Core Qt6::Gui Qt6::Quick Qt6::Multimedia Qt6::Svg
-    PRIVATE PkgConfig::LIBEVDEV PkgConfig::WAYLAND_CLIENT
+    PRIVATE PkgConfig::LIBEVDEV PkgConfig::WAYLAND_CLIENT PkgConfig::TURBOJPEG
 )
 
 add_library(omareel_render STATIC)

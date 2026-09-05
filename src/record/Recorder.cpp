@@ -1025,7 +1025,7 @@ int Recorder::daemonMain(const QStringList &arguments)
             const QString cameraStatus = readState().value(QStringLiteral("camera_status")).toString();
             if (cameraStatus == QLatin1String("ready")) {
                 cameraAvailable = true;
-                cameraBackend = QStringLiteral("qt-multimedia");
+                cameraBackend = QStringLiteral("ffmpeg-pipe");
             }
         }
         if (nativeCapture) {
@@ -1213,7 +1213,7 @@ int Recorder::daemonMain(const QStringList &arguments)
                 const QJsonObject cameraState = readState();
                 if (cameraBackend.isEmpty())
                     cameraBackend = cameraState.value(QStringLiteral("camera_backend"))
-                                        .toString(QStringLiteral("qt-multimedia"));
+                                        .toString(QStringLiteral("ffmpeg-pipe"));
                 capture.insert(QStringLiteral("camera"), cameraCaptureBlock(
                     options.webcamDevice, options.webcamHeight,
                     stream.value(QStringLiteral("width")).toInt(),

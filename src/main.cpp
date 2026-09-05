@@ -16,6 +16,7 @@
 #include <LayerShellQt/window.h>
 
 #include <QGuiApplication>
+#include <QLoggingCategory>
 #include <algorithm>
 #include <chrono>
 #include <QFont>
@@ -530,6 +531,7 @@ int main(int argc, char **argv)
     const bool layerTest = argc > 1 && QByteArray(argv[1]) == "__layer-test";
     const bool windowTest = argc > 1 && QByteArray(argv[1]) == "__window-test";
     const bool recordBar = argc > 1 && QByteArray(argv[1]) == "__record-bar";
+    if (recordBar) QLoggingCategory::setFilterRules(QStringLiteral("qt.multimedia.ffmpeg*=false"));
     const bool hiddenRecordBar = recordBar && argc > 2 && QByteArray(argv[2]) == "--hidden";
     const bool graphical = argc == 1 || layerTest || windowTest || recordBar || (argc > 1 && QByteArray(argv[1]) == "edit");
     if (recordBar || layerTest) LayerShellQt::Shell::useLayerShell();

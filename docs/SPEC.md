@@ -38,7 +38,7 @@ This document is the frozen contract. Implementation runs are scoped to it.
   accent `#7aa2f7`.
 - Runtime deps: `gpu-screen-recorder`, `ffmpeg`, `slurp`, `hyprctl`, `jq` (optional),
   `omarchy-notification-send` (optional). Build deps: qt6-base, qt6-declarative, qt6-multimedia,
-  qt6-svg, qt6-shadertools, libevdev, cmake, ninja.
+  qt6-svg, qt6-shadertools, libevdev, libjpeg-turbo, cmake, ninja.
 
 ## 1. CLI
 
@@ -97,21 +97,29 @@ Move samples before the first frame or after stop are still stored (trimmed on l
 ### Webcam capture
 
 When enabled, the recording bar owns a Qt Multimedia capture session. One camera stream feeds both
-the live bar preview and the recorder, so the device is opened only once. The bar is also launched
+the live bar preview and a bounded ffmpeg pipe worker, so the device is opened only once. The bar is also launched
 as a hidden capture host for `--no-bar`; this keeps camera ownership in an existing GUI process
-without turning the recording daemon into a GUI application. The first preview frame records the
+without turning the recording daemon into a GUI application. The first frame admitted for recording records the
 monotonic timestamp in `camera.mp4.ts`. If no frame arrives within two seconds, the bar releases the
 device and the daemon starts the V4L2 fallback capture. `capture.json.camera.backend` records
-`qt-multimedia` or `v4l2-fallback`, along with the device, dimensions, frame rate, first-frame
+`ffmpeg-pipe` or `v4l2-fallback`, along with the device, dimensions, frame rate, first-frame
 timestamp, rotation, and horizontal flip. Rotation and flip affect previews and rendering but are
 not baked into `camera.mp4`.
 
+The worker repacks raw planes (or decodes MJPG directly to planar YUV with libjpeg-turbo)
+and uses the cached encoder probe to select NVENC or libx264. Monotonic deadlines pace
+30 fps CFR output with no B-frames. A single pending frame replaces superseded input;
+slower input repeats the latest packed frame. Pipe writes time out after two seconds,
+and encoder shutdown has a five-second deadline. Qt Multimedia remains the preview backend.
+A standby host exits when its owner is gone or quit is requested, after any active
+recording finishes. A live owner keeps the host in standby for the next recording.
+
 The self-view starts at the persisted bottom-right position on the recorded monitor and remains
-draggable with S, M, and L sizes. The in-process backend captures one seed frame before mapping
-the private overlays, then replaces their black exclusion rectangles with persistent desktop
-underlays in the writer thread. A vacated self-view area refreshes from later visible frames.
-The fallback backend does not apply this mask. No picker or alternate-monitor placement is
-involved. For in-process audio, a separate pulse capture is timestamped from the
+draggable with S, M, and L sizes. The bundled Hyprland plugin keeps the bar and self-view out
+of the capture: their layers are skipped in the compositor scene while a capture session is
+active and drawn onto the display after the mirror copy, so the file sees the live desktop
+beneath them. Without a matching plugin, the overlays move to a non-recorded monitor or are
+hidden on a single monitor. For in-process audio, a separate pulse capture is timestamped from the
 monotonic clock and copy-muxed with the video at stop.
 
 ## 3. Project model (`project.json`, version 1)

@@ -9,8 +9,29 @@
 #include <QTemporaryDir>
 #include <QScopeGuard>
 #include <limits>
+#include <QVideoFrame>
+#include <QAbstractVideoBuffer>
+#include <QBuffer>
+#include <cstring>
 
 using namespace Omareel;
+
+class JpegTestBuffer : public QAbstractVideoBuffer
+{
+public:
+    explicit JpegTestBuffer(QByteArray bytes): data(std::move(bytes)) {}
+    MapData map(QVideoFrame::MapMode) override
+    {
+        MapData mapped;
+        mapped.planeCount = 1;
+        mapped.data[0] = reinterpret_cast<uchar *>(data.data());
+        mapped.dataSize[0] = data.size();
+        return mapped;
+    }
+    QVideoFrameFormat format() const override
+    { return QVideoFrameFormat(QSize(16, 8), QVideoFrameFormat::Format_Jpeg); }
+    QByteArray data;
+};
 
 class RecorderTest : public QObject
 {
@@ -115,12 +136,101 @@ private slots:
         QCOMPARE(timestamp.firstFrameUs(), qint64(1234567));
     }
 
+    void selfViewHostLifetime()
+    {
+        for (bool active : {false, true}) {
+            for (bool quit : {false, true}) {
+                for (qint64 owner : {qint64(-1), qint64(0), qint64(42)}) {
+                    for (bool alive : {false, true}) {
+                        const bool expected = active ? false : quit || owner <= 0 || !alive;
+                        QCOMPARE(selfViewHostShouldExit(active, quit, owner, alive), expected);
+                    }
+                }
+            }
+        }
+        // Completing an adoption changes only active: a dead owner must exit,
+        // a live owner returns to standby, and quit waits for recording to finish.
+        QVERIFY(!selfViewHostShouldExit(true, false, 42, false));
+        QVERIFY(selfViewHostShouldExit(false, false, 42, false));
+        QVERIFY(!selfViewHostShouldExit(false, false, 42, true));
+        QVERIFY(!selfViewHostShouldExit(true, true, 42, true));
+        QVERIFY(selfViewHostShouldExit(false, true, 42, true));
+    }
+
+    void cameraPacingDoesNotAccumulateMillisecondRounding()
+    {
+        const qint64 first = 1234567;
+        QCOMPARE(cameraFrameDeadlineUs(first, 0), first);
+        QCOMPARE(cameraFrameDeadlineUs(first, 1), first + 33333);
+        QCOMPARE(cameraFrameDeadlineUs(first, 2), first + 66666);
+        QCOMPARE(cameraFrameDeadlineUs(first, 240), first + 8000000);
+        QCOMPARE(cameraFrameDeadlineUs(first, 108000), first + 3600000000LL);
+    }
+
+    void cameraPlanesAreTightlyPacked_data()
+    {
+        QTest::addColumn<int>("format");
+        QTest::addColumn<QString>("ffmpegFormat");
+        QTest::newRow("nv12") << int(QVideoFrameFormat::Format_NV12) << QString("nv12");
+        QTest::newRow("420") << int(QVideoFrameFormat::Format_YUV420P) << QString("yuv420p");
+        QTest::newRow("422") << int(QVideoFrameFormat::Format_YUV422P) << QString("yuv422p");
+        QTest::newRow("bgra") << int(QVideoFrameFormat::Format_BGRA8888) << QString("bgra");
+        QTest::newRow("rgba") << int(QVideoFrameFormat::Format_RGBA8888) << QString("rgba");
+    }
+
+    void cameraPlanesAreTightlyPacked()
+    {
+        QFETCH(int, format);
+        QFETCH(QString, ffmpegFormat);
+        // Width 14 forces padded rows in Qt's allocated video buffer.
+        QVideoFrame frame(QVideoFrameFormat(QSize(14, 6), QVideoFrameFormat::PixelFormat(format)));
+        QVERIFY(frame.map(QVideoFrame::WriteOnly));
+        QByteArray expected;
+        for (int plane = 0; plane < frame.planeCount(); ++plane) {
+            const bool rgb = ffmpegFormat == "bgra" || ffmpegFormat == "rgba";
+            const int width = rgb ? 56 : plane == 0 || ffmpegFormat == "nv12" ? 14 : 7;
+            const int rows = plane == 0 || ffmpegFormat == "yuv422p" ? 6 : 3;
+            std::memset(frame.bits(plane), 0xee, frame.mappedBytes(plane));
+            for (int row = 0; row < rows; ++row) {
+                const char value = char(16 + plane*20 + row);
+                std::memset(frame.bits(plane) + row*frame.bytesPerLine(plane), value, width);
+                expected += QByteArray(width, value);
+            }
+        }
+        frame.unmap();
+        const auto packed = packCameraFrame(frame);
+        QCOMPARE(packed.size, QSize(14,6));
+        QCOMPARE(packed.pixelFormat, ffmpegFormat);
+        QCOMPARE(packed.pixels, expected);
+    }
+
+    void cameraJpegDecodesDirectlyToYuv()
+    {
+        QImage source(16, 8, QImage::Format_RGB32);
+        source.fill(Qt::red);
+        QByteArray jpeg;
+        QBuffer buffer(&jpeg);
+        QVERIFY(buffer.open(QIODevice::WriteOnly));
+        QVERIFY(source.save(&buffer, "JPEG", 95));
+        QVideoFrame frame(std::make_unique<JpegTestBuffer>(jpeg));
+        const auto packed = packCameraFrame(frame);
+        QCOMPARE(packed.size, QSize(16, 8));
+        QCOMPARE(packed.pixelFormat, QString("yuvj444p"));
+        QCOMPARE(packed.pixels.size(), 16*8*3);
+        // Full-range JPEG red: Y approximately 76, Cb 85, Cr 255.
+        QVERIFY(std::abs(int(uchar(packed.pixels[0])) - 76) < 4);
+        QVERIFY(std::abs(int(uchar(packed.pixels[128])) - 85) < 4);
+        QVERIFY(int(uchar(packed.pixels[256])) > 250);
+        QVideoFrame broken(std::make_unique<JpegTestBuffer>(QByteArray("invalid JPEG")));
+        QVERIFY(packCameraFrame(broken).pixels.isEmpty());
+    }
+
     void cameraCaptureBlockIncludesSettings()
     {
         const QJsonObject camera = Recorder::cameraCaptureBlock(
             QStringLiteral("/dev/video2"), 1080, 1920, 1080, 30.0, 1234567,
-            QStringLiteral("qt-multimedia"), 90, true);
-        QCOMPARE(camera.value(QStringLiteral("backend")).toString(), QStringLiteral("qt-multimedia"));
+            QStringLiteral("ffmpeg-pipe"), 90, true);
+        QCOMPARE(camera.value(QStringLiteral("backend")).toString(), QStringLiteral("ffmpeg-pipe"));
         QCOMPARE(camera.value(QStringLiteral("requestedHeight")).toInt(), 1080);
         QCOMPARE(camera.value(QStringLiteral("width")).toInt(), 1920);
         QCOMPARE(camera.value(QStringLiteral("height")).toInt(), 1080);

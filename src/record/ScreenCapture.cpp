@@ -396,6 +396,15 @@ bool writeAll(int fd, const char *bytes, qsizetype size, const std::atomic_bool 
 
 } // namespace
 
+bool Omareel::cachedPreferredEncoderAvailable()
+{
+    QFile file(encoderProbeCachePath());
+    if (!file.open(QIODevice::ReadOnly)) return false;
+    const auto cached = QJsonDocument::fromJson(file.readAll()).object();
+    return cached.value("key").toObject() == encoderProbeKey()
+        && cached.value("preferred").toBool(false);
+}
+
 struct ScreenCapture::Private {
     struct Slot {
         Private *owner = nullptr;
@@ -918,7 +927,6 @@ bool ScreenCapture::captureFrame(QString *error)
     }
     return true;
 }
-
 
 
 bool ScreenCapture::finish(QString *error)

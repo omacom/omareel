@@ -14,6 +14,7 @@
 #include <QJsonDocument>
 #include <QProcess>
 #include <csignal>
+#include <cerrno>
 #include <unistd.h>
 #include <QDebug>
 #include <QFile>
@@ -57,6 +58,9 @@ RecordingBar::RecordingBar(bool hidden, bool standby, qint64 owner, QObject *par
             QTimer::singleShot(0, this, &RecordingBar::finished);
             return;
         }
+        // Holding the host lock proves that no previous host owns this state.
+        // QLockFile removes a crashed process's stale lock by PID, immediately.
+        QFile::remove(Recorder::selfViewHostPath());
         const auto prefs = RecordingPreferences::load();
         QProcess monitors;
         monitors.start("hyprctl", {"-j", "monitors"});
@@ -102,7 +106,8 @@ RecordingBar::RecordingBar(bool hidden, bool standby, qint64 owner, QObject *par
     if (m_standby) publishHost();
     connect(&m_timer, &QTimer::timeout, this, &RecordingBar::poll);
     m_timer.start(50);
-    poll();
+    // Let main connect finished() before an invalid/dead owner can end the host.
+    QTimer::singleShot(0, this, &RecordingBar::poll);
 }
 
 RecordingBar::~RecordingBar()
@@ -151,9 +156,14 @@ void RecordingBar::poll()
             m_suppressed = suppressed;
             emit selfViewVisibilityChanged();
         }
+        const bool ownerAlive = m_owner > 0 && (::kill(pid_t(m_owner), 0) == 0 || errno == EPERM);
+        if (selfViewHostShouldExit(active, m_quit, m_owner, ownerAlive)) {
+            m_timer.stop();
+            emit finished();
+            return;
+        }
         if (!active && m_adopted) {
             m_adopted = false;
-            m_completedRecording = true;
             m_captureStarted = false;
             m_hidden = true;
             m_selfViewSafe = true;
@@ -166,11 +176,6 @@ void RecordingBar::poll()
             emit selfViewVisibilityChanged();
             hostCommand("configure");
             publishHost();
-        }
-        if (!active && (m_quit || (!m_completedRecording && (m_owner <= 0 || ::kill(pid_t(m_owner), 0) != 0)))) {
-            m_timer.stop();
-            emit finished();
-            return;
         }
         if (!ours) return;
     } else if (!active) {
@@ -476,7 +481,7 @@ void RecordingBar::createCamera(const QJsonObject &state)
         if (!m_cameraCapture->ready()) return;
         cameraState(QJsonObject{
             {QStringLiteral("camera_status"), QStringLiteral("ready")},
-            {QStringLiteral("camera_backend"), QStringLiteral("qt-multimedia")},
+            {QStringLiteral("camera_backend"), QStringLiteral("ffmpeg-pipe")},
             {QStringLiteral("camera_width"), m_cameraCapture->captureSize().width()},
             {QStringLiteral("camera_height_actual"), m_cameraCapture->captureSize().height()},
             {QStringLiteral("camera_fps"), m_cameraCapture->frameRate()}
