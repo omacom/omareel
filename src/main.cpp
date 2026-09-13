@@ -323,6 +323,7 @@ static int exportCommand(const QStringList &arguments)
     QObject::connect(&exporter, &Exporter::progress, [](int frame, int total) {
         if (frame == total || frame == 1 || frame % 10 == 0)
             QTextStream(stderr) << '\r' << "Exporting " << frame << '/' << total << Qt::flush;
+        if (frame == total) QTextStream(stderr) << "  Finishing encoding..." << Qt::flush;
     });
     QObject::connect(&exporter, &Exporter::finished, [&](const QString &path) {
         success = true;

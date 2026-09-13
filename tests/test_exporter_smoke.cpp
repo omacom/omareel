@@ -7,6 +7,7 @@
 #include <QJsonDocument>
 #include <QImage>
 #include <QProcess>
+#include <QScopeGuard>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QtTest>
@@ -21,6 +22,121 @@ private slots:
     {
         QCOMPARE(paddedEvenSize(1367, 781), QSize(1368, 782));
         QCOMPARE(paddedEvenSize(1920, 1080), QSize(1920, 1080));
+    }
+
+    void backpressure_data()
+    {
+        QTest::addColumn<QByteArray>("mode");
+        QTest::newRow("slow-real-encoder") << QByteArray("slow");
+        QTest::newRow("cancel-full-queue") << QByteArray("stalled");
+        QTest::newRow("cancel-finalization") << QByteArray("finalizing");
+        QTest::newRow("silent-encoder-failure") << QByteArray("failed");
+    }
+
+    void backpressure()
+    {
+        QFETCH(QByteArray, mode);
+        const QString ffmpeg = QStandardPaths::findExecutable(QStringLiteral("ffmpeg"));
+        const QString python = QStandardPaths::findExecutable(QStringLiteral("python3"));
+        if (ffmpeg.isEmpty() || python.isEmpty()) QSKIP("ffmpeg/python3 unavailable");
+        QTemporaryDir temporary;
+        QVERIFY(temporary.isValid());
+        const QString bundle = temporary.filePath(QStringLiteral("test.omareel"));
+        QVERIFY(QDir().mkpath(bundle));
+        QFile capture(QDir(bundle).filePath(QStringLiteral("capture.json")));
+        QVERIFY(capture.open(QIODevice::WriteOnly));
+        capture.write("{\"fps\":30,\"first_frame_us\":0}");
+        capture.close();
+        QFile input(QDir(bundle).filePath(QStringLiteral("input.jsonl")));
+        QVERIFY(input.open(QIODevice::WriteOnly));
+        input.close();
+        QProcess source;
+        source.start(ffmpeg, {QStringLiteral("-v"), QStringLiteral("error"),
+            QStringLiteral("-f"), QStringLiteral("lavfi"), QStringLiteral("-i"),
+            QStringLiteral("testsrc2=size=320x180:rate=30"), QStringLiteral("-t"),
+            QStringLiteral("1"), QStringLiteral("-c:v"), QStringLiteral("libx264"),
+            QDir(bundle).filePath(QStringLiteral("screen.mp4"))});
+        QVERIFY(source.waitForFinished(15000));
+        QCOMPARE(source.exitCode(), 0);
+        Project project = Project::defaults(QStringLiteral("Backpressure"), 1.0);
+        project.background.type = QStringLiteral("color");
+        project.cursor.visible = false;
+        project.camera.enabled = false;
+        QString error;
+        QVERIFY2(project.save(QDir(bundle).filePath(QStringLiteral("project.json")), &error), qPrintable(error));
+
+        const QString shim = QFINDTESTDATA("tools/export-encoder.py");
+        QVERIFY(!shim.isEmpty());
+        const auto quote = [](QString value) {
+            return QLatin1Char('\'') + value.replace(QLatin1Char('\''), QStringLiteral("'\\''")) + QLatin1Char('\'');
+        };
+        QFile wrapper(temporary.filePath(QStringLiteral("ffmpeg")));
+        QVERIFY(wrapper.open(QIODevice::WriteOnly));
+        wrapper.write((QStringLiteral("#!/bin/sh\nexec ") + quote(python) + QLatin1Char(' ')
+                       + quote(shim) + QStringLiteral(" \"$@\"\n")).toUtf8());
+        wrapper.close();
+        QVERIFY(wrapper.setPermissions(QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner));
+        const QList<QByteArray> names{"PATH", "OMAREEL_DISABLE_NVENC", "OMAREEL_TEST_ENCODER_MODE", "OMAREEL_TEST_REAL_FFMPEG"};
+        QList<QByteArray> previous;
+        for (const auto &name : names) previous << qgetenv(name.constData());
+        const auto restore = qScopeGuard([&] {
+            for (int i = 0; i < names.size(); ++i) {
+                if (previous[i].isNull()) qunsetenv(names[i].constData());
+                else qputenv(names[i].constData(), previous[i]);
+            }
+        });
+        qputenv("PATH", temporary.path().toUtf8() + ':' + previous[0]);
+        qputenv("OMAREEL_DISABLE_NVENC", "1");
+        qputenv("OMAREEL_TEST_ENCODER_MODE", mode);
+        qputenv("OMAREEL_TEST_REAL_FFMPEG", ffmpeg.toUtf8());
+
+        const QString output = temporary.filePath(QStringLiteral("out.mp4"));
+        QFile sentinel(output);
+        QVERIFY(sentinel.open(QIODevice::WriteOnly));
+        sentinel.write("keep");
+        sentinel.close();
+        Exporter exporter;
+        QSignalSpy finished(&exporter, &Exporter::finished);
+        QSignalSpy failed(&exporter, &Exporter::failed);
+        bool cancelScheduled = false;
+        connect(&exporter, &Exporter::progress, this, [&](int frame, int total) {
+            if (!cancelScheduled && ((mode == "stalled" && frame == 1)
+                                     || (mode == "finalizing" && frame == total))) {
+                cancelScheduled = true;
+                QTimer::singleShot(150, &exporter, &Exporter::cancel);
+            }
+        });
+        QElapsedTimer elapsed;
+        elapsed.start();
+        exporter.exportBundle({bundle, output, 30, 1280, QStringLiteral("web-low"), 0, 0});
+        if (mode == "slow") {
+            QVERIFY2(finished.count() == 1, failed.isEmpty() ? "No completion" : qPrintable(failed.first().first().toString()));
+            QVERIFY(failed.isEmpty());
+            QVERIFY(elapsed.elapsed() >= 1000);
+            QProcess probe;
+            probe.start(QStringLiteral("ffprobe"), {QStringLiteral("-v"), QStringLiteral("error"),
+                QStringLiteral("-count_frames"), QStringLiteral("-select_streams"), QStringLiteral("v:0"),
+                QStringLiteral("-show_entries"), QStringLiteral("stream=nb_read_frames"),
+                QStringLiteral("-of"), QStringLiteral("csv=p=0"), output});
+            QVERIFY(probe.waitForFinished(15000));
+            QCOMPARE(probe.exitCode(), 0);
+            QCOMPARE(probe.readAllStandardOutput().trimmed(), QByteArray("30"));
+        } else {
+            QVERIFY(finished.isEmpty());
+            QCOMPARE(failed.count(), 1);
+            const QString failure = failed.first().first().toString();
+            QVERIFY(!failure.isEmpty());
+            if (mode == "failed") QVERIFY2(failure.contains(QStringLiteral("encoder"), Qt::CaseInsensitive), qPrintable(failure));
+            if (mode != "failed") {
+                QVERIFY2(cancelScheduled, qPrintable(failure));
+                QVERIFY2(failure.contains(QStringLiteral("cancelled")), qPrintable(failure));
+            }
+            QVERIFY2(elapsed.elapsed() < 10000, "Cancellation/failure must not wait for the write or finish timeout");
+            QVERIFY(sentinel.open(QIODevice::ReadOnly));
+            QCOMPARE(sentinel.readAll(), QByteArray("keep"));
+        }
+        QCOMPARE(QDir(temporary.path()).entryList({QStringLiteral(".omareel-export-*.mp4")},
+                                                  QDir::Files | QDir::Hidden), QStringList());
     }
 
     void exportsTwoSecondH264()

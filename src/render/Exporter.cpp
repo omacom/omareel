@@ -1,5 +1,6 @@
 #include "Exporter.h"
 
+#include "EncoderPipe.h"
 #include "FfmpegDecoder.h"
 #include "FrameSource.h"
 #include "core/ClipTimeline.h"
@@ -34,12 +35,14 @@
 #include <QQmlContext>
 #include <QQmlEngine>
 #include <QStandardPaths>
+#include <QScopeGuard>
 #include <QTemporaryFile>
 #include <QTextStream>
 #include <cmath>
 #include <array>
 #include <cstring>
 #include <condition_variable>
+#include <chrono>
 #include <deque>
 #include <mutex>
 #include <thread>
@@ -477,6 +480,12 @@ bool Exporter::run(const ExportOptions &options, QString *error)
              << QStringLiteral("-movflags") << QStringLiteral("+faststart") << encodedPath;
     }
 
+    const auto processEvents = [&] {
+        QCoreApplication::processEvents();
+        // Painting the editor while a queue is full can switch GL contexts.
+        // Restore ours before touching its readbacks or framebuffer again.
+        if (context) context->makeCurrent(surface.get());
+    };
     std::mutex encodeMutex;
     std::condition_variable encodeReady;
     std::condition_variable encodeSpace;
@@ -484,12 +493,22 @@ bool Exporter::run(const ExportOptions &options, QString *error)
     bool encodeStarted = gif;
     bool encodeStartOk = gif;
     bool encodeClosing = false;
-    bool encodeAbort = false;
+    std::atomic_bool encodeAbort{false};
+    std::atomic_bool encodeDone{false};
     QString encodeError;
     std::thread encodeThread;
     if (!gif) {
         encodeThread = std::thread([&] {
             QProcess process;
+            const auto cleanup = qScopeGuard([&] {
+                if (process.state() != QProcess::NotRunning) {
+                    process.kill();
+                    process.waitForFinished(2000);
+                }
+                encodeDone = true;
+                encodeSpace.notify_all();
+            });
+            const auto cancelled = [&] { return encodeAbort || m_cancelled; };
             process.start(QStringLiteral("ffmpeg"), encoderArgs, QIODevice::ReadWrite);
             const bool started = process.waitForStarted(10000);
             {
@@ -507,9 +526,8 @@ bool Exporter::run(const ExportOptions &options, QString *error)
                     encodeReady.wait(lock, [&] {
                         return !encodeQueue.empty() || encodeClosing || encodeAbort || m_cancelled;
                     });
-                    if (encodeAbort || m_cancelled) {
-                        process.kill();
-                        process.waitForFinished(2000);
+                    if (cancelled()) {
+                        encodeError = QStringLiteral("Export cancelled");
                         return;
                     }
                     if (encodeQueue.empty() && encodeClosing) break;
@@ -519,27 +537,20 @@ bool Exporter::run(const ExportOptions &options, QString *error)
                 encodeSpace.notify_one();
                 QElapsedTimer writeTimer;
                 writeTimer.start();
-                qint64 written = 0;
-                while (written < bytes.size()) {
-                    const qint64 amount = process.write(bytes.constData() + written,
-                                                        bytes.size() - written);
-                    if (amount < 0 || !process.waitForBytesWritten(30000)) {
-                        std::lock_guard lock(encodeMutex);
-                        encodeError = QString::fromUtf8(process.readAllStandardError()).trimmed();
-                        encodeAbort = true;
-                        encodeSpace.notify_all();
-                        process.kill();
-                        process.waitForFinished(2000);
-                        return;
-                    }
-                    written += amount;
+                QString pipeError;
+                if (!writeEncoderFrame(process, bytes, cancelled, &pipeError)) {
+                    std::lock_guard lock(encodeMutex);
+                    encodeError = pipeError;
+                    encodeAbort = true;
+                    encodeSpace.notify_all();
+                    return;
                 }
                 encodeWriteNs += writeTimer.nsecsElapsed();
             }
-            process.closeWriteChannel();
-            if (!process.waitForFinished(120000) || process.exitCode() != 0) {
+            QString pipeError;
+            if (!finishEncoderPipe(process, cancelled, &pipeError)) {
                 std::lock_guard lock(encodeMutex);
-                encodeError = QString::fromUtf8(process.readAllStandardError()).trimmed();
+                encodeError = pipeError;
             }
         });
         std::unique_lock lock(encodeMutex);
@@ -560,11 +571,18 @@ bool Exporter::run(const ExportOptions &options, QString *error)
         }
         encodeReady.notify_all();
         encodeSpace.notify_all();
+        // Export runs on the GUI thread. Keep Cancel and the finishing status
+        // responsive while the worker drains the last frames and finalizes MP4.
+        while (!encodeDone) {
+            processEvents();
+            std::unique_lock lock(encodeMutex);
+            encodeSpace.wait_for(lock, std::chrono::milliseconds(20), [&] { return encodeDone.load(); });
+        }
         if (encodeThread.joinable()) encodeThread.join();
     };
 
     struct ReadbackSlot { GLuint buffer = 0; int frame = -1; };
-    std::array<ReadbackSlot, 8> readbacks;
+    std::array<ReadbackSlot, 2> readbacks;
     const qsizetype frameBytes = qsizetype(width) * height * 4;
     QOpenGLExtraFunctions *glExtra = nullptr;
     if (!softwareRendering) {
@@ -706,9 +724,16 @@ bool Exporter::run(const ExportOptions &options, QString *error)
             encodeWriteNs += writeTimer.nsecsElapsed();
         } else {
             std::unique_lock lock(encodeMutex);
-            encodeSpace.wait(lock, [&] {
-                return encodeQueue.size() < 4 || encodeAbort || !encodeError.isEmpty() || m_cancelled;
-            });
+            // Two queued frames, one in the pipe, and two GPU readbacks bound
+            // how far rendering can run ahead, independent of video length.
+            const auto ready = [&] {
+                return encodeQueue.size() < 2 || encodeAbort || !encodeError.isEmpty() || m_cancelled;
+            };
+            while (!encodeSpace.wait_for(lock, std::chrono::milliseconds(20), ready)) {
+                lock.unlock();
+                processEvents();
+                lock.lock();
+            }
             if (encodeAbort || !encodeError.isEmpty() || m_cancelled) {
                 pipelineError = !encodeError.isEmpty() ? encodeError : QStringLiteral("Export cancelled");
             } else {
@@ -781,7 +806,7 @@ bool Exporter::run(const ExportOptions &options, QString *error)
         frameSource->setImage(packet.image);
         if (cameraEnabled && !packet.cameraImage.isNull())
             cameraFrameSource->setImage(packet.cameraImage);
-        QCoreApplication::processEvents();
+        processEvents();
         uploadNs += stageTimer.nsecsElapsed();
         QImage rendered;
         QByteArray bytes;
@@ -849,8 +874,8 @@ bool Exporter::run(const ExportOptions &options, QString *error)
     if (renderControl) renderControl->invalidate();
     if (!gif) {
         finishEncoder(false);
-        if (!encodeError.isEmpty()) {
-            if (error) *error = encodeError;
+        if (!encodeError.isEmpty() || m_cancelled) {
+            if (error) *error = !encodeError.isEmpty() ? encodeError : QStringLiteral("Export cancelled");
             return false;
         }
         if (QFileInfo::exists(options.outputPath) && !QFile::remove(options.outputPath)) {
