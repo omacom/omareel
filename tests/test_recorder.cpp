@@ -66,6 +66,46 @@ private slots:
         QCOMPARE(int(Recorder::classifyGsrExit(exitCode, stopRequested, fileSize, duration)), expected);
     }
 
+    void trimsCaptureRegionToEvenSize()
+    {
+        CaptureRegion region;
+        region.x = 10.0;
+        region.y = 20.0;
+        region.width = 1521.0;
+        region.height = 835.0;
+        region.physicalWidth = 1521;
+        region.physicalHeight = 835;
+        const CaptureRegion trimmed = Recorder::evenCaptureRegion(region);
+        QCOMPARE(trimmed.physicalWidth, 1520);
+        QCOMPARE(trimmed.physicalHeight, 834);
+        QCOMPARE(trimmed.width, 1520.0);
+        QCOMPARE(trimmed.height, 834.0);
+        QCOMPARE(trimmed.x, 10.0);
+        QCOMPARE(trimmed.y, 20.0);
+
+        region.scale = 2.0;
+        region.width = 760.5;
+        region.height = 418.0;
+        region.physicalWidth = 1521;
+        region.physicalHeight = 836;
+        const CaptureRegion scaled = Recorder::evenCaptureRegion(region);
+        QCOMPARE(scaled.physicalWidth, 1520);
+        QCOMPARE(scaled.physicalHeight, 836);
+        QCOMPARE(scaled.width, 760.0);
+        QCOMPARE(scaled.height, 418.0);
+
+        region.scale = 1.0;
+        region.width = 1520.0;
+        region.height = 836.0;
+        region.physicalWidth = 1520;
+        region.physicalHeight = 836;
+        const CaptureRegion even = Recorder::evenCaptureRegion(region);
+        QCOMPARE(even.physicalWidth, 1520);
+        QCOMPARE(even.physicalHeight, 836);
+        QCOMPARE(even.width, 1520.0);
+        QCOMPARE(even.height, 836.0);
+    }
+
     void recordingPreferencesRoundTrip()
     {
         QTemporaryDir config;
