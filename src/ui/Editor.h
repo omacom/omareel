@@ -172,6 +172,7 @@ public:
     Q_INVOKABLE bool moveClip(const QString &id, double sourceIn);
     Q_INVOKABLE bool trimClip(const QString &id, double newIn, double newOut);
     Q_INVOKABLE bool removeClip(const QString &id);
+    Q_INVOKABLE bool deleteOutputRange(double from, double to);
     Q_INVOKABLE bool mergeClip(const QString &id, int direction);
     Q_INVOKABLE bool resetClipTrims(const QString &id);
     Q_INVOKABLE bool setClipSpeed(const QString &id, double speed);

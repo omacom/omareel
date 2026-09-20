@@ -128,7 +128,7 @@ auto-generated zoom summary.
 | `Shift+Left`, `Shift+Right` | Back/forward one second |
 | `S` | Split at playhead |
 | `Z` | Add a two-second zoom |
-| `Delete` | Remove all selected zooms, or the selected clip |
+| `Delete` | Remove the selected time range, selected zooms, or selected clip |
 | `Ctrl+Z`, `Ctrl+Shift+Z` | Undo/redo |
 | `Ctrl+S` | Save |
 | `Ctrl+E` | Export |
@@ -136,7 +136,8 @@ auto-generated zoom summary.
 The timeline scrolls horizontally with either wheel axis (80 px per mouse-wheel notch), and
 touchpad horizontal or vertical scrolling. Ctrl+wheel zooms around the pointer. Click or drag
 on the ruler or video row to seek; scrubbing pauses playback. Ctrl+drag a clip to move it,
-or drag its edges to trim it.
+or drag its edges to trim it. Shift+drag on the ruler or video row selects a time range;
+press Delete to cut it and join the remaining footage. Escape clears the selection.
 
 ## Project bundle
 

@@ -105,6 +105,7 @@ ApplicationWindow {
             }
             Timeline {
                 id: timeline
+                objectName: "editorTimeline"
                 Layout.fillWidth: true
                 Layout.preferredHeight: implicitHeight
                 scaleFactor: window.timelineScale
@@ -149,11 +150,26 @@ ApplicationWindow {
     Shortcut { sequence: "Shift+Right"; enabled: !window.singleKeyShortcutsBlocked; onActivated: editor.seek(editor.position + 1) }
     Shortcut { sequence: "S"; enabled: !window.singleKeyShortcutsBlocked; onActivated: editor.splitAtPlayhead() }
     Shortcut { sequence: "Z"; enabled: !window.singleKeyShortcutsBlocked; onActivated: editor.addZoomAt(editor.position) }
-    Shortcut { sequence: "Delete"; enabled: !window.singleKeyShortcutsBlocked; onActivated: editor.selectedZoomIds.length ? editor.removeSelectedZooms() : editor.removeClip(editor.selectedClipId) }
+    Shortcut {
+        sequence: "Delete"
+        enabled: !window.singleKeyShortcutsBlocked
+        onActivated: {
+            if (timeline.hasRange) timeline.deleteSelectedRange()
+            else if (editor.selectedZoomIds.length) editor.removeSelectedZooms()
+            else editor.removeClip(editor.selectedClipId)
+        }
+    }
     Shortcut { sequence: "Ctrl+Z"; onActivated: editor.undo() }
     Shortcut { sequence: "Ctrl+Shift+Z"; onActivated: editor.redo() }
     Shortcut { sequence: "Ctrl+S"; onActivated: { topBar.commitProjectName(); editor.saveNow() } }
     Shortcut { sequence: "Ctrl+E"; onActivated: window.openExport() }
     Shortcut { sequence: "?"; enabled: !window.singleKeyShortcutsBlocked; onActivated: bottomBar.openShortcuts() }
-    Shortcut { sequence: "Escape"; enabled: editor.pickingZoomTarget; onActivated: editor.setPickingZoomTarget(false) }
+    Shortcut {
+        sequence: "Escape"
+        enabled: editor.pickingZoomTarget || timeline.hasRange
+        onActivated: {
+            if (editor.pickingZoomTarget) editor.setPickingZoomTarget(false)
+            else timeline.clearRange()
+        }
+    }
 }

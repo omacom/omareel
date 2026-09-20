@@ -31,6 +31,7 @@
 #include <QtConcurrent>
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 using namespace Omareel;
 
@@ -571,6 +572,9 @@ void Editor::applyGradientPreset(int index)
 void Editor::restore(const QJsonObject &json)
 {
     m_project = Project::fromJson(json);
+    if (!m_selectedClipId.isEmpty() && clipIndex(m_selectedClipId) < 0)
+        m_selectedClipId = m_project.clips.isEmpty() ? QString()
+            : m_project.clips[clipForOutput(std::min(m_outputPosition, duration()))].id;
     QStringList retained;
     for (const QString &id : std::as_const(m_selectedZoomIds))
         if (zoomIndex(id) >= 0) retained << id;
@@ -578,6 +582,7 @@ void Editor::restore(const QJsonObject &json)
     if (zoomIndex(m_selectedZoomId) < 0)
         m_selectedZoomId = retained.isEmpty() ? QString() : retained.first();
     changed();
+    if (!m_project.clips.isEmpty()) seek(std::min(m_outputPosition, duration()));
     emit selectionChanged();
 }
 
@@ -897,6 +902,58 @@ bool Editor::removeClip(const QString &id)
     m_selectedClipId = m_project.clips[std::min(index, int(m_project.clips.size()) - 1)].id;
     seek(std::min(m_outputPosition, duration()));
     changed(false);
+    emit selectionChanged();
+    return true;
+}
+
+bool Editor::deleteOutputRange(double from, double to)
+{
+    if (!std::isfinite(from) || !std::isfinite(to)) return false;
+    if (from > to) std::swap(from, to);
+    from = std::clamp(from, 0.0, duration());
+    to = std::clamp(to, 0.0, duration());
+    ClipTimeline edited(m_project.clips);
+    const QString remainderId = QStringLiteral("c-%1").arg(
+        QUuid::createUuid().toString(QUuid::WithoutBraces));
+    if (!edited.deleteRange(from, to, remainderId)) return false;
+
+    pause();
+    snapshot();
+    const auto visibleSourceSpan = [](const ZoomSegment &zoom, const QVector<Clip> &clips) {
+        double first = std::numeric_limits<double>::infinity();
+        double last = -std::numeric_limits<double>::infinity();
+        for (const Clip &clip : clips) {
+            const double start = std::max(zoom.start, clip.in);
+            const double end = std::min(zoom.end, clip.out);
+            if (end - start <= 1e-9) continue;
+            first = std::min(first, start);
+            last = std::max(last, end);
+        }
+        return std::pair{first, last};
+    };
+    QVector<ZoomSegment> survivingZooms;
+    bool zoomsChanged = false;
+    for (ZoomSegment zoom : std::as_const(m_project.zooms)) {
+        const auto before = visibleSourceSpan(zoom, m_project.clips);
+        const auto after = visibleSourceSpan(zoom, edited.clips());
+        if (std::isfinite(before.first) && !std::isfinite(after.first)) {
+            zoomsChanged = true;
+            continue;
+        }
+        if (std::isfinite(before.first) && before != after) {
+            zoom.start = after.first;
+            zoom.end = after.second;
+            zoomsChanged = true;
+        }
+        survivingZooms << zoom;
+    }
+    m_project.clips = edited.clips();
+    if (zoomsChanged) m_project.zooms = std::move(survivingZooms);
+    m_selectedClipId = m_project.clips[clipForOutput(std::min(from, duration()))].id;
+    m_selectedZoomId.clear();
+    m_selectedZoomIds.clear();
+    changed(zoomsChanged);
+    seek(std::min(from, duration()));
     emit selectionChanged();
     return true;
 }

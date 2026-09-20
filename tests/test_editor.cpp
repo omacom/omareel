@@ -499,6 +499,75 @@ private slots:
         QVERIFY(qAbs(editor.position() - .5) < .001);
     }
 
+    void shiftDragCutsMiddleAsOneUndoableEdit()
+    {
+        QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));
+        Editor editor(m_bundle);
+        QVERIFY(editor.isValid());
+        while (!editor.zooms().isEmpty())
+            QVERIFY(editor.removeZoom(editor.zooms().first().toMap().value(QStringLiteral("id")).toString()));
+        const QString zoomId = editor.addZoomAt(.9, 1.1);
+        QVERIFY(!zoomId.isEmpty());
+        Theme theme;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("editor"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("comp"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import Omareel
+            Main { width: 1200; height: 800; visible: true })", QUrl());
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        std::unique_ptr<QObject> object(component.create());
+        auto *window = qobject_cast<QQuickWindow *>(object.get());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        auto *timeline = window->findChild<QQuickItem *>(QStringLiteral("editorTimeline"));
+        QTRY_VERIFY(timeline);
+        const double pixelsPerSecond = timeline->property("pixelsPerSecond").toDouble();
+        const QPoint start = timeline->mapToScene(
+            QPointF(72 + .4 * pixelsPerSecond, 56)).toPoint();
+        const QPoint end = timeline->mapToScene(
+            QPointF(72 + 1.3 * pixelsPerSecond, 56)).toPoint();
+        QTest::mousePress(window, Qt::LeftButton, Qt::ShiftModifier, start);
+        QTest::mouseMove(window, end, 1);
+        QTest::mouseRelease(window, Qt::LeftButton, Qt::ShiftModifier, end);
+        QVERIFY(timeline->property("hasRange").toBool());
+        auto *selection = window->findChild<QQuickItem *>(QStringLiteral("clipRangeSelection"));
+        QVERIFY(selection);
+        QVERIFY(selection->isVisible());
+        QVERIFY(qAbs(timeline->property("rangeStart").toDouble() - .4) < .02);
+        QVERIFY(qAbs(timeline->property("rangeEnd").toDouble() - 1.3) < .02);
+
+        QTest::keyClick(window, Qt::Key_Delete);
+        QTRY_VERIFY(qAbs(editor.duration() - 1.1) < .03);
+        QVERIFY(!timeline->property("hasRange").toBool());
+        QCOMPARE(editor.clips().size(), 2);
+        QVERIFY(qAbs(editor.duration() - 1.1) < .03);
+        QCOMPARE(editor.zooms().size(), 1);
+        QVERIFY(qAbs(editor.zooms().first().toMap().value(QStringLiteral("start")).toDouble() - 1.3) < .03);
+        QVERIFY(editor.sourceToOutput(editor.zooms().first().toMap()
+            .value(QStringLiteral("start")).toDouble()) >= 0);
+        QVERIFY(qAbs(editor.outputToSource(editor.clips().first().toMap()
+            .value(QStringLiteral("out")).toDouble()) - 1.3) < .03);
+        QVERIFY(editor.canUndo());
+        editor.undo();
+        QCOMPARE(editor.clips().size(), 1);
+        QVERIFY(qAbs(editor.duration() - 2.0) < .03);
+        QVERIFY(!editor.selectedClipId().isEmpty());
+        QCOMPARE(editor.selectedClipId(), editor.clips().first().toMap().value(QStringLiteral("id")).toString());
+        QTRY_VERIFY(qAbs(editor.playerPositionMsForTests() - 400) < 35);
+        QVERIFY(qAbs(editor.zooms().first().toMap().value(QStringLiteral("start")).toDouble() - .9) < .03);
+        editor.redo();
+        QCOMPARE(editor.clips().size(), 2);
+        QVERIFY(qAbs(editor.duration() - 1.1) < .03);
+        QVERIFY(editor.saveNow());
+        Editor reopened(m_bundle);
+        QVERIFY(reopened.isValid());
+        QCOMPARE(reopened.clips().size(), 2);
+        QVERIFY(qAbs(reopened.duration() - 1.1) < .03);
+    }
+
     void zoomTrackRubberBandSelectsAndDeletesTwo()
     {
         QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));

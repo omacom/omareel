@@ -7,6 +7,44 @@ FocusScope {
     required property real scaleFactor
     signal scaleFactorRequested(real value)
     signal cameraSelected()
+    property real rangeAnchor: -1
+    property real rangeHead: -1
+    property bool selectingRange: false
+    readonly property real rangeStart: Math.min(rangeAnchor, rangeHead)
+    readonly property real rangeEnd: Math.max(rangeAnchor, rangeHead)
+    readonly property bool hasRange: !selectingRange && rangeAnchor >= 0
+        && rangeHead >= 0 && rangeEnd - rangeStart > 0.000001
+    function clearRange() {
+        selectingRange = false
+        rangeAnchor = -1
+        rangeHead = -1
+    }
+    function beginRange(time) {
+        root.forceActiveFocus()
+        editor.pause()
+        rangeAnchor = Math.max(0, Math.min(editor.duration, time))
+        rangeHead = rangeAnchor
+        selectingRange = true
+    }
+    function updateRange(time) {
+        if (selectingRange)
+            rangeHead = Math.max(0, Math.min(editor.duration, time))
+    }
+    function finishRange(time) {
+        updateRange(time)
+        selectingRange = false
+        if ((rangeEnd - rangeStart) * pixelsPerSecond < 2) clearRange()
+        else editor.seek(rangeStart)
+    }
+    function deleteSelectedRange() {
+        if (!hasRange || !editor.deleteOutputRange(rangeStart, rangeEnd)) return false
+        clearRange()
+        return true
+    }
+    Connections {
+        target: editor
+        function onDurationChanged() { root.clearRange() }
+    }
     implicitHeight: editor.hasCamera ? 204 : 148
     property real labelWidth: 72
     property real basePixels: Math.max(55, (width - labelWidth - 24) / Math.max(1, editor.duration))
@@ -156,21 +194,38 @@ FocusScope {
                     }
                 }
                 MouseArea {
+                    id: rulerMouse
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
                     preventStealing: true
+                    property bool selectingRange: false
+                    function timeAt(px) {
+                        return Math.max(0, Math.min(editor.duration, px / root.pixelsPerSecond))
+                    }
                     function seekAt(px) {
-                        editor.scrubTo(Math.max(0, Math.min(editor.duration,
-                                                           px / root.pixelsPerSecond)))
+                        editor.scrubTo(timeAt(px))
                     }
                     onPressed: mouse => {
                         root.forceActiveFocus()
-                        editor.beginScrub()
-                        seekAt(mouse.x)
+                        selectingRange = (mouse.modifiers & Qt.ShiftModifier) !== 0
+                        if (selectingRange) root.beginRange(timeAt(mouse.x))
+                        else { root.clearRange(); editor.beginScrub(); seekAt(mouse.x) }
                     }
-                    onPositionChanged: mouse => { if (pressed) seekAt(mouse.x) }
-                    onReleased: mouse => { seekAt(mouse.x); editor.endScrub() }
-                    onCanceled: editor.endScrub()
+                    onPositionChanged: mouse => {
+                        if (!pressed) return
+                        if (selectingRange) root.updateRange(timeAt(mouse.x))
+                        else seekAt(mouse.x)
+                    }
+                    onReleased: mouse => {
+                        if (selectingRange) root.finishRange(timeAt(mouse.x))
+                        else { seekAt(mouse.x); editor.endScrub() }
+                        selectingRange = false
+                    }
+                    onCanceled: {
+                        if (selectingRange) root.clearRange()
+                        else editor.endScrub()
+                        selectingRange = false
+                    }
                 }
             }
 
@@ -190,9 +245,28 @@ FocusScope {
                 height: 40
                 pixelsPerSecond: root.pixelsPerSecond
                 focusTarget: root
-                onScrubStarted: editor.beginScrub()
+                onScrubStarted: { root.clearRange(); editor.beginScrub() }
                 onScrubMoved: time => editor.scrubTo(time)
                 onScrubFinished: editor.endScrub()
+                onRangeStarted: time => root.beginRange(time)
+                onRangeMoved: time => root.updateRange(time)
+                onRangeFinished: time => root.finishRange(time)
+                onRangeCanceled: root.clearRange()
+                onClearRangeRequested: root.clearRange()
+            }
+            Rectangle {
+                objectName: "clipRangeSelection"
+                visible: root.rangeAnchor >= 0 && root.rangeHead >= 0
+                    && Math.abs(root.rangeHead - root.rangeAnchor) * root.pixelsPerSecond >= 2
+                x: root.rangeStart * root.pixelsPerSecond
+                y: 32
+                width: Math.max(0, (root.rangeEnd - root.rangeStart) * root.pixelsPerSecond)
+                height: 48
+                radius: theme.radius
+                color: Qt.alpha(theme.accent, .20)
+                border.width: 1
+                border.color: theme.accent
+                z: 10
             }
             Rectangle {
                 x: 0
@@ -389,6 +463,7 @@ FocusScope {
                     }
                     onPressed: mouse => {
                         root.forceActiveFocus()
+                        root.clearRange()
                         editor.beginScrub()
                         seekAt(mouse.x, mouse.y)
                     }
