@@ -133,8 +133,9 @@ auto-generated zoom summary.
 | `Ctrl+S` | Save |
 | `Ctrl+E` | Export |
 
-The timeline scrolls horizontally with either wheel axis (80 px per mouse-wheel notch), and
-touchpad horizontal or vertical scrolling. Ctrl+wheel zooms around the pointer. Click or drag
+The timeline fits the full recording at 1×. Scroll either wheel axis or touchpad axis to zoom
+around the pointer, up to 16×; right-button drag pans the zoomed timeline. The bottom toolbar's
+zoom controls keep the visible center in place. Click or drag
 on the ruler or video row to seek; scrubbing pauses playback. The video row shows frame
 thumbnails sampled from each clip's source interval. Ctrl+click a clip to select it without
 seeking; Ctrl+click it again, click empty video-row space, or press Escape to deselect it.

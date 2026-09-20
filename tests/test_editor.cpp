@@ -379,7 +379,7 @@ private slots:
         QCOMPARE(hoverBounds, normalBounds);
     }
 
-    void timelineWheelScrollsHorizontally()
+    void timelineWheelZoomsAroundPointerAndRightDragPans()
     {
         QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));
         Editor editor(m_bundle);
@@ -394,24 +394,99 @@ private slots:
             import QtQuick.Window
             import Omareel
             Window {
+                id: testWindow
                 width: 400; height: 180; visible: true
-                Timeline { anchors.fill: parent; scaleFactor: 5 }
+                property real timelineScale: 1
+                Timeline {
+                    objectName: "timeline"
+                    anchors.fill: parent
+                    scaleFactor: testWindow.timelineScale
+                    onScaleFactorRequested: value => testWindow.timelineScale = value
+                }
             })", QUrl());
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         std::unique_ptr<QObject> object(component.create());
         auto *window = qobject_cast<QQuickWindow *>(object.get());
         QVERIFY(window);
         QVERIFY(QTest::qWaitForWindowExposed(window));
+        auto *timeline = window->findChild<QQuickItem *>(QStringLiteral("timeline"));
+        QTRY_VERIFY(timeline);
         auto *flickable = window->findChild<QQuickItem *>(QStringLiteral("timelineFlickable"));
         QTRY_VERIFY(flickable);
         QCOMPARE(flickable->property("contentX").toDouble(), 0.0);
+        QVERIFY(std::abs(flickable->property("contentWidth").toDouble() - flickable->width()) < .01);
+        const double pointerX = 220.0 - flickable->x();
+        const auto timeAtPointer = [&] {
+            return (flickable->property("contentX").toDouble() + pointerX)
+                / timeline->property("pixelsPerSecond").toDouble();
+        };
+        const double beforeZoom = timeAtPointer();
         QTest::mouseMove(window, QPoint(220, 90));
+        QTest::wheelEvent(window, QPointF(220, 90), QPoint(0, 120));
+        QTRY_VERIFY(std::abs(timeline->property("scaleFactor").toDouble() - 1.25) < .0001);
+        QTRY_VERIFY(std::abs(timeAtPointer() - beforeZoom) < .02);
+        QTest::wheelEvent(window, QPointF(220, 90), QPoint(120, 0));
+        QTRY_VERIFY(std::abs(timeline->property("scaleFactor").toDouble() - 1.5625) < .0001);
+        QTRY_VERIFY(std::abs(timeAtPointer() - beforeZoom) < .02);
+
+        const double beforePan = flickable->property("contentX").toDouble();
+        QTest::mousePress(window, Qt::RightButton, Qt::NoModifier, QPoint(220, 90));
+        QTest::mouseMove(window, QPoint(190, 90), 5);
+        QTest::mouseMove(window, QPoint(170, 90), 5);
+        QTest::mouseRelease(window, Qt::RightButton, Qt::NoModifier, QPoint(170, 90));
+        QTRY_VERIFY(flickable->property("contentX").toDouble() > beforePan + 20);
+
         QTest::wheelEvent(window, QPointF(220, 90), QPoint(0, -120));
-        QTRY_VERIFY(flickable->property("contentX").toDouble() > 0.0);
-        QCOMPARE(flickable->property("contentX").toDouble(), 80.0);
-        QVERIFY(flickable->setProperty("contentX", 0.0));
-        QTest::wheelEvent(window, QPointF(220, 90), QPoint(-120, 0));
-        QTRY_COMPARE(flickable->property("contentX").toDouble(), 80.0);
+        QTest::wheelEvent(window, QPointF(220, 90), QPoint(0, -120));
+        QTRY_VERIFY(std::abs(timeline->property("scaleFactor").toDouble() - 1) < .0001);
+        QTRY_VERIFY(std::abs(flickable->property("contentWidth").toDouble()
+            - flickable->width()) < .01);
+        QTRY_VERIFY(std::abs(flickable->property("contentX").toDouble()) < .01);
+
+        const double centerTime = (flickable->property("contentX").toDouble()
+            + flickable->width() / 2) / timeline->property("pixelsPerSecond").toDouble();
+        QVERIFY(window->setProperty("timelineScale", 16.0));
+        QTRY_VERIFY(std::abs(timeline->property("scaleFactor").toDouble() - 16) < .0001);
+        QTRY_VERIFY(std::abs((flickable->property("contentX").toDouble()
+            + flickable->width() / 2) / timeline->property("pixelsPerSecond").toDouble()
+            - centerTime) < .02);
+    }
+
+    void timelineZoomButtonsKeepSliderInSync()
+    {
+        QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));
+        Editor editor(m_bundle);
+        QVERIFY(editor.isValid());
+        Theme theme;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("editor"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("comp"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import Omareel
+            Main { width: 1200; height: 800; visible: true })", QUrl());
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        std::unique_ptr<QObject> object(component.create());
+        auto *window = qobject_cast<QQuickWindow *>(object.get());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        auto *slider = window->findChild<QQuickItem *>(QStringLiteral("timelineZoomSlider"));
+        auto *zoomIn = window->findChild<QQuickItem *>(QStringLiteral("timelineZoomIn"));
+        auto *zoomOut = window->findChild<QQuickItem *>(QStringLiteral("timelineZoomOut"));
+        QTRY_VERIFY(slider && zoomIn && zoomOut);
+        const auto center = [](QQuickItem *item) {
+            return item->mapToScene(QPointF(item->width() / 2, item->height() / 2)).toPoint();
+        };
+
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, center(zoomIn));
+        QTRY_VERIFY(std::abs(window->property("timelineScale").toDouble() - 1.25) < .001);
+        QTRY_VERIFY(std::abs(slider->property("value").toDouble() - 1.25) < .001);
+        QVERIFY(window->setProperty("timelineScale", 2.0));
+        QTRY_VERIFY(std::abs(slider->property("value").toDouble() - 2.0) < .001);
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, center(zoomOut));
+        QTRY_VERIFY(std::abs(window->property("timelineScale").toDouble() - 1.6) < .001);
+        QTRY_VERIFY(std::abs(slider->property("value").toDouble() - 1.6) < .001);
     }
 
     void timelineScrubPausesAndSeeksToLastPosition()

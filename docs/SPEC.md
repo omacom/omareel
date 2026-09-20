@@ -254,8 +254,8 @@ Exporter pipeline (`render/Exporter`):
   track** (blue blocks labelled "Zoom 2x · Auto"), drag to move, drag edges to resize, click to
   select → inspector shows level (1.25/1.5/2/2.5/3/4) and target (Auto / pick point on
   preview), delete key removes, double-click empty area adds a 2 s zoom.
-  Either wheel axis scrolls horizontally (80 px per mouse-wheel notch); Ctrl+wheel zooms around
-  the pointer. The 12 px scrollbar stays visible whenever content overflows.
+  Either wheel axis zooms around the pointer from fit-to-view to 16×; right-button drag pans.
+  The 12 px scrollbar stays visible whenever content overflows.
 - Playback: `QMediaPlayer` on screen.mp4, mapping output time ↔ source time through clips;
   skipping over trimmed regions; cursor + zoom overlay driven by player position.
 - Keyboard: Space play/pause, ←/→ 1 frame, Shift+←/→ 1 s, S split, Delete, Ctrl+Z/Ctrl+Shift+Z,

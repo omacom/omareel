@@ -91,7 +91,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         timelineScale: window.timelineScale
                         cropMode: window.cropMode
-                        onTimelineScaleChanged: window.timelineScale = timelineScale
+                        onTimelineScaleRequested: value => window.timelineScale = value
                         onCropModeChanged: window.cropMode = cropMode
                     }
                 }

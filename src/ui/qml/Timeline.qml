@@ -7,6 +7,49 @@ FocusScope {
     id: root
     required property real scaleFactor
     signal scaleFactorRequested(real value)
+    property real previousScaleFactor: 1
+    property real wheelRequestedScale: -1
+    property real zoomAnchorX: -1
+    property real zoomAnchorTime: -1
+    function applyZoomAnchor() {
+        if (zoomAnchorTime < 0) return
+        flick.contentX = Math.max(0, Math.min(flick.contentWidth - flick.width,
+            zoomAnchorTime * pixelsPerSecond - zoomAnchorX))
+        zoomAnchorX = -1
+        zoomAnchorTime = -1
+    }
+    function zoomBy(factor, anchorX) {
+        const next = Math.max(1, Math.min(16, scaleFactor * factor))
+        if (Math.abs(next - scaleFactor) < 0.000001) return
+        applyZoomAnchor()
+        zoomAnchorX = Math.max(0, Math.min(flick.width, anchorX))
+        zoomAnchorTime = (flick.contentX + zoomAnchorX) / pixelsPerSecond
+        wheelRequestedScale = next
+        scaleFactorRequested(next)
+    }
+    onScaleFactorChanged: {
+        if (flick.width <= 0 || basePixels <= 0) {
+            previousScaleFactor = scaleFactor
+            return
+        }
+        if (Math.abs(scaleFactor - wheelRequestedScale) > 0.000001) {
+            const oldPixelsPerSecond = basePixels * previousScaleFactor
+            const oldMaxX = Math.max(0, editor.duration * oldPixelsPerSecond
+                + timelinePadding - flick.width)
+            const oldContentX = zoomAnchorTime < 0 ? flick.contentX
+                : Math.max(0, Math.min(oldMaxX,
+                    zoomAnchorTime * oldPixelsPerSecond - zoomAnchorX))
+            zoomAnchorX = flick.width / 2
+            zoomAnchorTime = (oldContentX + zoomAnchorX) / oldPixelsPerSecond
+        } else if (zoomAnchorTime < 0) {
+            zoomAnchorX = flick.width / 2
+            zoomAnchorTime = (flick.contentX + zoomAnchorX)
+                / (basePixels * previousScaleFactor)
+        }
+        wheelRequestedScale = -1
+        previousScaleFactor = scaleFactor
+        Qt.callLater(root.applyZoomAnchor)
+    }
     signal cameraSelected()
     property real rangeAnchor: -1
     property real rangeHead: -1
@@ -95,9 +138,27 @@ FocusScope {
     }
     implicitHeight: editor.hasCamera ? 204 : 148
     property real labelWidth: 72
-    property real basePixels: Math.max(55, (width - labelWidth - 24) / Math.max(1, editor.duration))
+    readonly property real timelinePadding: 40
+    property real basePixels: Math.max(1, width - labelWidth - timelinePadding)
+        / Math.max(0.001, editor.duration)
     property real pixelsPerSecond: basePixels * scaleFactor
-    property int ticksPerSecond: pixelsPerSecond >= 120 ? 5 : pixelsPerSecond >= 72 ? 2 : 1
+    readonly property real tickStepSeconds: {
+        const target = 90 / Math.max(0.001, pixelsPerSecond)
+        const power = Math.pow(10, Math.floor(Math.log10(target)))
+        for (const multiple of [1, 2, 5, 10])
+            if (multiple * power >= target) return multiple * power
+        return 10 * power
+    }
+    function formatRulerTime(seconds) {
+        const milliseconds = Math.max(0, Math.round(seconds * 1000))
+        const minutes = Math.floor(milliseconds / 60000)
+        const secondsPart = Math.floor(milliseconds / 1000) % 60
+        const time = (minutes < 10 ? "0" : "") + minutes + ":"
+            + (secondsPart < 10 ? "0" : "") + secondsPart
+        if (tickStepSeconds >= 1) return time
+        const precision = tickStepSeconds >= .1 ? 1 : tickStepSeconds >= .01 ? 2 : 3
+        return time + "." + ("00" + (milliseconds % 1000)).slice(-3).slice(0, precision)
+    }
     readonly property int trackCount: editor.hasCamera ? 3 : 2
     readonly property real tracksBottom: 32 + trackCount * 48 + (trackCount - 1) * 8
 
@@ -150,53 +211,41 @@ FocusScope {
         y: 0
         width: parent.width - x
         height: parent.height
-        contentWidth: Math.max(width, editor.duration * root.pixelsPerSecond + 40)
+        contentWidth: Math.max(width, editor.duration * root.pixelsPerSecond
+            + root.timelinePadding)
         contentHeight: height
         clip: true
         interactive: false
         boundsBehavior: Flickable.StopAtBounds
-        function scrollFromWheel(event) {
-            const pixel = event.pixelDelta.x !== 0 ? event.pixelDelta.x : event.pixelDelta.y
-            const angle = event.angleDelta.x !== 0 ? event.angleDelta.x : event.angleDelta.y
-            const amount = pixel !== 0 ? pixel : angle / 120 * 80
-            contentX = Math.max(0, Math.min(contentWidth - width, contentX - amount))
-            event.accepted = true
-        }
-
         WheelHandler {
+            id: timelineWheel
             target: null
             acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-            acceptedModifiers: Qt.ControlModifier
             onWheel: event => {
-                const pointerX = event.position.x
-                const timeAtPointer = (flick.contentX + pointerX) / root.pixelsPerSecond
-                const delta = event.angleDelta.y !== 0 ? event.angleDelta.y : event.pixelDelta.y
-                const next = Math.max(1, Math.min(5, root.scaleFactor * Math.pow(1.12, delta / 120)))
-                root.scaleFactorRequested(next)
-                Qt.callLater(function() {
-                    flick.contentX = Math.max(0, Math.min(flick.contentWidth - flick.width,
-                        timeAtPointer * root.pixelsPerSecond - pointerX))
-                })
+                const pixel = event.pixelDelta.y !== 0 ? event.pixelDelta.y : event.pixelDelta.x
+                const angle = event.angleDelta.y !== 0 ? event.angleDelta.y : event.angleDelta.x
+                const amount = pixel !== 0 ? pixel : angle
+                if (amount !== 0) {
+                    const scene = timelineWheel.point.scenePosition
+                    const pointerX = flick.mapFromItem(null, scene.x, scene.y).x
+                    root.zoomBy(Math.pow(1.25, amount / 120), pointerX)
+                }
                 event.accepted = true
             }
         }
-        WheelHandler {
+        DragHandler {
             target: null
-            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-            // NoModifier is zero, so it cannot represent an alternative when OR'ed with Shift.
-            acceptedModifiers: Qt.NoModifier
-            onWheel: event => flick.scrollFromWheel(event)
-        }
-        WheelHandler {
-            target: null
-            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-            acceptedModifiers: Qt.ShiftModifier
-            onWheel: event => flick.scrollFromWheel(event)
+            acceptedButtons: Qt.RightButton
+            property real startContentX: 0
+            onActiveChanged: if (active) startContentX = flick.contentX
+            onTranslationChanged: if (active)
+                flick.contentX = Math.max(0, Math.min(flick.contentWidth - flick.width,
+                    startContentX - translation.x))
         }
         readonly property int firstVisibleTick: Math.max(0,
-            Math.floor(contentX * root.ticksPerSecond / root.pixelsPerSecond) - 1)
-        readonly property int visibleTickCount: Math.ceil(width * root.ticksPerSecond
-                                                          / root.pixelsPerSecond) + 4
+            Math.floor(contentX / (root.tickStepSeconds * root.pixelsPerSecond)) - 1)
+        readonly property int visibleTickCount: Math.ceil(width
+            / (root.tickStepSeconds * root.pixelsPerSecond)) + 4
 
         Item {
             id: content
@@ -214,8 +263,7 @@ FocusScope {
                         id: tickDelegate
                         required property int index
                         property int tickIndex: flick.firstVisibleTick + index
-                        property real tickTime: tickIndex / root.ticksPerSecond
-                        property bool major: tickIndex % root.ticksPerSecond === 0
+                        property real tickTime: tickIndex * root.tickStepSeconds
                         visible: tickTime <= editor.duration
                         x: tickTime * root.pixelsPerSecond
                         width: 1
@@ -223,17 +271,15 @@ FocusScope {
                         Rectangle {
                             anchors.bottom: parent.bottom
                             width: 1
-                            height: tickDelegate.major ? 9 : 5
+                            height: 9
                             color: theme.hairlineStrong
                         }
                         Loader {
-                            active: tickDelegate.major
-                                && Math.round(tickDelegate.tickTime)
-                                   % Math.max(1, Math.ceil(62 / root.pixelsPerSecond)) === 0
+                            active: true
                             x: 5
                             y: 5
                             sourceComponent: Text {
-                                text: editor.formatTime(tickDelegate.tickTime)
+                                text: root.formatRulerTime(tickDelegate.tickTime)
                                 color: theme.textFaint
                                 font.pixelSize: theme.font.caption
                                 font.family: theme.fontFamily
@@ -568,7 +614,8 @@ FocusScope {
 
         ScrollBar.horizontal: ScrollBar {
             id: horizontalBar
-            policy: flick.contentWidth > flick.width ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+            policy: flick.contentWidth > flick.width + 0.5
+                ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
             interactive: true
             height: 12
             topPadding: 2

@@ -8,6 +8,7 @@ Rectangle {
     height: 56
     color: theme.surface
     property real timelineScale: 1
+    signal timelineScaleRequested(real value)
     property bool cropMode: false
     readonly property bool compact: width < 1100
     readonly property bool narrow: width < 900
@@ -23,6 +24,8 @@ Rectangle {
         {key:"Z", action:"Add zoom"}, {key:"Delete", action:"Remove selection"},
         {key:"Ctrl Z", action:"Undo"}, {key:"Ctrl Shift Z", action:"Redo"},
         {key:"Ctrl S", action:"Save"}, {key:"Ctrl E", action:"Export"},
+        {key:"Scroll", action:"Zoom timeline at pointer"},
+        {key:"Right drag", action:"Pan timeline"},
         {key:"Esc", action:"Cancel point picking"}, {key:"?", action:"Show shortcuts"}
     ]
 
@@ -142,28 +145,31 @@ Rectangle {
                     font.pixelSize: theme.font.caption
                 }
                 IconToolButton {
+                    objectName: "timelineZoomOut"
                     Layout.preferredWidth: 20; Layout.preferredHeight: 20
                     width: 20; height: 20
                     icon.source: "qrc:/omareel/assets/icons/lucide/zoom-out.svg"
                     icon.width: 16; icon.height: 16
                     Accessible.name: "Zoom timeline out"
-                    onClicked: root.timelineScale = Math.max(1, root.timelineScale - .25)
+                    onClicked: root.timelineScaleRequested(Math.max(1, root.timelineScale / 1.25))
                 }
                 EditorSlider {
-                    from: 1; to: 5; value: root.timelineScale
+                    objectName: "timelineZoomSlider"
+                    from: 1; to: 16; value: root.timelineScale
                     Layout.preferredWidth: root.compact ? 82 : 104
                     Layout.minimumWidth: Layout.preferredWidth
                     Layout.preferredHeight: 28
-                    onMoved: root.timelineScale = value
+                    onMoved: root.timelineScaleRequested(value)
                     Accessible.name: "Timeline zoom"
                 }
                 IconToolButton {
+                    objectName: "timelineZoomIn"
                     Layout.preferredWidth: 20; Layout.preferredHeight: 20
                     width: 20; height: 20
                     icon.source: "qrc:/omareel/assets/icons/lucide/zoom-in.svg"
                     icon.width: 16; icon.height: 16
                     Accessible.name: "Zoom timeline in"
-                    onClicked: root.timelineScale = Math.min(5, root.timelineScale + .25)
+                    onClicked: root.timelineScaleRequested(Math.min(16, root.timelineScale * 1.25))
                 }
                 OmIconButton {
                     width: 28; height: 28
