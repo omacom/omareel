@@ -129,6 +129,7 @@ auto-generated zoom summary.
 | `S` | Split at playhead |
 | `Z` | Add a two-second zoom |
 | `Delete` | Remove the selected time range, selected zooms, or selected clip |
+| `Backspace` | Remove the selected time range |
 | `Ctrl+Z`, `Ctrl+Shift+Z` | Undo/redo |
 | `Ctrl+S` | Save |
 | `Ctrl+E` | Export |
@@ -142,8 +143,8 @@ seeking; Ctrl+click it again, click empty video-row space, or press Escape to de
 Ctrl+drag moves its source window, and the selected clip's edge markers can be dragged to trim.
 Shift+drag on the ruler or video row selects a time range. Drag either orange range handle to
 adjust it and preview that endpoint. Seeking and Space playback stay inside the range; playback
-stops at its end and restarts at its start. Press Delete to cut the range and join the remaining
-footage, or Escape to clear it.
+stops at its end and restarts at its start. Press Delete or Backspace to cut the range and join
+the remaining footage, or Escape to clear it.
 
 ## Project bundle
 

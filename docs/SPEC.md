@@ -258,8 +258,9 @@ Exporter pipeline (`render/Exporter`):
   The 12 px scrollbar stays visible whenever content overflows.
 - Playback: `QMediaPlayer` on screen.mp4, mapping output time ↔ source time through clips;
   skipping over trimmed regions; cursor + zoom overlay driven by player position.
-- Keyboard: Space play/pause, ←/→ 1 frame, Shift+←/→ 1 s, S split, Delete, Ctrl+Z/Ctrl+Shift+Z,
-  Ctrl+S save, Ctrl+E export, Z add zoom at playhead.
+- Keyboard: Space play/pause, ←/→ 1 frame, Shift+←/→ 1 s, S split, Delete selection,
+  Backspace selected range, Ctrl+Z/Ctrl+Shift+Z, Ctrl+S save, Ctrl+E export,
+  Z add zoom at playhead.
 - Autosave project.json on every change (debounced 500 ms). Undo stack in C++ (command pattern
   or snapshot-based JSON diff; snapshots are fine — projects are tiny).
 

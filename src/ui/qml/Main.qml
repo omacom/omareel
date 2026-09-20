@@ -19,6 +19,7 @@ ApplicationWindow {
     readonly property bool singleKeyShortcutsBlocked: activeFocusItem !== null
         && !previewPane.activeFocus && !timeline.activeFocus
     function restoreEditorFocus() { previewPane.forceActiveFocus() }
+    Component.onCompleted: restoreEditorFocus()
     function openExport() {
         topBar.commitProjectName()
         previewPane.grabPreview(function(result) {
@@ -158,6 +159,11 @@ ApplicationWindow {
             else if (editor.selectedZoomIds.length) editor.removeSelectedZooms()
             else editor.removeClip(editor.selectedClipId)
         }
+    }
+    Shortcut {
+        sequence: "Backspace"
+        enabled: !window.singleKeyShortcutsBlocked && timeline.hasRange
+        onActivated: timeline.deleteSelectedRange()
     }
     Shortcut { sequence: "Ctrl+Z"; onActivated: editor.undo() }
     Shortcut { sequence: "Ctrl+Shift+Z"; onActivated: editor.redo() }

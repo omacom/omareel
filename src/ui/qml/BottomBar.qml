@@ -22,6 +22,7 @@ Rectangle {
         {key:"Space", action:"Play / pause"}, {key:"← / →", action:"Step one frame"},
         {key:"Shift ← / →", action:"Jump one second"}, {key:"S", action:"Split at playhead"},
         {key:"Z", action:"Add zoom"}, {key:"Delete", action:"Remove selection"},
+        {key:"Backspace", action:"Remove range"},
         {key:"Ctrl Z", action:"Undo"}, {key:"Ctrl Shift Z", action:"Redo"},
         {key:"Ctrl S", action:"Save"}, {key:"Ctrl E", action:"Export"},
         {key:"Scroll", action:"Zoom timeline at pointer"},

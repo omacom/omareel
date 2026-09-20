@@ -743,6 +743,74 @@ private slots:
         QVERIFY(std::abs(editor.playheadPosition() - 1.0) < .002);
     }
 
+    void spaceStartsPlaybackWhenEditorOpens()
+    {
+        QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));
+        Editor editor(m_bundle);
+        QVERIFY2(editor.isValid(), qPrintable(editor.errorString()));
+        Theme theme;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("editor"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("comp"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import Omareel
+            Main { width: 1200; height: 800; visible: true })", QUrl());
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        std::unique_ptr<QObject> object(component.create());
+        auto *window = qobject_cast<QQuickWindow *>(object.get());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        QTRY_VERIFY_WITH_TIMEOUT(!editor.loading() && !editor.playing(), 15000);
+        QVERIFY(!window->property("singleKeyShortcutsBlocked").toBool());
+        QTest::keyClick(window, Qt::Key_Space);
+        QTRY_VERIFY_WITH_TIMEOUT(editor.playing(), 3000);
+        QTest::keyClick(window, Qt::Key_Space);
+        QTRY_VERIFY_WITH_TIMEOUT(!editor.playing(), 3000);
+    }
+
+    void backspaceDeletesOnlySelectedRange()
+    {
+        QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));
+        Editor editor(m_bundle);
+        QVERIFY2(editor.isValid(), qPrintable(editor.errorString()));
+        Theme theme;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("editor"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("comp"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import Omareel
+            Main { width: 1200; height: 800; visible: true })", QUrl());
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        std::unique_ptr<QObject> object(component.create());
+        auto *window = qobject_cast<QQuickWindow *>(object.get());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        auto *timeline = window->findChild<QQuickItem *>(QStringLiteral("editorTimeline"));
+        QTRY_VERIFY(timeline);
+
+        const QString clipId = editor.clips().first().toMap().value(QStringLiteral("id")).toString();
+        editor.setSelectedClipId(clipId);
+        QTest::keyClick(window, Qt::Key_Backspace);
+        QCOMPARE(editor.selectedClipId(), clipId);
+        QVERIFY(qAbs(editor.duration() - 2.0) < .02);
+
+        const double pps = timeline->property("pixelsPerSecond").toDouble();
+        const QPoint start = timeline->mapToScene(QPointF(72 + .4 * pps, 56)).toPoint();
+        const QPoint end = timeline->mapToScene(QPointF(72 + 1.3 * pps, 56)).toPoint();
+        QTest::mousePress(window, Qt::LeftButton, Qt::ShiftModifier, start);
+        QTest::mouseMove(window, end, 1);
+        QTest::mouseRelease(window, Qt::LeftButton, Qt::ShiftModifier, end);
+        QVERIFY(timeline->property("hasRange").toBool());
+        QTest::keyClick(window, Qt::Key_Backspace);
+        QTRY_VERIFY(qAbs(editor.duration() - 1.1) < .03);
+        QVERIFY(!timeline->property("hasRange").toBool());
+        QVERIFY(!editor.hasPlaybackRange());
+    }
+
     void timelineRangeHandlesPreviewAndCtrlSelect()
     {
         QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));
