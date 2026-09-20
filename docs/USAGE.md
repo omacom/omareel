@@ -134,7 +134,9 @@ auto-generated zoom summary.
 | `Ctrl+E` | Export |
 
 The timeline scrolls horizontally with either wheel axis (80 px per mouse-wheel notch), and
-touchpad horizontal or vertical scrolling. Ctrl+wheel zooms around the pointer.
+touchpad horizontal or vertical scrolling. Ctrl+wheel zooms around the pointer. Click or drag
+on the ruler or video row to seek; scrubbing pauses playback. Ctrl+drag a clip to move it,
+or drag its edges to trim it.
 
 ## Project bundle
 
@@ -167,7 +169,7 @@ clip, style, cursor, and zoom edits are stored in `project.json`.
   (`OMAREEL_SCREENSHOT_TIME` remains accepted for compatibility).
 - `OMAREEL_SCREENSHOT_PLAY_TO_END=1` first plays the last 1.5 s of the clip so the player reaches
   its end-of-media state before the seek; `OMAREEL_SCREENSHOT_NO_PAUSE=1` seeks without pausing
-  first, the way a playhead drag does. Together they reproduce scrub-after-end rendering.
+  first, to exercise playing-state seeks after end-of-media.
 - `OMAREEL_SCREENSHOT_PROJECT_VALUES=JSON` applies path/value pairs through the editor before
   capture, for example `{"camera.rotation":180}`.
 - `OMAREEL_SCREENSHOT_VIEW=export|aspect|background-expanded|background-gradient-3|background-gradient-7|rail-tooltip|camera-proof` opens a transient

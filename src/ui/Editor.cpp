@@ -176,8 +176,11 @@ Editor::Editor(const QString &bundlePath, QObject *parent)
     m_autosaveTimer.setInterval(500);
     m_motionTimer.setSingleShot(true);
     m_motionTimer.setInterval(100);
+    m_scrubTimer.setSingleShot(true);
+    m_scrubTimer.setInterval(35);
     connect(&m_autosaveTimer, &QTimer::timeout, this, &Editor::saveNow);
     connect(&m_motionTimer, &QTimer::timeout, this, &Editor::rebuildMotion);
+    connect(&m_scrubTimer, &QTimer::timeout, this, &Editor::flushScrubSeek);
     connect(&m_motionWatcher, &QFutureWatcher<MotionTrack>::finished, this, &Editor::applyMotionResult);
     connect(&m_waveformWatcher, &QFutureWatcher<QVariantList>::finished, this, [this] {
         m_waveform = m_waveformWatcher.result();
@@ -651,11 +654,59 @@ double Editor::sourceToOutput(double sourceTime, int preferredClip) const
 void Editor::seek(double outputTime)
 {
     if (m_project.clips.isEmpty()) return;
+    m_scrubTimer.stop();
+    m_pendingScrubPosition = -1.0;
+    m_scrubbing = false;
+    setOutputPosition(outputTime);
+    seekMedia(m_outputPosition);
+}
+
+void Editor::beginScrub()
+{
+    if (m_project.clips.isEmpty()) return;
+    pause();
+    m_scrubbing = true;
+}
+
+void Editor::scrubTo(double outputTime)
+{
+    if (m_project.clips.isEmpty()) return;
+    if (!m_scrubbing) beginScrub();
+    setOutputPosition(outputTime);
+    m_pendingScrubPosition = m_outputPosition;
+    if (!m_scrubTimer.isActive()) m_scrubTimer.start();
+}
+
+void Editor::endScrub()
+{
+    if (!m_scrubbing) return;
+    m_scrubbing = false;
+    m_scrubTimer.stop();
+    flushScrubSeek();
+}
+
+void Editor::setOutputPosition(double outputTime)
+{
     m_outputPosition = std::clamp(outputTime, 0.0, duration());
+    m_activeClip = clipForOutput(m_outputPosition);
+    emit positionChanged();
+    updatePreview();
+}
+
+void Editor::flushScrubSeek()
+{
+    if (m_pendingScrubPosition < 0.0) return;
+    const double target = m_pendingScrubPosition;
+    m_pendingScrubPosition = -1.0;
+    seekMedia(target);
+}
+
+void Editor::seekMedia(double outputTime)
+{
     double clipStart = 0.0;
-    m_activeClip = clipForOutput(m_outputPosition, &clipStart);
-    const auto &clip = m_project.clips[m_activeClip];
-    const double source = clip.in + (m_outputPosition - clipStart) * clip.speed;
+    const int clipIndex = clipForOutput(outputTime, &clipStart);
+    const auto &clip = m_project.clips[clipIndex];
+    const double source = clip.in + (outputTime - clipStart) * clip.speed;
     m_internalSeek = true;
     m_player.setPlaybackRate(clip.speed);
     const qint64 targetMs = qRound64(std::clamp(source, clip.in, clip.out) * 1000.0);
@@ -684,13 +735,12 @@ void Editor::seek(double outputTime)
     }
     syncCamera(source, true);
     m_internalSeek = false;
-    emit positionChanged();
-    updatePreview();
 }
 
 void Editor::playPause() { playing() ? pause() : play(); }
 void Editor::play()
 {
+    endScrub();
     if (m_outputPosition >= duration() - 0.0001) seek(0);
     m_player.play();
     syncCamera(sourcePosition(), true);
@@ -714,7 +764,7 @@ void Editor::seekBoundary(int direction)
 
 void Editor::handlePlayerPosition(qint64 milliseconds)
 {
-    if (m_internalSeek || m_project.clips.isEmpty()) return;
+    if (m_internalSeek || m_scrubbing || m_project.clips.isEmpty()) return;
     const double source = milliseconds / 1000.0;
     syncCamera(source);
     const Clip &clip = m_project.clips[std::clamp(m_activeClip, 0, int(m_project.clips.size()) - 1)];

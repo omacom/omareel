@@ -160,11 +160,17 @@ FocusScope {
                     cursorShape: Qt.PointingHandCursor
                     preventStealing: true
                     function seekAt(px) {
-                        editor.seek(Math.max(0, Math.min(editor.duration,
-                                                        px / root.pixelsPerSecond)))
+                        editor.scrubTo(Math.max(0, Math.min(editor.duration,
+                                                           px / root.pixelsPerSecond)))
                     }
-                    onPressed: mouse => { root.forceActiveFocus(); seekAt(mouse.x) }
+                    onPressed: mouse => {
+                        root.forceActiveFocus()
+                        editor.beginScrub()
+                        seekAt(mouse.x)
+                    }
                     onPositionChanged: mouse => { if (pressed) seekAt(mouse.x) }
+                    onReleased: mouse => { seekAt(mouse.x); editor.endScrub() }
+                    onCanceled: editor.endScrub()
                 }
             }
 
@@ -184,6 +190,9 @@ FocusScope {
                 height: 40
                 pixelsPerSecond: root.pixelsPerSecond
                 focusTarget: root
+                onScrubStarted: editor.beginScrub()
+                onScrubMoved: time => editor.scrubTo(time)
+                onScrubFinished: editor.endScrub()
             }
             Rectangle {
                 x: 0
@@ -375,16 +384,19 @@ FocusScope {
                     cursorShape: Qt.SizeHorCursor
                     function seekAt(mouseX, mouseY) {
                         const contentX = mapToItem(content, mouseX, mouseY).x
-                        editor.seek(Math.max(0, Math.min(editor.duration,
-                                                        contentX / root.pixelsPerSecond)))
+                        editor.scrubTo(Math.max(0, Math.min(editor.duration,
+                                                           contentX / root.pixelsPerSecond)))
                     }
                     onPressed: mouse => {
                         root.forceActiveFocus()
+                        editor.beginScrub()
                         seekAt(mouse.x, mouse.y)
                     }
                     onPositionChanged: mouse => {
                         if (pressed) seekAt(mouse.x, mouse.y)
                     }
+                    onReleased: mouse => { seekAt(mouse.x, mouse.y); editor.endScrub() }
+                    onCanceled: editor.endScrub()
                     ToolTip.visible: containsMouse
                     ToolTip.text: editor.formatTime(editor.position)
                     ToolTip.delay: 250

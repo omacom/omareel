@@ -161,6 +161,9 @@ public:
     Q_INVOKABLE void play();
     Q_INVOKABLE void pause();
     Q_INVOKABLE void seek(double outputTime);
+    Q_INVOKABLE void beginScrub();
+    Q_INVOKABLE void scrubTo(double outputTime);
+    Q_INVOKABLE void endScrub();
     Q_INVOKABLE void stepFrames(int frames);
     Q_INVOKABLE void seekBoundary(int direction);
     Q_INVOKABLE double outputToSource(double outputTime) const;
@@ -230,6 +233,9 @@ private:
     void rebuildMotion();
     void applyMotionResult();
     void updatePreview();
+    void setOutputPosition(double outputTime);
+    void seekMedia(double outputTime);
+    void flushScrubSeek();
     void handlePlayerPosition(qint64 milliseconds);
     void handlePreviewStats();
     void attachPreviewWindow(QQuickWindow *window);
@@ -274,6 +280,8 @@ private:
     double m_outputPosition = 0.0;
     int m_activeClip = 0;
     bool m_internalSeek = false;
+    bool m_scrubbing = false;
+    double m_pendingScrubPosition = -1.0;
     bool m_warmingPreview = false;
     bool m_warmingCameraPreview = false;
     bool m_previewStatsEnabled = false;
@@ -281,6 +289,7 @@ private:
     qint64 m_previewStatsCostNs = 0;
     QElapsedTimer m_previewStatsClock;
     QTimer m_previewTimer;
+    QTimer m_scrubTimer;
     QTimer m_previewStatsTimer;
     QTimer m_autosaveTimer;
     QTimer m_motionTimer;

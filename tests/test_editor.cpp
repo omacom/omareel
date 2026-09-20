@@ -281,20 +281,21 @@ private slots:
         };
         auto *clipBlock = findItem(window->contentItem(), QStringLiteral("clipBlock-") + clipId);
         QTRY_VERIFY(clipBlock);
-        const auto dragCentre = [window](QQuickItem *block) {
+        const auto dragBlock = [window](QQuickItem *block, double fraction,
+                                        Qt::KeyboardModifiers modifiers) {
             const QPoint start = block->mapToScene(
-                QPointF(block->width() / 2, block->height() / 2)).toPoint();
+                QPointF(block->width() * fraction, block->height() / 2)).toPoint();
             const QPoint finish = start + QPoint(80, 0);
-            QTest::mousePress(window, Qt::LeftButton, Qt::NoModifier, start);
+            QTest::mousePress(window, Qt::LeftButton, modifiers, start);
             QTest::mouseMove(window, finish, 20);
-            QTest::mouseRelease(window, Qt::LeftButton, Qt::NoModifier, finish);
+            QTest::mouseRelease(window, Qt::LeftButton, modifiers, finish);
         };
-        dragCentre(clipBlock);
+        dragBlock(clipBlock, .25, Qt::ControlModifier);
         QTRY_VERIFY(editor.clips().first().toMap().value(QStringLiteral("in")).toDouble()
                     > originalClipIn + 0.05);
         auto *zoomBlock = findItem(window->contentItem(), QStringLiteral("zoomBlock-") + zoomId);
         QTRY_VERIFY(zoomBlock);
-        dragCentre(zoomBlock);
+        dragBlock(zoomBlock, .5, Qt::NoModifier);
         QVariantMap movedZoom;
         for (const QVariant &entry : editor.zooms())
             if (entry.toMap().value(QStringLiteral("id")).toString() == zoomId)
@@ -411,6 +412,93 @@ private slots:
         QTRY_COMPARE(flickable->property("contentX").toDouble(), 80.0);
     }
 
+    void timelineScrubPausesAndSeeksToLastPosition()
+    {
+        QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));
+        Editor editor(m_bundle);
+        QVERIFY(editor.isValid());
+        Theme theme;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("editor"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import QtQuick
+            import QtQuick.Window
+            import Omareel
+            Window {
+                width: 800; height: 180; visible: true
+                Timeline { objectName: "timeline"; anchors.fill: parent; scaleFactor: 1 }
+            })", QUrl());
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        std::unique_ptr<QObject> object(component.create());
+        auto *window = qobject_cast<QQuickWindow *>(object.get());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        auto *timeline = window->findChild<QQuickItem *>(QStringLiteral("timeline"));
+        QTRY_VERIFY(timeline);
+        const double pixelsPerSecond = timeline->property("pixelsPerSecond").toDouble();
+        QVERIFY(pixelsPerSecond > 0);
+
+        editor.play();
+        QTRY_VERIFY(editor.playing());
+        const QPoint rulerStart(72 + qRound(.3 * pixelsPerSecond), 16);
+        const QPoint rulerEnd(72 + qRound(1.4 * pixelsPerSecond), 16);
+        QTest::mousePress(window, Qt::LeftButton, Qt::NoModifier, rulerStart);
+        QVERIFY(!editor.playing());
+        QVERIFY(qAbs(editor.position() - .3) < .02);
+        QTest::mouseMove(window, rulerEnd, 1);
+        QVERIFY(qAbs(editor.position() - 1.4) < .02);
+        QTest::mouseRelease(window, Qt::LeftButton, Qt::NoModifier, rulerEnd);
+        QTRY_VERIFY(qAbs(editor.playerPositionMsForTests() - 1400) < 35);
+
+        const QPoint clipClick(72 + qRound(.7 * pixelsPerSecond), 56);
+        const double originalClipIn = editor.clips().first().toMap().value(QStringLiteral("in")).toDouble();
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, clipClick);
+        QVERIFY(qAbs(editor.position() - .7) < .02);
+        QTRY_VERIFY(qAbs(editor.playerPositionMsForTests() - 700) < 35);
+        editor.play();
+        QTRY_VERIFY(editor.playing());
+        const QPoint clipDragEnd(72 + qRound(1.1 * pixelsPerSecond), 56);
+        QTest::mousePress(window, Qt::LeftButton, Qt::NoModifier, clipClick);
+        QVERIFY(!editor.playing());
+        QTest::mouseMove(window, clipDragEnd, 1);
+        QVERIFY(qAbs(editor.position() - 1.1) < .02);
+        QTest::mouseRelease(window, Qt::LeftButton, Qt::NoModifier, clipDragEnd);
+        QTRY_VERIFY(qAbs(editor.playerPositionMsForTests() - 1100) < 35);
+        QCOMPARE(editor.clips().first().toMap().value(QStringLiteral("in")).toDouble(), originalClipIn);
+
+        const QPoint badgeStart(72 + qRound(1.0 * pixelsPerSecond), 56);
+        const QPoint badgeEnd(72 + qRound(1.15 * pixelsPerSecond), 56);
+        QTest::mousePress(window, Qt::LeftButton, Qt::NoModifier, badgeStart);
+        QTest::mouseMove(window, badgeEnd, 1);
+        QTest::mouseRelease(window, Qt::LeftButton, Qt::NoModifier, badgeEnd);
+        QVERIFY(qAbs(editor.position() - 1.15) < .02);
+        QCOMPARE(editor.clips().first().toMap().value(QStringLiteral("in")).toDouble(), originalClipIn);
+
+        const QPoint emptyClipClick(72 + qRound(editor.duration() * pixelsPerSecond) + 10, 56);
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, emptyClipClick);
+        QVERIFY(qAbs(editor.position() - editor.duration()) < .001);
+
+        editor.seek(0);
+        const qint64 decoderBeforeDrag = editor.playerPositionMsForTests();
+        editor.beginScrub();
+        editor.scrubTo(.2);
+        editor.scrubTo(.8);
+        editor.scrubTo(1.2);
+        QVERIFY(qAbs(editor.position() - 1.2) < .001);
+        QCOMPARE(editor.playerPositionMsForTests(), decoderBeforeDrag);
+        editor.endScrub();
+        QTRY_VERIFY(qAbs(editor.playerPositionMsForTests() - 1200) < 35);
+
+        editor.seek(editor.duration());
+        editor.beginScrub();
+        editor.scrubTo(.5);
+        editor.endScrub();
+        QTRY_VERIFY(qAbs(editor.playerPositionMsForTests() - 500) < 35);
+        QVERIFY(qAbs(editor.position() - .5) < .001);
+    }
+
     void zoomTrackRubberBandSelectsAndDeletesTwo()
     {
         QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));
@@ -525,7 +613,7 @@ private slots:
     // Regression: after the player reaches the end of the media, seeking must still land the
     // player in a paused state at the requested position (previously it stayed stopped at the
     // end and the preview kept showing the final black frame while scrubbing).
-    void seekAfterEndOfMediaResumesPausedDecoding()
+    void seekAndScrubAfterEndOfMediaResumePausedDecoding()
     {
         Editor editor(m_bundle);
         QVERIFY(editor.isValid());
@@ -551,6 +639,17 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(editor.playerPlaybackStateForTests() == QMediaPlayer::PausedState, 5000);
         QVERIFY(qAbs(editor.position() - 0.5) < 0.2);
         QVERIFY(editor.playerMediaStatusForTests() != QMediaPlayer::EndOfMedia);
+
+        editor.seek(editor.duration() - 0.3);
+        editor.play();
+        QTRY_VERIFY_WITH_TIMEOUT(!editor.playing(), 15000);
+        framesAfterSeek = 0;
+        editor.beginScrub();
+        editor.scrubTo(0.5);
+        editor.endScrub();
+        QTRY_VERIFY_WITH_TIMEOUT(framesAfterSeek > 0, 5000);
+        QTRY_VERIFY_WITH_TIMEOUT(editor.playerPlaybackStateForTests() == QMediaPlayer::PausedState, 5000);
+        QVERIFY(qAbs(editor.position() - 0.5) < 0.2);
     }
 
     void exportThroughEditorApi()
