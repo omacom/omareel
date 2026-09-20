@@ -12,6 +12,7 @@
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QImage>
+#include <QUrl>
 #include <algorithm>
 #include <functional>
 #include <QVideoFrame>
@@ -55,6 +56,7 @@ private slots:
         QVERIFY(!editor.hasMicrophoneAudio());
         QVERIFY(!editor.hasCamera());
         QVERIFY(editor.duration() > 1.9);
+        QVERIFY(editor.selectedClipId().isEmpty());
         editor.seek(1.0);
         QVERIFY(editor.splitAtPlayhead());
         QCOMPARE(editor.clips().size(), 2);
@@ -538,10 +540,13 @@ private slots:
         QVERIFY(selection->isVisible());
         QVERIFY(qAbs(timeline->property("rangeStart").toDouble() - .4) < .02);
         QVERIFY(qAbs(timeline->property("rangeEnd").toDouble() - 1.3) < .02);
+        QVERIFY(editor.hasPlaybackRange());
+        QVERIFY(qAbs(editor.position() - .4) < .02);
 
         QTest::keyClick(window, Qt::Key_Delete);
         QTRY_VERIFY(qAbs(editor.duration() - 1.1) < .03);
         QVERIFY(!timeline->property("hasRange").toBool());
+        QVERIFY(!editor.hasPlaybackRange());
         QCOMPARE(editor.clips().size(), 2);
         QVERIFY(qAbs(editor.duration() - 1.1) < .03);
         QCOMPARE(editor.zooms().size(), 1);
@@ -566,6 +571,215 @@ private slots:
         QVERIFY(reopened.isValid());
         QCOMPARE(reopened.clips().size(), 2);
         QVERIFY(qAbs(reopened.duration() - 1.1) < .03);
+    }
+
+    void videoThumbnailsFollowSourceTimes()
+    {
+        const QString thumbnailBundle = m_temporary.filePath(QStringLiteral("thumbnails.omareel"));
+        QVERIFY(QDir().mkpath(thumbnailBundle));
+        for (const QString &file : {QStringLiteral("screen.mp4"),
+                                    QStringLiteral("capture.json"), QStringLiteral("input.jsonl")})
+            QVERIFY(QFile::copy(QDir(m_bundle).filePath(file), QDir(thumbnailBundle).filePath(file)));
+        Editor editor(thumbnailBundle);
+        QVERIFY2(editor.isValid(), qPrintable(editor.errorString()));
+        QString firstUrl;
+        QTRY_VERIFY_WITH_TIMEOUT(!(firstUrl = editor.videoThumbnailUrl(.25)).isEmpty(), 30000);
+        const QImage first(QUrl(firstUrl).toLocalFile());
+        QCOMPARE(first.size(), QSize(160, 90));
+        QCOMPARE(editor.videoThumbnailUrlForClip(.4, 0, .5), firstUrl);
+        QString secondUrl;
+        QTRY_VERIFY_WITH_TIMEOUT((secondUrl = editor.videoThumbnailUrl(1.25),
+            QFileInfo(QUrl(secondUrl).toLocalFile()).completeBaseName().toInt() == 1300), 30000);
+        QVERIFY(secondUrl != firstUrl);
+        const QImage second(QUrl(secondUrl).toLocalFile());
+        QCOMPARE(second.size(), QSize(160, 90));
+        QVERIFY(first != second);
+        QString tightUrl;
+        QTRY_VERIFY_WITH_TIMEOUT(!(tightUrl = editor.videoThumbnailUrlForClip(.17, .137, .181)).isEmpty(), 30000);
+        const int tightSample = QFileInfo(QUrl(tightUrl).toLocalFile()).completeBaseName().toInt();
+        QVERIFY(tightSample >= 137 && tightSample <= 180);
+        QCOMPARE(QImage(QUrl(tightUrl).toLocalFile()).size(), QSize(160, 90));
+    }
+
+    void playbackStaysWithinSelectedRange()
+    {
+        QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));
+        Editor editor(m_bundle);
+        QVERIFY2(editor.isValid(), qPrintable(editor.errorString()));
+        QVideoSink sink;
+        QObject holder;
+        holder.setProperty("videoSink", QVariant::fromValue(&sink));
+        editor.attachVideoOutput(&holder);
+        QTRY_VERIFY_WITH_TIMEOUT(editor.playerMediaStatusForTests() >= QMediaPlayer::LoadedMedia, 15000);
+        editor.setPlaybackRange(.4, .9);
+        QVERIFY(editor.hasPlaybackRange());
+        editor.seek(0);
+        QVERIFY(qAbs(editor.position() - .4) < .002);
+        editor.seek(1.5);
+        QVERIFY(qAbs(editor.position() - .899) < .005);
+        editor.play();
+        QTRY_VERIFY_WITH_TIMEOUT(editor.playing(), 5000);
+        QTRY_VERIFY_WITH_TIMEOUT(!editor.playing(), 10000);
+        QVERIFY(editor.position() >= .89 && editor.position() < .9);
+        QVERIFY(editor.playheadPosition() >= .89 && editor.playheadPosition() < .9);
+        editor.play();
+        QTRY_VERIFY_WITH_TIMEOUT(editor.playing(), 5000);
+        QVERIFY(editor.position() >= .4 && editor.position() < .9);
+        editor.pause();
+        editor.clearPlaybackRange();
+        editor.seek(0);
+        QVERIFY(qAbs(editor.position()) < .002);
+
+        editor.seek(1);
+        QVERIFY(editor.splitAtPlayhead());
+        editor.setPlaybackRange(.8, 1.3);
+        editor.seek(.8);
+        editor.play();
+        QTRY_VERIFY_WITH_TIMEOUT(editor.playing(), 5000);
+        QTRY_VERIFY_WITH_TIMEOUT(!editor.playing(), 10000);
+        QVERIFY(editor.position() >= 1.28 && editor.position() < 1.3);
+        QVERIFY(editor.playheadPosition() >= 1.28 && editor.playheadPosition() < 1.3);
+    }
+
+    void playheadAdvancesWithIdleQuickWindow()
+    {
+        QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));
+        Editor editor(m_bundle);
+        QVERIFY2(editor.isValid(), qPrintable(editor.errorString()));
+        QVideoSink sink;
+        QQuickWindow window;
+        window.resize(320, 180);
+        QQuickItem output(window.contentItem());
+        output.setProperty("videoSink", QVariant::fromValue(&sink));
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        editor.attachVideoOutput(&output);
+        QTRY_VERIFY_WITH_TIMEOUT(editor.playerMediaStatusForTests() >= QMediaPlayer::LoadedMedia, 15000);
+
+        editor.seek(.2);
+        QVERIFY(std::abs(editor.playheadPosition() - .2) < .002);
+        QSignalSpy playheadUpdates(&editor, &Editor::playheadPositionChanged);
+        editor.play();
+        QTRY_VERIFY_WITH_TIMEOUT(editor.playheadPosition() >= .4, 5000);
+        QVERIFY(playheadUpdates.count() >= 5);
+        editor.pause();
+        QVERIFY(std::abs(editor.playheadPosition() - editor.position()) < .002);
+        editor.seek(1.0);
+        QVERIFY(std::abs(editor.playheadPosition() - 1.0) < .002);
+    }
+
+    void timelineRangeHandlesPreviewAndCtrlSelect()
+    {
+        QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));
+        Editor editor(m_bundle);
+        QVERIFY2(editor.isValid(), qPrintable(editor.errorString()));
+        editor.seek(1);
+        QVERIFY(editor.splitAtPlayhead());
+        const QString firstId = editor.clips().first().toMap().value(QStringLiteral("id")).toString();
+        const QString secondId = editor.clips().last().toMap().value(QStringLiteral("id")).toString();
+        QVERIFY(editor.trimClip(firstId, 0, .83));
+        editor.setSelectedClipId(QString());
+        Theme theme;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("editor"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("comp"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import Omareel
+            Main { width: 1200; height: 800; visible: true })", QUrl());
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        std::unique_ptr<QObject> object(component.create());
+        auto *window = qobject_cast<QQuickWindow *>(object.get());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        auto *timeline = window->findChild<QQuickItem *>(QStringLiteral("editorTimeline"));
+        QTRY_VERIFY(timeline);
+        const double pps = timeline->property("pixelsPerSecond").toDouble();
+        std::function<QQuickItem *(QQuickItem *, const QString &)> findVisualItem =
+            [&](QQuickItem *item, const QString &name) -> QQuickItem * {
+                if (item->objectName() == name) return item;
+                for (QQuickItem *child : item->childItems())
+                    if (QQuickItem *match = findVisualItem(child, name)) return match;
+                return nullptr;
+            };
+        const auto scenePoint = [timeline, pps](double time, double y) {
+            return timeline->mapToScene(QPointF(72 + time * pps, y)).toPoint();
+        };
+        auto *firstBlock = findVisualItem(window->contentItem(), QStringLiteral("clipBlock-") + firstId);
+        auto *secondBlock = findVisualItem(window->contentItem(), QStringLiteral("clipBlock-") + secondId);
+        QVERIFY(firstBlock && secondBlock);
+        QVERIFY(qAbs(firstBlock->width() - .83 * pps) < .01);
+        QVERIFY(qAbs(secondBlock->x() - firstBlock->x() - firstBlock->width()) < .01);
+        auto *firstTrim = findVisualItem(window->contentItem(),
+            QStringLiteral("clipTrimHandle-") + firstId + QStringLiteral("-left"));
+        QVERIFY(firstTrim);
+        QTest::mouseMove(window, scenePoint(.4, 56));
+        QVERIFY(!firstTrim->isVisible());
+        const double beforeSelection = editor.position();
+        QTest::mouseClick(window, Qt::LeftButton, Qt::ControlModifier, scenePoint(.4, 56));
+        QCOMPARE(editor.selectedClipId(), firstId);
+        QVERIFY(firstTrim->isVisible());
+        QVERIFY(qAbs(editor.position() - beforeSelection) < .002);
+        QTest::qWait(800);
+        window->grabWindow().save(QStringLiteral("/tmp/omareel-clip-fallback.png"));
+        QTest::mouseClick(window, Qt::LeftButton, Qt::ControlModifier, scenePoint(.4, 56));
+        QVERIFY(editor.selectedClipId().isEmpty());
+        QVERIFY(!firstTrim->isVisible());
+        QTest::mouseClick(window, Qt::LeftButton, Qt::ControlModifier, scenePoint(.4, 56));
+        QCOMPARE(editor.selectedClipId(), firstId);
+
+        QTest::mousePress(window, Qt::LeftButton, Qt::ShiftModifier, scenePoint(.35, 56));
+        QTest::mouseMove(window, scenePoint(1.25, 56), 1);
+        QTest::mouseRelease(window, Qt::LeftButton, Qt::ShiftModifier, scenePoint(1.25, 56));
+        QVERIFY(timeline->property("hasRange").toBool());
+        QVERIFY(editor.hasPlaybackRange());
+        QVERIFY(editor.selectedClipId().isEmpty());
+        auto *right = window->findChild<QQuickItem *>(QStringLiteral("rangeTrimHandle-right"));
+        auto *left = window->findChild<QQuickItem *>(QStringLiteral("rangeTrimHandle-left"));
+        QVERIFY(right && left);
+        const QPoint rightStart = right->mapToScene(QPointF(7, right->height() / 2)).toPoint();
+        const QPoint rightFinish = rightStart + QPoint(qRound(.2 * pps), 0);
+        QTest::mousePress(window, Qt::LeftButton, Qt::NoModifier, rightStart);
+        QTest::mouseMove(window, rightFinish, 1);
+        QTest::mouseRelease(window, Qt::LeftButton, Qt::NoModifier, rightFinish);
+        QVERIFY(qAbs(timeline->property("rangeEnd").toDouble() - 1.45) < .04);
+        QVERIFY(qAbs(editor.position() - timeline->property("rangeEnd").toDouble()) < .01);
+        const QPoint leftStart = left->mapToScene(QPointF(7, left->height() / 2)).toPoint();
+        const QPoint leftFinish = leftStart - QPoint(qRound(.15 * pps), 0);
+        QTest::mousePress(window, Qt::LeftButton, Qt::NoModifier, leftStart);
+        QTest::mouseMove(window, leftFinish, 1);
+        QTest::mouseRelease(window, Qt::LeftButton, Qt::NoModifier, leftFinish);
+        QVERIFY(qAbs(timeline->property("rangeStart").toDouble() - .2) < .04);
+        QVERIFY(qAbs(editor.position() - timeline->property("rangeStart").toDouble()) < .01);
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, scenePoint(0, 16));
+        QVERIFY(qAbs(editor.position() - timeline->property("rangeStart").toDouble()) < .01);
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, scenePoint(1.8, 16));
+        QVERIFY(qAbs(editor.position() - timeline->property("rangeEnd").toDouble()) < .01);
+        QTest::keyClick(window, Qt::Key_Space);
+        QTRY_VERIFY_WITH_TIMEOUT(editor.playing(), 5000);
+        QVERIFY(editor.position() >= timeline->property("rangeStart").toDouble());
+        QTest::keyClick(window, Qt::Key_Space);
+        QTRY_VERIFY_WITH_TIMEOUT(!editor.playing(), 5000);
+        QTest::keyClick(window, Qt::Key_Escape);
+        QVERIFY(!timeline->property("hasRange").toBool());
+        QVERIFY(!editor.hasPlaybackRange());
+
+        QTest::mouseClick(window, Qt::LeftButton, Qt::ControlModifier, scenePoint(1.5, 56));
+        QCOMPARE(editor.selectedClipId(), secondId);
+        auto *trim = findVisualItem(window->contentItem(),
+            QStringLiteral("clipTrimHandle-") + secondId + QStringLiteral("-left"));
+        QVERIFY(trim);
+        const double originalIn = editor.clips().last().toMap().value(QStringLiteral("in")).toDouble();
+        const QPoint trimStart = trim->mapToScene(QPointF(7, trim->height() / 2)).toPoint();
+        const QPoint trimFinish = trimStart + QPoint(qRound(.12 * pps), 0);
+        QTest::mousePress(window, Qt::LeftButton, Qt::NoModifier, trimStart);
+        QTest::mouseMove(window, trimFinish, 1);
+        QVERIFY(secondBlock->property("displayedIn").toDouble() > originalIn + .07);
+        QTest::mouseRelease(window, Qt::LeftButton, Qt::NoModifier, trimFinish);
+        QVERIFY(editor.clips().last().toMap().value(QStringLiteral("in")).toDouble() > originalIn + .07);
+        QTest::keyClick(window, Qt::Key_Escape);
+        QVERIFY(editor.selectedClipId().isEmpty());
     }
 
     void zoomTrackRubberBandSelectsAndDeletesTwo()

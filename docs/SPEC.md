@@ -249,8 +249,7 @@ Exporter pipeline (`render/Exporter`):
 - **Bottom toolbar:** aspect dropdown (Auto, Wide 16:9, 4:3, Square, Vertical 9:16, 4:5, 3:2),
   Crop toggle (drag handles on preview), transport (⏮ ▶/⏸ ⏭), split (scissors) at playhead,
   timeline zoom slider.
-- **Timeline:** ruler; **Clip track** (accent-tinted blocks, waveform of audio if present via
-  `ffmpeg -filter astats`-free approach: decode to pcm and draw peaks), trim handles at both
+- **Timeline:** ruler; **Clip track** (source-frame thumbnails), trim handles at both
   ends, split at playhead creates two clips, delete selected clip, drag clip edges; **Zoom
   track** (blue blocks labelled "Zoom 2x · Auto"), drag to move, drag edges to resize, click to
   select → inspector shows level (1.25/1.5/2/2.5/3/4) and target (Auto / pick point on

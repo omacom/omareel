@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Shapes
+import Omareel.Ui
 
 FocusScope {
     id: root
@@ -10,31 +11,78 @@ FocusScope {
     property real rangeAnchor: -1
     property real rangeHead: -1
     property bool selectingRange: false
+    property bool resizingRange: false
+    property string rangeResizeEdge: ""
+    property real rangeResizeOffset: 0
+    property real priorRangeStart: -1
+    property real priorRangeEnd: -1
     readonly property real rangeStart: Math.min(rangeAnchor, rangeHead)
     readonly property real rangeEnd: Math.max(rangeAnchor, rangeHead)
-    readonly property bool hasRange: !selectingRange && rangeAnchor >= 0
+    readonly property bool hasRange: rangeAnchor >= 0
         && rangeHead >= 0 && rangeEnd - rangeStart > 0.000001
     function clearRange() {
         selectingRange = false
+        resizingRange = false
         rangeAnchor = -1
         rangeHead = -1
+        editor.clearPlaybackRange()
     }
     function beginRange(time) {
         root.forceActiveFocus()
-        editor.pause()
+        editor.beginScrub()
+        editor.selectedClipId = ""
+        editor.clearPlaybackRange()
         rangeAnchor = Math.max(0, Math.min(editor.duration, time))
         rangeHead = rangeAnchor
         selectingRange = true
+        resizingRange = false
+    }
+    function beginRangeResize(edge, pointerTime) {
+        if (!hasRange) return
+        root.forceActiveFocus()
+        editor.beginScrub()
+        priorRangeStart = rangeStart
+        priorRangeEnd = rangeEnd
+        rangeResizeEdge = edge
+        rangeResizeOffset = (edge === "left" ? priorRangeStart : priorRangeEnd) - pointerTime
+        resizingRange = true
+        selectingRange = true
     }
     function updateRange(time) {
-        if (selectingRange)
+        if (selectingRange) {
             rangeHead = Math.max(0, Math.min(editor.duration, time))
+            if (resizingRange)
+                rangeAnchor = rangeResizeEdge === "left" ? priorRangeEnd : priorRangeStart
+            if (hasRange) editor.setPlaybackRange(rangeStart, rangeEnd)
+            else editor.clearPlaybackRange()
+            editor.scrubTo(rangeHead)
+        }
     }
     function finishRange(time) {
         updateRange(time)
         selectingRange = false
-        if ((rangeEnd - rangeStart) * pixelsPerSecond < 2) clearRange()
-        else editor.seek(rangeStart)
+        if ((rangeEnd - rangeStart) * pixelsPerSecond < 2) {
+            clearRange()
+            editor.seek(editor.position)
+        }
+        else {
+            editor.setPlaybackRange(rangeStart, rangeEnd)
+            editor.seek(resizingRange ? rangeHead : rangeStart)
+        }
+        resizingRange = false
+    }
+    function cancelRange() {
+        if (resizingRange) {
+            rangeAnchor = priorRangeStart
+            rangeHead = priorRangeEnd
+            selectingRange = false
+            resizingRange = false
+            editor.setPlaybackRange(rangeStart, rangeEnd)
+            editor.seek(rangeStart)
+        } else {
+            clearRange()
+            editor.seek(editor.position)
+        }
     }
     function deleteSelectedRange() {
         if (!hasRange || !editor.deleteOutputRange(rangeStart, rangeEnd)) return false
@@ -209,7 +257,7 @@ FocusScope {
                         root.forceActiveFocus()
                         selectingRange = (mouse.modifiers & Qt.ShiftModifier) !== 0
                         if (selectingRange) root.beginRange(timeAt(mouse.x))
-                        else { root.clearRange(); editor.beginScrub(); seekAt(mouse.x) }
+                        else { editor.beginScrub(); seekAt(mouse.x) }
                     }
                     onPositionChanged: mouse => {
                         if (!pressed) return
@@ -222,7 +270,7 @@ FocusScope {
                         selectingRange = false
                     }
                     onCanceled: {
-                        if (selectingRange) root.clearRange()
+                        if (selectingRange) root.cancelRange()
                         else editor.endScrub()
                         selectingRange = false
                     }
@@ -235,8 +283,6 @@ FocusScope {
                 width: parent.width
                 height: 48
                 color: theme.normalFill
-                border.width: 1
-                border.color: theme.normalBorder
             }
             ClipTrack {
                 x: 0
@@ -244,29 +290,71 @@ FocusScope {
                 width: parent.width
                 height: 40
                 pixelsPerSecond: root.pixelsPerSecond
+                viewportX: flick.contentX
+                viewportWidth: flick.width
                 focusTarget: root
-                onScrubStarted: { root.clearRange(); editor.beginScrub() }
+                onScrubStarted: editor.beginScrub()
                 onScrubMoved: time => editor.scrubTo(time)
                 onScrubFinished: editor.endScrub()
                 onRangeStarted: time => root.beginRange(time)
                 onRangeMoved: time => root.updateRange(time)
                 onRangeFinished: time => root.finishRange(time)
-                onRangeCanceled: root.clearRange()
+                onRangeCanceled: root.cancelRange()
                 onClearRangeRequested: root.clearRange()
             }
             Rectangle {
+                id: clipRangeSelection
                 objectName: "clipRangeSelection"
                 visible: root.rangeAnchor >= 0 && root.rangeHead >= 0
-                    && Math.abs(root.rangeHead - root.rangeAnchor) * root.pixelsPerSecond >= 2
+                    && (root.resizingRange
+                        || Math.abs(root.rangeHead - root.rangeAnchor) * root.pixelsPerSecond >= 2)
                 x: root.rangeStart * root.pixelsPerSecond
                 y: 32
                 width: Math.max(0, (root.rangeEnd - root.rangeStart) * root.pixelsPerSecond)
                 height: 48
-                radius: theme.radius
-                color: Qt.alpha(theme.accent, .20)
-                border.width: 1
+                color: Qt.alpha(theme.accent, .30)
+                border.width: 2
                 border.color: theme.accent
                 z: 10
+                OmTrimHandle {
+                    objectName: "rangeTrimHandle-left"
+                    edge: "left"
+                    accent: theme.accent
+                    active: true
+                    visible: !root.selectingRange || root.resizingRange
+                    mouseArea.onPressed: mouse => root.beginRangeResize("left",
+                        mouseArea.mapToItem(content, mouse.x, mouse.y).x / root.pixelsPerSecond)
+                    mouseArea.onPositionChanged: mouse => {
+                        if (mouseArea.pressed)
+                            root.updateRange(Math.max(0, Math.min(editor.duration,
+                                mouseArea.mapToItem(content, mouse.x, mouse.y).x / root.pixelsPerSecond
+                                    + root.rangeResizeOffset)))
+                    }
+                    mouseArea.onReleased: mouse => root.finishRange(Math.max(0, Math.min(editor.duration,
+                        mouseArea.mapToItem(content, mouse.x, mouse.y).x / root.pixelsPerSecond
+                            + root.rangeResizeOffset)))
+                    mouseArea.onCanceled: root.cancelRange()
+                }
+                OmTrimHandle {
+                    x: parent.width - width
+                    objectName: "rangeTrimHandle-right"
+                    edge: "right"
+                    accent: theme.accent
+                    active: true
+                    visible: !root.selectingRange || root.resizingRange
+                    mouseArea.onPressed: mouse => root.beginRangeResize("right",
+                        mouseArea.mapToItem(content, mouse.x, mouse.y).x / root.pixelsPerSecond)
+                    mouseArea.onPositionChanged: mouse => {
+                        if (mouseArea.pressed)
+                            root.updateRange(Math.max(0, Math.min(editor.duration,
+                                mouseArea.mapToItem(content, mouse.x, mouse.y).x / root.pixelsPerSecond
+                                    + root.rangeResizeOffset)))
+                    }
+                    mouseArea.onReleased: mouse => root.finishRange(Math.max(0, Math.min(editor.duration,
+                        mouseArea.mapToItem(content, mouse.x, mouse.y).x / root.pixelsPerSecond
+                            + root.rangeResizeOffset)))
+                    mouseArea.onCanceled: root.cancelRange()
+                }
             }
             Rectangle {
                 x: 0
@@ -403,7 +491,7 @@ FocusScope {
 
             Rectangle {
                 id: playhead
-                x: editor.position * root.pixelsPerSecond - width / 2
+                x: editor.playheadPosition * root.pixelsPerSecond - width / 2
                 y: 25
                 width: playheadDrag.pressed ? 2 : 1.5
                 height: root.tracksBottom - y
@@ -463,7 +551,6 @@ FocusScope {
                     }
                     onPressed: mouse => {
                         root.forceActiveFocus()
-                        root.clearRange()
                         editor.beginScrub()
                         seekAt(mouse.x, mouse.y)
                     }

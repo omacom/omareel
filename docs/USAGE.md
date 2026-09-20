@@ -135,9 +135,14 @@ auto-generated zoom summary.
 
 The timeline scrolls horizontally with either wheel axis (80 px per mouse-wheel notch), and
 touchpad horizontal or vertical scrolling. Ctrl+wheel zooms around the pointer. Click or drag
-on the ruler or video row to seek; scrubbing pauses playback. Ctrl+drag a clip to move it,
-or drag its edges to trim it. Shift+drag on the ruler or video row selects a time range;
-press Delete to cut it and join the remaining footage. Escape clears the selection.
+on the ruler or video row to seek; scrubbing pauses playback. The video row shows frame
+thumbnails sampled from each clip's source interval. Ctrl+click a clip to select it without
+seeking; Ctrl+click it again, click empty video-row space, or press Escape to deselect it.
+Ctrl+drag moves its source window, and the selected clip's edge markers can be dragged to trim.
+Shift+drag on the ruler or video row selects a time range. Drag either orange range handle to
+adjust it and preview that endpoint. Seeking and Space playback stay inside the range; playback
+stops at its end and restarts at its start. Press Delete to cut the range and join the remaining
+footage, or Escape to clear it.
 
 ## Project bundle
 

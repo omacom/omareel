@@ -167,9 +167,11 @@ ApplicationWindow {
     Shortcut {
         sequence: "Escape"
         enabled: editor.pickingZoomTarget || timeline.hasRange
+            || editor.selectedClipId || editor.selectedZoomId
         onActivated: {
             if (editor.pickingZoomTarget) editor.setPickingZoomTarget(false)
-            else timeline.clearRange()
+            else if (timeline.hasRange) timeline.clearRange()
+            else editor.selectedClipId = ""
         }
     }
 }

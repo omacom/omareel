@@ -10,6 +10,7 @@
 
 #include <QAudioOutput>
 #include <QClipboard>
+#include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
@@ -20,7 +21,6 @@
 #include <QProcess>
 #include <QRegularExpression>
 #include <QSaveFile>
-#include <QQuickItem>
 #include <QQuickWindow>
 #include <QPointer>
 #include <QStandardPaths>
@@ -101,32 +101,6 @@ QString cleanPresetName(QString name)
     return name.left(80);
 }
 
-QVariantList buildWaveform(const QString &videoPath)
-{
-    QProcess process;
-    process.start(QStringLiteral("ffmpeg"), {QStringLiteral("-v"), QStringLiteral("error"),
-        QStringLiteral("-i"), videoPath, QStringLiteral("-ac"), QStringLiteral("1"),
-        QStringLiteral("-ar"), QStringLiteral("8000"), QStringLiteral("-f"), QStringLiteral("s16le"),
-        QStringLiteral("-")});
-    if (!process.waitForFinished(120000) || process.exitCode() != 0) return {};
-    const QByteArray pcm = process.readAllStandardOutput();
-    const auto *samples = reinterpret_cast<const qint16 *>(pcm.constData());
-    const qsizetype sampleCount = pcm.size() / qsizetype(sizeof(qint16));
-    if (sampleCount == 0) return {};
-    constexpr int bins = 360;
-    QVariantList peaks;
-    peaks.reserve(bins);
-    for (int bin = 0; bin < bins; ++bin) {
-        const qsizetype begin = bin * sampleCount / bins;
-        const qsizetype end = std::max(begin + 1, (bin + 1) * sampleCount / bins);
-        int peak = 0;
-        for (qsizetype i = begin; i < std::min(end, sampleCount); ++i)
-            peak = std::max(peak, std::abs(int(samples[i])));
-        peaks << peak / 32768.0;
-    }
-    return peaks;
-}
-
 QVariantList buildCameraThumbnails(const QString &videoPath, double duration,
                                    const QString &cacheDirectory)
 {
@@ -165,6 +139,38 @@ QVariantList buildCameraThumbnails(const QString &videoPath, double duration,
     return result;
 }
 
+bool buildVideoThumbnail(const QString &videoPath, const QString &path, int milliseconds)
+{
+    const QFileInfo target(path);
+    if (!QDir().mkpath(target.absolutePath())) return false;
+    const QString temporary = path + QLatin1Char('.')
+        + QString::number(QCoreApplication::applicationPid()) + QStringLiteral(".tmp.jpg");
+    QProcess process;
+    process.start(QStringLiteral("ffmpeg"), {
+        QStringLiteral("-v"), QStringLiteral("error"), QStringLiteral("-ss"),
+        QString::number(milliseconds / 1000.0, 'f', 3), QStringLiteral("-i"), videoPath,
+        QStringLiteral("-frames:v"), QStringLiteral("1"), QStringLiteral("-an"),
+        QStringLiteral("-vf"), QStringLiteral("scale=160:90:force_original_aspect_ratio=increase,crop=160:90"),
+        QStringLiteral("-q:v"), QStringLiteral("4"), QStringLiteral("-y"), temporary});
+    if (!process.waitForFinished(20000)) {
+        process.kill();
+        process.waitForFinished();
+        QFile::remove(temporary);
+        return false;
+    }
+    if (process.exitCode() != 0 || QFileInfo(temporary).size() == 0) {
+        QFile::remove(temporary);
+        return false;
+    }
+    if (QFileInfo(path).size() > 0) QFile::remove(temporary);
+    else if (!QFile::rename(temporary, path)) return false;
+    const QFileInfoList cached = target.dir().entryInfoList({QStringLiteral("??????????.jpg")},
+        QDir::Files, QDir::Time);
+    for (qsizetype index = 512; index < cached.size(); ++index)
+        QFile::remove(cached[index].absoluteFilePath());
+    return true;
+}
+
 } // namespace
 
 Editor::Editor(const QString &bundlePath, QObject *parent)
@@ -183,13 +189,30 @@ Editor::Editor(const QString &bundlePath, QObject *parent)
     connect(&m_motionTimer, &QTimer::timeout, this, &Editor::rebuildMotion);
     connect(&m_scrubTimer, &QTimer::timeout, this, &Editor::flushScrubSeek);
     connect(&m_motionWatcher, &QFutureWatcher<MotionTrack>::finished, this, &Editor::applyMotionResult);
-    connect(&m_waveformWatcher, &QFutureWatcher<QVariantList>::finished, this, [this] {
-        m_waveform = m_waveformWatcher.result();
-        emit waveformChanged();
-    });
     connect(&m_cameraThumbnailWatcher, &QFutureWatcher<QVariantList>::finished, this, [this] {
         m_cameraThumbnails = m_cameraThumbnailWatcher.result();
         emit cameraThumbnailsChanged();
+    });
+    connect(&m_videoThumbnailWatcher, &QFutureWatcher<bool>::finished, this, [this] {
+        const int finished = m_videoThumbnailQueue.takeFirst();
+        m_videoThumbnailPending.remove(finished);
+        if (!m_videoThumbnailWatcher.result()) m_videoThumbnailFailed.insert(finished);
+        else {
+            m_videoThumbnailReady.insert(finished);
+            if (m_videoThumbnailReady.size() > 512) {
+                m_videoThumbnailReady.clear();
+                const QDir cache(m_videoThumbnailCacheDirectory);
+                for (const QFileInfo &file : cache.entryInfoList(
+                         {QStringLiteral("??????????.jpg")}, QDir::Files)) {
+                    bool valid = false;
+                    const int sample = file.completeBaseName().toInt(&valid);
+                    if (valid && file.size() > 0) m_videoThumbnailReady.insert(sample);
+                }
+            }
+        }
+        ++m_videoThumbnailRevision;
+        emit videoThumbnailRevisionChanged();
+        startNextVideoThumbnail();
     });
 
     QFile gradientsFile(QStringLiteral(":/omareel/assets/gradients.json"));
@@ -197,6 +220,21 @@ Editor::Editor(const QString &bundlePath, QObject *parent)
         m_gradients = QJsonDocument::fromJson(gradientsFile.readAll()).array().toVariantList();
 
     if (!loadBundle()) return;
+    const QFileInfo videoSource(m_videoPath);
+    const QByteArray videoFingerprint = QCryptographicHash::hash(
+        (videoSource.canonicalFilePath() + QLatin1Char('|') + QString::number(videoSource.size())
+         + QLatin1Char('|') + QString::number(videoSource.lastModified().toMSecsSinceEpoch())).toUtf8(),
+        QCryptographicHash::Sha256).toHex().left(16);
+    m_videoThumbnailCacheDirectory = QDir(
+        QStandardPaths::writableLocation(QStandardPaths::CacheLocation))
+        .filePath(QStringLiteral("clip-filmstrips-v2/") + QString::fromLatin1(videoFingerprint));
+    const QDir videoCache(m_videoThumbnailCacheDirectory);
+    for (const QFileInfo &file : videoCache.entryInfoList(
+             {QStringLiteral("??????????.jpg")}, QDir::Files)) {
+        bool valid = false;
+        const int sample = file.completeBaseName().toInt(&valid);
+        if (valid && file.size() > 0) m_videoThumbnailReady.insert(sample);
+    }
     m_audioOutput = std::make_unique<QAudioOutput>();
     m_player.setAudioOutput(m_audioOutput.get());
     connect(&m_player, &QMediaPlayer::mediaStatusChanged, this,
@@ -210,6 +248,7 @@ Editor::Editor(const QString &bundlePath, QObject *parent)
     m_previewTimer.setInterval(16);
     connect(&m_previewTimer, &QTimer::timeout, this, [this] {
         handlePlayerPosition(m_player.position());
+        updatePlayheadPosition();
     });
     m_previewStatsEnabled = qEnvironmentVariableIntValue("OMAREEL_PREVIEW_STATS") == 1;
     if (m_previewStatsEnabled) QTextStream(stderr) << "preview stats enabled\n";
@@ -219,7 +258,8 @@ Editor::Editor(const QString &bundlePath, QObject *parent)
         if (m_previewStatsEnabled)
             QTextStream(stderr) << "preview state=" << int(m_player.playbackState()) << '\n';
         if (playing()) {
-            if (!m_previewWindow) m_previewTimer.start();
+            resetPlayheadClock(m_outputPosition);
+            m_previewTimer.start();
             if (m_previewStatsEnabled) {
                 m_previewStatsFrames = 0;
                 m_previewStatsCostNs = 0;
@@ -229,8 +269,11 @@ Editor::Editor(const QString &bundlePath, QObject *parent)
         } else {
             m_previewTimer.stop();
             m_previewStatsTimer.stop();
+            m_playheadClock.invalidate();
+            setPlayheadPosition(m_outputPosition);
         }
         emit playingChanged();
+        if (!playing()) startNextVideoThumbnail();
     });
     if (m_hasCamera) {
         m_cameraPlayer.setSource(QUrl::fromLocalFile(m_cameraVideoPath));
@@ -238,7 +281,6 @@ Editor::Editor(const QString &bundlePath, QObject *parent)
     m_valid = true;
     ++m_motionGeneration;
     rebuildMotion();
-    startWaveformBuild();
     startCameraThumbnailBuild();
     QTimer::singleShot(1500, this, &Editor::finishLoading);
 }
@@ -248,8 +290,8 @@ Editor::~Editor()
     m_autosaveTimer.stop();
     if (m_dirty) saveNow();
     m_motionWatcher.waitForFinished();
-    m_waveformWatcher.waitForFinished();
     m_cameraThumbnailWatcher.waitForFinished();
+    m_videoThumbnailWatcher.waitForFinished();
     cancelExport();
 }
 
@@ -317,7 +359,7 @@ bool Editor::loadBundle()
         m_dirty = true;
         m_autosaveTimer.start();
     }
-    m_selectedClipId = m_project.clips.first().id;
+    m_selectedClipId.clear();
     return true;
 }
 
@@ -416,10 +458,25 @@ void Editor::attachVideoOutput(QObject *output)
     m_videoSink = output ? output->property("videoSink").value<QVideoSink *>() : nullptr;
     m_player.setVideoSink(m_videoSink);
     if (m_videoSink) connect(m_videoSink, &QVideoSink::videoFrameChanged, this,
-        [this](const QVideoFrame &) {
+        [this](const QVideoFrame &frame) {
             QElapsedTimer cost;
             cost.start();
             ++m_previewStatsFrames;
+            if (playing() && !m_warmingPreview && !m_scrubbing && !m_internalSeek
+                && frame.isValid() && frame.startTime() >= 0
+                && m_activeClip >= 0 && m_activeClip < m_project.clips.size()) {
+                const Clip &clip = m_project.clips[m_activeClip];
+                const double source = frame.startTime() / 1000000.0;
+                const double output = sourceToOutput(source, m_activeClip);
+                // A seek can deliver queued frames from the previous location. Only a frame
+                // near the current clip and transport position may anchor the display clock.
+                if (source >= clip.in - 0.01 && source < clip.out
+                    && output >= m_outputPosition - 0.1
+                    && output <= m_outputPosition + 0.5) {
+                    m_playheadClockPosition = std::max(m_playheadPosition, output);
+                    m_playheadClock.restart();
+                }
+            }
             if (m_warmingPreview) {
                 m_warmingPreview = false;
                 QTimer::singleShot(0, this, [this] {
@@ -433,31 +490,9 @@ void Editor::attachVideoOutput(QObject *output)
             }
             m_previewStatsCostNs += cost.nsecsElapsed();
         });
-    QObject::disconnect(m_previewWindowConnection);
-    if (auto *item = qobject_cast<QQuickItem *>(output)) {
-        m_previewWindowConnection = connect(item, &QQuickItem::windowChanged,
-            this, &Editor::attachPreviewWindow);
-        attachPreviewWindow(item->window());
-    } else {
-        attachPreviewWindow(nullptr);
-    }
     if (m_player.mediaStatus() != QMediaPlayer::InvalidMedia) {
         m_warmingPreview = true;
         m_player.play();
-    }
-}
-
-void Editor::attachPreviewWindow(QQuickWindow *window)
-{
-    QObject::disconnect(m_previewFrameConnection);
-    m_previewWindow = window;
-    if (window) {
-        m_previewTimer.stop();
-        m_previewFrameConnection = connect(window, &QQuickWindow::afterAnimating, this, [this] {
-            if (playing()) handlePlayerPosition(m_player.position());
-        });
-    } else if (playing()) {
-        m_previewTimer.start();
     }
 }
 
@@ -662,8 +697,91 @@ void Editor::seek(double outputTime)
     m_scrubTimer.stop();
     m_pendingScrubPosition = -1.0;
     m_scrubbing = false;
-    setOutputPosition(outputTime);
+    setOutputPosition(clampPlaybackPosition(outputTime));
     seekMedia(m_outputPosition);
+    startNextVideoThumbnail();
+}
+
+void Editor::setPlaybackRange(double from, double to)
+{
+    if (!std::isfinite(from) || !std::isfinite(to)) return;
+    if (from > to) std::swap(from, to);
+    from = std::clamp(from, 0.0, duration());
+    to = std::clamp(to, 0.0, duration());
+    if (to - from <= 0.001) { clearPlaybackRange(); return; }
+    if (m_playbackRangeStart == from && m_playbackRangeEnd == to) return;
+    m_playbackRangeStart = from;
+    m_playbackRangeEnd = to;
+    emit playbackRangeChanged();
+}
+
+void Editor::clearPlaybackRange()
+{
+    if (!hasPlaybackRange()) return;
+    m_playbackRangeStart = -1.0;
+    m_playbackRangeEnd = -1.0;
+    emit playbackRangeChanged();
+}
+
+QString Editor::videoThumbnailUrl(double sourceTime)
+{
+    return videoThumbnailUrlForClip(sourceTime, 0.0, m_sourceDuration);
+}
+
+QString Editor::videoThumbnailUrlForClip(double sourceTime, double sourceStart,
+                                         double sourceEnd)
+{
+    if (!m_valid || !std::isfinite(sourceTime) || !std::isfinite(sourceStart)
+        || !std::isfinite(sourceEnd) || m_videoThumbnailCacheDirectory.isEmpty()) return {};
+    sourceStart = std::clamp(sourceStart, 0.0, m_sourceDuration);
+    sourceEnd = std::clamp(sourceEnd, sourceStart, m_sourceDuration);
+    if (sourceEnd - sourceStart <= 0.001) return {};
+    const int firstSample = qCeil(sourceStart * 1000.0);
+    const double tailMargin = std::min((sourceEnd - sourceStart) / 2.0,
+                                       1.5 / std::max(1.0, m_fps));
+    const int lastSample = std::max(firstSample, qFloor((sourceEnd - tailMargin) * 1000.0));
+    const int milliseconds = std::clamp(qRound(sourceTime * 10.0) * 100,
+                                        firstSample, lastSample);
+    const QString path = QDir(m_videoThumbnailCacheDirectory)
+        .filePath(QStringLiteral("%1.jpg").arg(milliseconds, 10, 10, QLatin1Char('0')));
+    if (QFileInfo(path).size() > 0) {
+        m_videoThumbnailReady.insert(milliseconds);
+        return QUrl::fromLocalFile(path).toString();
+    }
+    if (!m_videoThumbnailPending.contains(milliseconds)
+        && !m_videoThumbnailFailed.contains(milliseconds)
+        && m_videoThumbnailQueue.size() < 96) {
+        m_videoThumbnailPending.insert(milliseconds);
+        m_videoThumbnailQueue << milliseconds;
+        startNextVideoThumbnail();
+    }
+    int nearest = -1;
+    for (const int ready : std::as_const(m_videoThumbnailReady))
+        if (ready >= firstSample && ready <= lastSample
+            && (nearest < 0 || std::abs(ready - milliseconds) < std::abs(nearest - milliseconds)))
+            nearest = ready;
+    if (nearest < 0) return {};
+    return QUrl::fromLocalFile(QDir(m_videoThumbnailCacheDirectory)
+        .filePath(QStringLiteral("%1.jpg").arg(nearest, 10, 10, QLatin1Char('0')))).toString();
+}
+
+void Editor::startNextVideoThumbnail()
+{
+    if (playing() || m_scrubbing || m_videoThumbnailWatcher.isRunning()
+        || m_videoThumbnailQueue.isEmpty()) return;
+    const int milliseconds = m_videoThumbnailQueue.first();
+    const QString path = QDir(m_videoThumbnailCacheDirectory)
+        .filePath(QStringLiteral("%1.jpg").arg(milliseconds, 10, 10, QLatin1Char('0')));
+    m_videoThumbnailWatcher.setFuture(QtConcurrent::run(
+        buildVideoThumbnail, m_videoPath, path, milliseconds));
+}
+
+double Editor::clampPlaybackPosition(double outputTime) const
+{
+    outputTime = std::clamp(outputTime, 0.0, duration());
+    if (!hasPlaybackRange()) return outputTime;
+    return std::clamp(outputTime, m_playbackRangeStart,
+                      std::max(m_playbackRangeStart, m_playbackRangeEnd - 0.001));
 }
 
 void Editor::beginScrub()
@@ -677,7 +795,7 @@ void Editor::scrubTo(double outputTime)
 {
     if (m_project.clips.isEmpty()) return;
     if (!m_scrubbing) beginScrub();
-    setOutputPosition(outputTime);
+    setOutputPosition(clampPlaybackPosition(outputTime));
     m_pendingScrubPosition = m_outputPosition;
     if (!m_scrubTimer.isActive()) m_scrubTimer.start();
 }
@@ -688,14 +806,48 @@ void Editor::endScrub()
     m_scrubbing = false;
     m_scrubTimer.stop();
     flushScrubSeek();
+    startNextVideoThumbnail();
 }
 
 void Editor::setOutputPosition(double outputTime)
 {
     m_outputPosition = std::clamp(outputTime, 0.0, duration());
     m_activeClip = clipForOutput(m_outputPosition);
+    resetPlayheadClock(m_outputPosition);
     emit positionChanged();
     updatePreview();
+}
+
+void Editor::setPlayheadPosition(double outputTime)
+{
+    outputTime = std::clamp(outputTime, 0.0, duration());
+    if (std::abs(m_playheadPosition - outputTime) < 0.0005) return;
+    m_playheadPosition = outputTime;
+    emit playheadPositionChanged();
+}
+
+void Editor::resetPlayheadClock(double outputTime)
+{
+    m_playheadClockPosition = outputTime;
+    m_playheadClock.restart();
+    setPlayheadPosition(outputTime);
+}
+
+void Editor::updatePlayheadPosition()
+{
+    if (!playing() || m_scrubbing || m_project.clips.isEmpty()
+        || !m_playheadClock.isValid()) return;
+    const Clip &clip = m_project.clips[std::clamp(m_activeClip, 0, int(m_project.clips.size()) - 1)];
+    const double clipEnd = ClipTimeline(m_project.clips).outputTime(m_activeClip, clip.out);
+    const double limit = std::min(clipEnd, hasPlaybackRange()
+        ? m_playbackRangeEnd - 0.001 : duration());
+    // A decoded frame supplies the clock origin. Interpolate between frames, but stop
+    // within two frame intervals if decoding stalls instead of racing ahead of the video.
+    const double maxLead = std::max(0.05, 2.0 / std::max(1.0, m_fps));
+    const double elapsed = std::min(m_playheadClock.elapsed() / 1000.0, maxLead);
+    const double target = std::max({m_playheadPosition, m_outputPosition,
+                                    m_playheadClockPosition + elapsed});
+    setPlayheadPosition(std::min(target, limit));
 }
 
 void Editor::flushScrubSeek()
@@ -746,7 +898,11 @@ void Editor::playPause() { playing() ? pause() : play(); }
 void Editor::play()
 {
     endScrub();
-    if (m_outputPosition >= duration() - 0.0001) seek(0);
+    if (hasPlaybackRange()) {
+        if (m_outputPosition < m_playbackRangeStart
+            || m_outputPosition >= m_playbackRangeEnd - 0.001)
+            seek(m_playbackRangeStart);
+    } else if (m_outputPosition >= duration() - 0.0001) seek(0);
     m_player.play();
     syncCamera(sourcePosition(), true);
 }
@@ -771,6 +927,12 @@ void Editor::handlePlayerPosition(qint64 milliseconds)
 {
     if (m_internalSeek || m_scrubbing || m_project.clips.isEmpty()) return;
     const double source = milliseconds / 1000.0;
+    const double mapped = sourceToOutput(source, m_activeClip);
+    if (hasPlaybackRange() && playing() && mapped >= m_playbackRangeEnd - 0.001) {
+        pause();
+        seek(m_playbackRangeEnd);
+        return;
+    }
     syncCamera(source);
     const Clip &clip = m_project.clips[std::clamp(m_activeClip, 0, int(m_project.clips.size()) - 1)];
     if (playing() && source >= clip.out - 0.004) {
@@ -778,14 +940,16 @@ void Editor::handlePlayerPosition(qint64 milliseconds)
             double nextOutput = ClipTimeline(m_project.clips).outputTime(m_activeClip + 1, m_project.clips[m_activeClip + 1].in);
             seek(nextOutput);
             m_player.play();
-        } else { m_outputPosition = duration(); pause(); emit positionChanged(); updatePreview(); }
+        } else { pause(); setOutputPosition(duration()); }
         return;
     }
-    const double mapped = sourceToOutput(source, m_activeClip);
     if (mapped >= 0.0) {
-        m_outputPosition = std::clamp(mapped, 0.0, duration());
-        emit positionChanged();
-        updatePreview();
+        const double output = clampPlaybackPosition(mapped);
+        if (std::abs(m_outputPosition - output) >= 0.0005) {
+            m_outputPosition = output;
+            emit positionChanged();
+            updatePreview();
+        }
     }
 }
 
@@ -1234,12 +1398,6 @@ void Editor::applyMotionResult()
     m_motion = std::make_shared<MotionTrack>(m_motionWatcher.result());
     updatePreview();
     if (m_runningMotionGeneration != m_motionGeneration) m_motionTimer.start();
-}
-
-void Editor::startWaveformBuild()
-{
-    if (!m_hasAudio) return;
-    m_waveformWatcher.setFuture(QtConcurrent::run(buildWaveform, m_videoPath));
 }
 
 void Editor::startCameraThumbnailBuild()
