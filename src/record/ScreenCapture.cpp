@@ -730,6 +730,10 @@ bool ScreenCapture::start(const ScreenCaptureConfig &config, QString *error)
     }
     d->crop = config.crop.isValid() ? config.crop.intersected(QRect(0, 0, d->width, d->height))
                                     : QRect(0, 0, d->width, d->height);
+    // The encoders reject odd frame sizes; a crop that lost a pixel to the output edge (or a whole
+    // output of odd size) is trimmed rather than failing at the first frame.
+    d->crop.setWidth(d->crop.width() - d->crop.width() % 2);
+    d->crop.setHeight(d->crop.height() - d->crop.height() % 2);
     if (!d->crop.isValid()) {
         if (error) *error = QStringLiteral("The capture region is outside the monitor");
         return false;

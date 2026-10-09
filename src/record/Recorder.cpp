@@ -244,6 +244,24 @@ Recorder::GsrExitClassification Recorder::classifyGsrExit(
     return requested ? GsrExitClassification::UserStop : GsrExitClassification::ExternalStop;
 }
 
+// yuv420p encoders (libx264 behind -fallback-cpu-encoding, and the hardware encoders in front of
+// it) refuse a frame with an odd width or height, so the capture is trimmed to an even size in
+// physical pixels. Trimming rather than padding keeps the rectangle inside the picked area and
+// the output; the logical size follows so the recorded metadata matches the encoded frame.
+CaptureRegion Recorder::evenCaptureRegion(CaptureRegion region)
+{
+    const int width = region.physicalWidth - region.physicalWidth % 2;
+    const int height = region.physicalHeight - region.physicalHeight % 2;
+    if (width == region.physicalWidth && height == region.physicalHeight) return region;
+    region.physicalWidth = width;
+    region.physicalHeight = height;
+    if (region.scale > 0.0) {
+        region.width = width / region.scale;
+        region.height = height / region.scale;
+    }
+    return region;
+}
+
 QJsonObject Recorder::cameraCaptureBlock(const QString &device, int requestedHeight,
                                          int width, int height, double fps,
                                          qint64 firstFrameUs, const QString &backend,
@@ -757,6 +775,10 @@ int Recorder::daemonMain(const QStringList &arguments)
     region.scale = valueAfter(arguments, QStringLiteral("--scale")).toDouble();
     region.physicalWidth = valueAfter(arguments, QStringLiteral("--physical-w")).toInt();
     region.physicalHeight = valueAfter(arguments, QStringLiteral("--physical-h")).toInt();
+    const CaptureRegion pickedRegion = region;
+    region = evenCaptureRegion(region);
+    const bool trimmed = region.physicalWidth != pickedRegion.physicalWidth
+        || region.physicalHeight != pickedRegion.physicalHeight;
     RecordingPreferences preferences = RecordingPreferences::load();
     SelfViewPlacement selfView = selfViewPlacement(options, region, preferences);
 
@@ -779,10 +801,13 @@ int Recorder::daemonMain(const QStringList &arguments)
     const QString video = bundle + QStringLiteral("/screen.mp4");
     const QString cameraVideo = bundle + QStringLiteral("/camera.mp4");
     QStringList gsr;
-    if (region.mode == CaptureMode::Fullscreen) {
+    if (region.mode == CaptureMode::Fullscreen && !trimmed) {
         gsr << QStringLiteral("-w") << region.monitorName
             << QStringLiteral("-s") << QStringLiteral("0x0");
     } else {
+        // An output with an odd size is captured as a region too: gpu-screen-recorder passes the
+        // monitor size straight to the encoder with -s 0x0, and -s WxH would scale the whole
+        // frame instead of trimming a pixel.
         const int captureX = int(std::lround(region.x));
         const int captureY = int(std::lround(region.y));
         gsr << QStringLiteral("-w") << QStringLiteral("region") << QStringLiteral("-region")

@@ -55,6 +55,7 @@ public:
     static bool signalExisting(bool cancel, QString *error = nullptr);
     static GsrExitClassification classifyGsrExit(int exitCode, bool stopRequested,
                                                  qint64 fileSize, double probedDuration);
+    static CaptureRegion evenCaptureRegion(CaptureRegion region);
     static QJsonObject cameraCaptureBlock(const QString &device, int requestedHeight,
                                           int width, int height, double fps,
                                           qint64 firstFrameUs, const QString &backend,
