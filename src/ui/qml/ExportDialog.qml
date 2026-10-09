@@ -176,9 +176,10 @@ Dialog {
 
         ProgressBar {
             id: progress
+            objectName: "exportProgressBar"
             Layout.fillWidth: true
             visible: editor.exporting || root.successPath.length > 0
-            value: editor.exportProgress
+            value: editor.exporting ? Math.min(0.99, editor.exportProgress) : editor.exportProgress
             background: Rectangle { implicitHeight: 4; color: theme.selectedFill; radius: theme.rounded ? 2 : 0 }
             contentItem: Item {
                 implicitHeight: 4
@@ -200,9 +201,15 @@ Dialog {
                     easing.type: Easing.InOutSine
                 }
             }
-            Label { text: Math.round(editor.exportProgress * 100) + "%"; font.weight: Font.DemiBold }
+            Label {
+                objectName: "exportStatusLabel"
+                text: editor.exportProgress >= 1 ? "Finishing encoding…"
+                    : Math.min(99, Math.round(editor.exportProgress * 100)) + "%"
+                font.weight: Font.DemiBold
+            }
             Item { Layout.fillWidth: true }
             Label {
+                visible: editor.exportProgress < 1
                 text: editor.exportFps.toFixed(1) + " fps  ·  ETA " + root.formatEta(editor.exportEtaSeconds)
                 color: theme.textMuted
                 font.pixelSize: theme.font.bodySmall

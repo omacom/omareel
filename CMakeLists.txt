@@ -148,6 +148,7 @@ qt_add_qml_module(omareel_render
         src/render/FrameSource.h src/render/FrameSource.cpp
         src/render/FfmpegDecoder.h src/render/FfmpegDecoder.cpp
         src/render/Exporter.h src/render/Exporter.cpp
+        src/render/EncoderPipe.h src/render/EncoderPipe.cpp
         src/render/PreviewSink.h src/render/PreviewSink.cpp
         src/ui/Editor.h src/ui/Editor.cpp
         src/ui/Launcher.h src/ui/Launcher.cpp
@@ -230,6 +231,11 @@ if(BUILD_TESTING)
         target_link_libraries(test_${test_name} PRIVATE omareel_core Qt6::Test)
         add_test(NAME ${test_name} COMMAND test_${test_name})
     endforeach()
+    qt_add_executable(test_encoderpipe tests/test_encoderpipe.cpp src/render/EncoderPipe.cpp)
+    target_include_directories(test_encoderpipe PRIVATE src)
+    target_link_libraries(test_encoderpipe PRIVATE Qt6::Test)
+    add_test(NAME encoderpipe COMMAND test_encoderpipe)
+    set_tests_properties(encoderpipe PROPERTIES TIMEOUT 30)
     qt_add_executable(test_exporter_smoke tests/test_exporter_smoke.cpp)
     target_link_libraries(test_exporter_smoke PRIVATE omareel_render Qt6::Test)
     add_test(NAME exporter_smoke COMMAND test_exporter_smoke)

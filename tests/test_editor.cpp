@@ -1082,6 +1082,37 @@ private slots:
     {
         Editor editor(m_bundle);
         QVERIFY(editor.isValid());
+        Theme theme;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("editor"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import QtQuick
+            import QtQuick.Controls
+            import Omareel
+            ApplicationWindow {
+                width: 800; height: 950; visible: true
+                ExportDialog { Component.onCompleted: open() }
+            })", QUrl());
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        std::unique_ptr<QObject> object(component.create());
+        auto *window = qobject_cast<QQuickWindow *>(object.get());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        auto *status = object->findChild<QObject *>(QStringLiteral("exportStatusLabel"));
+        auto *bar = object->findChild<QObject *>(QStringLiteral("exportProgressBar"));
+        QVERIFY(status);
+        QVERIFY(bar);
+        bool sawFinishing = false;
+        bool prematureCompletion = false;
+        connect(&editor, &Editor::exportProgressChanged, this, [&] {
+            if (!editor.exporting()) return;
+            prematureCompletion |= bar->property("value").toDouble() >= 1.0
+                || status->property("text").toString() == QLatin1String("100%");
+            if (editor.exportProgress() >= 1.0)
+                sawFinishing = status->property("text").toString() == QStringLiteral("Finishing encoding…");
+        });
         const QString output = m_temporary.filePath(QStringLiteral("editor-api.mp4"));
         QSignalSpy finished(&editor, &Editor::exportFinished);
         QSignalSpy errors(&editor, &Editor::exportErrorChanged);
@@ -1089,6 +1120,9 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(finished.count() > 0 || (!editor.exporting() && !editor.exportError().isEmpty()), 120000);
         QVERIFY2(finished.count() > 0, qPrintable(editor.exportError()));
         QVERIFY(QFileInfo(output).size() > 0);
+        QVERIFY(sawFinishing);
+        QVERIFY(!prematureCompletion);
+        QCOMPARE(bar->property("value").toDouble(), 1.0);
         Q_UNUSED(errors);
     }
 
