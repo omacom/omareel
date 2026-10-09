@@ -1,17 +1,164 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Shapes
+import Omareel.Ui
 
 FocusScope {
     id: root
     required property real scaleFactor
     signal scaleFactorRequested(real value)
+    property real previousScaleFactor: 1
+    property real wheelRequestedScale: -1
+    property real zoomAnchorX: -1
+    property real zoomAnchorTime: -1
+    function applyZoomAnchor() {
+        if (zoomAnchorTime < 0) return
+        flick.contentX = Math.max(0, Math.min(flick.contentWidth - flick.width,
+            zoomAnchorTime * pixelsPerSecond - zoomAnchorX))
+        zoomAnchorX = -1
+        zoomAnchorTime = -1
+    }
+    function zoomBy(factor, anchorX) {
+        const next = Math.max(1, Math.min(16, scaleFactor * factor))
+        if (Math.abs(next - scaleFactor) < 0.000001) return
+        applyZoomAnchor()
+        zoomAnchorX = Math.max(0, Math.min(flick.width, anchorX))
+        zoomAnchorTime = (flick.contentX + zoomAnchorX) / pixelsPerSecond
+        wheelRequestedScale = next
+        scaleFactorRequested(next)
+    }
+    onScaleFactorChanged: {
+        if (flick.width <= 0 || basePixels <= 0) {
+            previousScaleFactor = scaleFactor
+            return
+        }
+        if (Math.abs(scaleFactor - wheelRequestedScale) > 0.000001) {
+            const oldPixelsPerSecond = basePixels * previousScaleFactor
+            const oldMaxX = Math.max(0, editor.duration * oldPixelsPerSecond
+                + timelinePadding - flick.width)
+            const oldContentX = zoomAnchorTime < 0 ? flick.contentX
+                : Math.max(0, Math.min(oldMaxX,
+                    zoomAnchorTime * oldPixelsPerSecond - zoomAnchorX))
+            zoomAnchorX = flick.width / 2
+            zoomAnchorTime = (oldContentX + zoomAnchorX) / oldPixelsPerSecond
+        } else if (zoomAnchorTime < 0) {
+            zoomAnchorX = flick.width / 2
+            zoomAnchorTime = (flick.contentX + zoomAnchorX)
+                / (basePixels * previousScaleFactor)
+        }
+        wheelRequestedScale = -1
+        previousScaleFactor = scaleFactor
+        Qt.callLater(root.applyZoomAnchor)
+    }
     signal cameraSelected()
+    property real rangeAnchor: -1
+    property real rangeHead: -1
+    property bool selectingRange: false
+    property bool resizingRange: false
+    property string rangeResizeEdge: ""
+    property real rangeResizeOffset: 0
+    property real priorRangeStart: -1
+    property real priorRangeEnd: -1
+    readonly property real rangeStart: Math.min(rangeAnchor, rangeHead)
+    readonly property real rangeEnd: Math.max(rangeAnchor, rangeHead)
+    readonly property bool hasRange: rangeAnchor >= 0
+        && rangeHead >= 0 && rangeEnd - rangeStart > 0.000001
+    function clearRange() {
+        selectingRange = false
+        resizingRange = false
+        rangeAnchor = -1
+        rangeHead = -1
+        editor.clearPlaybackRange()
+    }
+    function beginRange(time) {
+        root.forceActiveFocus()
+        editor.beginScrub()
+        editor.selectedClipId = ""
+        editor.clearPlaybackRange()
+        rangeAnchor = Math.max(0, Math.min(editor.duration, time))
+        rangeHead = rangeAnchor
+        selectingRange = true
+        resizingRange = false
+    }
+    function beginRangeResize(edge, pointerTime) {
+        if (!hasRange) return
+        root.forceActiveFocus()
+        editor.beginScrub()
+        priorRangeStart = rangeStart
+        priorRangeEnd = rangeEnd
+        rangeResizeEdge = edge
+        rangeResizeOffset = (edge === "left" ? priorRangeStart : priorRangeEnd) - pointerTime
+        resizingRange = true
+        selectingRange = true
+    }
+    function updateRange(time) {
+        if (selectingRange) {
+            rangeHead = Math.max(0, Math.min(editor.duration, time))
+            if (resizingRange)
+                rangeAnchor = rangeResizeEdge === "left" ? priorRangeEnd : priorRangeStart
+            if (hasRange) editor.setPlaybackRange(rangeStart, rangeEnd)
+            else editor.clearPlaybackRange()
+            editor.scrubTo(rangeHead)
+        }
+    }
+    function finishRange(time) {
+        updateRange(time)
+        selectingRange = false
+        if ((rangeEnd - rangeStart) * pixelsPerSecond < 2) {
+            clearRange()
+            editor.seek(editor.position)
+        }
+        else {
+            editor.setPlaybackRange(rangeStart, rangeEnd)
+            editor.seek(resizingRange ? rangeHead : rangeStart)
+        }
+        resizingRange = false
+    }
+    function cancelRange() {
+        if (resizingRange) {
+            rangeAnchor = priorRangeStart
+            rangeHead = priorRangeEnd
+            selectingRange = false
+            resizingRange = false
+            editor.setPlaybackRange(rangeStart, rangeEnd)
+            editor.seek(rangeStart)
+        } else {
+            clearRange()
+            editor.seek(editor.position)
+        }
+    }
+    function deleteSelectedRange() {
+        if (!hasRange || !editor.deleteOutputRange(rangeStart, rangeEnd)) return false
+        clearRange()
+        return true
+    }
+    Connections {
+        target: editor
+        function onDurationChanged() { root.clearRange() }
+    }
     implicitHeight: editor.hasCamera ? 204 : 148
     property real labelWidth: 72
-    property real basePixels: Math.max(55, (width - labelWidth - 24) / Math.max(1, editor.duration))
+    readonly property real timelinePadding: 40
+    property real basePixels: Math.max(1, width - labelWidth - timelinePadding)
+        / Math.max(0.001, editor.duration)
     property real pixelsPerSecond: basePixels * scaleFactor
-    property int ticksPerSecond: pixelsPerSecond >= 120 ? 5 : pixelsPerSecond >= 72 ? 2 : 1
+    readonly property real tickStepSeconds: {
+        const target = 90 / Math.max(0.001, pixelsPerSecond)
+        const power = Math.pow(10, Math.floor(Math.log10(target)))
+        for (const multiple of [1, 2, 5, 10])
+            if (multiple * power >= target) return multiple * power
+        return 10 * power
+    }
+    function formatRulerTime(seconds) {
+        const milliseconds = Math.max(0, Math.round(seconds * 1000))
+        const minutes = Math.floor(milliseconds / 60000)
+        const secondsPart = Math.floor(milliseconds / 1000) % 60
+        const time = (minutes < 10 ? "0" : "") + minutes + ":"
+            + (secondsPart < 10 ? "0" : "") + secondsPart
+        if (tickStepSeconds >= 1) return time
+        const precision = tickStepSeconds >= .1 ? 1 : tickStepSeconds >= .01 ? 2 : 3
+        return time + "." + ("00" + (milliseconds % 1000)).slice(-3).slice(0, precision)
+    }
     readonly property int trackCount: editor.hasCamera ? 3 : 2
     readonly property real tracksBottom: 32 + trackCount * 48 + (trackCount - 1) * 8
 
@@ -64,53 +211,41 @@ FocusScope {
         y: 0
         width: parent.width - x
         height: parent.height
-        contentWidth: Math.max(width, editor.duration * root.pixelsPerSecond + 40)
+        contentWidth: Math.max(width, editor.duration * root.pixelsPerSecond
+            + root.timelinePadding)
         contentHeight: height
         clip: true
         interactive: false
         boundsBehavior: Flickable.StopAtBounds
-        function scrollFromWheel(event) {
-            const pixel = event.pixelDelta.x !== 0 ? event.pixelDelta.x : event.pixelDelta.y
-            const angle = event.angleDelta.x !== 0 ? event.angleDelta.x : event.angleDelta.y
-            const amount = pixel !== 0 ? pixel : angle / 120 * 80
-            contentX = Math.max(0, Math.min(contentWidth - width, contentX - amount))
-            event.accepted = true
-        }
-
         WheelHandler {
+            id: timelineWheel
             target: null
             acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-            acceptedModifiers: Qt.ControlModifier
             onWheel: event => {
-                const pointerX = event.position.x
-                const timeAtPointer = (flick.contentX + pointerX) / root.pixelsPerSecond
-                const delta = event.angleDelta.y !== 0 ? event.angleDelta.y : event.pixelDelta.y
-                const next = Math.max(1, Math.min(5, root.scaleFactor * Math.pow(1.12, delta / 120)))
-                root.scaleFactorRequested(next)
-                Qt.callLater(function() {
-                    flick.contentX = Math.max(0, Math.min(flick.contentWidth - flick.width,
-                        timeAtPointer * root.pixelsPerSecond - pointerX))
-                })
+                const pixel = event.pixelDelta.y !== 0 ? event.pixelDelta.y : event.pixelDelta.x
+                const angle = event.angleDelta.y !== 0 ? event.angleDelta.y : event.angleDelta.x
+                const amount = pixel !== 0 ? pixel : angle
+                if (amount !== 0) {
+                    const scene = timelineWheel.point.scenePosition
+                    const pointerX = flick.mapFromItem(null, scene.x, scene.y).x
+                    root.zoomBy(Math.pow(1.25, amount / 120), pointerX)
+                }
                 event.accepted = true
             }
         }
-        WheelHandler {
+        DragHandler {
             target: null
-            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-            // NoModifier is zero, so it cannot represent an alternative when OR'ed with Shift.
-            acceptedModifiers: Qt.NoModifier
-            onWheel: event => flick.scrollFromWheel(event)
-        }
-        WheelHandler {
-            target: null
-            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-            acceptedModifiers: Qt.ShiftModifier
-            onWheel: event => flick.scrollFromWheel(event)
+            acceptedButtons: Qt.RightButton
+            property real startContentX: 0
+            onActiveChanged: if (active) startContentX = flick.contentX
+            onTranslationChanged: if (active)
+                flick.contentX = Math.max(0, Math.min(flick.contentWidth - flick.width,
+                    startContentX - translation.x))
         }
         readonly property int firstVisibleTick: Math.max(0,
-            Math.floor(contentX * root.ticksPerSecond / root.pixelsPerSecond) - 1)
-        readonly property int visibleTickCount: Math.ceil(width * root.ticksPerSecond
-                                                          / root.pixelsPerSecond) + 4
+            Math.floor(contentX / (root.tickStepSeconds * root.pixelsPerSecond)) - 1)
+        readonly property int visibleTickCount: Math.ceil(width
+            / (root.tickStepSeconds * root.pixelsPerSecond)) + 4
 
         Item {
             id: content
@@ -128,8 +263,7 @@ FocusScope {
                         id: tickDelegate
                         required property int index
                         property int tickIndex: flick.firstVisibleTick + index
-                        property real tickTime: tickIndex / root.ticksPerSecond
-                        property bool major: tickIndex % root.ticksPerSecond === 0
+                        property real tickTime: tickIndex * root.tickStepSeconds
                         visible: tickTime <= editor.duration
                         x: tickTime * root.pixelsPerSecond
                         width: 1
@@ -137,17 +271,15 @@ FocusScope {
                         Rectangle {
                             anchors.bottom: parent.bottom
                             width: 1
-                            height: tickDelegate.major ? 9 : 5
+                            height: 9
                             color: theme.hairlineStrong
                         }
                         Loader {
-                            active: tickDelegate.major
-                                && Math.round(tickDelegate.tickTime)
-                                   % Math.max(1, Math.ceil(62 / root.pixelsPerSecond)) === 0
+                            active: true
                             x: 5
                             y: 5
                             sourceComponent: Text {
-                                text: editor.formatTime(tickDelegate.tickTime)
+                                text: root.formatRulerTime(tickDelegate.tickTime)
                                 color: theme.textFaint
                                 font.pixelSize: theme.font.caption
                                 font.family: theme.fontFamily
@@ -156,15 +288,38 @@ FocusScope {
                     }
                 }
                 MouseArea {
+                    id: rulerMouse
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
                     preventStealing: true
-                    function seekAt(px) {
-                        editor.seek(Math.max(0, Math.min(editor.duration,
-                                                        px / root.pixelsPerSecond)))
+                    property bool selectingRange: false
+                    function timeAt(px) {
+                        return Math.max(0, Math.min(editor.duration, px / root.pixelsPerSecond))
                     }
-                    onPressed: mouse => { root.forceActiveFocus(); seekAt(mouse.x) }
-                    onPositionChanged: mouse => { if (pressed) seekAt(mouse.x) }
+                    function seekAt(px) {
+                        editor.scrubTo(timeAt(px))
+                    }
+                    onPressed: mouse => {
+                        root.forceActiveFocus()
+                        selectingRange = (mouse.modifiers & Qt.ShiftModifier) !== 0
+                        if (selectingRange) root.beginRange(timeAt(mouse.x))
+                        else { editor.beginScrub(); seekAt(mouse.x) }
+                    }
+                    onPositionChanged: mouse => {
+                        if (!pressed) return
+                        if (selectingRange) root.updateRange(timeAt(mouse.x))
+                        else seekAt(mouse.x)
+                    }
+                    onReleased: mouse => {
+                        if (selectingRange) root.finishRange(timeAt(mouse.x))
+                        else { seekAt(mouse.x); editor.endScrub() }
+                        selectingRange = false
+                    }
+                    onCanceled: {
+                        if (selectingRange) root.cancelRange()
+                        else editor.endScrub()
+                        selectingRange = false
+                    }
                 }
             }
 
@@ -174,8 +329,6 @@ FocusScope {
                 width: parent.width
                 height: 48
                 color: theme.normalFill
-                border.width: 1
-                border.color: theme.normalBorder
             }
             ClipTrack {
                 x: 0
@@ -183,7 +336,71 @@ FocusScope {
                 width: parent.width
                 height: 40
                 pixelsPerSecond: root.pixelsPerSecond
+                viewportX: flick.contentX
+                viewportWidth: flick.width
                 focusTarget: root
+                onScrubStarted: editor.beginScrub()
+                onScrubMoved: time => editor.scrubTo(time)
+                onScrubFinished: editor.endScrub()
+                onRangeStarted: time => root.beginRange(time)
+                onRangeMoved: time => root.updateRange(time)
+                onRangeFinished: time => root.finishRange(time)
+                onRangeCanceled: root.cancelRange()
+                onClearRangeRequested: root.clearRange()
+            }
+            Rectangle {
+                id: clipRangeSelection
+                objectName: "clipRangeSelection"
+                visible: root.rangeAnchor >= 0 && root.rangeHead >= 0
+                    && (root.resizingRange
+                        || Math.abs(root.rangeHead - root.rangeAnchor) * root.pixelsPerSecond >= 2)
+                x: root.rangeStart * root.pixelsPerSecond
+                y: 32
+                width: Math.max(0, (root.rangeEnd - root.rangeStart) * root.pixelsPerSecond)
+                height: 48
+                color: Qt.alpha(theme.accent, .30)
+                border.width: 2
+                border.color: theme.accent
+                z: 10
+                OmTrimHandle {
+                    objectName: "rangeTrimHandle-left"
+                    edge: "left"
+                    accent: theme.accent
+                    active: true
+                    visible: !root.selectingRange || root.resizingRange
+                    mouseArea.onPressed: mouse => root.beginRangeResize("left",
+                        mouseArea.mapToItem(content, mouse.x, mouse.y).x / root.pixelsPerSecond)
+                    mouseArea.onPositionChanged: mouse => {
+                        if (mouseArea.pressed)
+                            root.updateRange(Math.max(0, Math.min(editor.duration,
+                                mouseArea.mapToItem(content, mouse.x, mouse.y).x / root.pixelsPerSecond
+                                    + root.rangeResizeOffset)))
+                    }
+                    mouseArea.onReleased: mouse => root.finishRange(Math.max(0, Math.min(editor.duration,
+                        mouseArea.mapToItem(content, mouse.x, mouse.y).x / root.pixelsPerSecond
+                            + root.rangeResizeOffset)))
+                    mouseArea.onCanceled: root.cancelRange()
+                }
+                OmTrimHandle {
+                    x: parent.width - width
+                    objectName: "rangeTrimHandle-right"
+                    edge: "right"
+                    accent: theme.accent
+                    active: true
+                    visible: !root.selectingRange || root.resizingRange
+                    mouseArea.onPressed: mouse => root.beginRangeResize("right",
+                        mouseArea.mapToItem(content, mouse.x, mouse.y).x / root.pixelsPerSecond)
+                    mouseArea.onPositionChanged: mouse => {
+                        if (mouseArea.pressed)
+                            root.updateRange(Math.max(0, Math.min(editor.duration,
+                                mouseArea.mapToItem(content, mouse.x, mouse.y).x / root.pixelsPerSecond
+                                    + root.rangeResizeOffset)))
+                    }
+                    mouseArea.onReleased: mouse => root.finishRange(Math.max(0, Math.min(editor.duration,
+                        mouseArea.mapToItem(content, mouse.x, mouse.y).x / root.pixelsPerSecond
+                            + root.rangeResizeOffset)))
+                    mouseArea.onCanceled: root.cancelRange()
+                }
             }
             Rectangle {
                 x: 0
@@ -320,7 +537,7 @@ FocusScope {
 
             Rectangle {
                 id: playhead
-                x: editor.position * root.pixelsPerSecond - width / 2
+                x: editor.playheadPosition * root.pixelsPerSecond - width / 2
                 y: 25
                 width: playheadDrag.pressed ? 2 : 1.5
                 height: root.tracksBottom - y
@@ -375,16 +592,19 @@ FocusScope {
                     cursorShape: Qt.SizeHorCursor
                     function seekAt(mouseX, mouseY) {
                         const contentX = mapToItem(content, mouseX, mouseY).x
-                        editor.seek(Math.max(0, Math.min(editor.duration,
-                                                        contentX / root.pixelsPerSecond)))
+                        editor.scrubTo(Math.max(0, Math.min(editor.duration,
+                                                           contentX / root.pixelsPerSecond)))
                     }
                     onPressed: mouse => {
                         root.forceActiveFocus()
+                        editor.beginScrub()
                         seekAt(mouse.x, mouse.y)
                     }
                     onPositionChanged: mouse => {
                         if (pressed) seekAt(mouse.x, mouse.y)
                     }
+                    onReleased: mouse => { seekAt(mouse.x, mouse.y); editor.endScrub() }
+                    onCanceled: editor.endScrub()
                     ToolTip.visible: containsMouse
                     ToolTip.text: editor.formatTime(editor.position)
                     ToolTip.delay: 250
@@ -394,7 +614,8 @@ FocusScope {
 
         ScrollBar.horizontal: ScrollBar {
             id: horizontalBar
-            policy: flick.contentWidth > flick.width ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+            policy: flick.contentWidth > flick.width + 0.5
+                ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
             interactive: true
             height: 12
             topPadding: 2

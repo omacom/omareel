@@ -47,11 +47,13 @@ class Editor : public QObject
     Q_PROPERTY(bool hasDesktopAudio READ hasDesktopAudio CONSTANT)
     Q_PROPERTY(bool hasMicrophoneAudio READ hasMicrophoneAudio CONSTANT)
     Q_PROPERTY(bool hasCamera READ hasCamera CONSTANT)
-    Q_PROPERTY(QVariantList waveform READ waveform NOTIFY waveformChanged)
     Q_PROPERTY(QVariantList cameraThumbnails READ cameraThumbnails NOTIFY cameraThumbnailsChanged)
+    Q_PROPERTY(int videoThumbnailRevision READ videoThumbnailRevision NOTIFY videoThumbnailRevisionChanged)
     Q_PROPERTY(bool loading READ loading NOTIFY loadingChanged)
     Q_PROPERTY(double position READ position NOTIFY positionChanged)
+    Q_PROPERTY(double playheadPosition READ playheadPosition NOTIFY playheadPositionChanged)
     Q_PROPERTY(bool playing READ playing NOTIFY playingChanged)
+    Q_PROPERTY(bool hasPlaybackRange READ hasPlaybackRange NOTIFY playbackRangeChanged)
     Q_PROPERTY(bool canUndo READ canUndo NOTIFY historyChanged)
     Q_PROPERTY(bool canRedo READ canRedo NOTIFY historyChanged)
     Q_PROPERTY(bool dirty READ dirty NOTIFY dirtyChanged)
@@ -105,11 +107,13 @@ public:
     bool hasDesktopAudio() const { return m_hasDesktopAudio; }
     bool hasMicrophoneAudio() const { return m_hasMicrophoneAudio; }
     bool hasCamera() const { return m_hasCamera; }
-    QVariantList waveform() const { return m_waveform; }
     QVariantList cameraThumbnails() const { return m_cameraThumbnails; }
+    int videoThumbnailRevision() const { return m_videoThumbnailRevision; }
     bool loading() const { return m_loading; }
     double position() const { return m_outputPosition; }
+    double playheadPosition() const { return m_playheadPosition; }
     bool playing() const;
+    bool hasPlaybackRange() const { return m_playbackRangeEnd > m_playbackRangeStart; }
     bool canUndo() const { return !m_undo.isEmpty(); }
     bool canRedo() const { return !m_redo.isEmpty(); }
     bool dirty() const { return m_dirty; }
@@ -160,7 +164,15 @@ public:
     Q_INVOKABLE void playPause();
     Q_INVOKABLE void play();
     Q_INVOKABLE void pause();
+    Q_INVOKABLE void setPlaybackRange(double from, double to);
+    Q_INVOKABLE void clearPlaybackRange();
+    Q_INVOKABLE QString videoThumbnailUrl(double sourceTime);
+    Q_INVOKABLE QString videoThumbnailUrlForClip(double sourceTime, double sourceStart,
+                                                double sourceEnd);
     Q_INVOKABLE void seek(double outputTime);
+    Q_INVOKABLE void beginScrub();
+    Q_INVOKABLE void scrubTo(double outputTime);
+    Q_INVOKABLE void endScrub();
     Q_INVOKABLE void stepFrames(int frames);
     Q_INVOKABLE void seekBoundary(int direction);
     Q_INVOKABLE double outputToSource(double outputTime) const;
@@ -169,6 +181,7 @@ public:
     Q_INVOKABLE bool moveClip(const QString &id, double sourceIn);
     Q_INVOKABLE bool trimClip(const QString &id, double newIn, double newOut);
     Q_INVOKABLE bool removeClip(const QString &id);
+    Q_INVOKABLE bool deleteOutputRange(double from, double to);
     Q_INVOKABLE bool mergeClip(const QString &id, int direction);
     Q_INVOKABLE bool resetClipTrims(const QString &id);
     Q_INVOKABLE bool setClipSpeed(const QString &id, double speed);
@@ -200,14 +213,16 @@ signals:
     void projectChanged();
     void durationChanged();
     void positionChanged();
+    void playheadPositionChanged();
     void playingChanged();
+    void playbackRangeChanged();
+    void videoThumbnailRevisionChanged();
     void historyChanged();
     void dirtyChanged();
     void selectionChanged();
     void pickingZoomTargetChanged();
     void presetsChanged();
     void wallpapersChanged();
-    void waveformChanged();
     void cameraThumbnailsChanged();
     void loadingChanged();
     void outputSizeChanged();
@@ -230,11 +245,17 @@ private:
     void rebuildMotion();
     void applyMotionResult();
     void updatePreview();
+    void setOutputPosition(double outputTime);
+    void seekMedia(double outputTime);
+    void flushScrubSeek();
     void handlePlayerPosition(qint64 milliseconds);
+    void updatePlayheadPosition();
+    void resetPlayheadClock(double outputTime);
+    void setPlayheadPosition(double outputTime);
+    double clampPlaybackPosition(double outputTime) const;
+    void startNextVideoThumbnail();
     void handlePreviewStats();
-    void attachPreviewWindow(QQuickWindow *window);
     void syncCamera(double screenSourceTime, bool force = false);
-    void startWaveformBuild();
     void startCameraThumbnailBuild();
     void finishLoading();
     QString presetsDirectory() const;
@@ -268,12 +289,16 @@ private:
     std::unique_ptr<QAudioOutput> m_audioOutput;
     QPointer<QVideoSink> m_videoSink;
     QPointer<QVideoSink> m_cameraVideoSink;
-    QPointer<QQuickWindow> m_previewWindow;
-    QMetaObject::Connection m_previewFrameConnection;
-    QMetaObject::Connection m_previewWindowConnection;
     double m_outputPosition = 0.0;
+    double m_playheadPosition = 0.0;
+    double m_playheadClockPosition = 0.0;
+    QElapsedTimer m_playheadClock;
+    double m_playbackRangeStart = -1.0;
+    double m_playbackRangeEnd = -1.0;
     int m_activeClip = 0;
     bool m_internalSeek = false;
+    bool m_scrubbing = false;
+    double m_pendingScrubPosition = -1.0;
     bool m_warmingPreview = false;
     bool m_warmingCameraPreview = false;
     bool m_previewStatsEnabled = false;
@@ -281,6 +306,7 @@ private:
     qint64 m_previewStatsCostNs = 0;
     QElapsedTimer m_previewStatsClock;
     QTimer m_previewTimer;
+    QTimer m_scrubTimer;
     QTimer m_previewStatsTimer;
     QTimer m_autosaveTimer;
     QTimer m_motionTimer;
@@ -297,10 +323,15 @@ private:
     int m_runningMotionGeneration = 0;
     QFutureWatcher<MotionTrack> m_motionWatcher;
     std::shared_ptr<const MotionTrack> m_motion;
-    QVariantList m_waveform;
-    QFutureWatcher<QVariantList> m_waveformWatcher;
     QVariantList m_cameraThumbnails;
     QFutureWatcher<QVariantList> m_cameraThumbnailWatcher;
+    QString m_videoThumbnailCacheDirectory;
+    int m_videoThumbnailRevision = 0;
+    QList<int> m_videoThumbnailQueue;
+    QSet<int> m_videoThumbnailPending;
+    QSet<int> m_videoThumbnailFailed;
+    QSet<int> m_videoThumbnailReady;
+    QFutureWatcher<bool> m_videoThumbnailWatcher;
     bool m_loading = true;
     QVariantList m_gradients;
     mutable QVariantMap m_projectMapCache;

@@ -249,18 +249,18 @@ Exporter pipeline (`render/Exporter`):
 - **Bottom toolbar:** aspect dropdown (Auto, Wide 16:9, 4:3, Square, Vertical 9:16, 4:5, 3:2),
   Crop toggle (drag handles on preview), transport (⏮ ▶/⏸ ⏭), split (scissors) at playhead,
   timeline zoom slider.
-- **Timeline:** ruler; **Clip track** (accent-tinted blocks, waveform of audio if present via
-  `ffmpeg -filter astats`-free approach: decode to pcm and draw peaks), trim handles at both
+- **Timeline:** ruler; **Clip track** (source-frame thumbnails), trim handles at both
   ends, split at playhead creates two clips, delete selected clip, drag clip edges; **Zoom
   track** (blue blocks labelled "Zoom 2x · Auto"), drag to move, drag edges to resize, click to
   select → inspector shows level (1.25/1.5/2/2.5/3/4) and target (Auto / pick point on
   preview), delete key removes, double-click empty area adds a 2 s zoom.
-  Either wheel axis scrolls horizontally (80 px per mouse-wheel notch); Ctrl+wheel zooms around
-  the pointer. The 12 px scrollbar stays visible whenever content overflows.
+  Either wheel axis zooms around the pointer from fit-to-view to 16×; right-button drag pans.
+  The 12 px scrollbar stays visible whenever content overflows.
 - Playback: `QMediaPlayer` on screen.mp4, mapping output time ↔ source time through clips;
   skipping over trimmed regions; cursor + zoom overlay driven by player position.
-- Keyboard: Space play/pause, ←/→ 1 frame, Shift+←/→ 1 s, S split, Delete, Ctrl+Z/Ctrl+Shift+Z,
-  Ctrl+S save, Ctrl+E export, Z add zoom at playhead.
+- Keyboard: Space play/pause, ←/→ 1 frame, Shift+←/→ 1 s, S split, Delete selection,
+  Backspace selected range, Ctrl+Z/Ctrl+Shift+Z, Ctrl+S save, Ctrl+E export,
+  Z add zoom at playhead.
 - Autosave project.json on every change (debounced 500 ms). Undo stack in C++ (command pattern
   or snapshot-based JSON diff; snapshots are fine — projects are tiny).
 

@@ -15,6 +15,7 @@ public:
     bool split(double outputTime);
     bool trim(int index, double newIn, double newOut);
     bool remove(int index);
+    bool deleteRange(double from, double to, const QString &remainderId);
 
 private:
     QVector<Clip> m_clips;

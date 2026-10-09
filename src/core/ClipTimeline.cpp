@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 using namespace Omareel;
 
@@ -21,9 +22,10 @@ double ClipTimeline::sourceTime(double output) const
 {
     if (m_clips.isEmpty()) return -1.0;
     double cursor = 0.0;
-    for (const auto &clip : m_clips) {
+    for (int i = 0; i < m_clips.size(); ++i) {
+        const Clip &clip = m_clips[i];
         const double length = duration(clip);
-        if (output <= cursor + length)
+        if (output < cursor + length || i == m_clips.size() - 1)
             return std::clamp(clip.in + (output - cursor) * clip.speed, clip.in, clip.out);
         cursor += length;
     }
@@ -72,5 +74,49 @@ bool ClipTimeline::remove(int index)
 {
     if (index < 0 || index >= m_clips.size()) return false;
     m_clips.removeAt(index);
+    return true;
+}
+
+bool ClipTimeline::deleteRange(double from, double to, const QString &remainderId)
+{
+    if (!std::isfinite(from) || !std::isfinite(to)) return false;
+    const double total = totalDuration();
+    from = std::clamp(from, 0.0, total);
+    to = std::clamp(to, 0.0, total);
+    if (to - from < 1e-9) return false;
+
+    QVector<Clip> kept;
+    double cursor = 0.0;
+    for (const Clip &clip : std::as_const(m_clips)) {
+        const double length = duration(clip);
+        const double end = cursor + length;
+        if (end <= from || cursor >= to) {
+            kept << clip;
+        } else {
+            const double leftLength = std::clamp(from - cursor, 0.0, length);
+            const double rightLength = std::clamp(end - to, 0.0, length);
+            if (leftLength > 1e-9) {
+                Clip left = clip;
+                left.out = clip.in + leftLength * clip.speed;
+                if (left.out - left.in < 0.1) return false;
+                kept << left;
+            }
+            if (rightLength > 1e-9) {
+                Clip right = clip;
+                right.in = clip.out - rightLength * clip.speed;
+                if (right.out - right.in < 0.1) return false;
+                if (leftLength > 1e-9) {
+                    if (remainderId.isEmpty()) return false;
+                    for (const Clip &existing : std::as_const(m_clips))
+                        if (existing.id == remainderId) return false;
+                    right.id = remainderId;
+                }
+                kept << right;
+            }
+        }
+        cursor = end;
+    }
+    if (kept.isEmpty()) return false;
+    m_clips = std::move(kept);
     return true;
 }

@@ -114,7 +114,7 @@ want the bar to appear.
 | `Shift+Left` / `Shift+Right` | Seek one second |
 | `S` | Split the selected clip at the playhead |
 | `Z` | Add a zoom at the playhead |
-| `Delete` | Delete the selected zoom, or selected clip |
+| `Delete` | Delete the selected time range, zoom, or clip |
 | `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / redo |
 | `Ctrl+S` | Save now |
 | `Ctrl+E` | Open export |
