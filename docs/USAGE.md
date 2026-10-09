@@ -70,12 +70,9 @@ the bar from the video. Use `--no-bar` or set `OMAREEL_NO_BAR=1` to suppress it.
 ## Launcher window
 
 The launcher opens at 380×460 and grows to 380×520 while its floating self-view controls are visible. Its
-Wayland app id is `omareel`. This optional Omarchy rule keeps it floating, centred,
-and at the intended default size:
-
-```lua
-o.window("^omareel$", { float = true, center = true, size = "380 460" })
-```
+Wayland app id is `omareel`. It needs no window rule: a toplevel whose minimum and maximum width
+match is one Hyprland floats on its own, so the launcher's fixed width keeps it floating and
+centred while its height follows the self-view controls.
 
 ## Camera self-view
 
