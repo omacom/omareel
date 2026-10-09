@@ -478,8 +478,10 @@ void Editor::attachVideoOutput(QObject *output)
                 }
             }
             if (m_warmingPreview) {
-                m_warmingPreview = false;
                 QTimer::singleShot(0, this, [this] {
+                    // play() may have taken over since this frame arrived.
+                    if (!m_warmingPreview) return;
+                    m_warmingPreview = false;
                     pause();
                     // The decoder may have advanced a frame or two during warm-up; re-seek so
                     // the paused frame is the one the playhead points at.
@@ -903,6 +905,9 @@ void Editor::play()
             || m_outputPosition >= m_playbackRangeEnd - 0.001)
             seek(m_playbackRangeStart);
     } else if (m_outputPosition >= duration() - 0.0001) seek(0);
+    // The opening preview, or a seek from a stalled player, may still be warming up; its pause
+    // on the first decoded frame must not stop playback asked for in the meantime.
+    m_warmingPreview = false;
     m_player.play();
     syncCamera(sourcePosition(), true);
 }
