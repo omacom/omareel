@@ -1,5 +1,6 @@
 #include "ui/Editor.h"
 #include "core/Theme.h"
+#include "render/VideoDecoding.h"
 
 #include <QDir>
 #include <QFile>
@@ -27,6 +28,7 @@ class EditorTest : public QObject
 private slots:
     void initTestCase()
     {
+        configureVideoDecoding();
         if (QStandardPaths::findExecutable(QStringLiteral("ffmpeg")).isEmpty()
             || QStandardPaths::findExecutable(QStringLiteral("ffprobe")).isEmpty())
             QSKIP("ffmpeg/ffprobe unavailable");
