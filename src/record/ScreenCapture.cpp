@@ -913,6 +913,8 @@ bool ScreenCapture::start(const ScreenCaptureConfig &config, QString *error)
                   << QStringLiteral("-bufsize") << QStringLiteral("%1k").arg(maxrateKbps * 2)
                   << QStringLiteral("-g") << QString::number(d->config.fps)
                   << QStringLiteral("-bf") << QStringLiteral("0");
+    // Without NVENC, libx264 it is. h264_vulkan looks like the hardware alternative, but uploading
+    // BGRA frames through hwupload held it below libx264 veryfast at every capture size on the N1X.
     else
         arguments << QStringLiteral("libx264") << QStringLiteral("-preset") << QStringLiteral("veryfast")
                   << QStringLiteral("-crf") << (smallFrame ? QStringLiteral("10") : QStringLiteral("16"))
@@ -959,11 +961,15 @@ bool ScreenCapture::captureFrame(QString *error)
             std::lock_guard<std::mutex> lock(d->ringMutex);
             index = d->ring.acquire();
         }
-        if (d->lastCaptureRequestUs == 0) d->lastCaptureRequestUs = now;
-        else {
-            d->lastCaptureRequestUs += intervalUs;
-            if (now - d->lastCaptureRequestUs > intervalUs)
-                d->lastCaptureRequestUs = now;
+        // A copy that outlasts the interval leaves its tick pending, so the next request goes out
+        // as soon as the copy completes instead of waiting for the tick after.
+        if (!frameInFlight) {
+            if (d->lastCaptureRequestUs == 0) d->lastCaptureRequestUs = now;
+            else {
+                d->lastCaptureRequestUs += intervalUs;
+                if (now - d->lastCaptureRequestUs > intervalUs)
+                    d->lastCaptureRequestUs = now;
+            }
         }
         if (index >= 0) {
             Private::Slot &slot = d->captureSlots[size_t(index)];
