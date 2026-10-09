@@ -353,6 +353,62 @@ private slots:
         QCOMPARE(full.first().bytes, qsizetype(3840) * 2160 * 4);
     }
 
+    void captureStreamKeepsFrameTimesAndColours()
+    {
+        if (QStandardPaths::findExecutable(QStringLiteral("ffmpeg")).isEmpty()
+            || QStandardPaths::findExecutable(QStringLiteral("ffprobe")).isEmpty())
+            QSKIP("ffmpeg/ffprobe unavailable");
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const QString video = directory.filePath(QStringLiteral("screen.mp4"));
+        const QSize size(64, 32);
+        // A capture that stalls between 0.117 s and 0.5 s must not close that gap up.
+        const QList<qint64> timesUs{0, 16667, 100000, 116667, 500000};
+        QByteArray stream = captureStreamHeader(size, 60);
+        for (const qint64 timeUs : timesUs) {
+            QByteArray frame;
+            for (int pixel = 0; pixel < size.width() * size.height(); ++pixel)
+                frame += QByteArray::fromHex("c8320aff"); // B, G, R, X
+            stream += captureFrameHeader(timeUs, frame.size()) + frame;
+        }
+        QProcess encoder;
+        encoder.start(QStringLiteral("ffmpeg"), {QStringLiteral("-v"), QStringLiteral("error"),
+            QStringLiteral("-f"), QStringLiteral("matroska"), QStringLiteral("-i"), QStringLiteral("pipe:0"),
+            QStringLiteral("-c:v"), QStringLiteral("libx264"), QStringLiteral("-bf"), QStringLiteral("0"),
+            QStringLiteral("-pix_fmt"), QStringLiteral("yuv420p"), QStringLiteral("-fps_mode"),
+            QStringLiteral("vfr"), QStringLiteral("-enc_time_base"), QStringLiteral("1/60"), video});
+        QVERIFY(encoder.waitForStarted(5000));
+        encoder.write(stream);
+        encoder.closeWriteChannel();
+        QVERIFY(encoder.waitForFinished(30000));
+        QVERIFY2(encoder.exitCode() == 0, encoder.readAllStandardError().constData());
+
+        QProcess probe;
+        probe.start(QStringLiteral("ffprobe"), {QStringLiteral("-v"), QStringLiteral("error"),
+            QStringLiteral("-select_streams"), QStringLiteral("v"), QStringLiteral("-show_entries"),
+            QStringLiteral("packet=pts_time:format=duration"), QStringLiteral("-of"),
+            QStringLiteral("csv=p=0"), video});
+        QVERIFY(probe.waitForFinished(10000));
+        const QStringList lines = QString::fromUtf8(probe.readAllStandardOutput())
+            .split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+        QCOMPARE(lines.size(), timesUs.size() + 1);
+        for (int index = 0; index < timesUs.size(); ++index)
+            QVERIFY2(qAbs(lines[index].toDouble() - timesUs[index] / 1e6) < 0.001, qPrintable(lines[index]));
+        QVERIFY2(qAbs(lines.last().toDouble() - (0.5 + 1.0 / 60.0)) < 0.001, qPrintable(lines.last()));
+
+        QProcess decoder;
+        decoder.start(QStringLiteral("ffmpeg"), {QStringLiteral("-v"), QStringLiteral("error"),
+            QStringLiteral("-i"), video, QStringLiteral("-frames:v"), QStringLiteral("1"),
+            QStringLiteral("-pix_fmt"), QStringLiteral("rgb24"), QStringLiteral("-f"),
+            QStringLiteral("rawvideo"), QStringLiteral("-")});
+        QVERIFY(decoder.waitForFinished(10000));
+        const QByteArray rgb = decoder.readAllStandardOutput();
+        QVERIFY(rgb.size() >= 3);
+        QVERIFY2(qAbs(uchar(rgb[0]) - 10) <= 4 && qAbs(uchar(rgb[1]) - 50) <= 4
+                     && qAbs(uchar(rgb[2]) - 200) <= 4,
+                 qPrintable(QStringLiteral("%1,%2,%3").arg(uchar(rgb[0])).arg(uchar(rgb[1])).arg(uchar(rgb[2]))));
+    }
+
     void captureExclusionRequiresExactValidHash()
     {
         const QString hash(40, 'a');

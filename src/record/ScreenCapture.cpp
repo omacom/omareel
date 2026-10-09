@@ -117,6 +117,76 @@ QVector<CaptureRowCopy> Omareel::captureCropRows(const QSize &sourceSize, int so
 
 namespace {
 
+// Just enough EBML for one uncompressed video track. IDs keep their marker bits; every size is an
+// eight-byte vint so element lengths never change how a header is laid out.
+void appendEbmlId(QByteArray &out, quint32 id)
+{
+    for (int shift = 24; shift >= 0; shift -= 8)
+        if (id >> shift) out.append(char((id >> shift) & 0xff));
+}
+
+void appendEbmlSize(QByteArray &out, quint64 size)
+{
+    out.append(char(0x01));
+    for (int shift = 48; shift >= 0; shift -= 8) out.append(char((size >> shift) & 0xff));
+}
+
+QByteArray ebmlElement(quint32 id, const QByteArray &payload)
+{
+    QByteArray out;
+    appendEbmlId(out, id);
+    appendEbmlSize(out, quint64(payload.size()));
+    return out + payload;
+}
+
+QByteArray ebmlUnsigned(quint32 id, quint64 value)
+{
+    QByteArray payload;
+    for (int shift = 56; shift >= 0; shift -= 8) payload.append(char((value >> shift) & 0xff));
+    return ebmlElement(id, payload);
+}
+
+} // namespace
+
+QByteArray Omareel::captureStreamHeader(const QSize &size, int fps)
+{
+    const QByteArray ebml = ebmlElement(0x1A45DFA3,
+        ebmlUnsigned(0x4286, 1) + ebmlUnsigned(0x42F7, 1) + ebmlUnsigned(0x42F2, 4)
+        + ebmlUnsigned(0x42F3, 8) + ebmlElement(0x4282, QByteArrayLiteral("matroska"))
+        + ebmlUnsigned(0x4287, 4) + ebmlUnsigned(0x4285, 2));
+    // Timestamps count microseconds; DefaultDuration gives the last frame one interval.
+    const QByteArray info = ebmlElement(0x1549A966, ebmlUnsigned(0x2AD7B1, 1000)
+        + ebmlElement(0x4D80, QByteArrayLiteral("omareel"))
+        + ebmlElement(0x5741, QByteArrayLiteral("omareel")));
+    const QByteArray video = ebmlElement(0xE0, ebmlUnsigned(0xB0, quint64(size.width()))
+        + ebmlUnsigned(0xBA, quint64(size.height())) + ebmlElement(0x2EB524, QByteArrayLiteral("BGRA")));
+    const QByteArray track = ebmlElement(0xAE, ebmlUnsigned(0xD7, 1) + ebmlUnsigned(0x73C5, 1)
+        + ebmlUnsigned(0x83, 1) + ebmlElement(0x86, QByteArrayLiteral("V_UNCOMPRESSED"))
+        + ebmlUnsigned(0x9C, 0) + ebmlUnsigned(0x23E383, quint64(std::llround(1e9 / std::max(1, fps))))
+        + video);
+    QByteArray segment;
+    appendEbmlId(segment, 0x18538067);
+    segment += QByteArray::fromHex("01ffffffffffffff"); // unknown size: the stream ends with the pipe
+    return ebml + segment + info + ebmlElement(0x1654AE6B, track);
+}
+
+QByteArray Omareel::captureFrameHeader(qint64 timestampUs, qsizetype frameBytes)
+{
+    // Track 1, no offset from the cluster timestamp, keyframe.
+    const QByteArray blockHeader = QByteArray::fromHex("81000080");
+    QByteArray block;
+    appendEbmlId(block, 0xA3);
+    appendEbmlSize(block, quint64(blockHeader.size() + frameBytes));
+    block += blockHeader;
+    const QByteArray timestamp = ebmlUnsigned(0xE7, quint64(std::max<qint64>(0, timestampUs)));
+    QByteArray cluster;
+    appendEbmlId(cluster, 0x1F43B675);
+    appendEbmlSize(cluster, quint64(timestamp.size() + block.size() + frameBytes));
+    return cluster + timestamp + block;
+}
+
+namespace {
+
 qint64 monotonicUs()
 {
     timespec value{};
@@ -524,6 +594,18 @@ void ScreenCapture::Private::writerLoop()
     QByteArray cropped;
     if (cropRows.size() > 1)
         cropped.resize(encodedSize.width() * encodedSize.height() * 4);
+    {
+        const QByteArray header = captureStreamHeader(encodedSize, config.fps);
+        QString error;
+        if (!writeAll(encoderFd, header.constData(), header.size(), writerAbort, &error)) {
+            std::lock_guard<std::mutex> lock(ringMutex);
+            writerError = error;
+            writerFailed.store(true, std::memory_order_relaxed);
+            writerStopping = true;
+            return;
+        }
+    }
+    qint64 lastFrameIndex = -1;
     for (;;) {
         int index = -1;
         {
@@ -536,6 +618,27 @@ void ScreenCapture::Private::writerLoop()
         }
         if (index < 0) continue;
 
+        const qint64 presentationUs = captureSlots[size_t(index)].presentationUs;
+        if (firstUs == 0) {
+            firstUs = presentationUs;
+            QString timestampError;
+            if (!writeTimestamp(config.timestampPath, firstUs, &timestampError)) {
+                std::lock_guard<std::mutex> lock(ringMutex);
+                ring.release(index);
+                writerError = timestampError;
+                writerFailed.store(true);
+                break;
+            }
+        }
+        // Frames keep their capture time on the encoder's 1/fps grid. A second capture within one
+        // interval would land on the same tick as the first, so it is skipped.
+        const qint64 frameIndex = std::llround((presentationUs - firstUs) * double(config.fps) / 1e6);
+        if (frameIndex <= lastFrameIndex) {
+            std::lock_guard<std::mutex> lock(ringMutex);
+            ring.release(index);
+            continue;
+        }
+
         const char *bytes = reinterpret_cast<const char *>(captureSlots[size_t(index)].memory);
         const char *output = bytes + cropRows.first().sourceOffset;
         qsizetype outputBytes = cropRows.first().bytes;
@@ -546,20 +649,12 @@ void ScreenCapture::Private::writerLoop()
             output = cropped.constData();
             outputBytes = cropped.size();
         }
-        if (firstUs == 0) {
-            firstUs = captureSlots[size_t(index)].presentationUs;
-            if (firstUs <= 0) firstUs = monotonicUs();
-            QString timestampError;
-            if (!writeTimestamp(config.timestampPath, firstUs, &timestampError)) {
-                std::lock_guard<std::mutex> lock(ringMutex);
-                ring.release(index);
-                writerError = timestampError;
-                writerFailed.store(true);
-                break;
-            }
-        }
+        const QByteArray frameHeader = captureFrameHeader(
+            std::llround(frameIndex * 1e6 / config.fps), outputBytes);
         QString error;
-        const bool wrote = writeAll(encoderFd, output, outputBytes, writerAbort, &error);
+        const bool wrote = writeAll(encoderFd, frameHeader.constData(), frameHeader.size(),
+                                    writerAbort, &error)
+            && writeAll(encoderFd, output, outputBytes, writerAbort, &error);
         {
             std::lock_guard<std::mutex> lock(ringMutex);
             ring.release(index);
@@ -570,6 +665,7 @@ void ScreenCapture::Private::writerLoop()
             }
         }
         if (!wrote) break;
+        lastFrameIndex = frameIndex;
         frames.fetch_add(1, std::memory_order_relaxed);
     }
 }
@@ -781,10 +877,7 @@ bool ScreenCapture::start(const ScreenCaptureConfig &config, QString *error)
         && probeResults.gpuConversion;
     d->conversion = useGpuConversion ? QStringLiteral("gpu") : QStringLiteral("cpu");
     QStringList arguments{QStringLiteral("-y"), QStringLiteral("-loglevel"), QStringLiteral("error"),
-        QStringLiteral("-f"), QStringLiteral("rawvideo"), QStringLiteral("-pix_fmt"),
-        QStringLiteral("bgra"), QStringLiteral("-s"),
-        QStringLiteral("%1x%2").arg(d->encodedSize.width()).arg(d->encodedSize.height()),
-        QStringLiteral("-r"), QString::number(d->config.fps), QStringLiteral("-i"),
+        QStringLiteral("-f"), QStringLiteral("matroska"), QStringLiteral("-i"),
         QStringLiteral("pipe:0"), QStringLiteral("-an")};
     if (useGpuConversion)
         arguments << QStringLiteral("-vf") << QStringLiteral("hwupload_cuda,scale_cuda=format=nv12");
@@ -823,8 +916,14 @@ bool ScreenCapture::start(const ScreenCaptureConfig &config, QString *error)
     else
         arguments << QStringLiteral("libx264") << QStringLiteral("-preset") << QStringLiteral("veryfast")
                   << QStringLiteral("-crf") << (smallFrame ? QStringLiteral("10") : QStringLiteral("16"))
-                  << QStringLiteral("-g") << QString::number(d->config.fps);
+                  << QStringLiteral("-g") << QString::number(d->config.fps)
+                  << QStringLiteral("-bf") << QStringLiteral("0");
     if (!useGpuConversion && !lossless) arguments << QStringLiteral("-pix_fmt") << QStringLiteral("yuv420p");
+    // Frames keep the times they were captured at, on a 1/fps time base. Gaps stay gaps: ffmpeg
+    // neither fills them with copies nor closes them up. (B-frames would also break the MP4
+    // durations of such a stream, so none of the encoders above use them.)
+    arguments << QStringLiteral("-fps_mode") << QStringLiteral("vfr")
+              << QStringLiteral("-enc_time_base") << QStringLiteral("1/%1").arg(d->config.fps);
     arguments << QStringLiteral("-movflags") << QStringLiteral("+faststart") << config.outputPath;
     if (!startEncoder(arguments, &d->encoderPid, &d->encoderFd, &d->encoderErrorFd, error))
         return false;
@@ -902,7 +1001,9 @@ bool ScreenCapture::captureFrame(QString *error)
             d->ring.release(slot.index);
             continue;
         }
-        d->lastUs = slot.presentationUs > 0 ? slot.presentationUs : monotonicUs();
+        // The writer times frames by presentation; arrival stands in if the compositor sent none.
+        if (slot.presentationUs <= 0) slot.presentationUs = monotonicUs();
+        d->lastUs = slot.presentationUs;
         {
             std::lock_guard<std::mutex> lock(d->ringMutex);
             if (!d->ring.markQueued(slot.index)) {
