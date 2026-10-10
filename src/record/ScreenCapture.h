@@ -68,6 +68,8 @@ public:
     void abort();
     qint64 firstFrameUs() const;
     qint64 lastFrameUs() const;
+    // From the first frame to the end of the last one written; final once finish() returns.
+    qint64 videoDurationUs() const;
     QSize outputSize() const;
     int encodedFrames() const;
     int droppedFrames() const;

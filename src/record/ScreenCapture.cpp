@@ -527,6 +527,7 @@ struct ScreenCapture::Private {
     qint64 lastCaptureRequestUs = 0;
     qint64 stopUs = 0;
     std::atomic_int frames{0};
+    std::atomic<qint64> lastFrameIndex{-1}; // on the 1/fps grid, including the stop repeat
     int captureFailures = 0;
     QElapsedTimer rateClock;
     int rateFrames = 0;
@@ -625,7 +626,6 @@ void ScreenCapture::Private::writerLoop()
         return writeAll(encoderFd, frameHeader.constData(), frameHeader.size(), writerAbort, error)
             && writeAll(encoderFd, output, outputBytes, writerAbort, error);
     };
-    qint64 lastFrameIndex = -1;
     // The compositor only sends frames when the screen changes, so the last one written stays in
     // its slot until the next replaces it. At stop it is written again at the stop time, or a
     // recording that ends on a still screen would end at its last change.
@@ -684,8 +684,12 @@ void ScreenCapture::Private::writerLoop()
     const qint64 stopIndex = stopUs > 0
         ? std::llround((stopUs - firstUs) * double(config.fps) / 1e6) : -1;
     QString error;
-    const bool padded = stopIndex <= lastFrameIndex || writerAbort.load(std::memory_order_relaxed)
-        || writerFailed.load(std::memory_order_relaxed) || writeFrame(heldIndex, stopIndex, &error);
+    bool padded = true;
+    if (stopIndex > lastFrameIndex && !writerAbort.load(std::memory_order_relaxed)
+        && !writerFailed.load(std::memory_order_relaxed)) {
+        padded = writeFrame(heldIndex, stopIndex, &error);
+        if (padded) lastFrameIndex = stopIndex;
+    }
     std::lock_guard<std::mutex> lock(ringMutex);
     ring.release(heldIndex);
     if (!padded) {
@@ -1086,6 +1090,11 @@ void ScreenCapture::abort()
 
 qint64 ScreenCapture::firstFrameUs() const { return d->firstUs; }
 qint64 ScreenCapture::lastFrameUs() const { return d->lastUs; }
+qint64 ScreenCapture::videoDurationUs() const
+{
+    const qint64 index = d->lastFrameIndex.load(std::memory_order_relaxed);
+    return index < 0 ? 0 : std::llround((index + 1) * 1e6 / d->config.fps);
+}
 QSize ScreenCapture::outputSize() const { return d->encodedSize; }
 int ScreenCapture::encodedFrames() const { return d->frames.load(std::memory_order_relaxed); }
 int ScreenCapture::droppedFrames() const
