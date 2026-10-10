@@ -71,7 +71,7 @@ Also call `omarchy-shell -q omarchy.indicators refresh` if present (it watches g
 ## 2. Bundle format (`Name.omareel/` directory)
 
 ```
-screen.mp4          raw capture (no cursor), cfr
+screen.mp4          raw capture (no cursor); each frame at its capture time on the 1/fps grid
 screen.mp4.ts       first-frame timestamps
 camera.mp4          optional webcam capture, without audio
 camera.mp4.ts       webcam first-frame timestamps

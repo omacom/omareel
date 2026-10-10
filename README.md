@@ -58,12 +58,8 @@ Run `omareel` to open the launcher, or bind the smart recording toggle:
 o.bind("SUPER + ALT + R", "Record with omareel", "omareel record")
 ```
 
-The launcher's app id is `omareel`. To keep its compact 380×460 window floating and
-centred, add this optional Omarchy window rule:
-
-```lua
-o.window("^omareel$", { float = true, center = true, size = "380 460" })
-```
+The launcher's app id is `omareel`. Its compact 380×460 window floats without a window rule: the
+fixed width is Hyprland's cue to float it, and Hyprland centres it on the focused monitor.
 
 The default command uses one gesture: drag to select an area, click a window to snap to it, or
 click the desktop to record the whole screen. Explicit modes remain available for dedicated

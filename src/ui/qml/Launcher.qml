@@ -11,7 +11,9 @@ ApplicationWindow {
     visible: true
     width: 380
     height: desiredHeight
-    minimumWidth: 340
+    // A fixed width is how the launcher asks to float: Hyprland (like Sway) floats a toplevel
+    // whose minimum and maximum size match in either dimension, so no window rule is needed.
+    minimumWidth: 380
     maximumWidth: 380
     minimumHeight: desiredHeight - 40
     maximumHeight: desiredHeight

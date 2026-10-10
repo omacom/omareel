@@ -5,6 +5,7 @@
 #include "core/ZoomTimeline.h"
 #include "record/Recorder.h"
 #include "render/Exporter.h"
+#include "render/VideoDecoding.h"
 #include "core/Theme.h"
 #include "core/OmarchyPaths.h"
 #include "core/RecordingPreferences.h"
@@ -550,6 +551,7 @@ int main(int argc, char **argv)
         if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")) qputenv("QT_QPA_PLATFORM", "offscreen");
         qputenv("QT_QPA_PLATFORMTHEME", QByteArray());
     }
+    configureVideoDecoding();
     if (exporting) {
         const bool headless = qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY")
                            && qEnvironmentVariableIsEmpty("DISPLAY");

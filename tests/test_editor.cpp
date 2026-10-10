@@ -1,5 +1,6 @@
 #include "ui/Editor.h"
 #include "core/Theme.h"
+#include "render/VideoDecoding.h"
 
 #include <QDir>
 #include <QFile>
@@ -27,6 +28,7 @@ class EditorTest : public QObject
 private slots:
     void initTestCase()
     {
+        configureVideoDecoding();
         if (QStandardPaths::findExecutable(QStringLiteral("ffmpeg")).isEmpty()
             || QStandardPaths::findExecutable(QStringLiteral("ffprobe")).isEmpty())
             QSKIP("ffmpeg/ffprobe unavailable");
@@ -714,6 +716,21 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(!editor.playing(), 10000);
         QVERIFY(editor.position() >= 1.28 && editor.position() < 1.3);
         QVERIFY(editor.playheadPosition() >= 1.28 && editor.playheadPosition() < 1.3);
+    }
+
+    void playRequestedDuringWarmUpKeepsPlaying()
+    {
+        QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));
+        Editor editor(m_bundle);
+        QVERIFY2(editor.isValid(), qPrintable(editor.errorString()));
+        QVideoSink sink;
+        QObject holder;
+        holder.setProperty("videoSink", QVariant::fromValue(&sink));
+        // No event has run yet, so the opening preview cannot have delivered its first frame.
+        editor.attachVideoOutput(&holder);
+        editor.play();
+        QTRY_VERIFY_WITH_TIMEOUT(editor.position() >= .5, 10000);
+        QVERIFY(editor.playing());
     }
 
     void playheadAdvancesWithIdleQuickWindow()

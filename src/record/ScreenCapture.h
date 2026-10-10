@@ -28,6 +28,12 @@ struct CaptureRowCopy {
 
 QVector<CaptureRowCopy> captureCropRows(const QSize &sourceSize, int sourceStride,
                                         const QRect &requestedCrop);
+
+// Captured BGRA frames reach ffmpeg as uncompressed Matroska so each keeps its capture time. Raw
+// video carries no timestamps, and ffmpeg would lay the frames end to end at the nominal rate.
+QByteArray captureStreamHeader(const QSize &size, int fps);
+QByteArray captureFrameHeader(qint64 timestampUs, qsizetype frameBytes);
+
 class CaptureRingBookkeeping
 {
 public:
@@ -62,6 +68,8 @@ public:
     void abort();
     qint64 firstFrameUs() const;
     qint64 lastFrameUs() const;
+    // From the first frame to the end of the last one written; final once finish() returns.
+    qint64 videoDurationUs() const;
     QSize outputSize() const;
     int encodedFrames() const;
     int droppedFrames() const;

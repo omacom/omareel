@@ -515,7 +515,8 @@ static bool startAudioCapture(QProcess *process, const RecordOptions &options,
 
 static bool finishAudioCapture(QProcess *process, const QString &screenPath,
                                const QString &audioPath, const QString &outputPath,
-                               qint64 screenStartedUs, qint64 audioStartedUs)
+                               qint64 screenStartedUs, qint64 audioStartedUs,
+                               qint64 screenDurationUs)
 {
     if (process->state() != QProcess::NotRunning) {
         ::kill(pid_t(process->processId()), SIGINT);
@@ -529,14 +530,19 @@ static bool finishAudioCapture(QProcess *process, const QString &screenPath,
     if (!cleanAudioStop
         || QFileInfo(audioPath).size() <= 0) return false;
     const double offset = (audioStartedUs - screenStartedUs) / 1000000.0;
+    // The screen video sets the length: audio past its end is cut, and audio that ends early
+    // leaves the video whole. -shortest would instead drop every video frame shown past the end
+    // of the audio, and the screen only produces frames when it changes.
+    const QStringList length = screenDurationUs > 0
+        ? QStringList{QStringLiteral("-t"), QString::number(screenDurationUs / 1000000.0, 'f', 6)}
+        : QStringList{QStringLiteral("-shortest")};
     QProcess mux;
-    mux.start(QStringLiteral("ffmpeg"), {QStringLiteral("-y"), QStringLiteral("-loglevel"),
+    mux.start(QStringLiteral("ffmpeg"), QStringList{QStringLiteral("-y"), QStringLiteral("-loglevel"),
         QStringLiteral("error"), QStringLiteral("-i"), screenPath, QStringLiteral("-itsoffset"),
         QString::number(offset, 'f', 6), QStringLiteral("-i"), audioPath,
         QStringLiteral("-map"), QStringLiteral("0:v:0"), QStringLiteral("-map"),
-        QStringLiteral("1:a:0"), QStringLiteral("-c"), QStringLiteral("copy"),
-        QStringLiteral("-shortest"), QStringLiteral("-movflags"), QStringLiteral("+faststart"),
-        outputPath});
+        QStringLiteral("1:a:0"), QStringLiteral("-c"), QStringLiteral("copy")}
+        + length + QStringList{QStringLiteral("-movflags"), QStringLiteral("+faststart"), outputPath});
     return mux.waitForFinished(30000) && mux.exitCode() == 0 && QFileInfo(outputPath).size() > 0;
 }
 
@@ -1116,7 +1122,8 @@ int Recorder::daemonMain(const QStringList &arguments)
         if (!screenCapture.finish(&error)) captureLoopFailed = true;
         if (audioActive)
             audioMuxed = finishAudioCapture(&audioRecorder, nativeVideo, audioVideo, video,
-                                            screenCapture.firstFrameUs(), audioStartedUs);
+                                            screenCapture.firstFrameUs(), audioStartedUs,
+                                            screenCapture.videoDurationUs());
         if (!audioMuxed) {
             QFile::remove(video);
             if (nativeVideo != video) QFile::rename(nativeVideo, video);
