@@ -506,7 +506,10 @@ struct ScreenCapture::Private {
     QSize encodedSize;
     QVector<CaptureRowCopy> cropRows;
     std::vector<Slot> captureSlots;
-    CaptureRingBookkeeping ring{4};
+    // One slot holds the last frame written (see writerLoop), one is being written, and the rest
+    // take captures and queue them.
+    static constexpr int slotCount = 5;
+    CaptureRingBookkeeping ring{slotCount};
     std::mutex ringMutex;
     std::condition_variable queuedFrame;
     std::thread writer;
@@ -522,6 +525,7 @@ struct ScreenCapture::Private {
     std::atomic<qint64> firstUs{0};
     qint64 lastUs = 0;
     qint64 lastCaptureRequestUs = 0;
+    qint64 stopUs = 0;
     std::atomic_int frames{0};
     int captureFailures = 0;
     QElapsedTimer rateClock;
@@ -605,7 +609,27 @@ void ScreenCapture::Private::writerLoop()
             return;
         }
     }
+    const auto writeFrame = [&](int index, qint64 frameIndex, QString *error) {
+        const char *bytes = reinterpret_cast<const char *>(captureSlots[size_t(index)].memory);
+        const char *output = bytes + cropRows.first().sourceOffset;
+        qsizetype outputBytes = cropRows.first().bytes;
+        if (cropRows.size() > 1) {
+            for (const CaptureRowCopy &row : std::as_const(cropRows))
+                std::memcpy(cropped.data() + row.destinationOffset,
+                            bytes + row.sourceOffset, size_t(row.bytes));
+            output = cropped.constData();
+            outputBytes = cropped.size();
+        }
+        const QByteArray frameHeader = captureFrameHeader(
+            std::llround(frameIndex * 1e6 / config.fps), outputBytes);
+        return writeAll(encoderFd, frameHeader.constData(), frameHeader.size(), writerAbort, error)
+            && writeAll(encoderFd, output, outputBytes, writerAbort, error);
+    };
     qint64 lastFrameIndex = -1;
+    // The compositor only sends frames when the screen changes, so the last one written stays in
+    // its slot until the next replaces it. At stop it is written again at the stop time, or a
+    // recording that ends on a still screen would end at its last change.
+    int heldIndex = -1;
     for (;;) {
         int index = -1;
         {
@@ -639,26 +663,14 @@ void ScreenCapture::Private::writerLoop()
             continue;
         }
 
-        const char *bytes = reinterpret_cast<const char *>(captureSlots[size_t(index)].memory);
-        const char *output = bytes + cropRows.first().sourceOffset;
-        qsizetype outputBytes = cropRows.first().bytes;
-        if (cropRows.size() > 1) {
-            for (const CaptureRowCopy &row : std::as_const(cropRows))
-                std::memcpy(cropped.data() + row.destinationOffset,
-                            bytes + row.sourceOffset, size_t(row.bytes));
-            output = cropped.constData();
-            outputBytes = cropped.size();
-        }
-        const QByteArray frameHeader = captureFrameHeader(
-            std::llround(frameIndex * 1e6 / config.fps), outputBytes);
         QString error;
-        const bool wrote = writeAll(encoderFd, frameHeader.constData(), frameHeader.size(),
-                                    writerAbort, &error)
-            && writeAll(encoderFd, output, outputBytes, writerAbort, &error);
+        const bool wrote = writeFrame(index, frameIndex, &error);
         {
             std::lock_guard<std::mutex> lock(ringMutex);
-            ring.release(index);
+            if (heldIndex >= 0) ring.release(heldIndex);
+            heldIndex = wrote ? index : -1;
             if (!wrote) {
+                ring.release(index);
                 writerError = error;
                 writerFailed.store(true, std::memory_order_relaxed);
                 writerStopping = true;
@@ -667,6 +679,18 @@ void ScreenCapture::Private::writerLoop()
         if (!wrote) break;
         lastFrameIndex = frameIndex;
         frames.fetch_add(1, std::memory_order_relaxed);
+    }
+    if (heldIndex < 0) return;
+    const qint64 stopIndex = stopUs > 0
+        ? std::llround((stopUs - firstUs) * double(config.fps) / 1e6) : -1;
+    QString error;
+    const bool padded = stopIndex <= lastFrameIndex || writerAbort.load(std::memory_order_relaxed)
+        || writerFailed.load(std::memory_order_relaxed) || writeFrame(heldIndex, stopIndex, &error);
+    std::lock_guard<std::mutex> lock(ringMutex);
+    ring.release(heldIndex);
+    if (!padded) {
+        writerError = error;
+        writerFailed.store(true, std::memory_order_relaxed);
     }
 }
 
@@ -841,7 +865,7 @@ bool ScreenCapture::start(const ScreenCaptureConfig &config, QString *error)
         return false;
     }
 
-    constexpr int slotCount = 4;
+    constexpr int slotCount = Private::slotCount;
     d->slotBytes = qsizetype(d->stride) * d->height;
     d->memorySize = d->slotBytes * slotCount;
     d->memoryFd = memfd_create("omareel-capture", MFD_CLOEXEC);
@@ -1042,6 +1066,8 @@ bool ScreenCapture::captureFrame(QString *error)
 
 bool ScreenCapture::finish(QString *error)
 {
+    // The video runs until now, even if the screen has not changed since its last frame.
+    d->stopUs = monotonicUs();
     for (Private::Slot &slot : d->captureSlots) {
         if (!slot.frame) continue;
         ext_image_copy_capture_frame_v1_destroy(slot.frame);
