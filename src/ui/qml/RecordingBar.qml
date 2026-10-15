@@ -73,6 +73,30 @@ ApplicationWindow {
                 Accessible.name: "Flip camera"
             }
 
+            OmIconButton {
+                visible: recordingBar.webcam
+                Layout.preferredWidth: 24; Layout.preferredHeight: 24
+                focusPolicy: Qt.NoFocus
+                icon.source: "qrc:/omareel/assets/icons/lucide/square.svg"
+                icon.color: theme.foreground
+                icon.width: 15; icon.height: 15
+                tooltipText: ""
+                onClicked: recordingBar.cycleCameraShape()
+                Accessible.name: "Camera shape"
+            }
+
+            OmIconButton {
+                visible: recordingBar.webcam
+                Layout.preferredWidth: 24; Layout.preferredHeight: 24
+                focusPolicy: Qt.NoFocus
+                icon.source: "qrc:/omareel/assets/icons/lucide/circle.svg"
+                icon.color: theme.foreground
+                icon.width: 15; icon.height: 15
+                tooltipText: ""
+                onClicked: recordingBar.snapSelfViewToNextCorner()
+                Accessible.name: "Camera corner"
+            }
+
             OmButton {
                 visible: recordingBar.webcam
                 Layout.preferredWidth: 130
@@ -192,7 +216,9 @@ ApplicationWindow {
                 Rectangle {
                     id: cameraMask
                     anchors.fill: parent
-                    radius: width / 2
+                    radius: recordingBar.cameraShape === "square" ? 0
+                        : recordingBar.cameraShape === "rounded" ? recordingBar.cameraRadius
+                        : width / 2
                     color: "white"
                     visible: false
                     layer.enabled: true

@@ -285,6 +285,8 @@ private slots:
         QCOMPARE(camera.value(QStringLiteral("first_frame_us")).toVariant().toLongLong(), qint64(1234567));
         QCOMPARE(camera.value(QStringLiteral("rotation")).toInt(), 90);
         QVERIFY(camera.value(QStringLiteral("flipHorizontal")).toBool());
+        QCOMPARE(camera.value(QStringLiteral("shape")).toString(), QStringLiteral("round"));
+        QCOMPARE(camera.value(QStringLiteral("radius")).toDouble(), 16.0);
     }
 
     void discardTimelineNeverDrains()

@@ -267,8 +267,11 @@ CaptureRegion Recorder::evenCaptureRegion(CaptureRegion region)
 QJsonObject Recorder::cameraCaptureBlock(const QString &device, int requestedHeight,
                                          int width, int height, double fps,
                                          qint64 firstFrameUs, const QString &backend,
-                                         int rotation, bool flipHorizontal)
+                                         int rotation, bool flipHorizontal,
+                                         const QString &shape, double radius)
 {
+    const QString cameraShape = (shape == QLatin1String("rounded") || shape == QLatin1String("square"))
+        ? shape : QStringLiteral("round");
     return QJsonObject{
         {QStringLiteral("device"), device},
         {QStringLiteral("requestedHeight"), requestedHeight == 720 ? 720 : 1080},
@@ -278,7 +281,9 @@ QJsonObject Recorder::cameraCaptureBlock(const QString &device, int requestedHei
         {QStringLiteral("first_frame_us"), firstFrameUs},
         {QStringLiteral("backend"), backend},
         {QStringLiteral("rotation"), rotation},
-        {QStringLiteral("flipHorizontal"), flipHorizontal}
+        {QStringLiteral("flipHorizontal"), flipHorizontal},
+        {QStringLiteral("shape"), cameraShape},
+        {QStringLiteral("radius"), radius}
     };
 }
 
@@ -1320,7 +1325,9 @@ int Recorder::daemonMain(const QStringList &arguments)
                     cameraBackend,
                     cameraState.value(QStringLiteral("camera_rotation")).toInt(options.webcamRotation),
                     cameraState.value(QStringLiteral("camera_flip_horizontal"))
-                        .toBool(options.webcamFlipHorizontal)));
+                        .toBool(options.webcamFlipHorizontal),
+                    cameraState.value(QStringLiteral("camera_shape")).toString(QStringLiteral("round")),
+                    cameraState.value(QStringLiteral("camera_radius")).toDouble(16)));
             } else {
                 QFile::remove(cameraVideo);
                 QFile::remove(cameraVideo + QStringLiteral(".ts"));

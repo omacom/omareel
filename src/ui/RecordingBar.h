@@ -48,6 +48,8 @@ class RecordingBar : public QObject
     Q_PROPERTY(int countdownValue READ countdownValue NOTIFY countdownChanged)
     Q_PROPERTY(int cameraRotation READ cameraRotation NOTIFY cameraSettingsChanged)
     Q_PROPERTY(bool cameraFlipHorizontal READ cameraFlipHorizontal NOTIFY cameraSettingsChanged)
+    Q_PROPERTY(QString cameraShape READ cameraShape NOTIFY cameraSettingsChanged)
+    Q_PROPERTY(int cameraRadius READ cameraRadius NOTIFY cameraSettingsChanged)
     Q_PROPERTY(QString cameraError READ cameraError NOTIFY cameraErrorChanged)
     Q_PROPERTY(bool cameraReady READ cameraReady NOTIFY cameraReadyChanged)
     Q_PROPERTY(bool selfViewVisible READ selfViewVisible NOTIFY selfViewVisibilityChanged)
@@ -71,6 +73,8 @@ public:
     int countdownValue() const { return m_countdownValue; }
     int cameraRotation() const { return m_cameraRotation; }
     bool cameraFlipHorizontal() const { return m_cameraFlipHorizontal; }
+    QString cameraShape() const { return m_cameraShape; }
+    int cameraRadius() const { return m_cameraRadius; }
     QString cameraError() const { return m_cameraError; }
     bool cameraReady() const;
     bool selfViewVisible() const { return m_selfViewVisible; }
@@ -83,6 +87,8 @@ public:
     Q_INVOKABLE void attachCameraOutput(QObject *output);
     Q_INVOKABLE void rotateCamera();
     Q_INVOKABLE void flipCamera();
+    Q_INVOKABLE void cycleCameraShape();
+    Q_INVOKABLE void snapSelfViewToNextCorner();
     Q_INVOKABLE QPointF globalCursorPos() const;
     Q_INVOKABLE void beginDrag(const QPointF &globalPosition);
     Q_INVOKABLE void dragTo(const QPointF &globalPosition);
@@ -138,6 +144,9 @@ private:
     int m_countdownValue = 3;
     int m_cameraRotation = 0;
     bool m_cameraFlipHorizontal = false;
+    QString m_cameraShape = QStringLiteral("round");
+    int m_cameraRadius = 16;
+    int m_corner = 3;
     QString m_cameraError;
     bool m_selfViewVisible = false;
     bool m_selfViewSafe = false;

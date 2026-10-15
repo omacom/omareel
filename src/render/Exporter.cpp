@@ -277,6 +277,11 @@ bool Exporter::run(const ExportOptions &options, QString *error)
                 project.camera.rotation = rotation;
             project.camera.flipHorizontal = camera
                 .value(QStringLiteral("flipHorizontal")).toBool(false);
+            const QString shape = camera.value(QStringLiteral("shape")).toString(QStringLiteral("round"));
+            if (shape == QLatin1String("round") || shape == QLatin1String("rounded")
+                    || shape == QLatin1String("square"))
+                project.camera.shape = shape;
+            project.camera.radius = camera.value(QStringLiteral("radius")).toDouble(16.0);
         }
         QString inputError;
         const auto input = InputLog::loadBundle(bundle.absolutePath(), media.duration, &inputError);

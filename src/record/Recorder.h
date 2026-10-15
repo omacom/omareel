@@ -62,7 +62,9 @@ public:
     static QJsonObject cameraCaptureBlock(const QString &device, int requestedHeight,
                                           int width, int height, double fps,
                                           qint64 firstFrameUs, const QString &backend,
-                                          int rotation, bool flipHorizontal);
+                                          int rotation, bool flipHorizontal,
+                                          const QString &shape = QStringLiteral("round"),
+                                          double radius = 16);
     static bool discardTimeline(const DiscardActions &actions);
     static bool finishAudioCapture(QProcess *process, const QString &screenPath,
                                    const QString &audioPath, const QString &outputPath,
