@@ -1,8 +1,8 @@
 #include "Exporter.h"
 
 #include "EncoderPipe.h"
+#include "ExportRenderer.h"
 #include "FfmpegDecoder.h"
-#include "FrameSource.h"
 #include "MediaProbe.h"
 #include "core/ClipTimeline.h"
 #include "core/CameraTimeline.h"
@@ -15,7 +15,6 @@
 #include "omareel_qt/src/theme.cxxqt.h"
 #include "core/ZoomTimeline.h"
 
-#include <QCoreApplication>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFileInfo>
@@ -23,28 +22,14 @@
 #include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <QOffscreenSurface>
-#include <QOpenGLContext>
-#include <QOpenGLExtraFunctions>
-#include <QOpenGLFramebufferObject>
-#include <QOpenGLFunctions>
 #include <QProcess>
-#include <QQuickItem>
-#include <QQuickGraphicsDevice>
-#include <QQuickRenderControl>
-#include <QQuickRenderTarget>
 #include <QQuickWindow>
-#include <QQmlComponent>
-#include <QQmlContext>
-#include <QQmlEngine>
 #include <QStandardPaths>
 #include <QScopeGuard>
 #include <QTemporaryFile>
 #include <QTextStream>
 #include <algorithm>
 #include <cmath>
-#include <array>
-#include <cstring>
 #include <condition_variable>
 #include <chrono>
 #include <deque>
@@ -252,9 +237,6 @@ bool Exporter::run(const ExportOptions &options, QString *error)
     QElapsedTimer totalTimer;
     totalTimer.start();
     qint64 decodeNs = 0;
-    qint64 uploadNs = 0;
-    qint64 renderNs = 0;
-    qint64 readbackNs = 0;
     qint64 encodeWriteNs = 0;
     const QDir bundle(options.bundlePath);
     const QString videoPath = bundle.filePath(QStringLiteral("screen.mp4"));
@@ -378,45 +360,9 @@ bool Exporter::run(const ExportOptions &options, QString *error)
 
     const bool softwareRendering = QQuickWindow::graphicsApi() == QSGRendererInterface::Software
                                 || QGuiApplication::platformName() == QLatin1String("offscreen");
-    std::unique_ptr<QOpenGLContext> context;
-    std::unique_ptr<QOffscreenSurface> surface;
-    std::unique_ptr<QOpenGLFramebufferObject> fbo;
-    if (!softwareRendering) {
-        context = std::make_unique<QOpenGLContext>();
-        if (!context->create()) { if (error) *error = QStringLiteral("Could not create OpenGL context"); return false; }
-        surface = std::make_unique<QOffscreenSurface>();
-        surface->setFormat(context->format());
-        surface->create();
-        if (!surface->isValid() || !context->makeCurrent(surface.get())) {
-            if (error) *error = QStringLiteral("Could not create an offscreen OpenGL surface");
-            return false;
-        }
-        QOpenGLFramebufferObjectFormat fboFormat;
-        fboFormat.setAttachment(QOpenGLFramebufferObject::CombinedDepthStencil);
-        fbo = std::make_unique<QOpenGLFramebufferObject>(width, height, fboFormat);
-        if (!fbo->isValid()) { if (error) *error = QStringLiteral("Could not create render framebuffer"); return false; }
-    }
-    std::unique_ptr<QQuickRenderControl> renderControl;
-    std::unique_ptr<QQuickWindow> window;
-    if (softwareRendering) {
-        // Qt's software scene-graph adaptation rejects QQuickRenderControl. A hidden
-        // offscreen QQuickWindow keeps headless export functional on hosts with no EGL/GL.
-        window = std::make_unique<QQuickWindow>();
-    } else {
-        renderControl = std::make_unique<QQuickRenderControl>();
-        window = std::make_unique<QQuickWindow>(renderControl.get());
-        window->setGraphicsDevice(QQuickGraphicsDevice::fromOpenGLContext(context.get()));
-        QQuickRenderTarget target = QQuickRenderTarget::fromOpenGLTexture(fbo->texture(), {width, height});
-        window->setRenderTarget(target);
-    }
-    window->setGeometry(0, 0, width, height);
-    window->setColor(Qt::transparent);
-    if (!softwareRendering && !renderControl->initialize()) {
-        if (error) *error = QStringLiteral("Could not initialize Qt Quick render control");
-        return false;
-    }
-
-    CompositionState state;
+    ExportRenderer renderer;
+    // Composition.qml reads the state as it loads.
+    CompositionState &state = renderer.state();
     state.outputWidth = width; state.outputHeight = height;
     state.softwareRendering = softwareRendering;
     state.sourceWidth = media.width; state.sourceHeight = media.height;
@@ -434,24 +380,7 @@ bool Exporter::run(const ExportOptions &options, QString *error)
     state.cursor = {{QStringLiteral("x"), 0.5}, {QStringLiteral("y"), 0.5},
         {QStringLiteral("visible"), project.cursor.visible}, {QStringLiteral("scale"), 1.0},
         {QStringLiteral("opacity"), project.cursor.visible ? 1.0 : 0.0}, {QStringLiteral("rotation"), 0.0}};
-    QQmlEngine engine;
-    engine.rootContext()->setContextProperty(QStringLiteral("comp"), &state);
-    QQmlComponent component(&engine, QUrl(QStringLiteral("qrc:/qt/qml/Omareel/Composition.qml")));
-    if (component.status() != QQmlComponent::Ready) {
-        if (error) *error = component.errorString();
-        return false;
-    }
-    std::unique_ptr<QObject> rootObject(component.create());
-    auto *rootItem = qobject_cast<QQuickItem *>(rootObject.get());
-    if (!rootItem) { if (error) *error = QStringLiteral("Composition.qml did not create a QQuickItem"); return false; }
-    rootItem->setParentItem(window->contentItem());
-    rootItem->setSize(QSizeF(width, height));
-    auto *frameSource = rootItem->findChild<FrameSource *>(QStringLiteral("videoFrameSource"));
-    if (!frameSource) { if (error) *error = QStringLiteral("Composition has no FrameSource"); return false; }
-    auto *cameraFrameSource = rootItem->findChild<FrameSource *>(QStringLiteral("cameraFrameSource"));
-    if (!cameraFrameSource) { if (error) *error = QStringLiteral("Composition has no camera FrameSource"); return false; }
-    auto *mediaFrameSource = rootItem->findChild<FrameSource *>(QStringLiteral("mediaFrameSource"));
-    if (!mediaFrameSource) { if (error) *error = QStringLiteral("Composition has no inserted-clip FrameSource"); return false; }
+    if (!renderer.init(width, height, softwareRendering, error)) return false;
 
     QString runtime = qEnvironmentVariable("XDG_RUNTIME_DIR");
     if (runtime.isEmpty() || !QFileInfo(runtime).isWritable()) runtime = QDir::tempPath();
@@ -557,12 +486,6 @@ bool Exporter::run(const ExportOptions &options, QString *error)
              << QStringLiteral("-movflags") << QStringLiteral("+faststart") << encodedPath;
     }
 
-    const auto processEvents = [&] {
-        QCoreApplication::processEvents();
-        // Painting the editor while a queue is full can switch GL contexts.
-        // Restore ours before touching its readbacks or framebuffer again.
-        if (context) context->makeCurrent(surface.get());
-    };
     std::mutex encodeMutex;
     std::condition_variable encodeReady;
     std::condition_variable encodeSpace;
@@ -651,27 +574,12 @@ bool Exporter::run(const ExportOptions &options, QString *error)
         // Export runs on the GUI thread. Keep Cancel and the finishing status
         // responsive while the worker drains the last frames and finalizes MP4.
         while (!encodeDone) {
-            processEvents();
+            renderer.processEvents();
             std::unique_lock lock(encodeMutex);
             encodeSpace.wait_for(lock, std::chrono::milliseconds(20), [&] { return encodeDone.load(); });
         }
         if (encodeThread.joinable()) encodeThread.join();
     };
-
-    struct ReadbackSlot { GLuint buffer = 0; int frame = -1; };
-    std::array<ReadbackSlot, 2> readbacks;
-    const qsizetype frameBytes = qsizetype(width) * height * 4;
-    QOpenGLExtraFunctions *glExtra = nullptr;
-    if (!softwareRendering) {
-        glExtra = context->extraFunctions();
-        glExtra->initializeOpenGLFunctions();
-        for (auto &slot : readbacks) {
-            glExtra->glGenBuffers(1, &slot.buffer);
-            glExtra->glBindBuffer(GL_PIXEL_PACK_BUFFER, slot.buffer);
-            glExtra->glBufferData(GL_PIXEL_PACK_BUFFER, frameBytes, nullptr, GL_STREAM_READ);
-        }
-        glExtra->glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-    }
 
     // An inserted clip decodes at the size that covers the output, never larger than itself.
     const auto insertDecodeSize = [width, height](const VideoInfo &info) {
@@ -829,7 +737,7 @@ bool Exporter::run(const ExportOptions &options, QString *error)
             };
             while (!encodeSpace.wait_for(lock, std::chrono::milliseconds(20), ready)) {
                 lock.unlock();
-                processEvents();
+                renderer.processEvents();
                 lock.lock();
             }
             if (encodeAbort || !encodeError.isEmpty() || m_cancelled) {
@@ -840,20 +748,6 @@ bool Exporter::run(const ExportOptions &options, QString *error)
                 encodeReady.notify_one();
             }
         }
-    };
-    const auto mapReadback = [&](ReadbackSlot &slot) {
-        QByteArray bytes(frameBytes, Qt::Uninitialized);
-        glExtra->glBindBuffer(GL_PIXEL_PACK_BUFFER, slot.buffer);
-        const void *mapped = glExtra->glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, frameBytes,
-                                                       GL_MAP_READ_BIT);
-        if (!mapped) {
-            pipelineError = QStringLiteral("Could not map asynchronous frame readback");
-            return QByteArray();
-        }
-        std::memcpy(bytes.data(), mapped, frameBytes);
-        glExtra->glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-        slot.frame = -1;
-        return bytes;
     };
     for (int frame = 0; frame < totalFrames; ++frame) {
         if (m_cancelled) { pipelineError = QStringLiteral("Export cancelled"); break; }
@@ -915,78 +809,30 @@ bool Exporter::run(const ExportOptions &options, QString *error)
         } else {
             state.media.insert(QStringLiteral("active"), false);
         }
-        state.notifyChanged();
-        stageTimer.restart();
-        if (insert) mediaFrameSource->setImage(packet.insertImage);
-        else frameSource->setImage(packet.image);
-        if (cameraEnabled && !insert && !packet.cameraImage.isNull())
-            cameraFrameSource->setImage(packet.cameraImage);
-        processEvents();
-        uploadNs += stageTimer.nsecsElapsed();
-        QImage rendered;
         QByteArray bytes;
-        if (softwareRendering) {
-            window->show();
-            window->requestUpdate();
-            QCoreApplication::processEvents();
-            rendered = window->grabWindow();
-            rendered = rendered.convertToFormat(QImage::Format_RGBA8888);
-            if (rendered.size() != QSize(width, height)) {
-                pipelineError = QStringLiteral("Could not grab the rendered frame");
-                break;
-            }
-            bytes = QByteArray(reinterpret_cast<const char *>(rendered.constBits()),
-                               rendered.sizeInBytes());
-        } else {
-            fbo->bind();
-            context->functions()->glViewport(0, 0, width, height);
-            context->functions()->glClearColor(0, 0, 0, 0);
-            context->functions()->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-            stageTimer.restart();
-            renderControl->beginFrame();
-            renderControl->polishItems();
-            renderNs += stageTimer.nsecsElapsed();
-            stageTimer.restart();
-            renderControl->sync();
-            uploadNs += stageTimer.nsecsElapsed();
-            stageTimer.restart();
-            renderControl->render();
-            renderControl->endFrame();
-            renderNs += stageTimer.nsecsElapsed();
-            stageTimer.restart();
-            auto &slot = readbacks[frame % int(readbacks.size())];
-            if (slot.frame >= 0) bytes = mapReadback(slot);
-            if (!pipelineError.isEmpty()) break;
-            glExtra->glBindBuffer(GL_PIXEL_PACK_BUFFER, slot.buffer);
-            glExtra->glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-            slot.frame = frame;
-            glExtra->glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-            readbackNs += stageTimer.nsecsElapsed();
-        }
+        if (!renderer.renderFrame(insert ? QImage() : packet.image,
+                                  cameraEnabled && !insert ? packet.cameraImage : QImage(),
+                                  insert ? packet.insertImage : QImage(), &bytes, &pipelineError))
+            break;
         if (!bytes.isEmpty()) writeFrame(bytes);
         if (!pipelineError.isEmpty()) break;
         emit progress(frame + 1, totalFrames);
     }
     finishDecoder();
-    if (pipelineError.isEmpty() && !softwareRendering) {
-        const int firstPending = std::max(0, totalFrames - int(readbacks.size()));
-        for (int frame = firstPending; frame < totalFrames; ++frame) {
-            auto &slot = readbacks[frame % int(readbacks.size())];
-            if (slot.frame == frame) writeFrame(mapReadback(slot));
+    if (pipelineError.isEmpty()) {
+        QByteArray bytes;
+        while (renderer.takePendingFrame(&bytes, &pipelineError)) {
+            writeFrame(bytes);
             if (!pipelineError.isEmpty()) break;
         }
     }
-    if (!softwareRendering) {
-        glExtra->glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-        for (auto &slot : readbacks)
-            if (slot.buffer) glExtra->glDeleteBuffers(1, &slot.buffer);
-    }
+    renderer.releaseReadbacks();
     if (!pipelineError.isEmpty()) {
         finishEncoder(true);
         if (error) *error = pipelineError;
         return false;
     }
-    if (renderControl) renderControl->invalidate();
+    renderer.invalidate();
     if (!gif) {
         finishEncoder(false);
         if (!encodeError.isEmpty() || m_cancelled) {
@@ -1037,9 +883,9 @@ bool Exporter::run(const ExportOptions &options, QString *error)
         QTextStream(stderr)
             << "\nTiming (" << totalFrames << " frames):\n"
             << "  decode wait:  " << QString::number(decodeNs / divisor, 'f', 3) << " ms/frame\n"
-            << "  upload:       " << QString::number(uploadNs / divisor, 'f', 3) << " ms/frame\n"
-            << "  render:       " << QString::number(renderNs / divisor, 'f', 3) << " ms/frame\n"
-            << "  readback:     " << QString::number(readbackNs / divisor, 'f', 3) << " ms/frame\n"
+            << "  upload:       " << QString::number(renderer.timing().uploadNs / divisor, 'f', 3) << " ms/frame\n"
+            << "  render:       " << QString::number(renderer.timing().renderNs / divisor, 'f', 3) << " ms/frame\n"
+            << "  readback:     " << QString::number(renderer.timing().readbackNs / divisor, 'f', 3) << " ms/frame\n"
             << "  encode write: " << QString::number(encodeWriteNs / divisor, 'f', 3) << " ms/frame\n"
             << "  total:        " << QString::number(seconds, 'f', 3) << " s ("
             << QString::number(totalFrames / std::max(0.001, seconds), 'f', 1) << " frames/s)\n";

@@ -179,9 +179,11 @@ qt_add_qml_module(omareel_render
         src/render/FfmpegDecoder.h src/render/FfmpegDecoder.cpp
         src/render/MediaProbe.h src/render/MediaProbe.cpp
         src/render/Exporter.h src/render/Exporter.cpp
+        src/render/ExportRenderer.h src/render/ExportRenderer.cpp
         src/render/EncoderPipe.h src/render/EncoderPipe.cpp
         src/render/VideoDecoding.h src/render/VideoDecoding.cpp
         src/ui/Editor.h src/ui/Editor.cpp
+        src/ui/PlaybackDriver.h src/ui/PlaybackDriver.cpp
         src/ui/Launcher.h src/ui/Launcher.cpp
         src/ui/MicrophoneMeter.h src/ui/MicrophoneMeter.cpp
         src/ui/RecordingBar.h src/ui/RecordingBar.cpp

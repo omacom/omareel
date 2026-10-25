@@ -6,6 +6,7 @@
 #include "core/MotionTrack.h"
 #include "core/Project.h"
 #include "render/MediaProbe.h"
+#include "ui/PlaybackDriver.h"
 
 #include <QFutureWatcher>
 #include <QElapsedTimer>
@@ -14,7 +15,6 @@
 #include <QMediaPlayer>
 #include <QObject>
 #include <QPointF>
-#include <QPointer>
 #include <QTimer>
 #include <QSet>
 #include <QVariantList>
@@ -22,8 +22,6 @@
 #include <map>
 #include <memory>
 
-class QVideoSink;
-class QAudioOutput;
 class QQuickWindow;
 
 namespace Omareel {
@@ -179,13 +177,13 @@ public:
     Q_INVOKABLE void redo();
     Q_INVOKABLE bool saveNow();
     // Test hooks (no UI use).
-    QMediaPlayer::PlaybackState playerPlaybackStateForTests() const { return m_player.playbackState(); }
-    QMediaPlayer::MediaStatus playerMediaStatusForTests() const { return m_player.mediaStatus(); }
-    qint64 playerPositionMsForTests() const { return m_player.position(); }
-    QMediaPlayer::PlaybackState cameraPlaybackStateForTests() const { return m_cameraPlayer.playbackState(); }
-    qint64 cameraPositionMsForTests() const { return m_cameraPlayer.position(); }
+    QMediaPlayer::PlaybackState playerPlaybackStateForTests() const { return m_playback.playbackState(PlaybackDriver::Screen); }
+    QMediaPlayer::MediaStatus playerMediaStatusForTests() const { return m_playback.mediaStatus(PlaybackDriver::Screen); }
+    qint64 playerPositionMsForTests() const { return m_playback.position(PlaybackDriver::Screen); }
+    QMediaPlayer::PlaybackState cameraPlaybackStateForTests() const { return m_playback.playbackState(PlaybackDriver::Camera); }
+    qint64 cameraPositionMsForTests() const { return m_playback.position(PlaybackDriver::Camera); }
     bool screenFrameTimesReadyForTests() const { return !m_screenFrameTimes.isEmpty(); }
-    QMediaPlayer::PlaybackState mediaPlaybackStateForTests() const { return m_mediaPlayer.playbackState(); }
+    QMediaPlayer::PlaybackState mediaPlaybackStateForTests() const { return m_playback.playbackState(PlaybackDriver::Media); }
     Q_INVOKABLE void playPause();
     Q_INVOKABLE void play();
     Q_INVOKABLE void pause();
@@ -314,11 +312,11 @@ private:
     // inserted video.
     QPair<double, double> clipBounds(int index);
     VideoInfo insertInfo(const QString &path);
-    QMediaPlayer &playerFor(int clipIndex);
+    PlaybackDriver::Player playerFor(int clipIndex) const;
     void setTransportPlaying(bool value);
-    // Shows the frame at milliseconds. A player that is not about to play decodes that frame
-    // briefly and pauses on it (warming).
-    void seekPlayer(QMediaPlayer &player, qint64 milliseconds, bool willPlay);
+    // Counts the screen's frames for the preview stats, and anchors the playhead clock to a
+    // frame the active clip's player shows while playing.
+    void handleFrameShown(PlaybackDriver::Player player, qint64 startTimeUs, bool live);
     void loadInsert(const QString &path);
     void prepareNextClip();
     void advanceClip();
@@ -354,28 +352,15 @@ private:
     double m_cameraOffset = 0.0;
     bool m_valid = false;
     QString m_error;
-    QMediaPlayer m_player;
-    QMediaPlayer m_cameraPlayer;
-    // Plays inserted clips; holds one file at a time.
-    QMediaPlayer m_mediaPlayer;
-    std::unique_ptr<QAudioOutput> m_audioOutput;
-    std::unique_ptr<QAudioOutput> m_mediaAudioOutput;
-    QPointer<QVideoSink> m_mediaVideoSink;
+    PlaybackDriver m_playback;
+    // The inserted video the media player holds.
     QString m_mediaPlayerSource;
-    qint64 m_pendingMediaSeekMs = -1;
-    bool m_pendingMediaWillPlay = false;
-    qint64 m_mediaWarmTargetMs = 0;
-    bool m_warmingMediaPreview = false;
-    // The media sink shows a frame of the file now loaded.
-    bool m_mediaFrameReady = false;
     // What Space controls: the players follow it as clips change hands.
     bool m_transportPlaying = false;
     QHash<QString, VideoInfo> m_inserts;
     bool m_importing = false;
     QString m_importError;
     QFutureWatcher<ImportedInsert> m_importWatcher;
-    QPointer<QVideoSink> m_videoSink;
-    QPointer<QVideoSink> m_cameraVideoSink;
     double m_outputPosition = 0.0;
     double m_playheadPosition = 0.0;
     double m_playheadClockPosition = 0.0;
@@ -390,8 +375,6 @@ private:
     bool m_internalSeek = false;
     bool m_scrubbing = false;
     double m_pendingScrubPosition = -1.0;
-    bool m_warmingPreview = false;
-    bool m_warmingCameraPreview = false;
     bool m_previewStatsEnabled = false;
     int m_previewStatsFrames = 0;
     qint64 m_previewStatsCostNs = 0;
