@@ -1,5 +1,6 @@
 #include "QtShims.h"
 
+#include <QDebug>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonValue>
@@ -28,6 +29,11 @@ QColor invalidWithAlpha(quint16 alpha)
     QColor color;
     color.setAlphaF(alpha / 65535.0f);
     return color;
+}
+
+void warning(const QString &message)
+{
+    qWarning().noquote() << message;
 }
 
 } // namespace Omareel::Shims

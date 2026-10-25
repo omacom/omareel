@@ -1,0 +1,88 @@
+== before-first-sample
+ok	true	"<untouched>"
+file	130	0644
+line	{"b":"left","k":"d","t":1,"x":1080,"y":620}
+line	{"dx":0,"dy":1,"k":"s","t":4999,"x":1080,"y":620}
+line	{"k":"m","t":5000,"x":1080,"y":620}
+== clicks-and-scrolls
+ok	true	"<untouched>"
+file	481	0644
+line	{"b":"left","k":"d","t":500,"x":400,"y":300}
+line	{"k":"m","t":1000,"x":400,"y":300}
+line	{"b":"left","k":"u","t":1000,"x":400,"y":300}
+line	{"b":"right","k":"d","t":4999,"x":400,"y":300}
+line	{"k":"m","t":5000,"x":420,"y":310}
+line	{"dx":0,"dy":-1,"k":"s","t":5000,"x":420,"y":310}
+line	{"dx":2,"dy":0,"k":"s","t":7000,"x":420,"y":310}
+line	{"k":"m","t":9000,"x":800,"y":700}
+line	{"b":"right","k":"u","t":9000,"x":800,"y":700}
+line	{"b":"middle","k":"d","t":12000,"x":800,"y":700}
+line	{"b":"","k":"d","t":12001,"x":800,"y":700}
+== empty
+ok	true	"<untouched>"
+file	0	0644
+== fractional-scale
+ok	true	"<untouched>"
+file	247	0644
+line	{"k":"m","t":1,"x":-0.2666666666666666,"y":0.4}
+line	{"k":"m","t":2,"x":2559.4666666666667,"y":1440.0666666666666}
+line	{"b":"left","k":"d","t":2,"x":2559.4666666666667,"y":1440.0666666666666}
+line	{"k":"m","t":3,"x":-5.7333333333333325,"y":0.13333346666666668}
+== keys
+ok	true	"<untouched>"
+file	424	0644
+line	{"k":"m","t":100,"x":1,"y":2}
+line	{"code":29,"k":"kd","mods":["ctrl"],"name":"KEY_LEFTCTRL","t":200}
+line	{"code":31,"k":"kd","mods":["ctrl"],"name":"KEY_S","t":300}
+line	{"code":31,"k":"ku","t":350}
+line	{"code":29,"k":"ku","t":400}
+line	{"code":57,"k":"kd","mods":[],"name":"KEY_SPACE","t":500}
+line	{"code":0,"k":"kd","mods":["shift","alt","meta","ctrl"],"name":"","t":600}
+line	{"code":240,"k":"kd","mods":["shift","shift"],"name":"KEY_UNKNOWN","t":700}
+== moves-only
+ok	true	"<untouched>"
+file	136	0644
+line	{"k":"m","t":1000,"x":0,"y":0}
+line	{"k":"m","t":2000,"x":1,"y":0.5}
+line	{"k":"m","t":3000,"x":2559,"y":1439.5}
+line	{"k":"m","t":4000,"x":-2,"y":-2}
+== negative-and-large-times
+ok	true	"<untouched>"
+file	225	0644
+line	{"b":"left","k":"d","t":-10,"x":-200,"y":-100}
+line	{"k":"m","t":-5,"x":-200,"y":-100}
+line	{"k":"m","t":9007199254740993,"x":-198,"y":-98}
+line	{"k":"m","t":9223372036854775807,"x":-196,"y":-96}
+line	{"code":1,"k":"ku","t":9223372036854775807}
+== no-cursor
+ok	true	"<untouched>"
+file	95	0644
+line	{"b":"left","k":"d","t":10,"x":-200,"y":-100}
+line	{"dx":1,"dy":1,"k":"s","t":20,"x":-200,"y":-100}
+== ties-and-order
+ok	true	"<untouched>"
+file	373	0644
+line	{"b":"left","k":"u","t":500,"x":-198,"y":-98}
+line	{"k":"m","t":1000,"x":-198,"y":-98}
+line	{"k":"m","t":1000,"x":-196,"y":-96}
+line	{"code":30,"k":"kd","mods":[],"name":"KEY_A","t":1000}
+line	{"b":"left","k":"d","t":1000,"x":-196,"y":-96}
+line	{"k":"m","t":2000,"x":-192,"y":-92}
+line	{"code":30,"k":"ku","t":2000}
+line	{"k":"m","t":3000,"x":-194,"y":-94}
+line	{"dx":-3,"dy":4,"k":"s","t":3000,"x":-192,"y":-92}
+== unicode-names
+ok	true	"<untouched>"
+file	74	0644
+line	{"code":30,"k":"kd","mods":["Strg","☃"],"name":"KEY_Ä \"q\" \\","t":1}
+== zero-scale
+ok	true	"<untouched>"
+file	67	0644
+line	{"k":"m","t":1,"x":0,"y":0}
+line	{"b":"left","k":"d","t":1,"x":0,"y":0}
+== <missing directory>
+ok	false	"No such file or directory"
+file	-
+== <path is a directory>
+ok	false	"Filename refers to a directory"
+file	-

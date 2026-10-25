@@ -1,0 +1,282 @@
+[
+    {
+        "id": 0,
+        "name": "ROT-0",
+        "description": "Oracle ROT-0",
+        "make": "Oracle",
+        "model": "ROT-0",
+        "serial": "",
+        "width": 2560,
+        "height": 1600,
+        "refreshRate": 60.0,
+        "x": 0,
+        "y": 0,
+        "activeWorkspace": {
+            "id": 1,
+            "name": "1"
+        },
+        "specialWorkspace": {
+            "id": 0,
+            "name": ""
+        },
+        "reserved": [
+            0,
+            0,
+            0,
+            0
+        ],
+        "scale": 1.6,
+        "transform": 0,
+        "focused": false,
+        "dpmsStatus": true,
+        "vrr": false,
+        "disabled": false,
+        "currentFormat": "XRGB8888",
+        "mirrorOf": "none"
+    },
+    {
+        "id": 1,
+        "name": "ROT-1",
+        "description": "Oracle ROT-1",
+        "make": "Oracle",
+        "model": "ROT-1",
+        "serial": "",
+        "width": 2560,
+        "height": 1600,
+        "refreshRate": 60.0,
+        "x": 1600,
+        "y": 0,
+        "activeWorkspace": {
+            "id": 1,
+            "name": "1"
+        },
+        "specialWorkspace": {
+            "id": 0,
+            "name": ""
+        },
+        "reserved": [
+            0,
+            0,
+            0,
+            0
+        ],
+        "scale": 1.6,
+        "transform": 1,
+        "focused": false,
+        "dpmsStatus": true,
+        "vrr": false,
+        "disabled": false,
+        "currentFormat": "XRGB8888",
+        "mirrorOf": "none"
+    },
+    {
+        "id": 2,
+        "name": "ROT-2",
+        "description": "Oracle ROT-2",
+        "make": "Oracle",
+        "model": "ROT-2",
+        "serial": "",
+        "width": 2560,
+        "height": 1600,
+        "refreshRate": 60.0,
+        "x": 3200,
+        "y": 0,
+        "activeWorkspace": {
+            "id": 1,
+            "name": "1"
+        },
+        "specialWorkspace": {
+            "id": 0,
+            "name": ""
+        },
+        "reserved": [
+            0,
+            0,
+            0,
+            0
+        ],
+        "scale": 1.6,
+        "transform": 2,
+        "focused": false,
+        "dpmsStatus": true,
+        "vrr": false,
+        "disabled": false,
+        "currentFormat": "XRGB8888",
+        "mirrorOf": "none"
+    },
+    {
+        "id": 3,
+        "name": "ROT-3",
+        "description": "Oracle ROT-3",
+        "make": "Oracle",
+        "model": "ROT-3",
+        "serial": "",
+        "width": 2560,
+        "height": 1600,
+        "refreshRate": 60.0,
+        "x": 4800,
+        "y": 0,
+        "activeWorkspace": {
+            "id": 1,
+            "name": "1"
+        },
+        "specialWorkspace": {
+            "id": 0,
+            "name": ""
+        },
+        "reserved": [
+            0,
+            0,
+            0,
+            0
+        ],
+        "scale": 1.6,
+        "transform": 3,
+        "focused": true,
+        "dpmsStatus": true,
+        "vrr": false,
+        "disabled": false,
+        "currentFormat": "XRGB8888",
+        "mirrorOf": "none"
+    },
+    {
+        "id": 4,
+        "name": "ROT-4",
+        "description": "Oracle ROT-4",
+        "make": "Oracle",
+        "model": "ROT-4",
+        "serial": "",
+        "width": 2560,
+        "height": 1600,
+        "refreshRate": 60.0,
+        "x": 6400,
+        "y": 0,
+        "activeWorkspace": {
+            "id": 1,
+            "name": "1"
+        },
+        "specialWorkspace": {
+            "id": 0,
+            "name": ""
+        },
+        "reserved": [
+            0,
+            0,
+            0,
+            0
+        ],
+        "scale": 1.6,
+        "transform": 4,
+        "focused": false,
+        "dpmsStatus": true,
+        "vrr": false,
+        "disabled": false,
+        "currentFormat": "XRGB8888",
+        "mirrorOf": "none"
+    },
+    {
+        "id": 5,
+        "name": "ROT-5",
+        "description": "Oracle ROT-5",
+        "make": "Oracle",
+        "model": "ROT-5",
+        "serial": "",
+        "width": 2560,
+        "height": 1600,
+        "refreshRate": 60.0,
+        "x": 8000,
+        "y": 0,
+        "activeWorkspace": {
+            "id": 1,
+            "name": "1"
+        },
+        "specialWorkspace": {
+            "id": 0,
+            "name": ""
+        },
+        "reserved": [
+            0,
+            0,
+            0,
+            0
+        ],
+        "scale": 1.6,
+        "transform": 5,
+        "focused": false,
+        "dpmsStatus": true,
+        "vrr": false,
+        "disabled": false,
+        "currentFormat": "XRGB8888",
+        "mirrorOf": "none"
+    },
+    {
+        "id": 6,
+        "name": "ROT-6",
+        "description": "Oracle ROT-6",
+        "make": "Oracle",
+        "model": "ROT-6",
+        "serial": "",
+        "width": 2560,
+        "height": 1600,
+        "refreshRate": 60.0,
+        "x": 9600,
+        "y": 0,
+        "activeWorkspace": {
+            "id": 1,
+            "name": "1"
+        },
+        "specialWorkspace": {
+            "id": 0,
+            "name": ""
+        },
+        "reserved": [
+            0,
+            0,
+            0,
+            0
+        ],
+        "scale": 1.6,
+        "transform": 6,
+        "focused": false,
+        "dpmsStatus": true,
+        "vrr": false,
+        "disabled": false,
+        "currentFormat": "XRGB8888",
+        "mirrorOf": "none"
+    },
+    {
+        "id": 7,
+        "name": "ROT-7",
+        "description": "Oracle ROT-7",
+        "make": "Oracle",
+        "model": "ROT-7",
+        "serial": "",
+        "width": 2560,
+        "height": 1600,
+        "refreshRate": 60.0,
+        "x": 11200,
+        "y": 0,
+        "activeWorkspace": {
+            "id": 1,
+            "name": "1"
+        },
+        "specialWorkspace": {
+            "id": 0,
+            "name": ""
+        },
+        "reserved": [
+            0,
+            0,
+            0,
+            0
+        ],
+        "scale": 1.6,
+        "transform": 7,
+        "focused": false,
+        "dpmsStatus": true,
+        "vrr": false,
+        "disabled": false,
+        "currentFormat": "XRGB8888",
+        "mirrorOf": "none"
+    }
+]

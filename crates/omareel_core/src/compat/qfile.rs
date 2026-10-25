@@ -60,7 +60,7 @@ fn errno() -> i32 {
 /// `QFile::remove(fileName)`: unlinks the file (a directory is not removed).
 pub fn remove(path: &str) -> bool {
     if path.is_empty() {
-        eprintln!("QFile::remove: Empty or null file name");
+        crate::compat::qlog::warning("QFile::remove: Empty or null file name");
         return false;
     }
     std::fs::remove_file(path).is_ok()
@@ -108,7 +108,7 @@ fn rename_file(source: &str, target: &str) -> bool {
 /// directory, where neither applies.
 pub fn rename(old_name: &str, new_name: &str) -> bool {
     if old_name.is_empty() {
-        eprintln!("QFile::rename: Empty or null file name");
+        crate::compat::qlog::warning("QFile::rename: Empty or null file name");
         return false;
     }
     if old_name == new_name || !crate::compat::qdir::file_exists(old_name) {
@@ -145,6 +145,45 @@ fn copy_then_remove(old_name: &str, new_name: &str) -> bool {
     }
 }
 
+/// `QFile::copy(fileName, newName)` as Qt 6.11 does it on Linux: never over an existing file
+/// (one `stat` finds, so a dangling symlink does not count), the source opened for reading (a
+/// directory or an unreadable file fails), and the copy written through a `QSaveFile` with the
+/// direct write fallback, so it follows a symlink at `new_name` and appears whole or not at
+/// all. The copy gets the source's permissions as `QFile::permissions` reports them. Not
+/// reproduced: the error strings (omareel only looks at the result).
+pub fn copy(file_name: &str, new_name: &str) -> bool {
+    if file_name.is_empty() {
+        crate::compat::qlog::warning("QFile::copy: Empty or null file name");
+        return false;
+    }
+    if crate::compat::qdir::file_exists(new_name) {
+        return false;
+    }
+    // QFSFileEngine::copy is not implemented on Linux, so QFile copies the data itself.
+    let Ok(mut source) = open_read(file_name) else { return false };
+    let mut out = crate::compat::qsavefile::SaveFile::new(new_name);
+    out.set_direct_write_fallback(true);
+    if !out.open() {
+        return false;
+    }
+    let mut block = [0u8; 4096];
+    loop {
+        match source.read(&mut block) {
+            Ok(0) => break,
+            Ok(n) => {
+                if out.write(&block[..n]) != n as i64 {
+                    return false;
+                }
+            }
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+            Err(_) => return false,
+        }
+    }
+    out.set_permissions(crate::compat::qdir::FileInfo::new(file_name).permissions_mode());
+    drop(source);
+    out.commit()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -175,6 +214,34 @@ mod tests {
         assert!(rename(b, link.to_str().unwrap()));
         assert_eq!(std::fs::read(&target).unwrap(), b"a");
         assert!(std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn copy_keeps_permissions_follows_links_and_never_replaces() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("omareel-qfile-copy-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
+        let path = |name: &str| dir.join(name).to_str().unwrap().to_string();
+        std::fs::write(path("a"), "contents").unwrap();
+        std::fs::set_permissions(path("a"), std::fs::Permissions::from_mode(0o640)).unwrap();
+        assert!(copy(&path("a"), &path("b")));
+        assert_eq!(std::fs::read(path("b")).unwrap(), b"contents");
+        assert_eq!(std::fs::metadata(path("b")).unwrap().permissions().mode() & 0o7777, 0o640);
+        // Never over an existing file; a dangling symlink is followed and its target created.
+        std::fs::write(path("c"), "old").unwrap();
+        assert!(!copy(&path("a"), &path("c")));
+        assert_eq!(std::fs::read(path("c")).unwrap(), b"old");
+        std::os::unix::fs::symlink("target", path("sub/link")).unwrap();
+        assert!(copy(&path("a"), &path("sub/link")));
+        assert_eq!(std::fs::read(path("sub/target")).unwrap(), b"contents");
+        assert!(std::fs::symlink_metadata(path("sub/link")).unwrap().file_type().is_symlink());
+        // A directory or a missing file is not copied; a missing destination directory fails.
+        assert!(!copy(&path("sub"), &path("d")));
+        assert!(!copy(&path("missing"), &path("d")));
+        assert!(!copy(&path("a"), &path("missing/d")));
+        assert!(!std::path::Path::new(&path("d")).exists());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

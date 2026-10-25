@@ -5,19 +5,32 @@ fn main() {
     let plumbing = manifest.join("../../src/plumbing");
     let cpp = manifest.join("cpp");
     println!("cargo::rerun-if-changed={}", plumbing.display());
-    // The C++ compiled into this archive: the editor's base class and the exporter it starts,
-    // which call the Rust here and the plumbing below it.
+    // The C++ compiled into this archive: the editor's base class and the exporter it starts, and
+    // the launcher's and the recording bar's base classes, which call the Rust here and the
+    // plumbing below it.
     let moc = || MocArguments::default().include_path(plumbing.clone()).include_path(cpp.clone());
     let builder = CxxQtBuilder::new()
         .qt_module("Gui")
         .qt_module("Multimedia")
         .qt_module("Quick")
-        .files(["src/cli.rs", "src/editor.rs", "src/export.rs", "src/theme.rs"])
+        .files([
+            "src/cli.rs",
+            "src/editor.rs",
+            "src/export.rs",
+            "src/launcher.rs",
+            "src/record.rs",
+            "src/recording_bar.rs",
+            "src/theme.rs",
+        ])
         .cpp_files([
             CppFile::from(cpp.join("EditorBase.h")).moc_arguments(moc()),
             CppFile::from(cpp.join("EditorBase.cpp")),
             CppFile::from(cpp.join("Exporter.h")).moc_arguments(moc()),
             CppFile::from(cpp.join("Exporter.cpp")),
+            CppFile::from(cpp.join("LauncherBase.h")).moc_arguments(moc()),
+            CppFile::from(cpp.join("LauncherBase.cpp")),
+            CppFile::from(cpp.join("RecordingBarBase.h")).moc_arguments(moc()),
+            CppFile::from(cpp.join("RecordingBarBase.cpp")),
         ]);
     // Safety: only adds the include paths of the C++ plumbing headers and of the C++ here.
     let builder = unsafe {

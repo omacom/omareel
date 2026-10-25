@@ -10,8 +10,9 @@ find_package(Qt6 6.8 REQUIRED COMPONENTS Core Concurrent Gui GuiPrivate Quick Qu
 find_package(LayerShellQt REQUIRED)
 
 # The program logic is Rust (crates/). omareel_qt is the one static library linked into C++:
-# it carries omareel_core, the CXX-Qt objects that expose it to QML, and the C++ in
-# crates/omareel_qt/cpp that calls into it (the editor's base class and the exporter).
+# it carries omareel_core, omareel_record, the CXX-Qt objects that expose them to QML, and the
+# C++ in crates/omareel_qt/cpp that calls into them (the editor's base class and the exporter, and
+# the launcher's and recording bar's base classes).
 find_package(Corrosion REQUIRED)
 include(cmake/CxxQt.cmake)
 cxx_qt_import_crate(MANIFEST_PATH ${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml CRATES omareel_qt LOCKED
@@ -26,62 +27,28 @@ if(OMAREEL_BUILD_HYPRLAND_PLUGIN)
     endif()
 endif()
 pkg_check_modules(TURBOJPEG REQUIRED IMPORTED_TARGET libturbojpeg)
+# libevdev is what omareel_record reads the input devices with; the screen capture's Wayland
+# client is Rust's own. libwayland-client is for the windows main.cpp commits itself.
 pkg_check_modules(LIBEVDEV REQUIRED IMPORTED_TARGET libevdev)
 pkg_check_modules(WAYLAND_CLIENT REQUIRED IMPORTED_TARGET wayland-client)
-find_program(WAYLAND_SCANNER REQUIRED NAMES wayland-scanner)
-
-function(generate_wayland_protocol protocol_name protocol_xml)
-    set(protocol_header ${CMAKE_CURRENT_BINARY_DIR}/generated/${protocol_name}-client-protocol.h)
-    set(protocol_code ${CMAKE_CURRENT_BINARY_DIR}/generated/${protocol_name}-protocol.c)
-    add_custom_command(OUTPUT ${protocol_header} ${protocol_code}
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/generated
-        COMMAND ${WAYLAND_SCANNER} client-header ${protocol_xml} ${protocol_header}
-        COMMAND ${WAYLAND_SCANNER} private-code ${protocol_xml} ${protocol_code}
-        DEPENDS ${protocol_xml}
-        VERBATIM)
-    set(GENERATED_WAYLAND_SOURCES ${GENERATED_WAYLAND_SOURCES} ${protocol_header} ${protocol_code} PARENT_SCOPE)
-endfunction()
-
-generate_wayland_protocol(ext-image-capture-source-v1
-    /usr/share/wayland-protocols/staging/ext-image-capture-source/ext-image-capture-source-v1.xml)
-generate_wayland_protocol(ext-image-copy-capture-v1
-    /usr/share/wayland-protocols/staging/ext-image-copy-capture/ext-image-copy-capture-v1.xml)
-generate_wayland_protocol(ext-foreign-toplevel-list-v1
-    /usr/share/wayland-protocols/staging/ext-foreign-toplevel-list/ext-foreign-toplevel-list-v1.xml)
-
 qt_standard_project_setup()
 qt_policy(SET QTP0004 NEW)
 
 # C++ the Rust code drives: Qt-only pieces such as the editor's players, the export renderer,
-# file watchers and font calls. It never calls into Rust, so the static libraries link in one
-# direction.
+# the camera, file watchers and font calls. It never calls into Rust, so the static libraries link
+# in one direction.
 add_library(omareel_plumbing STATIC
     src/plumbing/QtShims.cpp
     src/plumbing/ThemeBase.cpp
     src/plumbing/PlaybackDriver.cpp
     src/plumbing/ExportRenderer.cpp
+    src/plumbing/CameraCapture.cpp
 )
 target_include_directories(omareel_plumbing PUBLIC src/plumbing)
-target_link_libraries(omareel_plumbing PUBLIC Qt6::Core Qt6::Gui Qt6::Multimedia Qt6::Qml Qt6::Quick Qt6::OpenGL)
-target_link_libraries(omareel_qt INTERFACE omareel_plumbing)
-
-add_library(omareel_core STATIC
-    src/core/OmarchyPaths.cpp
-    src/core/RecordingPreferences.cpp
-    src/record/CursorSampler.cpp
-    src/record/CameraCapture.cpp
-    src/record/EvdevListener.cpp
-    src/record/RegionPicker.cpp
-    src/record/Recorder.cpp
-    src/record/CaptureExclusion.cpp
-    src/record/ScreenCapture.cpp
-    ${GENERATED_WAYLAND_SOURCES}
-)
-target_include_directories(omareel_core PUBLIC src PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
-target_link_libraries(omareel_core
-    PUBLIC Qt6::Core Qt6::Gui Qt6::Quick Qt6::Multimedia Qt6::Svg
-    PRIVATE PkgConfig::LIBEVDEV PkgConfig::WAYLAND_CLIENT PkgConfig::TURBOJPEG
-)
+target_link_libraries(omareel_plumbing
+    PUBLIC Qt6::Core Qt6::Gui Qt6::Multimedia Qt6::Qml Qt6::Quick Qt6::OpenGL
+    PRIVATE PkgConfig::TURBOJPEG)
+target_link_libraries(omareel_qt INTERFACE omareel_plumbing PkgConfig::LIBEVDEV)
 
 add_library(omareel_render STATIC)
 qt_add_qml_module(omareel_ui STATIC
@@ -173,9 +140,6 @@ qt_add_qml_module(omareel_render
     SOURCES
         src/render/FrameSource.h src/render/FrameSource.cpp
         src/render/VideoDecoding.h src/render/VideoDecoding.cpp
-        src/ui/Launcher.h src/ui/Launcher.cpp
-        src/ui/MicrophoneMeter.h src/ui/MicrophoneMeter.cpp
-        src/ui/RecordingBar.h src/ui/RecordingBar.cpp
     QML_FILES
         src/ui/qml/Composition.qml
         src/ui/qml/Background.qml
@@ -246,7 +210,7 @@ qt_add_resources(omareel_render "omareel_assets"
         assets/sounds/click.wav
 )
 target_include_directories(omareel_render PUBLIC src src/render)
-target_link_libraries(omareel_render PUBLIC omareel_core omareel_qt omareel_ui Qt6::Concurrent Qt6::Quick Qt6::QuickControls2 Qt6::Multimedia Qt6::OpenGL)
+target_link_libraries(omareel_render PUBLIC omareel_qt omareel_ui Qt6::Concurrent Qt6::Quick Qt6::QuickControls2 Qt6::Multimedia Qt6::OpenGL Qt6::Svg)
 
 qt_add_executable(omareel src/main.cpp src/ui/CaptureTestClient.cpp)
 target_link_libraries(omareel PRIVATE omareel_render omareel_qt Qt6::Quick Qt6::Multimedia Qt6::GuiPrivate LayerShellQt::Interface PkgConfig::WAYLAND_CLIENT)
@@ -257,11 +221,11 @@ add_custom_command(TARGET omareel POST_BUILD
 
 include(CTest)
 if(BUILD_TESTING)
-    foreach(test_name IN ITEMS regionpicker omarchypaths recorder)
-        qt_add_executable(test_${test_name} tests/test_${test_name}.cpp)
-        target_link_libraries(test_${test_name} PRIVATE omareel_core Qt6::Test)
-        add_test(NAME ${test_name} COMMAND test_${test_name})
-    endforeach()
+    # The camera's frame packing, timestamp file, pacing and device matching: plumbing, which
+    # needs no Rust.
+    qt_add_executable(test_cameracapture tests/test_cameracapture.cpp)
+    target_link_libraries(test_cameracapture PRIVATE omareel_plumbing Qt6::Test)
+    add_test(NAME cameracapture COMMAND test_cameracapture)
     qt_add_executable(test_exporter_smoke tests/test_exporter_smoke.cpp)
     target_link_libraries(test_exporter_smoke PRIVATE omareel_render Qt6::Test)
     add_test(NAME exporter_smoke COMMAND test_exporter_smoke)

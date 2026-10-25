@@ -1,0 +1,4772 @@
+{
+ "rings": {
+  "the tag's test": [
+   4,
+   [
+    [
+     "acquire"
+    ],
+    [
+     "acquire"
+    ],
+    [
+     "acquire"
+    ],
+    [
+     "acquire"
+    ],
+    [
+     "acquire"
+    ],
+    [
+     "markQueued",
+     1
+    ],
+    [
+     "markQueued",
+     0
+    ],
+    [
+     "takeQueued"
+    ],
+    [
+     "takeQueued"
+    ],
+    [
+     "state",
+     1
+    ],
+    [
+     "release",
+     1
+    ],
+    [
+     "state",
+     1
+    ],
+    [
+     "acquire"
+    ],
+    [
+     "markQueued",
+     8
+    ]
+   ]
+  ],
+  "drops count every refusal": [
+   2,
+   [
+    [
+     "acquire"
+    ],
+    [
+     "acquire"
+    ],
+    [
+     "acquire"
+    ],
+    [
+     "acquire"
+    ],
+    [
+     "release",
+     0
+    ],
+    [
+     "acquire"
+    ],
+    [
+     "acquire"
+    ]
+   ]
+  ],
+  "queue keeps its order": [
+   5,
+   [
+    [
+     "acquire"
+    ],
+    [
+     "acquire"
+    ],
+    [
+     "acquire"
+    ],
+    [
+     "markQueued",
+     2
+    ],
+    [
+     "markQueued",
+     0
+    ],
+    [
+     "markQueued",
+     1
+    ],
+    [
+     "takeQueued"
+    ],
+    [
+     "takeQueued"
+    ],
+    [
+     "takeQueued"
+    ],
+    [
+     "takeQueued"
+    ]
+   ]
+  ],
+  "invalid transitions": [
+   3,
+   [
+    [
+     "markQueued",
+     0
+    ],
+    [
+     "release",
+     0
+    ],
+    [
+     "takeQueued"
+    ],
+    [
+     "acquire"
+    ],
+    [
+     "markQueued",
+     0
+    ],
+    [
+     "markQueued",
+     0
+    ],
+    [
+     "release",
+     0
+    ],
+    [
+     "takeQueued"
+    ],
+    [
+     "markQueued",
+     -1
+    ],
+    [
+     "release",
+     -1
+    ],
+    [
+     "release",
+     3
+    ],
+    [
+     "state",
+     -1
+    ],
+    [
+     "state",
+     3
+    ],
+    [
+     "state",
+     99
+    ]
+   ]
+  ],
+  "release while queued": [
+   3,
+   [
+    [
+     "acquire"
+    ],
+    [
+     "markQueued",
+     0
+    ],
+    [
+     "release",
+     0
+    ],
+    [
+     "takeQueued"
+    ],
+    [
+     "acquire"
+    ],
+    [
+     "markQueued",
+     0
+    ],
+    [
+     "takeQueued"
+    ]
+   ]
+  ],
+  "release while capturing": [
+   2,
+   [
+    [
+     "acquire"
+    ],
+    [
+     "release",
+     0
+    ],
+    [
+     "acquire"
+    ],
+    [
+     "markQueued",
+     0
+    ],
+    [
+     "takeQueued"
+    ],
+    [
+     "release",
+     0
+    ],
+    [
+     "release",
+     0
+    ]
+   ]
+  ],
+  "requeued slot": [
+   2,
+   [
+    [
+     "acquire"
+    ],
+    [
+     "markQueued",
+     0
+    ],
+    [
+     "takeQueued"
+    ],
+    [
+     "release",
+     0
+    ],
+    [
+     "acquire"
+    ],
+    [
+     "markQueued",
+     0
+    ],
+    [
+     "takeQueued"
+    ]
+   ]
+  ],
+  "stale queue entry": [
+   2,
+   [
+    [
+     "acquire"
+    ],
+    [
+     "markQueued",
+     0
+    ],
+    [
+     "release",
+     0
+    ],
+    [
+     "acquire"
+    ],
+    [
+     "acquire"
+    ],
+    [
+     "markQueued",
+     1
+    ],
+    [
+     "takeQueued"
+    ],
+    [
+     "takeQueued"
+    ],
+    [
+     "markQueued",
+     0
+    ],
+    [
+     "takeQueued"
+    ]
+   ]
+  ],
+  "one slot": [
+   1,
+   [
+    [
+     "acquire"
+    ],
+    [
+     "acquire"
+    ],
+    [
+     "markQueued",
+     0
+    ],
+    [
+     "acquire"
+    ],
+    [
+     "takeQueued"
+    ],
+    [
+     "release",
+     0
+    ],
+    [
+     "acquire"
+    ]
+   ]
+  ],
+  "zero slots": [
+   0,
+   [
+    [
+     "acquire"
+    ],
+    [
+     "acquire"
+    ],
+    [
+     "state",
+     0
+    ],
+    [
+     "markQueued",
+     0
+    ],
+    [
+     "takeQueued"
+    ]
+   ]
+  ],
+  "negative slots": [
+   -3,
+   [
+    [
+     "acquire"
+    ],
+    [
+     "acquire"
+    ]
+   ]
+  ],
+  "five slots, the capture's ring": [
+   5,
+   [
+    [
+     "acquire"
+    ],
+    [
+     "acquire"
+    ],
+    [
+     "acquire"
+    ],
+    [
+     "acquire"
+    ],
+    [
+     "acquire"
+    ],
+    [
+     "acquire"
+    ],
+    [
+     "markQueued",
+     0
+    ],
+    [
+     "markQueued",
+     1
+    ],
+    [
+     "markQueued",
+     2
+    ],
+    [
+     "markQueued",
+     3
+    ],
+    [
+     "markQueued",
+     4
+    ],
+    [
+     "takeQueued"
+    ],
+    [
+     "takeQueued"
+    ],
+    [
+     "takeQueued"
+    ],
+    [
+     "takeQueued"
+    ],
+    [
+     "takeQueued"
+    ],
+    [
+     "takeQueued"
+    ]
+   ]
+  ]
+ },
+ "crops": [
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "stride": 15360,
+   "crop": [
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "stride": 15360,
+   "crop": [
+    0,
+    0,
+    3840,
+    2160
+   ]
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "stride": 15360,
+   "crop": [
+    320,
+    240,
+    1280,
+    960
+   ]
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "stride": 15360,
+   "crop": [
+    0,
+    0,
+    3840,
+    1
+   ]
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "stride": 15360,
+   "crop": [
+    1,
+    1,
+    2,
+    1
+   ]
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "stride": 15360,
+   "crop": [
+    0,
+    1,
+    4,
+    2
+   ]
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "stride": 15360,
+   "crop": [
+    -1,
+    -1,
+    3,
+    3
+   ]
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "stride": 15360,
+   "crop": [
+    2,
+    1,
+    10,
+    10
+   ]
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "stride": 15360,
+   "crop": [
+    3840,
+    0,
+    4,
+    4
+   ]
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "stride": 15360,
+   "crop": [
+    0,
+    0,
+    -2,
+    2
+   ]
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "stride": 15360,
+   "crop": [
+    1,
+    0,
+    1,
+    1
+   ]
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "stride": 15360,
+   "crop": [
+    0,
+    2,
+    4,
+    1
+   ]
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "stride": 7680,
+   "crop": [
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "stride": 7680,
+   "crop": [
+    0,
+    0,
+    1920,
+    1080
+   ]
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "stride": 7680,
+   "crop": [
+    320,
+    240,
+    1280,
+    960
+   ]
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "stride": 7680,
+   "crop": [
+    0,
+    0,
+    1920,
+    1
+   ]
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "stride": 7680,
+   "crop": [
+    1,
+    1,
+    2,
+    1
+   ]
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "stride": 7680,
+   "crop": [
+    0,
+    1,
+    4,
+    2
+   ]
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "stride": 7680,
+   "crop": [
+    -1,
+    -1,
+    3,
+    3
+   ]
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "stride": 7680,
+   "crop": [
+    2,
+    1,
+    10,
+    10
+   ]
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "stride": 7680,
+   "crop": [
+    1920,
+    0,
+    4,
+    4
+   ]
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "stride": 7680,
+   "crop": [
+    0,
+    0,
+    -2,
+    2
+   ]
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "stride": 7680,
+   "crop": [
+    1,
+    0,
+    1,
+    1
+   ]
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "stride": 7680,
+   "crop": [
+    0,
+    2,
+    4,
+    1
+   ]
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "stride": 7936,
+   "crop": [
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "stride": 7936,
+   "crop": [
+    0,
+    0,
+    1920,
+    1080
+   ]
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "stride": 7936,
+   "crop": [
+    320,
+    240,
+    1280,
+    960
+   ]
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "stride": 7936,
+   "crop": [
+    0,
+    0,
+    1920,
+    1
+   ]
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "stride": 7936,
+   "crop": [
+    1,
+    1,
+    2,
+    1
+   ]
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "stride": 7936,
+   "crop": [
+    0,
+    1,
+    4,
+    2
+   ]
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "stride": 7936,
+   "crop": [
+    -1,
+    -1,
+    3,
+    3
+   ]
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "stride": 7936,
+   "crop": [
+    2,
+    1,
+    10,
+    10
+   ]
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "stride": 7936,
+   "crop": [
+    1920,
+    0,
+    4,
+    4
+   ]
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "stride": 7936,
+   "crop": [
+    0,
+    0,
+    -2,
+    2
+   ]
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "stride": 7936,
+   "crop": [
+    1,
+    0,
+    1,
+    1
+   ]
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "stride": 7936,
+   "crop": [
+    0,
+    2,
+    4,
+    1
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 16,
+   "crop": [
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 16,
+   "crop": [
+    0,
+    0,
+    4,
+    3
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 16,
+   "crop": [
+    320,
+    240,
+    1280,
+    960
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 16,
+   "crop": [
+    0,
+    0,
+    4,
+    1
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 16,
+   "crop": [
+    1,
+    1,
+    2,
+    1
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 16,
+   "crop": [
+    0,
+    1,
+    4,
+    2
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 16,
+   "crop": [
+    -1,
+    -1,
+    3,
+    3
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 16,
+   "crop": [
+    2,
+    1,
+    10,
+    10
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 16,
+   "crop": [
+    4,
+    0,
+    4,
+    4
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 16,
+   "crop": [
+    0,
+    0,
+    -2,
+    2
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 16,
+   "crop": [
+    1,
+    0,
+    1,
+    1
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 16,
+   "crop": [
+    0,
+    2,
+    4,
+    1
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 20,
+   "crop": [
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 20,
+   "crop": [
+    0,
+    0,
+    4,
+    3
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 20,
+   "crop": [
+    320,
+    240,
+    1280,
+    960
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 20,
+   "crop": [
+    0,
+    0,
+    4,
+    1
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 20,
+   "crop": [
+    1,
+    1,
+    2,
+    1
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 20,
+   "crop": [
+    0,
+    1,
+    4,
+    2
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 20,
+   "crop": [
+    -1,
+    -1,
+    3,
+    3
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 20,
+   "crop": [
+    2,
+    1,
+    10,
+    10
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 20,
+   "crop": [
+    4,
+    0,
+    4,
+    4
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 20,
+   "crop": [
+    0,
+    0,
+    -2,
+    2
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 20,
+   "crop": [
+    1,
+    0,
+    1,
+    1
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 20,
+   "crop": [
+    0,
+    2,
+    4,
+    1
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 15,
+   "crop": [
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 15,
+   "crop": [
+    0,
+    0,
+    4,
+    3
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 15,
+   "crop": [
+    320,
+    240,
+    1280,
+    960
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 15,
+   "crop": [
+    0,
+    0,
+    4,
+    1
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 15,
+   "crop": [
+    1,
+    1,
+    2,
+    1
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 15,
+   "crop": [
+    0,
+    1,
+    4,
+    2
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 15,
+   "crop": [
+    -1,
+    -1,
+    3,
+    3
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 15,
+   "crop": [
+    2,
+    1,
+    10,
+    10
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 15,
+   "crop": [
+    4,
+    0,
+    4,
+    4
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 15,
+   "crop": [
+    0,
+    0,
+    -2,
+    2
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 15,
+   "crop": [
+    1,
+    0,
+    1,
+    1
+   ]
+  },
+  {
+   "size": [
+    4,
+    3
+   ],
+   "stride": 15,
+   "crop": [
+    0,
+    2,
+    4,
+    1
+   ]
+  },
+  {
+   "size": [
+    0,
+    3
+   ],
+   "stride": 0,
+   "crop": [
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "size": [
+    0,
+    3
+   ],
+   "stride": 0,
+   "crop": [
+    0,
+    0,
+    0,
+    3
+   ]
+  },
+  {
+   "size": [
+    0,
+    3
+   ],
+   "stride": 0,
+   "crop": [
+    320,
+    240,
+    1280,
+    960
+   ]
+  },
+  {
+   "size": [
+    0,
+    3
+   ],
+   "stride": 0,
+   "crop": [
+    0,
+    0,
+    0,
+    1
+   ]
+  },
+  {
+   "size": [
+    0,
+    3
+   ],
+   "stride": 0,
+   "crop": [
+    1,
+    1,
+    2,
+    1
+   ]
+  },
+  {
+   "size": [
+    0,
+    3
+   ],
+   "stride": 0,
+   "crop": [
+    0,
+    1,
+    4,
+    2
+   ]
+  },
+  {
+   "size": [
+    0,
+    3
+   ],
+   "stride": 0,
+   "crop": [
+    -1,
+    -1,
+    3,
+    3
+   ]
+  },
+  {
+   "size": [
+    0,
+    3
+   ],
+   "stride": 0,
+   "crop": [
+    2,
+    1,
+    10,
+    10
+   ]
+  },
+  {
+   "size": [
+    0,
+    3
+   ],
+   "stride": 0,
+   "crop": [
+    0,
+    0,
+    4,
+    4
+   ]
+  },
+  {
+   "size": [
+    0,
+    3
+   ],
+   "stride": 0,
+   "crop": [
+    0,
+    0,
+    -2,
+    2
+   ]
+  },
+  {
+   "size": [
+    0,
+    3
+   ],
+   "stride": 0,
+   "crop": [
+    1,
+    0,
+    1,
+    1
+   ]
+  },
+  {
+   "size": [
+    0,
+    3
+   ],
+   "stride": 0,
+   "crop": [
+    0,
+    2,
+    4,
+    1
+   ]
+  },
+  {
+   "size": [
+    4,
+    0
+   ],
+   "stride": 16,
+   "crop": [
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "size": [
+    4,
+    0
+   ],
+   "stride": 16,
+   "crop": [
+    0,
+    0,
+    4,
+    0
+   ]
+  },
+  {
+   "size": [
+    4,
+    0
+   ],
+   "stride": 16,
+   "crop": [
+    320,
+    240,
+    1280,
+    960
+   ]
+  },
+  {
+   "size": [
+    4,
+    0
+   ],
+   "stride": 16,
+   "crop": [
+    0,
+    0,
+    4,
+    1
+   ]
+  },
+  {
+   "size": [
+    4,
+    0
+   ],
+   "stride": 16,
+   "crop": [
+    1,
+    1,
+    2,
+    1
+   ]
+  },
+  {
+   "size": [
+    4,
+    0
+   ],
+   "stride": 16,
+   "crop": [
+    0,
+    1,
+    4,
+    2
+   ]
+  },
+  {
+   "size": [
+    4,
+    0
+   ],
+   "stride": 16,
+   "crop": [
+    -1,
+    -1,
+    3,
+    3
+   ]
+  },
+  {
+   "size": [
+    4,
+    0
+   ],
+   "stride": 16,
+   "crop": [
+    2,
+    1,
+    10,
+    10
+   ]
+  },
+  {
+   "size": [
+    4,
+    0
+   ],
+   "stride": 16,
+   "crop": [
+    4,
+    0,
+    4,
+    4
+   ]
+  },
+  {
+   "size": [
+    4,
+    0
+   ],
+   "stride": 16,
+   "crop": [
+    0,
+    0,
+    -2,
+    2
+   ]
+  },
+  {
+   "size": [
+    4,
+    0
+   ],
+   "stride": 16,
+   "crop": [
+    1,
+    0,
+    1,
+    1
+   ]
+  },
+  {
+   "size": [
+    4,
+    0
+   ],
+   "stride": 16,
+   "crop": [
+    0,
+    2,
+    4,
+    1
+   ]
+  },
+  {
+   "size": [
+    5,
+    3
+   ],
+   "stride": 20,
+   "crop": [
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "size": [
+    5,
+    3
+   ],
+   "stride": 20,
+   "crop": [
+    0,
+    0,
+    5,
+    3
+   ]
+  },
+  {
+   "size": [
+    5,
+    3
+   ],
+   "stride": 20,
+   "crop": [
+    320,
+    240,
+    1280,
+    960
+   ]
+  },
+  {
+   "size": [
+    5,
+    3
+   ],
+   "stride": 20,
+   "crop": [
+    0,
+    0,
+    5,
+    1
+   ]
+  },
+  {
+   "size": [
+    5,
+    3
+   ],
+   "stride": 20,
+   "crop": [
+    1,
+    1,
+    2,
+    1
+   ]
+  },
+  {
+   "size": [
+    5,
+    3
+   ],
+   "stride": 20,
+   "crop": [
+    0,
+    1,
+    4,
+    2
+   ]
+  },
+  {
+   "size": [
+    5,
+    3
+   ],
+   "stride": 20,
+   "crop": [
+    -1,
+    -1,
+    3,
+    3
+   ]
+  },
+  {
+   "size": [
+    5,
+    3
+   ],
+   "stride": 20,
+   "crop": [
+    2,
+    1,
+    10,
+    10
+   ]
+  },
+  {
+   "size": [
+    5,
+    3
+   ],
+   "stride": 20,
+   "crop": [
+    5,
+    0,
+    4,
+    4
+   ]
+  },
+  {
+   "size": [
+    5,
+    3
+   ],
+   "stride": 20,
+   "crop": [
+    0,
+    0,
+    -2,
+    2
+   ]
+  },
+  {
+   "size": [
+    5,
+    3
+   ],
+   "stride": 20,
+   "crop": [
+    1,
+    0,
+    1,
+    1
+   ]
+  },
+  {
+   "size": [
+    5,
+    3
+   ],
+   "stride": 20,
+   "crop": [
+    0,
+    2,
+    4,
+    1
+   ]
+  },
+  {
+   "size": [
+    -4,
+    3
+   ],
+   "stride": 16,
+   "crop": [
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "size": [
+    -4,
+    3
+   ],
+   "stride": 16,
+   "crop": [
+    0,
+    0,
+    -4,
+    3
+   ]
+  },
+  {
+   "size": [
+    -4,
+    3
+   ],
+   "stride": 16,
+   "crop": [
+    320,
+    240,
+    1280,
+    960
+   ]
+  },
+  {
+   "size": [
+    -4,
+    3
+   ],
+   "stride": 16,
+   "crop": [
+    0,
+    0,
+    -4,
+    1
+   ]
+  },
+  {
+   "size": [
+    -4,
+    3
+   ],
+   "stride": 16,
+   "crop": [
+    1,
+    1,
+    2,
+    1
+   ]
+  },
+  {
+   "size": [
+    -4,
+    3
+   ],
+   "stride": 16,
+   "crop": [
+    0,
+    1,
+    4,
+    2
+   ]
+  },
+  {
+   "size": [
+    -4,
+    3
+   ],
+   "stride": 16,
+   "crop": [
+    -1,
+    -1,
+    3,
+    3
+   ]
+  },
+  {
+   "size": [
+    -4,
+    3
+   ],
+   "stride": 16,
+   "crop": [
+    2,
+    1,
+    10,
+    10
+   ]
+  },
+  {
+   "size": [
+    -4,
+    3
+   ],
+   "stride": 16,
+   "crop": [
+    -4,
+    0,
+    4,
+    4
+   ]
+  },
+  {
+   "size": [
+    -4,
+    3
+   ],
+   "stride": 16,
+   "crop": [
+    0,
+    0,
+    -2,
+    2
+   ]
+  },
+  {
+   "size": [
+    -4,
+    3
+   ],
+   "stride": 16,
+   "crop": [
+    1,
+    0,
+    1,
+    1
+   ]
+  },
+  {
+   "size": [
+    -4,
+    3
+   ],
+   "stride": 16,
+   "crop": [
+    0,
+    2,
+    4,
+    1
+   ]
+  }
+ ],
+ "streamHeaders": {
+  "sizes": [
+   [
+    1920,
+    1080
+   ],
+   [
+    3840,
+    2160
+   ],
+   [
+    2,
+    2
+   ],
+   [
+    0,
+    0
+   ],
+   [
+    -2,
+    4
+   ],
+   [
+    65536,
+    1
+   ],
+   [
+    1281,
+    721
+   ]
+  ],
+  "fps": [
+   60,
+   30,
+   1,
+   0,
+   -5,
+   7,
+   144,
+   1000000000,
+   2147483647
+  ]
+ },
+ "frameHeaders": {
+  "timestamps": [
+   0,
+   1,
+   16667,
+   1000000,
+   -1,
+   -9223372036854775807,
+   72057594037927935,
+   9223372036854775807
+  ],
+  "bytes": [
+   0,
+   1,
+   32,
+   8294400,
+   33177600,
+   4294967296,
+   -4
+  ]
+ },
+ "encoders": [
+  {
+   "size": [
+    440,
+    234
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    440,
+    234
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    440,
+    234
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    440,
+    234
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    440,
+    234
+   ],
+   "fps": 30,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    440,
+    234
+   ],
+   "fps": 30,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    440,
+    234
+   ],
+   "fps": 30,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    440,
+    234
+   ],
+   "fps": 30,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    440,
+    234
+   ],
+   "fps": 144,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    440,
+    234
+   ],
+   "fps": 144,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    440,
+    234
+   ],
+   "fps": 144,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    440,
+    234
+   ],
+   "fps": 144,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    440,
+    234
+   ],
+   "fps": 1,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    440,
+    234
+   ],
+   "fps": 1,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    440,
+    234
+   ],
+   "fps": 1,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    440,
+    234
+   ],
+   "fps": 1,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    440,
+    234
+   ],
+   "fps": 240,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    440,
+    234
+   ],
+   "fps": 240,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    440,
+    234
+   ],
+   "fps": 240,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    440,
+    234
+   ],
+   "fps": 240,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1280,
+    720
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1280,
+    720
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1280,
+    720
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1280,
+    720
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1280,
+    720
+   ],
+   "fps": 30,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1280,
+    720
+   ],
+   "fps": 30,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1280,
+    720
+   ],
+   "fps": 30,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1280,
+    720
+   ],
+   "fps": 30,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1280,
+    720
+   ],
+   "fps": 144,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1280,
+    720
+   ],
+   "fps": 144,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1280,
+    720
+   ],
+   "fps": 144,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1280,
+    720
+   ],
+   "fps": 144,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1280,
+    720
+   ],
+   "fps": 1,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1280,
+    720
+   ],
+   "fps": 1,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1280,
+    720
+   ],
+   "fps": 1,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1280,
+    720
+   ],
+   "fps": 1,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1280,
+    720
+   ],
+   "fps": 240,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1280,
+    720
+   ],
+   "fps": 240,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1280,
+    720
+   ],
+   "fps": 240,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1280,
+    720
+   ],
+   "fps": 240,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1224,
+    1224
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1224,
+    1224
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1224,
+    1224
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1224,
+    1224
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1224,
+    1224
+   ],
+   "fps": 30,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1224,
+    1224
+   ],
+   "fps": 30,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1224,
+    1224
+   ],
+   "fps": 30,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1224,
+    1224
+   ],
+   "fps": 30,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1224,
+    1224
+   ],
+   "fps": 144,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1224,
+    1224
+   ],
+   "fps": 144,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1224,
+    1224
+   ],
+   "fps": 144,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1224,
+    1224
+   ],
+   "fps": 144,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1224,
+    1224
+   ],
+   "fps": 1,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1224,
+    1224
+   ],
+   "fps": 1,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1224,
+    1224
+   ],
+   "fps": 1,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1224,
+    1224
+   ],
+   "fps": 1,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1224,
+    1224
+   ],
+   "fps": 240,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1224,
+    1224
+   ],
+   "fps": 240,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1224,
+    1224
+   ],
+   "fps": 240,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1224,
+    1224
+   ],
+   "fps": 240,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1225,
+    1225
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1225,
+    1225
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1225,
+    1225
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1225,
+    1225
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1225,
+    1225
+   ],
+   "fps": 30,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1225,
+    1225
+   ],
+   "fps": 30,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1225,
+    1225
+   ],
+   "fps": 30,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1225,
+    1225
+   ],
+   "fps": 30,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1225,
+    1225
+   ],
+   "fps": 144,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1225,
+    1225
+   ],
+   "fps": 144,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1225,
+    1225
+   ],
+   "fps": 144,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1225,
+    1225
+   ],
+   "fps": 144,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1225,
+    1225
+   ],
+   "fps": 1,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1225,
+    1225
+   ],
+   "fps": 1,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1225,
+    1225
+   ],
+   "fps": 1,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1225,
+    1225
+   ],
+   "fps": 1,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1225,
+    1225
+   ],
+   "fps": 240,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1225,
+    1225
+   ],
+   "fps": 240,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1225,
+    1225
+   ],
+   "fps": 240,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1225,
+    1225
+   ],
+   "fps": 240,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 30,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 30,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 30,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 30,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 144,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 144,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 144,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 144,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 1,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 1,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 1,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 1,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 240,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 240,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 240,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 240,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    2560,
+    1440
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    2560,
+    1440
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    2560,
+    1440
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    2560,
+    1440
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    2560,
+    1440
+   ],
+   "fps": 30,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    2560,
+    1440
+   ],
+   "fps": 30,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    2560,
+    1440
+   ],
+   "fps": 30,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    2560,
+    1440
+   ],
+   "fps": 30,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    2560,
+    1440
+   ],
+   "fps": 144,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    2560,
+    1440
+   ],
+   "fps": 144,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    2560,
+    1440
+   ],
+   "fps": 144,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    2560,
+    1440
+   ],
+   "fps": 144,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    2560,
+    1440
+   ],
+   "fps": 1,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    2560,
+    1440
+   ],
+   "fps": 1,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    2560,
+    1440
+   ],
+   "fps": 1,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    2560,
+    1440
+   ],
+   "fps": 1,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    2560,
+    1440
+   ],
+   "fps": 240,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    2560,
+    1440
+   ],
+   "fps": 240,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    2560,
+    1440
+   ],
+   "fps": 240,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    2560,
+    1440
+   ],
+   "fps": 240,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "fps": 30,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "fps": 30,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "fps": 30,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "fps": 30,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "fps": 144,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "fps": 144,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "fps": 144,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "fps": 144,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "fps": 1,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "fps": 1,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "fps": 1,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "fps": 1,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "fps": 240,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "fps": 240,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "fps": 240,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "fps": 240,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    7680,
+    4320
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    7680,
+    4320
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    7680,
+    4320
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    7680,
+    4320
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    7680,
+    4320
+   ],
+   "fps": 30,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    7680,
+    4320
+   ],
+   "fps": 30,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    7680,
+    4320
+   ],
+   "fps": 30,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    7680,
+    4320
+   ],
+   "fps": 30,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    7680,
+    4320
+   ],
+   "fps": 144,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    7680,
+    4320
+   ],
+   "fps": 144,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    7680,
+    4320
+   ],
+   "fps": 144,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    7680,
+    4320
+   ],
+   "fps": 144,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    7680,
+    4320
+   ],
+   "fps": 1,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    7680,
+    4320
+   ],
+   "fps": 1,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    7680,
+    4320
+   ],
+   "fps": 1,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    7680,
+    4320
+   ],
+   "fps": 1,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    7680,
+    4320
+   ],
+   "fps": 240,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    7680,
+    4320
+   ],
+   "fps": 240,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    7680,
+    4320
+   ],
+   "fps": 240,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    7680,
+    4320
+   ],
+   "fps": 240,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "fps": 30,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "fps": 30,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "fps": 30,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "fps": 30,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "fps": 144,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "fps": 144,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "fps": 144,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "fps": 144,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "fps": 1,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "fps": 1,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "fps": 1,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "fps": 1,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "fps": 240,
+   "preferred": false,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "fps": 240,
+   "preferred": true,
+   "gpuConversion": false
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "fps": 240,
+   "preferred": true,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "fps": 240,
+   "preferred": false,
+   "gpuConversion": true
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": true,
+   "conversion": "cpu",
+   "encoder": "lossless"
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": false,
+   "conversion": "cpu",
+   "encoder": "lossless"
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": true,
+   "conversion": "cpu",
+   "encoder": "Lossless"
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": false,
+   "conversion": "cpu",
+   "encoder": "Lossless"
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": true,
+   "conversion": "cpu",
+   "encoder": ""
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": false,
+   "conversion": "cpu",
+   "encoder": ""
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": true,
+   "conversion": "CPU",
+   "encoder": "lossless"
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": false,
+   "conversion": "CPU",
+   "encoder": "lossless"
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": true,
+   "conversion": "CPU",
+   "encoder": "Lossless"
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": false,
+   "conversion": "CPU",
+   "encoder": "Lossless"
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": true,
+   "conversion": "CPU",
+   "encoder": ""
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": false,
+   "conversion": "CPU",
+   "encoder": ""
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": true,
+   "conversion": "gpu",
+   "encoder": "lossless"
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": false,
+   "conversion": "gpu",
+   "encoder": "lossless"
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": true,
+   "conversion": "gpu",
+   "encoder": "Lossless"
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": false,
+   "conversion": "gpu",
+   "encoder": "Lossless"
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": true,
+   "conversion": "gpu",
+   "encoder": ""
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": false,
+   "conversion": "gpu",
+   "encoder": ""
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": true,
+   "conversion": "",
+   "encoder": "lossless"
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": false,
+   "conversion": "",
+   "encoder": "lossless"
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": true,
+   "conversion": "",
+   "encoder": "Lossless"
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": false,
+   "conversion": "",
+   "encoder": "Lossless"
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "preferred": true,
+   "gpuConversion": true,
+   "conversion": "",
+   "encoder": ""
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "preferred": false,
+   "gpuConversion": false,
+   "conversion": "",
+   "encoder": ""
+  }
+ ],
+ "trims": [
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "crop": [
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "crop": [
+    0,
+    0,
+    3840,
+    2160
+   ]
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "crop": [
+    10,
+    20,
+    641,
+    361
+   ]
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "crop": [
+    10,
+    20,
+    640,
+    360
+   ]
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "crop": [
+    3835,
+    2155,
+    100,
+    100
+   ]
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "crop": [
+    -3,
+    -3,
+    10,
+    10
+   ]
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "crop": [
+    3840,
+    2160,
+    10,
+    10
+   ]
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "crop": [
+    0,
+    0,
+    1,
+    1
+   ]
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "crop": [
+    0,
+    0,
+    2,
+    3
+   ]
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "crop": [
+    1,
+    1,
+    -4,
+    4
+   ]
+  },
+  {
+   "size": [
+    3840,
+    2160
+   ],
+   "crop": [
+    5,
+    5,
+    0,
+    7
+   ]
+  },
+  {
+   "size": [
+    1921,
+    1081
+   ],
+   "crop": [
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "size": [
+    1921,
+    1081
+   ],
+   "crop": [
+    0,
+    0,
+    1921,
+    1081
+   ]
+  },
+  {
+   "size": [
+    1921,
+    1081
+   ],
+   "crop": [
+    10,
+    20,
+    641,
+    361
+   ]
+  },
+  {
+   "size": [
+    1921,
+    1081
+   ],
+   "crop": [
+    10,
+    20,
+    640,
+    360
+   ]
+  },
+  {
+   "size": [
+    1921,
+    1081
+   ],
+   "crop": [
+    1916,
+    1076,
+    100,
+    100
+   ]
+  },
+  {
+   "size": [
+    1921,
+    1081
+   ],
+   "crop": [
+    -3,
+    -3,
+    10,
+    10
+   ]
+  },
+  {
+   "size": [
+    1921,
+    1081
+   ],
+   "crop": [
+    1921,
+    1081,
+    10,
+    10
+   ]
+  },
+  {
+   "size": [
+    1921,
+    1081
+   ],
+   "crop": [
+    0,
+    0,
+    1,
+    1
+   ]
+  },
+  {
+   "size": [
+    1921,
+    1081
+   ],
+   "crop": [
+    0,
+    0,
+    2,
+    3
+   ]
+  },
+  {
+   "size": [
+    1921,
+    1081
+   ],
+   "crop": [
+    1,
+    1,
+    -4,
+    4
+   ]
+  },
+  {
+   "size": [
+    1921,
+    1081
+   ],
+   "crop": [
+    5,
+    5,
+    0,
+    7
+   ]
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "crop": [
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "crop": [
+    0,
+    0,
+    2,
+    2
+   ]
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "crop": [
+    10,
+    20,
+    641,
+    361
+   ]
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "crop": [
+    10,
+    20,
+    640,
+    360
+   ]
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "crop": [
+    -3,
+    -3,
+    100,
+    100
+   ]
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "crop": [
+    -3,
+    -3,
+    10,
+    10
+   ]
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "crop": [
+    2,
+    2,
+    10,
+    10
+   ]
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "crop": [
+    0,
+    0,
+    1,
+    1
+   ]
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "crop": [
+    0,
+    0,
+    2,
+    3
+   ]
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "crop": [
+    1,
+    1,
+    -4,
+    4
+   ]
+  },
+  {
+   "size": [
+    2,
+    2
+   ],
+   "crop": [
+    5,
+    5,
+    0,
+    7
+   ]
+  },
+  {
+   "size": [
+    1,
+    1
+   ],
+   "crop": [
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "size": [
+    1,
+    1
+   ],
+   "crop": [
+    0,
+    0,
+    1,
+    1
+   ]
+  },
+  {
+   "size": [
+    1,
+    1
+   ],
+   "crop": [
+    10,
+    20,
+    641,
+    361
+   ]
+  },
+  {
+   "size": [
+    1,
+    1
+   ],
+   "crop": [
+    10,
+    20,
+    640,
+    360
+   ]
+  },
+  {
+   "size": [
+    1,
+    1
+   ],
+   "crop": [
+    -4,
+    -4,
+    100,
+    100
+   ]
+  },
+  {
+   "size": [
+    1,
+    1
+   ],
+   "crop": [
+    -3,
+    -3,
+    10,
+    10
+   ]
+  },
+  {
+   "size": [
+    1,
+    1
+   ],
+   "crop": [
+    1,
+    1,
+    10,
+    10
+   ]
+  },
+  {
+   "size": [
+    1,
+    1
+   ],
+   "crop": [
+    0,
+    0,
+    1,
+    1
+   ]
+  },
+  {
+   "size": [
+    1,
+    1
+   ],
+   "crop": [
+    0,
+    0,
+    2,
+    3
+   ]
+  },
+  {
+   "size": [
+    1,
+    1
+   ],
+   "crop": [
+    1,
+    1,
+    -4,
+    4
+   ]
+  },
+  {
+   "size": [
+    1,
+    1
+   ],
+   "crop": [
+    5,
+    5,
+    0,
+    7
+   ]
+  }
+ ],
+ "writer": {
+  "steady 60": {
+   "fps": 60,
+   "size": [
+    4,
+    2
+   ],
+   "times": [
+    1000000,
+    1016667,
+    1033333,
+    1050000,
+    1066667,
+    1083333
+   ],
+   "stop": 1100000
+  },
+  "still screen": {
+   "fps": 30,
+   "size": [
+    4,
+    2
+   ],
+   "times": [
+    5000000
+   ],
+   "stop": 7000000
+  },
+  "stop before the last tick": {
+   "fps": 30,
+   "size": [
+    4,
+    2
+   ],
+   "times": [
+    5000000,
+    5033333
+   ],
+   "stop": 5040000
+  },
+  "stop on the last frame": {
+   "fps": 30,
+   "size": [
+    4,
+    2
+   ],
+   "times": [
+    5000000,
+    5033333
+   ],
+   "stop": 5033333
+  },
+  "no stop time": {
+   "fps": 30,
+   "size": [
+    4,
+    2
+   ],
+   "times": [
+    5000000,
+    5100000
+   ],
+   "stop": 0
+  },
+  "same tick twice": {
+   "fps": 60,
+   "size": [
+    4,
+    2
+   ],
+   "times": [
+    1000000,
+    1008000,
+    1008334,
+    1016667,
+    1024000
+   ],
+   "stop": 1050000
+  },
+  "out of order": {
+   "fps": 60,
+   "size": [
+    4,
+    2
+   ],
+   "times": [
+    2000000,
+    2050000,
+    2030000,
+    2100000,
+    1990000
+   ],
+   "stop": 2200000
+  },
+  "gaps": {
+   "fps": 10,
+   "size": [
+    2,
+    2
+   ],
+   "times": [
+    0,
+    1,
+    250000,
+    2000000,
+    2049999,
+    2050000
+   ],
+   "stop": 3000000
+  },
+  "first frame at zero": {
+   "fps": 60,
+   "size": [
+    2,
+    1
+   ],
+   "times": [
+    0,
+    16667
+   ],
+   "stop": 1000
+  },
+  "cropped": {
+   "fps": 30,
+   "size": [
+    6,
+    3
+   ],
+   "crop": [
+    2,
+    1,
+    2,
+    2
+   ],
+   "times": [
+    1000,
+    34333,
+    67666
+   ],
+   "stop": 100000
+  },
+  "cropped one row": {
+   "fps": 30,
+   "size": [
+    6,
+    3
+   ],
+   "crop": [
+    0,
+    2,
+    6,
+    1
+   ],
+   "times": [
+    1000,
+    34333
+   ],
+   "stop": 0
+  },
+  "padded stride": {
+   "fps": 30,
+   "size": [
+    3,
+    2
+   ],
+   "stride": 16,
+   "times": [
+    1000,
+    34333
+   ],
+   "stop": 70000
+  },
+  "odd fps": {
+   "fps": 7,
+   "size": [
+    2,
+    2
+   ],
+   "times": [
+    100,
+    142957,
+    285814,
+    400000
+   ],
+   "stop": 1000000
+  },
+  "high fps": {
+   "fps": 1000,
+   "size": [
+    2,
+    1
+   ],
+   "times": [
+    10,
+    1010,
+    1510,
+    2010,
+    2499,
+    2500
+   ],
+   "stop": 5000
+  },
+  "many frames": {
+   "fps": 60,
+   "size": [
+    2,
+    1
+   ],
+   "times": [
+    7,
+    16674,
+    33340,
+    50007,
+    66674,
+    83340,
+    100007,
+    116674,
+    133340,
+    150007,
+    166674,
+    183340,
+    200007,
+    216674,
+    233340,
+    250007,
+    266674,
+    283340,
+    300007,
+    316674,
+    333340,
+    350007,
+    366674,
+    383340,
+    400007,
+    416674,
+    433340,
+    450007,
+    466674,
+    483340,
+    500007,
+    516674,
+    533340,
+    550007,
+    566674,
+    583340,
+    600007,
+    616674,
+    633340,
+    650007
+   ],
+   "stop": 683333
+  },
+  "nothing captured": {
+   "fps": 60,
+   "size": [
+    4,
+    2
+   ],
+   "times": [],
+   "stop": 5000000
+  },
+  "timestamp unwritable": {
+   "fps": 60,
+   "size": [
+    4,
+    2
+   ],
+   "times": [
+    1000,
+    2000
+   ],
+   "stop": 5000,
+   "timestampPath": "missing-directory/screen.mp4.ts"
+  },
+  "encoder closed": {
+   "fps": 60,
+   "size": [
+    4,
+    2
+   ],
+   "times": [
+    1000,
+    20000
+   ],
+   "stop": 50000,
+   "encoder": "closed"
+  },
+  "aborted": {
+   "fps": 60,
+   "size": [
+    4,
+    2
+   ],
+   "times": [
+    1000,
+    20000
+   ],
+   "stop": 50000,
+   "abort": true
+  }
+ }
+}

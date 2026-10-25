@@ -1,0 +1,200 @@
+elapsed	0	0	"00:00"
+elapsed	999999	0	"00:00"
+elapsed	1000000	0	"00:01"
+elapsed	1999999	0	"00:01"
+elapsed	59999999	0	"00:59"
+elapsed	60000000	0	"01:00"
+elapsed	61500000	0	"01:01"
+elapsed	3599999999	0	"59:59"
+elapsed	3600000000	0	"60:00"
+elapsed	5999999999	0	"99:59"
+elapsed	6000000000	0	"100:00"
+elapsed	359999999999	0	"5999:59"
+elapsed	-1000000	0	"00:00"
+elapsed	0	1000000	"00:00"
+elapsed	999999	1000000	"00:00"
+elapsed	1000000	1000000	"00:00"
+elapsed	1999999	1000000	"00:00"
+elapsed	59999999	1000000	"00:58"
+elapsed	60000000	1000000	"00:59"
+elapsed	61500000	1000000	"01:00"
+elapsed	3599999999	1000000	"59:58"
+elapsed	3600000000	1000000	"59:59"
+elapsed	5999999999	1000000	"99:58"
+elapsed	6000000000	1000000	"99:59"
+elapsed	359999999999	1000000	"5999:58"
+elapsed	-1000000	1000000	"00:00"
+elapsed	0	-5	"00:00"
+elapsed	999999	-5	"00:01"
+elapsed	1000000	-5	"00:01"
+elapsed	1999999	-5	"00:02"
+elapsed	59999999	-5	"01:00"
+elapsed	60000000	-5	"01:00"
+elapsed	61500000	-5	"01:01"
+elapsed	3599999999	-5	"60:00"
+elapsed	3600000000	-5	"60:00"
+elapsed	5999999999	-5	"100:00"
+elapsed	6000000000	-5	"100:00"
+elapsed	359999999999	-5	"6000:00"
+elapsed	-1000000	-5	"00:00"
+countdownValue	0	1000000	1
+countdownValue	1	1000000	1
+countdownValue	999999	1000000	1
+countdownValue	1000000	1000000	1
+countdownValue	1000001	1000000	1
+countdownValue	2000000	1000000	1
+countdownValue	2000001	1000000	2
+countdownValue	3000000	1000000	2
+countdownValue	3000001	1000000	3
+countdownValue	4000000	1000000	3
+countdownValue	4000001	1000000	3
+countdownValue	100000000	1000000	3
+countdownValue	-5	1000000	1
+countdownValue	0	0	1
+countdownValue	1	0	1
+countdownValue	999999	0	1
+countdownValue	1000000	0	1
+countdownValue	1000001	0	2
+countdownValue	2000000	0	2
+countdownValue	2000001	0	3
+countdownValue	3000000	0	3
+countdownValue	3000001	0	3
+countdownValue	4000000	0	3
+countdownValue	4000001	0	3
+countdownValue	100000000	0	3
+countdownValue	-5	0	1
+cycleCameraShape	"round"	16	"square" 16	"square" 0	"round" 16	"square" 16
+cycleCameraShape	"round"	0	"square" 16	"square" 0	"round" 16	"square" 16
+cycleCameraShape	"round"	8	"square" 8	"square" 0	"round" 16	"square" 16
+cycleCameraShape	"round"	80	"square" 80	"square" 0	"round" 16	"square" 16
+cycleCameraShape	"round"	-1	"square" -1	"round" 16	"square" 16	"square" 0
+cycleCameraShape	"square"	16	"square" 0	"round" 16	"square" 16	"square" 0
+cycleCameraShape	"square"	0	"round" 16	"square" 16	"square" 0	"round" 16
+cycleCameraShape	"square"	8	"square" 0	"round" 16	"square" 16	"square" 0
+cycleCameraShape	"square"	80	"square" 0	"round" 16	"square" 16	"square" 0
+cycleCameraShape	"square"	-1	"round" 16	"square" 16	"square" 0	"round" 16
+cycleCameraShape	"rectangle"	16	"rectangle" 0	"round" 16	"square" 16	"square" 0
+cycleCameraShape	"rectangle"	0	"round" 16	"square" 16	"square" 0	"round" 16
+cycleCameraShape	"rectangle"	8	"rectangle" 0	"round" 16	"square" 16	"square" 0
+cycleCameraShape	"rectangle"	80	"rectangle" 0	"round" 16	"square" 16	"square" 0
+cycleCameraShape	"rectangle"	-1	"round" 16	"square" 16	"square" 0	"round" 16
+cycleCameraShape	""	16	"" 0	"round" 16	"square" 16	"square" 0
+cycleCameraShape	""	0	"round" 16	"square" 16	"square" 0	"round" 16
+cycleCameraShape	""	8	"" 0	"round" 16	"square" 16	"square" 0
+cycleCameraShape	""	80	"" 0	"round" 16	"square" 16	"square" 0
+cycleCameraShape	""	-1	"round" 16	"square" 16	"square" 0	"round" 16
+snapSelfViewToNextCorner	2400x1350	120	0:24,24	1:2256,24	2:24,1206	3:2256,1206	0:24,24
+snapSelfViewToNextCorner	2400x1350	160	0:24,24	1:2216,24	2:24,1166	3:2216,1166	0:24,24
+snapSelfViewToNextCorner	2400x1350	220	0:24,24	1:2156,24	2:24,1106	3:2156,1106	0:24,24
+snapSelfViewToNextCorner	1920x1080	120	0:24,24	1:1776,24	2:24,936	3:1776,936	0:24,24
+snapSelfViewToNextCorner	1920x1080	160	0:24,24	1:1736,24	2:24,896	3:1736,896	0:24,24
+snapSelfViewToNextCorner	1920x1080	220	0:24,24	1:1676,24	2:24,836	3:1676,836	0:24,24
+snapSelfViewToNextCorner	200x200	120	0:24,24	1:56,24	2:24,56	3:56,56	0:24,24
+snapSelfViewToNextCorner	200x200	160	0:24,24	1:24,24	2:24,24	3:24,24	0:24,24
+snapSelfViewToNextCorner	200x200	220	0:0,0	1:0,0	2:0,0	3:0,0	0:0,0
+snapSelfViewToNextCorner	0x0	120	3:16,16	3:16,16	3:16,16	3:16,16	3:16,16
+snapSelfViewToNextCorner	0x0	160	3:16,16	3:16,16	3:16,16	3:16,16	3:16,16
+snapSelfViewToNextCorner	0x0	220	3:16,16	3:16,16	3:16,16	3:16,16	3:16,16
+snapSelfViewToNextCorner	100x0	120	3:16,16	3:16,16	3:16,16	3:16,16	3:16,16
+snapSelfViewToNextCorner	100x0	160	3:16,16	3:16,16	3:16,16	3:16,16	3:16,16
+snapSelfViewToNextCorner	100x0	220	3:16,16	3:16,16	3:16,16	3:16,16	3:16,16
+position	2400x1350	120	500,400	16,16	16,16	0	0
+position	2400x1350	120	500,400	0,0	0,0	0	0
+position	2400x1350	120	500,400	-50,3000	0,1230	0	1
+position	2400x1350	120	500,400	2224,1174	2224,1174	0.98220640569395012	0.96661101836393992
+position	2400x1350	120	500,400	1000,500	1000,500	0.4377224199288256	0.40400667779632721
+position	2400x1350	120	500,400	17,15	17,15	0.00044483985765124553	0
+position	2400x1350	160	500,400	16,16	16,16	0	0
+position	2400x1350	160	500,400	0,0	0,0	0	0
+position	2400x1350	160	500,400	-50,3000	0,1190	0	1
+position	2400x1350	160	500,400	2224,1174	2224,1174	1	1
+position	2400x1350	160	500,400	1000,500	1000,500	0.44565217391304346	0.41796200345423146
+position	2400x1350	160	500,400	17,15	17,15	0.00045289855072463769	0
+position	2400x1350	220	500,400	16,16	16,16	0	0
+position	2400x1350	220	500,400	0,0	0,0	0	0
+position	2400x1350	220	500,400	-50,3000	0,1130	0	1
+position	2400x1350	220	500,400	2224,1174	2180,1130	1	1
+position	2400x1350	220	500,400	1000,500	1000,500	0.45810055865921789	0.44080145719489983
+position	2400x1350	220	500,400	17,15	17,15	0.00046554934823091247	0
+position	1920x1080	120	500,400	16,16	16,16	0	0
+position	1920x1080	120	500,400	0,0	0,0	0	0
+position	1920x1080	120	500,400	-50,3000	0,960	0	1
+position	1920x1080	120	500,400	2224,1174	1800,960	1	1
+position	1920x1080	120	500,400	1000,500	1000,500	0.5565610859728507	0.52155172413793105
+position	1920x1080	120	500,400	17,15	17,15	0.00056561085972850684	0
+position	1920x1080	160	500,400	16,16	16,16	0	0
+position	1920x1080	160	500,400	0,0	0,0	0	0
+position	1920x1080	160	500,400	-50,3000	0,920	0	1
+position	1920x1080	160	500,400	2224,1174	1760,920	1	1
+position	1920x1080	160	500,400	1000,500	1000,500	0.56944444444444442	0.54504504504504503
+position	1920x1080	160	500,400	17,15	17,15	0.00057870370370370367	0
+position	1920x1080	220	500,400	16,16	16,16	0	0
+position	1920x1080	220	500,400	0,0	0,0	0	0
+position	1920x1080	220	500,400	-50,3000	0,860	0	1
+position	1920x1080	220	500,400	2224,1174	1700,860	1	1
+position	1920x1080	220	500,400	1000,500	1000,500	0.58992805755395683	0.58454106280193241
+position	1920x1080	220	500,400	17,15	17,15	0.00059952038369304552	0
+position	192x192	120	72,72	16,16	16,16	0	0
+position	192x192	120	72,72	0,0	0,0	0	0
+position	192x192	120	72,72	-50,3000	0,72	0	1
+position	192x192	120	72,72	2224,1174	72,72	1	1
+position	192x192	120	72,72	1000,500	72,72	1	1
+position	192x192	120	72,72	17,15	17,15	0.025000000000000001	0
+position	192x192	160	32,32	16,16	16,16	0	0
+position	192x192	160	32,32	0,0	0,0	0	0
+position	192x192	160	32,32	-50,3000	0,32	0	1
+position	192x192	160	32,32	2224,1174	32,32	1	1
+position	192x192	160	32,32	1000,500	32,32	1	1
+position	192x192	160	32,32	17,15	17,15	1	0
+position	192x192	220	0,0	16,16	0,0	0	0
+position	192x192	220	0,0	0,0	0,0	0	0
+position	192x192	220	0,0	-50,3000	0,0	0	0
+position	192x192	220	0,0	2224,1174	0,0	0	0
+position	192x192	220	0,0	1000,500	0,0	0	0
+position	192x192	220	0,0	17,15	0,0	0	0
+position	100x100	120	0,0	16,16	0,0	0	0
+position	100x100	120	0,0	0,0	0,0	0	0
+position	100x100	120	0,0	-50,3000	0,0	0	0
+position	100x100	120	0,0	2224,1174	0,0	0	0
+position	100x100	120	0,0	1000,500	0,0	0	0
+position	100x100	120	0,0	17,15	0,0	0	0
+position	100x100	160	0,0	16,16	0,0	0	0
+position	100x100	160	0,0	0,0	0,0	0	0
+position	100x100	160	0,0	-50,3000	0,0	0	0
+position	100x100	160	0,0	2224,1174	0,0	0	0
+position	100x100	160	0,0	1000,500	0,0	0	0
+position	100x100	160	0,0	17,15	0,0	0	0
+position	100x100	220	0,0	16,16	0,0	0	0
+position	100x100	220	0,0	0,0	0,0	0	0
+position	100x100	220	0,0	-50,3000	0,0	0	0
+position	100x100	220	0,0	2224,1174	0,0	0	0
+position	100x100	220	0,0	1000,500	0,0	0	0
+position	100x100	220	0,0	17,15	0,0	0	0
+position	-1x-1	120	0,0	16,16	0,0	-7	-7
+position	-1x-1	120	0,0	0,0	0,0	-7	-7
+position	-1x-1	120	0,0	-50,3000	0,0	-7	-7
+position	-1x-1	120	0,0	2224,1174	0,0	-7	-7
+position	-1x-1	120	0,0	1000,500	0,0	-7	-7
+position	-1x-1	120	0,0	17,15	0,0	-7	-7
+position	-1x-1	160	0,0	16,16	0,0	-7	-7
+position	-1x-1	160	0,0	0,0	0,0	-7	-7
+position	-1x-1	160	0,0	-50,3000	0,0	-7	-7
+position	-1x-1	160	0,0	2224,1174	0,0	-7	-7
+position	-1x-1	160	0,0	1000,500	0,0	-7	-7
+position	-1x-1	160	0,0	17,15	0,0	-7	-7
+position	-1x-1	220	0,0	16,16	0,0	-7	-7
+position	-1x-1	220	0,0	0,0	0,0	-7	-7
+position	-1x-1	220	0,0	-50,3000	0,0	-7	-7
+position	-1x-1	220	0,0	2224,1174	0,0	-7	-7
+position	-1x-1	220	0,0	1000,500	0,0	-7	-7
+position	-1x-1	220	0,0	17,15	0,0	-7	-7
+shapeFromPreferences	{}	"round"	16
+shapeFromPreferences	{"shape":"square"}	"square"	16
+shapeFromPreferences	{"radius":0,"shape":"square"}	"square"	0
+shapeFromPreferences	{"radius":40,"shape":"rectangle"}	"round"	40
+shapeFromPreferences	{"shape":"Square"}	"round"	16
+shapeFromPreferences	{"radius":81}	"round"	80
+shapeFromPreferences	{"radius":-3}	"round"	0
+shapeFromPreferences	{"radius":12.5}	"round"	16
+shapeFromPreferences	{"radius":"20"}	"round"	16
+shapeFromPreferences	{"radius":10000000000,"shape":1}	"round"	16

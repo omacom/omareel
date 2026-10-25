@@ -1,0 +1,37 @@
+[
+    {
+        "id": 0,
+        "name": "DP-1",
+        "description": "Oracle DP-1",
+        "make": "Oracle",
+        "model": "DP-1",
+        "serial": "",
+        "width": 1920,
+        "height": 1080,
+        "refreshRate": 60.0,
+        "x": 0,
+        "y": 0,
+        "activeWorkspace": {
+            "id": 1,
+            "name": "1"
+        },
+        "specialWorkspace": {
+            "id": 0,
+            "name": ""
+        },
+        "reserved": [
+            0,
+            0,
+            0,
+            0
+        ],
+        "scale": 1,
+        "transform": 0,
+        "focused": false,
+        "dpmsStatus": true,
+        "vrr": false,
+        "disabled": true,
+        "currentFormat": "XRGB8888",
+        "mirrorOf": "none"
+    }
+]

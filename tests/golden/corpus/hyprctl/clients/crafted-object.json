@@ -1,0 +1,20 @@
+{
+    "address": "0x1",
+    "mapped": true,
+    "hidden": false,
+    "at": [
+        12,
+        38
+    ],
+    "size": [
+        1896,
+        1030
+    ],
+    "workspace": {
+        "id": 1,
+        "name": "1"
+    },
+    "floating": false,
+    "class": "kitty",
+    "title": "Window 1"
+}

@@ -1,0 +1,5 @@
+crafted-dock.txt	["alsa_output.pci-0000_00_1f.3.analog-stereo.monitor","alsa_input.usb-Insta360_Insta360_Link_2-02.mono-fallback","alsa_input.platform-mtk_sdw_mc.HiFi__Mic__source"]
+crafted-empty.txt	[]
+crafted-malformed.txt	["","","only-name","","spaced name"]
+real-desktop.txt	["alsa_output.pci-0000_00_1f.3.hdmi-stereo.monitor","alsa_input.pci-0000_00_1f.3.analog-stereo"]
+<crafted-dock.txt, exit status 1>	[]

@@ -1,0 +1,35 @@
+"default_input"	duplicates	false
+"default_input"	empty-name	false
+"default_input"	laptop-and-camera	false
+"default_input"	none	false
+"default_input"	with-default	false
+"alsa_input.usb-Insta360_Insta360_Link_2-02.mono-fallback"	duplicates	true
+"alsa_input.usb-Insta360_Insta360_Link_2-02.mono-fallback"	empty-name	true
+"alsa_input.usb-Insta360_Insta360_Link_2-02.mono-fallback"	laptop-and-camera	false
+"alsa_input.usb-Insta360_Insta360_Link_2-02.mono-fallback"	none	false
+"alsa_input.usb-Insta360_Insta360_Link_2-02.mono-fallback"	with-default	true
+"alsa_input.usb-Elgato_Cam_Link_4K-02.analog-stereo"	duplicates	false
+"alsa_input.usb-Elgato_Cam_Link_4K-02.analog-stereo"	empty-name	true
+"alsa_input.usb-Elgato_Cam_Link_4K-02.analog-stereo"	laptop-and-camera	true
+"alsa_input.usb-Elgato_Cam_Link_4K-02.analog-stereo"	none	false
+"alsa_input.usb-Elgato_Cam_Link_4K-02.analog-stereo"	with-default	true
+""	duplicates	true
+""	empty-name	false
+""	laptop-and-camera	true
+""	none	false
+""	with-default	true
+"Default_Input"	duplicates	true
+"Default_Input"	empty-name	true
+"Default_Input"	laptop-and-camera	true
+"Default_Input"	none	false
+"Default_Input"	with-default	true
+" default_input"	duplicates	true
+" default_input"	empty-name	true
+" default_input"	laptop-and-camera	true
+" default_input"	none	false
+" default_input"	with-default	true
+"alsa_input.platform-mtk_sdw_mc.HiFi__Mic__source"	duplicates	true
+"alsa_input.platform-mtk_sdw_mc.HiFi__Mic__source"	empty-name	true
+"alsa_input.platform-mtk_sdw_mc.HiFi__Mic__source"	laptop-and-camera	false
+"alsa_input.platform-mtk_sdw_mc.HiFi__Mic__source"	none	false
+"alsa_input.platform-mtk_sdw_mc.HiFi__Mic__source"	with-default	true

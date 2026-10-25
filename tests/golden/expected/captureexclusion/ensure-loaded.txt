@@ -1,0 +1,205 @@
+== already loaded
+OMAREEL_PLUGIN_PATH	"$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"
+loaded	true
+builtHash	"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+reason	""
+details	{"built_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","monitors":[{"capturing":false,"excluded_layers":0,"name":"DP-1"}],"prefixes":["omareel-"],"version":"0.1.0"}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","omareel-exclude","status"]
+call	["hyprctl","-j","version"]
+== already loaded without override
+OMAREEL_PLUGIN_PATH	<unset>
+loaded	true
+builtHash	"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+reason	""
+details	{"built_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","monitors":[{"capturing":false,"excluded_layers":0,"name":"DP-1"}],"prefixes":["omareel-"],"version":"0.1.0"}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","omareel-exclude","status"]
+call	["hyprctl","-j","version"]
+== hash mismatch
+OMAREEL_PLUGIN_PATH	"$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"
+loaded	false
+builtHash	"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+reason	"Capture exclusion plugin needs rebuilding for this Hyprland commit"
+details	{}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","-j","version"]
+== hash uppercase
+OMAREEL_PLUGIN_PATH	"$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"
+loaded	false
+builtHash	"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+reason	"Capture exclusion plugin needs rebuilding for this Hyprland commit"
+details	{}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","-j","version"]
+== hash with newline
+OMAREEL_PLUGIN_PATH	"$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"
+loaded	true
+builtHash	"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+reason	""
+details	{"built_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","monitors":[{"capturing":false,"excluded_layers":0,"name":"DP-1"}],"prefixes":["omareel-"],"version":"0.1.0"}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","-j","version"]
+call	["hyprctl","plugin","load","$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"]
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","omareel-exclude","status"]
+call	["hyprctl","-j","version"]
+== hash with spaces
+OMAREEL_PLUGIN_PATH	"$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"
+loaded	true
+builtHash	"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+reason	""
+details	{"built_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","monitors":[{"capturing":false,"excluded_layers":0,"name":"DP-1"}],"prefixes":["omareel-"],"version":"0.1.0"}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","-j","version"]
+call	["hyprctl","plugin","load","$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"]
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","omareel-exclude","status"]
+call	["hyprctl","-j","version"]
+== load exit status
+OMAREEL_PLUGIN_PATH	"$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"
+loaded	false
+builtHash	"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+reason	"Hyprland refused to load the capture exclusion plugin (ok)"
+details	{}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","-j","version"]
+call	["hyprctl","plugin","load","$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"]
+== load exit status quiet
+OMAREEL_PLUGIN_PATH	"$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"
+loaded	false
+builtHash	"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+reason	"Hyprland refused to load the capture exclusion plugin (no reply)"
+details	{}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","-j","version"]
+call	["hyprctl","plugin","load","$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"]
+== load hangs
+OMAREEL_PLUGIN_PATH	"$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"
+loaded	false
+builtHash	"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+reason	"Hyprland refused to load the capture exclusion plugin (hyprctl did not answer within 2 seconds)"
+details	{}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","-j","version"]
+call	["hyprctl","plugin","load","$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"]
+== load refused
+OMAREEL_PLUGIN_PATH	"$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"
+loaded	false
+builtHash	"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+reason	"Hyprland refused to load the capture exclusion plugin (error: plugin could not be loaded: version mismatch)"
+details	{}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","-j","version"]
+call	["hyprctl","plugin","load","$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"]
+== load reply Ok
+OMAREEL_PLUGIN_PATH	"$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"
+loaded	false
+builtHash	"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+reason	"Hyprland refused to load the capture exclusion plugin (Ok)"
+details	{}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","-j","version"]
+call	["hyprctl","plugin","load","$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"]
+== load reply spaced
+OMAREEL_PLUGIN_PATH	"$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"
+loaded	true
+builtHash	"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+reason	""
+details	{"built_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","monitors":[{"capturing":false,"excluded_layers":0,"name":"DP-1"}],"prefixes":["omareel-"],"version":"0.1.0"}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","-j","version"]
+call	["hyprctl","plugin","load","$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"]
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","omareel-exclude","status"]
+call	["hyprctl","-j","version"]
+== load reply with newline
+OMAREEL_PLUGIN_PATH	"$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"
+loaded	true
+builtHash	"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+reason	""
+details	{"built_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","monitors":[{"capturing":false,"excluded_layers":0,"name":"DP-1"}],"prefixes":["omareel-"],"version":"0.1.0"}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","-j","version"]
+call	["hyprctl","plugin","load","$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"]
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","omareel-exclude","status"]
+call	["hyprctl","-j","version"]
+== load stderr only
+OMAREEL_PLUGIN_PATH	"$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"
+loaded	false
+builtHash	"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+reason	"Hyprland refused to load the capture exclusion plugin (couldn't connect)"
+details	{}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","-j","version"]
+call	["hyprctl","plugin","load","$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"]
+== load stdout and stderr
+OMAREEL_PLUGIN_PATH	"$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"
+loaded	false
+builtHash	"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+reason	"Hyprland refused to load the capture exclusion plugin (okwarning)"
+details	{}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","-j","version"]
+call	["hyprctl","plugin","load","$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"]
+== loads
+OMAREEL_PLUGIN_PATH	"$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"
+loaded	true
+builtHash	"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+reason	""
+details	{"built_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","monitors":[{"capturing":false,"excluded_layers":0,"name":"DP-1"}],"prefixes":["omareel-"],"version":"0.1.0"}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","-j","version"]
+call	["hyprctl","plugin","load","$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"]
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","omareel-exclude","status"]
+call	["hyprctl","-j","version"]
+== loads but status stays unloaded
+OMAREEL_PLUGIN_PATH	"$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"
+loaded	false
+builtHash	""
+reason	"Capture exclusion plugin is not loaded"
+details	{}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","-j","version"]
+call	["hyprctl","plugin","load","$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"]
+call	["hyprctl","-j","plugin","list"]
+== no hash file
+OMAREEL_PLUGIN_PATH	"$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"
+loaded	false
+builtHash	""
+reason	"Capture exclusion plugin needs rebuilding for this Hyprland commit"
+details	{}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","-j","version"]
+== path empty
+OMAREEL_PLUGIN_PATH	""
+loaded	false
+builtHash	""
+reason	"Configured capture exclusion plugin does not exist"
+details	{}
+== path is a directory
+OMAREEL_PLUGIN_PATH	"$HOME/oracle-scratch/captureexclusion/plugins/directory.so"
+loaded	false
+builtHash	""
+reason	"Configured capture exclusion plugin does not exist"
+details	{}
+== path missing
+OMAREEL_PLUGIN_PATH	"$HOME/oracle-scratch/captureexclusion/plugins/missing.so"
+loaded	false
+builtHash	""
+reason	"Configured capture exclusion plugin does not exist"
+details	{}
+== relative path
+OMAREEL_PLUGIN_PATH	"oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"
+loaded	true
+builtHash	"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+reason	""
+details	{"built_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","monitors":[{"capturing":false,"excluded_layers":0,"name":"DP-1"}],"prefixes":["omareel-"],"version":"0.1.0"}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","-j","version"]
+call	["hyprctl","plugin","load","$HOME/oracle-scratch/captureexclusion/plugins/omareel-capture-exclude.so"]
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","omareel-exclude","status"]
+call	["hyprctl","-j","version"]

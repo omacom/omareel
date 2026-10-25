@@ -1,0 +1,19 @@
+Input #0, lavfi, from 'anullsrc=r=48000:cl=mono:d=0':
+  Duration: N/A, bitrate: N/A
+  Stream #0:0: Audio: pcm_u8, 48000 Hz, mono, u8, 384 kb/s
+[Parsed_volumedetect_0 @ 0x0] n_samples: 0
+Stream mapping:
+  Stream #0:0 -> #0:0 (pcm_u8 (native) -> aac (native))
+Press [q] to stop, [?] for help
+[af#0:0 @ 0x0] No filtered frames for output stream, trying to initialize anyway.
+Output #0, matroska, to '@PATH@':
+  Metadata:
+    encoder         : Lavf63.1.101
+  Stream #0:0: Audio: aac (LC) ([255][0][0][0] / 0x00FF), 48000 Hz, mono, fltp, 192 kb/s
+    Metadata:
+      encoder         : Lavc63.1.101 aac
+[Parsed_volumedetect_0 @ 0x0] n_samples: 0
+[out#0/matroska @ 0x0] video:0KiB audio:0KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: unknown
+[out#0/matroska @ 0x0] Output file is empty, nothing was encoded(check -ss / -t / -frames parameters if used)
+size=       1KiB time=N/A bitrate=N/A speed=N/A elapsed=N/A    
+[aac @ 0x0] Qavg: nan

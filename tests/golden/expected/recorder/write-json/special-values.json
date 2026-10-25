@@ -1,0 +1,16 @@
+{
+    "big": 9007199254740993,
+    "inf": null,
+    "nan": null,
+    "negative-zero": 0,
+    "nested": {
+        "a": [
+            1,
+            2.5,
+            null,
+            true
+        ]
+    },
+    "text": "line\nbreak \"q\" \\ é🎬",
+    "tiny": 5e-324
+}

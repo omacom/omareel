@@ -1,0 +1,144 @@
+paths	XDG_RUNTIME_DIR hermetic	"$XDG_RUNTIME_DIR/omareel/recording.json"	"$XDG_RUNTIME_DIR/omareel/selfview-host.json"	"$XDG_RUNTIME_DIR/omareel/last-error.txt"
+paths	XDG_RUNTIME_DIR with a trailing slash	"$XDG_RUNTIME_DIR//omareel/recording.json"	"$XDG_RUNTIME_DIR/omareel/selfview-host.json"	"$XDG_RUNTIME_DIR/omareel/last-error.txt"
+paths	XDG_RUNTIME_DIR relative	"relative/run/omareel/recording.json"	"$HOME/relative/run/omareel/selfview-host.json"	"$HOME/relative/run/omareel/last-error.txt"
+paths	XDG_RUNTIME_DIR empty	"/tmp/omareel/recording.json"	"/tmp/omareel/selfview-host.json"	"/tmp/omareel/last-error.txt"
+paths	XDG_RUNTIME_DIR unset	"/tmp/omareel/recording.json"	"/tmp/omareel/selfview-host.json"	"/tmp/omareel/last-error.txt"
+readStateFile	array.json	{}
+readStateFile	bom.json	{"monitor":"DP-1"}
+readStateFile	doubles.json	{"command_sequence":2.5,"pid":-1,"started_us":1500000,"webcam":1}
+readStateFile	duplicate-keys.json	{"monitor":"second"}
+readStateFile	empty.json	{}
+readStateFile	huge.json	{"command_sequence":9223372036854775806,"pid":0,"started_us":9007199254740993}
+readStateFile	invalid.json	{}
+readStateFile	minimal.json	{"monitor":"HDMI-A-1","pid":1,"started_us":5,"webcam":false}
+readStateFile	nested.json	{"command":"rotate","command_sequence":3,"extra":{"a":[1,2,{"b":null}]}}
+readStateFile	nulls.json	{"command_sequence":null,"monitor":null,"pid":null,"started_us":null,"webcam":null}
+readStateFile	recording.json	{"bar_height":40,"bar_visible":true,"bar_width":448,"bundle":"/home/user/Videos/Recording 2026-10-25 10-00-00.omareel","camera_device":"/dev/video2","camera_flip_horizontal":true,"camera_height":1080,"camera_record":true,"camera_rotation":90,"camera_status":"ready","camera_stop":false,"capture_backend":"ext-image-copy-capture","capture_height":360,"capture_mode":"region","capture_started":true,"capture_width":640,"capture_x":10.5,"capture_y":20,"countdown_active":false,"countdown_end_us":0,"countdown_height":240,"countdown_ready":false,"countdown_requested":false,"countdown_width":240,"daemon_started_us":123456700000,"monitor":"DP-1","no_open":false,"overlay_exclusion":"plugin","overlay_monitor":"DP-1","pid":0,"selfview":true,"selfview_monitor":"DP-1","selfview_pixels":160,"selfview_safe":true,"selfview_size":"M","selfview_x":16,"selfview_y":16,"started_us":123456789012,"webcam":true}
+readStateFile	strings.json	{"command_sequence":"5","monitor":3,"pid":"0","started_us":"77","webcam":"true"}
+readStateFile	trailing-garbage.json	{}
+readStateFile	unicode.json	{"bundle":"/tmp/réc .omareel","monitor":"Écran ☃"}
+readStateFile	<missing>	{}
+readStateFile	<directory>	{}
+queries	array.json	0	""	false	{}	false	true	false	"No recording is active"	false	1	"<untouched>"	"No recording is active"	false
+queries	bom.json	0	"DP-1"	false	{"monitor":"DP-1"}	false	false	false	"No recording is active"	false	1	"<untouched>"	"No recording is active"	false
+queries	doubles.json	1500000	""	false	{"command_sequence":2.5,"pid":-1,"started_us":1500000,"webcam":1}	false	false	false	"No recording is active"	false	1	"<untouched>"	"No recording is active"	false
+queries	duplicate-keys.json	0	"second"	false	{"monitor":"second"}	false	false	false	"No recording is active"	false	1	"<untouched>"	"No recording is active"	false
+queries	empty.json	0	""	false	{}	false	true	false	"No recording is active"	false	1	"<untouched>"	"No recording is active"	false
+queries	huge.json	9007199254740993	""	false	{"command_sequence":9223372036854775806,"pid":0,"started_us":9007199254740993}	false	false	false	"No recording is active"	false	1	"<untouched>"	"No recording is active"	false
+queries	invalid.json	0	""	false	{}	false	true	false	"No recording is active"	false	1	"<untouched>"	"No recording is active"	false
+queries	minimal.json	5	"HDMI-A-1"	false	{"monitor":"HDMI-A-1","pid":1,"started_us":5,"webcam":false}	false	false	false	"No recording is active"	false	1	"<untouched>"	"No recording is active"	false
+queries	nested.json	0	""	false	{"command":"rotate","command_sequence":3,"extra":{"a":[1,2,{"b":null}]}}	false	false	false	"No recording is active"	false	1	"<untouched>"	"No recording is active"	false
+queries	nulls.json	0	""	false	{"command_sequence":null,"monitor":null,"pid":null,"started_us":null,"webcam":null}	false	false	false	"No recording is active"	false	1	"<untouched>"	"No recording is active"	false
+queries	recording.json	123456789012	"DP-1"	true	{"bar_height":40,"bar_visible":true,"bar_width":448,"bundle":"/home/user/Videos/Recording 2026-10-25 10-00-00.omareel","camera_device":"/dev/video2","camera_flip_horizontal":true,"camera_height":1080,"camera_record":true,"camera_rotation":90,"camera_status":"ready","camera_stop":false,"capture_backend":"ext-image-copy-capture","capture_height":360,"capture_mode":"region","capture_started":true,"capture_width":640,"capture_x":10.5,"capture_y":20,"countdown_active":false,"countdown_end_us":0,"countdown_height":240,"countdown_ready":false,"countdown_requested":false,"countdown_width":240,"daemon_started_us":123456700000,"monitor":"DP-1","no_open":false,"overlay_exclusion":"plugin","overlay_monitor":"DP-1","pid":0,"selfview":true,"selfview_monitor":"DP-1","selfview_pixels":160,"selfview_safe":true,"selfview_size":"M","selfview_x":16,"selfview_y":16,"started_us":123456789012,"webcam":true}	false	false	false	"No recording is active"	false	1	"<untouched>"	"No recording is active"	false
+queries	strings.json	77	""	false	{"command_sequence":"5","monitor":3,"pid":"0","started_us":"77","webcam":"true"}	false	false	false	"No recording is active"	false	1	"<untouched>"	"No recording is active"	false
+queries	trailing-garbage.json	0	""	false	{}	false	true	false	"No recording is active"	false	1	"<untouched>"	"No recording is active"	false
+queries	unicode.json	0	"Écran ☃"	false	{"bundle":"/tmp/réc .omareel","monitor":"Écran ☃"}	false	false	false	"No recording is active"	false	1	"<untouched>"	"No recording is active"	false
+queries	<no state file>	0	""	false	{}	false	false
+update	creates the directories	"$HOME/oracle-scratch/recorder/state/deep/omareel/recording.json"	{"monitor":"DP-1","pid":0}	true	""
+  file	"{\x0a    \"monitor\": \"DP-1\",\x0a    \"pid\": 0\x0a}\x0a"	0644
+  directory	recording.json:f0644
+update	first command	"$HOME/oracle-scratch/recorder/state/deep/omareel/recording.json"	{"command":"rotate"}	true	""
+  file	"{\x0a    \"command\": \"rotate\",\x0a    \"command_sequence\": 1,\x0a    \"monitor\": \"DP-1\",\x0a    \"pid\": 0\x0a}\x0a"	0644
+  directory	recording.json:f0644
+update	second command	"$HOME/oracle-scratch/recorder/state/deep/omareel/recording.json"	{"command":"rotate"}	true	""
+  file	"{\x0a    \"command\": \"rotate\",\x0a    \"command_sequence\": 2,\x0a    \"monitor\": \"DP-1\",\x0a    \"pid\": 0\x0a}\x0a"	0644
+  directory	recording.json:f0644
+update	explicit sequence	"$HOME/oracle-scratch/recorder/state/deep/omareel/recording.json"	{"command":"flip","command_sequence":7}	true	""
+  file	"{\x0a    \"command\": \"flip\",\x0a    \"command_sequence\": 7,\x0a    \"monitor\": \"DP-1\",\x0a    \"pid\": 0\x0a}\x0a"	0644
+  directory	recording.json:f0644
+update	after an explicit sequence	"$HOME/oracle-scratch/recorder/state/deep/omareel/recording.json"	{"command":"corner"}	true	""
+  file	"{\x0a    \"command\": \"corner\",\x0a    \"command_sequence\": 8,\x0a    \"monitor\": \"DP-1\",\x0a    \"pid\": 0\x0a}\x0a"	0644
+  directory	recording.json:f0644
+update	no command	"$HOME/oracle-scratch/recorder/state/deep/omareel/recording.json"	{"camera_status":"ready","selfview_x":16.5}	true	""
+  file	"{\x0a    \"camera_status\": \"ready\",\x0a    \"command\": \"corner\",\x0a    \"command_sequence\": 8,\x0a    \"monitor\": \"DP-1\",\x0a    \"pid\": 0,\x0a    \"selfview_x\": 16.5\x0a}\x0a"	0644
+  directory	recording.json:f0644
+update	empty command	"$HOME/oracle-scratch/recorder/state/deep/omareel/recording.json"	{"command":""}	true	""
+  file	"{\x0a    \"camera_status\": \"ready\",\x0a    \"command\": \"\",\x0a    \"command_sequence\": 9,\x0a    \"monitor\": \"DP-1\",\x0a    \"pid\": 0,\x0a    \"selfview_x\": 16.5\x0a}\x0a"	0644
+  directory	recording.json:f0644
+update	null command	"$HOME/oracle-scratch/recorder/state/deep/omareel/recording.json"	{"command":null}	true	""
+  file	"{\x0a    \"camera_status\": \"ready\",\x0a    \"command\": null,\x0a    \"command_sequence\": 10,\x0a    \"monitor\": \"DP-1\",\x0a    \"pid\": 0,\x0a    \"selfview_x\": 16.5\x0a}\x0a"	0644
+  directory	recording.json:f0644
+update	sequence only	"$HOME/oracle-scratch/recorder/state/deep/omareel/recording.json"	{"command_sequence":-3}	true	""
+  file	"{\x0a    \"camera_status\": \"ready\",\x0a    \"command\": null,\x0a    \"command_sequence\": -3,\x0a    \"monitor\": \"DP-1\",\x0a    \"pid\": 0,\x0a    \"selfview_x\": 16.5\x0a}\x0a"	0644
+  directory	recording.json:f0644
+update	command after a negative sequence	"$HOME/oracle-scratch/recorder/state/deep/omareel/recording.json"	{"command":"show"}	true	""
+  file	"{\x0a    \"camera_status\": \"ready\",\x0a    \"command\": \"show\",\x0a    \"command_sequence\": -2,\x0a    \"monitor\": \"DP-1\",\x0a    \"pid\": 0,\x0a    \"selfview_x\": 16.5\x0a}\x0a"	0644
+  directory	recording.json:f0644
+update	nested values	"$HOME/oracle-scratch/recorder/state/deep/omareel/recording.json"	{"extra":{"list":[1,"two",null]},"monitor":null}	true	""
+  file	"{\x0a    \"camera_status\": \"ready\",\x0a    \"command\": \"show\",\x0a    \"command_sequence\": -2,\x0a    \"extra\": {\x0a        \"list\": [\x0a            1,\x0a            \"two\",\x0a            null\x0a        ]\x0a    },\x0a    \"monitor\": null,\x0a    \"pid\": 0,\x0a    \"selfview_x\": 16.5\x0a}\x0a"	0644
+  directory	recording.json:f0644
+update	nothing	"$HOME/oracle-scratch/recorder/state/deep/omareel/recording.json"	{}	true	""
+  file	"{\x0a    \"camera_status\": \"ready\",\x0a    \"command\": \"show\",\x0a    \"command_sequence\": -2,\x0a    \"extra\": {\x0a        \"list\": [\x0a            1,\x0a            \"two\",\x0a            null\x0a        ]\x0a    },\x0a    \"monitor\": null,\x0a    \"pid\": 0,\x0a    \"selfview_x\": 16.5\x0a}\x0a"	0644
+  directory	recording.json:f0644
+update	command over strings.json	"$HOME/oracle-scratch/recorder/state/deep/omareel/recording.json"	{"command":"x"}	true	""
+  file	"{\x0a    \"command\": \"x\",\x0a    \"command_sequence\": 6,\x0a    \"monitor\": 3,\x0a    \"pid\": \"0\",\x0a    \"started_us\": \"77\",\x0a    \"webcam\": \"true\"\x0a}\x0a"	0644
+  directory	recording.json:f0644
+update	command over doubles.json	"$HOME/oracle-scratch/recorder/state/deep/omareel/recording.json"	{"command":"x"}	true	""
+  file	"{\x0a    \"command\": \"x\",\x0a    \"command_sequence\": 4,\x0a    \"pid\": -1,\x0a    \"started_us\": 1500000,\x0a    \"webcam\": 1\x0a}\x0a"	0644
+  directory	recording.json:f0644
+update	command over huge.json	"$HOME/oracle-scratch/recorder/state/deep/omareel/recording.json"	{"command":"x"}	true	""
+  file	"{\x0a    \"command\": \"x\",\x0a    \"command_sequence\": 9223372036854775807,\x0a    \"pid\": 0,\x0a    \"started_us\": 9007199254740993\x0a}\x0a"	0644
+  directory	recording.json:f0644
+update	command over nulls.json	"$HOME/oracle-scratch/recorder/state/deep/omareel/recording.json"	{"command":"x"}	true	""
+  file	"{\x0a    \"command\": \"x\",\x0a    \"command_sequence\": 1,\x0a    \"monitor\": null,\x0a    \"pid\": null,\x0a    \"started_us\": null,\x0a    \"webcam\": null\x0a}\x0a"	0644
+  directory	recording.json:f0644
+update	command over nested.json	"$HOME/oracle-scratch/recorder/state/deep/omareel/recording.json"	{"command":"x"}	true	""
+  file	"{\x0a    \"command\": \"x\",\x0a    \"command_sequence\": 4,\x0a    \"extra\": {\x0a        \"a\": [\x0a            1,\x0a            2,\x0a            {\x0a                \"b\": null\x0a            }\x0a        ]\x0a    }\x0a}\x0a"	0644
+  directory	recording.json:f0644
+update	command over array.json	"$HOME/oracle-scratch/recorder/state/deep/omareel/recording.json"	{"command":"x"}	true	""
+  file	"{\x0a    \"command\": \"x\",\x0a    \"command_sequence\": 1\x0a}\x0a"	0644
+  directory	recording.json:f0644
+update	command over invalid.json	"$HOME/oracle-scratch/recorder/state/deep/omareel/recording.json"	{"command":"x"}	true	""
+  file	"{\x0a    \"command\": \"x\",\x0a    \"command_sequence\": 1\x0a}\x0a"	0644
+  directory	recording.json:f0644
+update	command over empty.json	"$HOME/oracle-scratch/recorder/state/deep/omareel/recording.json"	{"command":"x"}	true	""
+  file	"{\x0a    \"command\": \"x\",\x0a    \"command_sequence\": 1\x0a}\x0a"	0644
+  directory	recording.json:f0644
+update	command over bom.json	"$HOME/oracle-scratch/recorder/state/deep/omareel/recording.json"	{"command":"x"}	true	""
+  file	"{\x0a    \"command\": \"x\",\x0a    \"command_sequence\": 1,\x0a    \"monitor\": \"DP-1\"\x0a}\x0a"	0644
+  directory	recording.json:f0644
+update	keeps mode 0600	"$HOME/oracle-scratch/recorder/state/deep/omareel/recording.json"	{"command":"y"}	true	""
+  file	"{\x0a    \"command\": \"y\",\x0a    \"command_sequence\": 2\x0a}\x0a"	0600
+  directory	recording.json:f0600
+update	lock held by this process (waits a second)	"$HOME/oracle-scratch/recorder/state/deep/omareel/recording.json"	{"command":"busy"}	false	"Recording state is busy"
+  file	"{\x0a    \"command\": \"y\",\x0a    \"command_sequence\": 2\x0a}\x0a"	0600
+  directory	recording.json:f0600 recording.json.lock:f0644
+after unlock	recording.json:f0600
+update	stale lock of a dead process	"$HOME/oracle-scratch/recorder/state/deep/omareel/recording.json"	{"command":"stale"}	true	""
+  file	"{\x0a    \"command\": \"stale\",\x0a    \"command_sequence\": 3\x0a}\x0a"	0600
+  directory	recording.json:f0600
+update	garbage lock file (waits a second)	"$HOME/oracle-scratch/recorder/state/deep/omareel/recording.json"	{"command":"garbage"}	false	"Recording state is busy"
+  file	"{\x0a    \"command\": \"stale\",\x0a    \"command_sequence\": 3\x0a}\x0a"	0600
+  directory	recording.json:f0600 recording.json.lock:f0644
+update	garbage lock file, old	"$HOME/oracle-scratch/recorder/state/deep/omareel/recording.json"	{"command":"old garbage"}	true	""
+  file	"{\x0a    \"command\": \"old garbage\",\x0a    \"command_sequence\": 4\x0a}\x0a"	0600
+  directory	recording.json:f0600
+update	lock path is a directory (waits a second)	"$HOME/oracle-scratch/recorder/state/deep/omareel/recording.json"	{"command":"directory"}	false	"Recording state is busy"
+  file	"{\x0a    \"command\": \"old garbage\",\x0a    \"command_sequence\": 4\x0a}\x0a"	0600
+  directory	recording.json:f0600 recording.json.lock:d0755
+update	state path is a directory	"$HOME/oracle-scratch/recorder/state/deep/omareel/recording.json"	{"command":"x"}	false	"Filename refers to a directory"
+  file	-	0755
+  directory	recording.json:d0755
+update	read-only directory	"$HOME/oracle-scratch/recorder/state/read-only/recording.json"	{"command":"x"}	false	"Could not lock recording state"
+  file	-	-
+  directory	(empty)
+update	without an error pointer	true	"<untouched>"
+sendHostCommand	"quit"	true
+  file	"{\x0a    \"command\": \"quit\",\x0a    \"command_sequence\": 1\x0a}\x0a"	0644
+  directory	selfview-host.json:f0644
+sendHostCommand	"configure"	true
+  file	"{\x0a    \"command\": \"configure\",\x0a    \"command_sequence\": 2\x0a}\x0a"	0644
+  directory	selfview-host.json:f0644
+sendHostCommand	""	true
+  file	"{\x0a    \"command\": \"\",\x0a    \"command_sequence\": 3\x0a}\x0a"	0644
+  directory	selfview-host.json:f0644
+updateRecordingState	true	""
+  file	"{\x0a    \"capture_started\": true,\x0a    \"command\": \"rotate\",\x0a    \"command_sequence\": 1\x0a}\x0a"	0644
+  directory	recording.json:f0644 selfview-host.json:f0644
+readLastError	<missing>	""
+writeLastError	"Overlays could not leave the recorded output"	"Overlays could not leave the recorded output\x0a"	"Overlays could not leave the recorded output"
+writeLastError	"two\u{a}lines\u{a}"	"two\x0alines\x0a\x0a"	"two\u{a}lines"
+writeLastError	"  padded  "	"  padded  \x0a"	"padded"
+writeLastError	""	"\x0a"	""
+QLockFile	"{pid}\x0a{applicationName}\x0a{hostName}\x0a{machineUniqueId}\x0a{bootUniqueId}\x0a"	0644
+QLockFile after unlock	false

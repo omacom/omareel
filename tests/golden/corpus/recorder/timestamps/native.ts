@@ -1,0 +1,2 @@
+monotonic_microsec	realtime_microsec
+1234567	1790000000000000

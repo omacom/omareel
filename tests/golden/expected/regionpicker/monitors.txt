@@ -1,0 +1,98 @@
+== crafted-all-disabled.json
+error	"<untouched>"
+"DP-1"	0	0	1920	1080	1	1920	1080	false
+== crafted-disabled.json
+error	"<untouched>"
+"DP-1"	0	0	1920	1080	1	1920	1080	true
+"DP-2"	1920	0	2560	1440	1	2560	1440	false
+== crafted-duplicate-names.json
+error	"<untouched>"
+"DUP"	0	0	1920	1080	1	1920	1080	false
+"DUP"	1920	0	1280	720	1	1280	720	true
+== crafted-empty-array.json
+error	"<untouched>"
+== crafted-empty.txt
+error	"<untouched>"
+== crafted-focus-both.json
+error	"<untouched>"
+"A"	0	0	1920	1080	1	1920	1080	true
+"B"	1920	0	1920	1080	1	1920	1080	true
+== crafted-focus-none.json
+error	"<untouched>"
+"A"	0	0	1920	1080	1	1920	1080	false
+"B"	1920	0	1920	1080	1	1920	1080	false
+== crafted-garbage.txt
+error	"<untouched>"
+== crafted-huge.json
+error	"<untouched>"
+"HUGE"	1.0000000000000001e+300	-1.0000000000000001e+300	0	2147483647	1	0	2147483647	false
+== crafted-missing-fields.json
+error	"<untouched>"
+"NOFIELDS"	0	0	1280	720	1	1280	720	false
+"BARE"	0	0	0	0	1	0	0	false
+""	0	0	0	0	1	0	0	false
+== crafted-negative-positions.json
+error	"<untouched>"
+"LEFT"	-1920	-200	1920	1080	1	1920	1080	false
+"MAIN"	0	0	1920	1080	2	3840	2160	true
+== crafted-null.json
+error	"<untouched>"
+== crafted-object.json
+error	"<untouched>"
+== crafted-odd-size.json
+error	"<untouched>"
+"eDP-1"	0	0	1280.6666666666667	720.66666666666663	1.5	1921	1081	true
+== crafted-reserved.json
+error	"<untouched>"
+"R-SHORT"	0	0	1920	1080	1	1920	1080	false
+"R-EMPTY"	0	0	1920	1080	1	1920	1080	false
+"R-LONG"	0	0	1920	1080	1	1920	1080	false
+"R-STRINGS"	0	0	1920	1080	1	1920	1080	false
+"R-OBJECT"	0	0	1920	1080	1	1920	1080	false
+== crafted-rotated.json
+error	"<untouched>"
+"ROT-0"	0	0	1600	1000	1.6000000000000001	2560	1600	false
+"ROT-1"	1600	0	1000	1600	1.6000000000000001	1600	2560	false
+"ROT-2"	3200	0	1600	1000	1.6000000000000001	2560	1600	false
+"ROT-3"	4800	0	1000	1600	1.6000000000000001	1600	2560	true
+"ROT-4"	6400	0	1600	1000	1.6000000000000001	2560	1600	false
+"ROT-5"	8000	0	1000	1600	1.6000000000000001	1600	2560	false
+"ROT-6"	9600	0	1600	1000	1.6000000000000001	2560	1600	false
+"ROT-7"	11200	0	1000	1600	1.6000000000000001	1600	2560	false
+== crafted-scalars.json
+error	"<untouched>"
+""	0	0	0	0	1	0	0	false
+""	0	0	0	0	1	0	0	false
+""	0	0	0	0	1	0	0	false
+""	0	0	0	0	1	0	0	false
+""	0	0	0	0	1	0	0	false
+== crafted-scales.json
+error	"<untouched>"
+"S0"	0	0	inf	inf	0	1920	1080	false
+"S-NEG"	0	0	-960	-540	-2	1920	1080	false
+"S-THIRD"	0	0	1920	1080	1.3333333333333333	2560	1440	false
+"S-STRING"	0	0	1920	1080	1	1920	1080	false
+"S-HALF"	0	0	3840	2160	0.5	1920	1080	false
+"S-TINY"	0	0	1920000	1080000	0.001	1920	1080	false
+== crafted-truncated.json
+error	"<untouched>"
+== crafted-two.json
+error	"<untouched>"
+"DP-1"	0	0	2048	1152	1.25	2560	1440	false
+"HDMI-A-1"	2048	0	1920	1080	1	1920	1080	true
+== crafted-unicode.json
+error	"<untouched>"
+"Écran \"1\" ☃"	0	0	1920	1080	1	1920	1080	true
+== crafted-wrong-types.json
+error	"<untouched>"
+"STR"	0	0	0	0	1	0	0	false
+""	12.75	-0.5	0	0	1	0	0	false
+== real-desktop.json
+error	"<untouched>"
+"HDMI-A-1"	0	0	1920	1080	2	3840	2160	true
+== <crafted-two.json, exit status 1, stderr>
+error	"hyprctl monitors failed: Couldn't connect to /run/user/1000/hypr/x/.socket.sock. (3)\u{a}"
+== <exit status 3, no output>
+error	"hyprctl monitors failed: "
+== <hyprctl not on PATH>
+error	"hyprctl monitors failed: "

@@ -1,0 +1,10 @@
+high-rate	1080=Jpeg 1280x720 30 30	720=Jpeg 1280x720 30 30	0=Jpeg 1280x720 30 30	480=Jpeg 1280x720 30 30	cameraCanRecord=true
+ir-sensor	1080=null	720=null	0=null	480=null	cameraCanRecord=false
+just-under-30	1080=null	720=null	0=null	480=null	cameraCanRecord=false
+no-formats	1080=null	720=null	0=null	480=null	cameraCanRecord=false
+only-4k	1080=Jpeg 2560x1440 30 30	720=Jpeg 2560x1440 30 30	0=Jpeg 2560x1440 30 30	480=Jpeg 2560x1440 30 30	cameraCanRecord=true
+only-small	1080=YUYV 320x240 30 30	720=YUYV 320x240 30 30	0=YUYV 320x240 30 30	480=YUYV 320x240 30 30	cameraCanRecord=true
+ties	1080=YUYV 1920x1081 30 30	720=Jpeg 1920x1079 30 30	0=YUYV 1920x1081 30 30	480=YUYV 1920x1081 30 30	cameraCanRecord=true
+webcam-1080p	1080=Jpeg 1920x1080 5 30	720=Jpeg 1280x720 5 30	0=Jpeg 1920x1080 5 30	480=Jpeg 1920x1080 5 30	cameraCanRecord=true
+webcam-60fps	1080=Jpeg 1920x1080 30 30	720=Jpeg 1920x1080 30 30	0=Jpeg 1920x1080 30 30	480=Jpeg 1920x1080 30 30	cameraCanRecord=true
+<null device>	1080=null	cameraCanRecord=false

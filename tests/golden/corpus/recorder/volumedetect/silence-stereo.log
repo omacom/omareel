@@ -1,0 +1,20 @@
+Input #0, lavfi, from 'anullsrc=r=48000:cl=stereo:d=1':
+  Duration: N/A, start: 0.000000, bitrate: 768 kb/s
+  Stream #0:0: Audio: pcm_u8, 48000 Hz, stereo, u8, 768 kb/s
+[Parsed_volumedetect_0 @ 0x0] n_samples: 0
+Stream mapping:
+  Stream #0:0 -> #0:0 (pcm_u8 (native) -> aac (native))
+Press [q] to stop, [?] for help
+Output #0, matroska, to '@PATH@':
+  Metadata:
+    encoder         : Lavf63.1.101
+  Stream #0:0: Audio: aac (LC) ([255][0][0][0] / 0x00FF), 48000 Hz, stereo, fltp, 192 kb/s
+    Metadata:
+      encoder         : Lavc63.1.101 aac
+[Parsed_volumedetect_0 @ 0x0] n_samples: 96000
+[Parsed_volumedetect_0 @ 0x0] mean_volume: -91.0 dB
+[Parsed_volumedetect_0 @ 0x0] max_volume: -91.0 dB
+[Parsed_volumedetect_0 @ 0x0] histogram_91db: 96000
+[out#0/matroska @ 0x0] video:0KiB audio:0KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: 305.940594%
+size=       1KiB time=00:00:01.00 bitrate=   9.8kbits/s speed=N/A elapsed=N/A    
+[aac @ 0x0] Qavg: 65536.000

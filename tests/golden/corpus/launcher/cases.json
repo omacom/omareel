@@ -1,0 +1,637 @@
+{
+ "cameraNames": [
+  "Cam Link 4K: Cam Link 4K",
+  "Integrated Webcam: Integrated W",
+  "Integrated Webcam: Integrated Webcam",
+  "Insta360 Link 2: Insta360 Link 2",
+  "Insta360 Link 2: Insta360 Link 2 Control",
+  "HD Pro Webcam C920",
+  "USB Camera: USB Camera: Video",
+  ": stream",
+  "device: ",
+  "device:  ",
+  "a: b",
+  "Camera :Camera",
+  "  Spaced  :  Spaced  ",
+  "Laptop Camera: Laptop",
+  "Laptop: Laptop Camera",
+  "",
+  ":",
+  ": ",
+  "x: x: x",
+  "Cámara: Cám",
+  "Cam: cam",
+  "Cam:Cam"
+ ],
+ "audio": [
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/crafted-duplicates.txt",
+   "chosen": "default_input",
+   "current": "default_input",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/crafted-duplicates.txt",
+   "chosen": "alsa_input.usb-Blue_Yeti-00.analog-stereo",
+   "current": "default_input",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/crafted-duplicates.txt",
+   "chosen": "alsa_input.unplugged",
+   "current": "alsa_input.unplugged",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/crafted-duplicates.txt",
+   "chosen": "alsa_input.pci-0000_00_1f.3.analog-stereo",
+   "current": "default_input",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/crafted-empty.txt",
+   "chosen": "default_input",
+   "current": "default_input",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/crafted-empty.txt",
+   "chosen": "alsa_input.usb-Blue_Yeti-00.analog-stereo",
+   "current": "default_input",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/crafted-empty.txt",
+   "chosen": "alsa_input.unplugged",
+   "current": "alsa_input.unplugged",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/crafted-empty.txt",
+   "chosen": "alsa_input.pci-0000_00_1f.3.analog-stereo",
+   "current": "default_input",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/crafted-malformed.txt",
+   "chosen": "default_input",
+   "current": "default_input",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/crafted-malformed.txt",
+   "chosen": "alsa_input.usb-Blue_Yeti-00.analog-stereo",
+   "current": "default_input",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/crafted-malformed.txt",
+   "chosen": "alsa_input.unplugged",
+   "current": "alsa_input.unplugged",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/crafted-malformed.txt",
+   "chosen": "alsa_input.pci-0000_00_1f.3.analog-stereo",
+   "current": "default_input",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/crafted-mixed.txt",
+   "chosen": "default_input",
+   "current": "default_input",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/crafted-mixed.txt",
+   "chosen": "alsa_input.usb-Blue_Yeti-00.analog-stereo",
+   "current": "default_input",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/crafted-mixed.txt",
+   "chosen": "alsa_input.unplugged",
+   "current": "alsa_input.unplugged",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/crafted-mixed.txt",
+   "chosen": "alsa_input.pci-0000_00_1f.3.analog-stereo",
+   "current": "default_input",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/crafted-only-outputs.txt",
+   "chosen": "default_input",
+   "current": "default_input",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/crafted-only-outputs.txt",
+   "chosen": "alsa_input.usb-Blue_Yeti-00.analog-stereo",
+   "current": "default_input",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/crafted-only-outputs.txt",
+   "chosen": "alsa_input.unplugged",
+   "current": "alsa_input.unplugged",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/crafted-only-outputs.txt",
+   "chosen": "alsa_input.pci-0000_00_1f.3.analog-stereo",
+   "current": "default_input",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/crafted-unicode.txt",
+   "chosen": "default_input",
+   "current": "default_input",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/crafted-unicode.txt",
+   "chosen": "alsa_input.usb-Blue_Yeti-00.analog-stereo",
+   "current": "default_input",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/crafted-unicode.txt",
+   "chosen": "alsa_input.unplugged",
+   "current": "alsa_input.unplugged",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/crafted-unicode.txt",
+   "chosen": "alsa_input.pci-0000_00_1f.3.analog-stereo",
+   "current": "default_input",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/crafted-whitespace.txt",
+   "chosen": "default_input",
+   "current": "default_input",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/crafted-whitespace.txt",
+   "chosen": "alsa_input.usb-Blue_Yeti-00.analog-stereo",
+   "current": "default_input",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/crafted-whitespace.txt",
+   "chosen": "alsa_input.unplugged",
+   "current": "alsa_input.unplugged",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/crafted-whitespace.txt",
+   "chosen": "alsa_input.pci-0000_00_1f.3.analog-stereo",
+   "current": "default_input",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/real-desktop.txt",
+   "chosen": "default_input",
+   "current": "default_input",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/real-desktop.txt",
+   "chosen": "alsa_input.usb-Blue_Yeti-00.analog-stereo",
+   "current": "default_input",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/real-desktop.txt",
+   "chosen": "alsa_input.unplugged",
+   "current": "alsa_input.unplugged",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/real-desktop.txt",
+   "chosen": "alsa_input.pci-0000_00_1f.3.analog-stereo",
+   "current": "default_input",
+   "status": 0
+  },
+  {
+   "file": "gpu-screen-recorder/list-audio-devices/crafted-mixed.txt",
+   "chosen": "default_input",
+   "current": "alsa_input.x",
+   "status": 1
+  },
+  {
+   "file": null,
+   "chosen": "alsa_input.y",
+   "current": "alsa_input.y",
+   "status": 0
+  }
+ ],
+ "stable": {
+  "/dev/video0": "/dev/v4l/by-id/usb-Laptop-video-index0",
+  "/dev/video2": "/dev/v4l/by-path/usb-0:1:1.2",
+  "/dev/video4": "/dev/v4l/by-id/usb-Insta360_Link_2-video-index0",
+  "/dev/video6": "/dev/v4l/by-id/usb-Insta360_Link_2-video-index0",
+  "/dev/video8": "/dev/video8"
+ },
+ "webcams": {
+  "laptop, chosen plugged in": {
+   "cameras": [
+    {
+     "id": "/dev/video0",
+     "description": "Integrated Webcam: Integrated W",
+     "formats": [
+      [
+       "Jpeg",
+       1920,
+       1080,
+       5,
+       30
+      ]
+     ]
+    },
+    {
+     "id": "/dev/video1",
+     "description": "Integrated Webcam: Integrated I",
+     "formats": [
+      [
+       "Y8",
+       640,
+       360,
+       15,
+       15
+      ]
+     ]
+    },
+    {
+     "id": "/dev/video4",
+     "description": "Insta360 Link 2: Insta360 Link 2",
+     "formats": [
+      [
+       "Jpeg",
+       1920,
+       1080,
+       5,
+       30
+      ]
+     ]
+    }
+   ],
+   "device": "/dev/v4l/by-id/usb-Laptop-video-index0",
+   "chosen": "/dev/v4l/by-id/usb-Insta360_Link_2-video-index0"
+  },
+  "laptop, chosen unplugged": {
+   "cameras": [
+    {
+     "id": "/dev/video0",
+     "description": "Integrated Webcam: Integrated W",
+     "formats": [
+      [
+       "Jpeg",
+       1920,
+       1080,
+       5,
+       30
+      ]
+     ]
+    },
+    {
+     "id": "/dev/video1",
+     "description": "Integrated Webcam: Integrated I",
+     "formats": [
+      [
+       "Y8",
+       640,
+       360,
+       15,
+       15
+      ]
+     ]
+    }
+   ],
+   "device": "/dev/v4l/by-id/usb-Insta360_Link_2-video-index0",
+   "chosen": "/dev/v4l/by-id/usb-Insta360_Link_2-video-index0"
+  },
+  "laptop, current listed": {
+   "cameras": [
+    {
+     "id": "/dev/video0",
+     "description": "Integrated Webcam: Integrated W",
+     "formats": [
+      [
+       "Jpeg",
+       1920,
+       1080,
+       5,
+       30
+      ]
+     ]
+    },
+    {
+     "id": "/dev/video1",
+     "description": "Integrated Webcam: Integrated I",
+     "formats": [
+      [
+       "Y8",
+       640,
+       360,
+       15,
+       15
+      ]
+     ]
+    },
+    {
+     "id": "/dev/video4",
+     "description": "Insta360 Link 2: Insta360 Link 2",
+     "formats": [
+      [
+       "Jpeg",
+       1920,
+       1080,
+       5,
+       30
+      ]
+     ]
+    }
+   ],
+   "device": "/dev/v4l/by-id/usb-Laptop-video-index0",
+   "chosen": "/dev/v4l/by-id/usb-Missing"
+  },
+  "laptop, nothing listed": {
+   "cameras": [
+    {
+     "id": "/dev/video0",
+     "description": "Integrated Webcam: Integrated W",
+     "formats": [
+      [
+       "Jpeg",
+       1920,
+       1080,
+       5,
+       30
+      ]
+     ]
+    },
+    {
+     "id": "/dev/video1",
+     "description": "Integrated Webcam: Integrated I",
+     "formats": [
+      [
+       "Y8",
+       640,
+       360,
+       15,
+       15
+      ]
+     ]
+    },
+    {
+     "id": "/dev/video4",
+     "description": "Insta360 Link 2: Insta360 Link 2",
+     "formats": [
+      [
+       "Jpeg",
+       1920,
+       1080,
+       5,
+       30
+      ]
+     ]
+    }
+   ],
+   "device": "/dev/video9",
+   "chosen": ""
+  },
+  "twins share a name": {
+   "cameras": [
+    {
+     "id": "/dev/video4",
+     "description": "USB Camera: USB Camera",
+     "formats": [
+      [
+       "Jpeg",
+       1920,
+       1080,
+       5,
+       30
+      ]
+     ]
+    },
+    {
+     "id": "/dev/video6",
+     "description": "USB Camera: USB Camera",
+     "formats": [
+      [
+       "Jpeg",
+       1920,
+       1080,
+       5,
+       30
+      ]
+     ]
+    }
+   ],
+   "device": "/dev/v4l/by-id/usb-Insta360_Link_2-video-index0",
+   "chosen": ""
+  },
+  "duplicate node": {
+   "cameras": [
+    {
+     "id": "v4l2 /dev/video0 a",
+     "description": "First: First",
+     "formats": [
+      [
+       "Jpeg",
+       1920,
+       1080,
+       5,
+       30
+      ]
+     ]
+    },
+    {
+     "id": "/dev/video0",
+     "description": "Second: Second",
+     "formats": [
+      [
+       "Jpeg",
+       1920,
+       1080,
+       5,
+       30
+      ]
+     ]
+    }
+   ],
+   "device": "",
+   "chosen": ""
+  },
+  "ids without nodes": {
+   "cameras": [
+    {
+     "id": "obs-virtual",
+     "description": "OBS Virtual Camera",
+     "formats": [
+      [
+       "Jpeg",
+       1920,
+       1080,
+       5,
+       30
+      ]
+     ]
+    },
+    {
+     "id": "",
+     "description": "Nothing",
+     "formats": [
+      [
+       "Jpeg",
+       1920,
+       1080,
+       5,
+       30
+      ]
+     ]
+    }
+   ],
+   "device": "/dev/video2",
+   "chosen": "/dev/video2",
+   "exists": [
+    "/dev/video2"
+   ]
+  },
+  "only an ir sensor": {
+   "cameras": [
+    {
+     "id": "/dev/video1",
+     "description": "IR: IR",
+     "formats": [
+      [
+       "Y8",
+       640,
+       360,
+       15,
+       15
+      ]
+     ]
+    }
+   ],
+   "device": "/dev/video2",
+   "chosen": "/dev/video2"
+  },
+  "no cameras, saved path exists": {
+   "cameras": [],
+   "device": "/dev/video2",
+   "chosen": "/dev/video2",
+   "exists": [
+    "/dev/video2"
+   ]
+  },
+  "no cameras, saved path missing": {
+   "cameras": [],
+   "device": "/dev/video2",
+   "chosen": "/dev/video2"
+  },
+  "no cameras, chosen elsewhere": {
+   "cameras": [],
+   "device": "/dev/video2",
+   "chosen": "/dev/video8",
+   "exists": [
+    "/dev/video2"
+   ]
+  },
+  "three of a name": {
+   "cameras": [
+    {
+     "id": "/dev/video0",
+     "description": "Cam: Cam",
+     "formats": [
+      [
+       "Jpeg",
+       1920,
+       1080,
+       5,
+       30
+      ]
+     ]
+    },
+    {
+     "id": "/dev/video2",
+     "description": "Cam: Cam",
+     "formats": [
+      [
+       "Jpeg",
+       1920,
+       1080,
+       5,
+       30
+      ]
+     ]
+    },
+    {
+     "id": "/dev/video8",
+     "description": "Cam",
+     "formats": [
+      [
+       "Jpeg",
+       1920,
+       1080,
+       5,
+       30
+      ]
+     ]
+    },
+    {
+     "id": "/dev/video4",
+     "description": "Other: Other",
+     "formats": [
+      [
+       "Jpeg",
+       1920,
+       1080,
+       5,
+       30
+      ]
+     ]
+    }
+   ],
+   "device": "/dev/video8",
+   "chosen": "/dev/video8"
+  },
+  "stable path maps two nodes together": {
+   "cameras": [
+    {
+     "id": "/dev/video4",
+     "description": "A: A",
+     "formats": [
+      [
+       "Jpeg",
+       1920,
+       1080,
+       5,
+       30
+      ]
+     ]
+    },
+    {
+     "id": "/dev/video6",
+     "description": "B: B",
+     "formats": [
+      [
+       "Jpeg",
+       1920,
+       1080,
+       5,
+       30
+      ]
+     ]
+    }
+   ],
+   "device": "",
+   "chosen": "/dev/v4l/by-id/usb-Insta360_Link_2-video-index0"
+  }
+ }
+}

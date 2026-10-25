@@ -1,0 +1,249 @@
+== workspace=hyprctl/activeworkspace/crafted-one.json clients=hyprctl/clients/crafted-mixed.json
+result	"12,38 1896x1030\u{a}400,300 640x480\u{a}-50,-40 300x200\u{a}0,0 0x200\u{a}0,20 300x200\u{a}5,5 0x0\u{a}5,5 -10x20\u{a}100,100 200x200\u{a}0,1 2147483647x1\u{a}"
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-one.json clients=hyprctl/clients/crafted-special.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-one.json clients=hyprctl/clients/crafted-none.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-one.json clients=hyprctl/clients/crafted-object.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-one.json clients=hyprctl/clients/crafted-garbage.txt
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-one.json clients=hyprctl/clients/real-desktop.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-two.json clients=hyprctl/clients/crafted-mixed.json
+result	"2060,10 1000x700\u{a}"
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-two.json clients=hyprctl/clients/crafted-special.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-two.json clients=hyprctl/clients/crafted-none.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-two.json clients=hyprctl/clients/crafted-object.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-two.json clients=hyprctl/clients/crafted-garbage.txt
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-two.json clients=hyprctl/clients/real-desktop.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-special.json clients=hyprctl/clients/crafted-mixed.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-special.json clients=hyprctl/clients/crafted-special.json
+result	"12,38 1896x1030\u{a}"
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-special.json clients=hyprctl/clients/crafted-none.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-special.json clients=hyprctl/clients/crafted-object.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-special.json clients=hyprctl/clients/crafted-garbage.txt
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-special.json clients=hyprctl/clients/real-desktop.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-string-id.json clients=hyprctl/clients/crafted-mixed.json
+result	"100,100 200x200\u{a}100,100 200x200\u{a}"
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-string-id.json clients=hyprctl/clients/crafted-special.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-string-id.json clients=hyprctl/clients/crafted-none.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-string-id.json clients=hyprctl/clients/crafted-object.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-string-id.json clients=hyprctl/clients/crafted-garbage.txt
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-string-id.json clients=hyprctl/clients/real-desktop.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-missing-id.json clients=hyprctl/clients/crafted-mixed.json
+result	"100,100 200x200\u{a}100,100 200x200\u{a}"
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-missing-id.json clients=hyprctl/clients/crafted-special.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-missing-id.json clients=hyprctl/clients/crafted-none.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-missing-id.json clients=hyprctl/clients/crafted-object.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-missing-id.json clients=hyprctl/clients/crafted-garbage.txt
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-missing-id.json clients=hyprctl/clients/real-desktop.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-array.json clients=hyprctl/clients/crafted-mixed.json
+result	"100,100 200x200\u{a}100,100 200x200\u{a}"
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-array.json clients=hyprctl/clients/crafted-special.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-array.json clients=hyprctl/clients/crafted-none.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-array.json clients=hyprctl/clients/crafted-object.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-array.json clients=hyprctl/clients/crafted-garbage.txt
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-array.json clients=hyprctl/clients/real-desktop.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-garbage.txt clients=hyprctl/clients/crafted-mixed.json
+result	"100,100 200x200\u{a}100,100 200x200\u{a}"
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-garbage.txt clients=hyprctl/clients/crafted-special.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-garbage.txt clients=hyprctl/clients/crafted-none.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-garbage.txt clients=hyprctl/clients/crafted-object.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-garbage.txt clients=hyprctl/clients/crafted-garbage.txt
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/crafted-garbage.txt clients=hyprctl/clients/real-desktop.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/real-desktop.json clients=hyprctl/clients/crafted-mixed.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/real-desktop.json clients=hyprctl/clients/crafted-special.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/real-desktop.json clients=hyprctl/clients/crafted-none.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/real-desktop.json clients=hyprctl/clients/crafted-object.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/real-desktop.json clients=hyprctl/clients/crafted-garbage.txt
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=hyprctl/activeworkspace/real-desktop.json clients=hyprctl/clients/real-desktop.json
+result	"12,38 1896x1030\u{a}"
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
+== workspace=<exit 1> clients=hyprctl/clients/crafted-mixed.json
+result	""
+error	"<untouched>"
+call	["hyprctl","-j","activeworkspace"]
+== workspace=hyprctl/activeworkspace/crafted-one.json clients=<exit 1>
+result	""
+error	"hyprctl clients failed"
+call	["hyprctl","-j","activeworkspace"]
+call	["hyprctl","-j","clients"]
