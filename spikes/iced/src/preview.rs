@@ -21,6 +21,9 @@ pub struct Options {
     /// Play from the start for this many seconds, write the stats and quit.
     pub measure: Option<f64>,
     pub stats: Option<String>,
+    /// Draw the composition at most this many pixels high (the Qt editor shows it at 620 in a
+    /// 1920x1080 window, beside its panels and timeline).
+    pub canvas_height: Option<f32>,
 }
 
 /// What each rendered frame records while measuring.
@@ -246,6 +249,7 @@ impl Preview {
                 screen: self.screen_frame.clone(),
                 camera: self.camera_frame.clone(),
                 stats: Arc::clone(&self.stats),
+                max_height: self.options.canvas_height,
             },
         };
         let position = self.document.output_position();
@@ -319,6 +323,7 @@ struct ScenePrimitive {
     screen: Option<(i64, VideoFrame)>,
     camera: Option<(i64, VideoFrame)>,
     stats: Arc<Mutex<Stats>>,
+    max_height: Option<f32>,
 }
 
 impl<Message> shader::Program<Message> for SceneProgram {
@@ -339,7 +344,9 @@ struct ScenePipeline {
 }
 
 impl shader::Pipeline for ScenePipeline {
-    fn new(device: &wgpu::Device, _queue: &wgpu::Queue, format: wgpu::TextureFormat) -> ScenePipeline {
+    fn new(device: &wgpu::Device, queue: &wgpu::Queue, format: wgpu::TextureFormat) -> ScenePipeline {
+        // The decode threads upload into textures of this device from now on.
+        let _ = crate::video::GPU.set((device.clone(), queue.clone()));
         ScenePipeline { scene: Scene::new(device, format), wallpaper_set: false, font_set: false, canvas: [0.0; 4] }
     }
 }
@@ -357,6 +364,7 @@ impl shader::Primitive for ScenePrimitive {
             pipeline.scene.set_wallpaper(device, queue, &wallpaper.0);
             pipeline.wallpaper_set = true;
         }
+        pipeline.scene.begin_frame();
         if let Some((_, frame)) = &self.screen {
             pipeline.scene.set_video(device, queue, Video::Screen, frame);
         }
@@ -367,7 +375,10 @@ impl shader::Primitive for ScenePrimitive {
         let scale = viewport.scale_factor();
         let (bx, by, bw, bh) = (bounds.x * scale, bounds.y * scale, bounds.width * scale, bounds.height * scale);
         let (cw, ch) = (self.state.output_width as f32, self.state.output_height as f32);
-        let fit = (bw / cw).min(bh / ch);
+        let mut fit = (bw / cw).min(bh / ch);
+        if let Some(max) = self.max_height {
+            fit = fit.min(max / ch);
+        }
         let (w, h) = (cw * fit, ch * fit);
         pipeline.canvas = [(bx + (bw - w) / 2.0).round(), (by + (bh - h) / 2.0).round(), w.round(), h.round()];
         pipeline.scene.prepare(device, queue, &self.state, &self.project, &self.theme, f64::from(fit));

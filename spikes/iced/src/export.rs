@@ -3,7 +3,7 @@
 //! wgpu device, with two readback buffers in flight as the Qt exporter has.
 
 use crate::scene::composition::RenderTheme;
-use crate::scene::{Scene, Video, VideoFrame, load_wallpaper};
+use crate::scene::{Pixels, Scene, Video, VideoFrame, load_wallpaper};
 use iced::wgpu;
 use omareel_core::export::{ExportJob, ExportOptions, Image};
 use std::sync::Arc;
@@ -57,7 +57,7 @@ impl Source {
             self.id += 1;
             self.last = Some(Arc::clone(&image.pixels));
         }
-        VideoFrame { id: self.id, width: image.width as u32, height: image.height as u32, pixels: Arc::clone(&image.pixels) }
+        VideoFrame { id: self.id, width: image.width as u32, height: image.height as u32, pixels: Pixels::Cpu(Arc::clone(&image.pixels)) }
     }
 }
 
@@ -167,6 +167,7 @@ pub fn run(options: &Options) -> Result<(), String> {
             error = Some(message);
             break;
         }
+        scene.begin_frame();
         if let Some(image) = &images.screen {
             scene.set_video(&device, &queue, Video::Screen, &screen.frame(image));
         }

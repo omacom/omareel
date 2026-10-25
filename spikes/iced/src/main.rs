@@ -12,7 +12,7 @@ fn usage() -> ! {
     eprintln!(
         "usage: omareel-iced-spike <command>\n\n\
          setup <bundle>                          finish a make-bundle.sh bundle (project.json, key presses)\n\
-         preview <bundle> [--measure SECONDS] [--stats FILE]\n\
+         preview <bundle> [--measure SECONDS] [--stats FILE] [--canvas-height PX]\n\
          export <bundle> -o <out.mp4> [--quality Q] [--timing] [--png-at T,T,...]\n\
          bar                                     the recording bar (layer shell)"
     );
@@ -30,12 +30,13 @@ fn main() {
         },
         "preview" => {
             let Some(bundle) = rest.first() else { usage() };
-            let mut options = preview::Options { bundle: bundle.clone(), measure: None, stats: None };
+            let mut options = preview::Options { bundle: bundle.clone(), measure: None, stats: None, canvas_height: None };
             let mut i = 1;
             while i < rest.len() {
                 match (rest[i].as_str(), rest.get(i + 1)) {
                     ("--measure", Some(v)) => options.measure = v.parse().ok(),
                     ("--stats", Some(v)) => options.stats = Some(v.clone()),
+                    ("--canvas-height", Some(v)) => options.canvas_height = v.parse().ok(),
                     _ => usage(),
                 }
                 i += 2;

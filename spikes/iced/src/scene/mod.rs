@@ -12,21 +12,69 @@ use iced::wgpu;
 use omareel_core::export::composition::CompositionState;
 use omareel_core::project::Project;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 use text::{ATLAS_SIZE, TextAtlas};
 
-/// A decoded video frame: tightly packed RGBA rows. `id` changes whenever the pixels do.
+/// A decoded video frame. `id` changes whenever the pixels do.
 #[derive(Clone)]
 pub struct VideoFrame {
     pub id: u64,
     pub width: u32,
     pub height: u32,
-    pub pixels: Arc<Vec<u8>>,
+    pub pixels: Pixels,
 }
 
 impl std::fmt::Debug for VideoFrame {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "VideoFrame({} {}x{})", self.id, self.width, self.height)
+    }
+}
+
+/// Where a frame's pixels are: tightly packed RGBA rows the scene uploads, or a staging buffer
+/// the decode thread read them into, which the scene copies to its texture on the GPU (see
+/// `video.rs`).
+#[derive(Clone)]
+pub enum Pixels {
+    Cpu(Arc<Vec<u8>>),
+    Staged(Arc<StagedFrame>),
+}
+
+/// A mapped staging buffer holding one frame with rows `stride` bytes apart. Once the scene
+/// unmapped it to copy from, dropping the last reference maps it again (after the copy ran)
+/// and hands it back through `release`.
+pub struct StagedFrame {
+    buffer: wgpu::Buffer,
+    pub stride: u32,
+    unmapped: AtomicBool,
+    release: Arc<dyn Fn(wgpu::Buffer) + Send + Sync>,
+}
+
+impl StagedFrame {
+    pub fn new(buffer: wgpu::Buffer, stride: u32, release: Arc<dyn Fn(wgpu::Buffer) + Send + Sync>) -> StagedFrame {
+        StagedFrame { buffer, stride, unmapped: AtomicBool::new(false), release }
+    }
+
+    fn unmap(&self) {
+        if !self.unmapped.swap(true, Ordering::AcqRel) {
+            self.buffer.unmap();
+        }
+    }
+}
+
+impl Drop for StagedFrame {
+    fn drop(&mut self) {
+        let buffer = self.buffer.clone();
+        let release = Arc::clone(&self.release);
+        if self.unmapped.load(Ordering::Acquire) {
+            self.buffer.slice(..).map_async(wgpu::MapMode::Write, move |result| {
+                if result.is_ok() {
+                    release(buffer);
+                }
+            });
+        } else {
+            release(buffer);
+        }
     }
 }
 
@@ -135,6 +183,8 @@ pub struct Scene {
     cursor_key: Option<(String, u32)>,
     screen_id: Option<u64>,
     camera_id: Option<u64>,
+    /// Staging buffers to copy into the video textures this frame.
+    copies: Vec<(Video, Arc<StagedFrame>)>,
     backdrop_due: bool,
     pub timing: Timing,
 }
@@ -341,6 +391,7 @@ impl Scene {
             cursor_key: None,
             screen_id: None,
             camera_id: None,
+            copies: Vec::new(),
             backdrop_due: false,
             timing: Timing::default(),
         }
@@ -358,7 +409,14 @@ impl Scene {
         self.atlas.set_family(family);
     }
 
-    /// Uploads a video frame unless it is the one already on the GPU.
+    /// Starts a frame: the staging buffers the last frame copied from are done with (that
+    /// frame was submitted), so they may be mapped again.
+    pub fn begin_frame(&mut self) {
+        self.copies.clear();
+    }
+
+    /// Uploads a video frame unless it is the one already on the GPU: writes CPU pixels through
+    /// the queue, or has [`Scene::render`] copy a staging buffer.
     pub fn set_video(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, video: Video, frame: &VideoFrame) {
         let (texture, id) = match video {
             Video::Screen => (&mut self.screen, &mut self.screen_id),
@@ -368,13 +426,20 @@ impl Scene {
             return;
         }
         let started = Instant::now();
+        *id = Some(frame.id);
         if texture.size != (frame.width, frame.height) {
-            *texture = Texture::new(device, if video == Video::Screen { "screen" } else { "camera" }, (frame.width, frame.height), wgpu::TextureFormat::Rgba8Unorm, false);
+            let label = if video == Video::Screen { "screen" } else { "camera" };
+            *texture = Texture::new(device, label, (frame.width, frame.height), wgpu::TextureFormat::Rgba8Unorm, false);
             self.bind_group = None;
             self.blur_groups = None;
         }
-        texture.write(queue, &frame.pixels, 4);
-        *id = Some(frame.id);
+        match &frame.pixels {
+            Pixels::Cpu(pixels) => texture.write(queue, pixels, 4),
+            Pixels::Staged(staged) => {
+                staged.unmap();
+                self.copies.push((video, Arc::clone(staged)));
+            }
+        }
         self.timing.upload_ns += started.elapsed().as_nanos() as u64;
     }
 
@@ -468,21 +533,21 @@ impl Scene {
     }
 
     fn make_blur_groups(&self, device: &wgpu::Device) -> [wgpu::BindGroup; 3] {
-        let group = |params: &wgpu::Buffer, source: &Texture| {
+        let group = |params: &wgpu::Buffer, source: &wgpu::TextureView| {
             device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("omareel backdrop blur"),
                 layout: &self.blur_layout,
                 entries: &[
                     wgpu::BindGroupEntry { binding: 0, resource: params.as_entire_binding() },
                     wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self.sampler) },
-                    wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(&source.view) },
+                    wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(source) },
                 ],
             })
         };
         [
-            group(&self.blur_params[0], &self.camera),
-            group(&self.blur_params[1], &self.backdrop_small),
-            group(&self.blur_params[2], &self.backdrop_wide),
+            group(&self.blur_params[0], &self.camera.view),
+            group(&self.blur_params[1], &self.backdrop_small.view),
+            group(&self.blur_params[2], &self.backdrop_wide.view),
         ]
     }
 
@@ -497,6 +562,17 @@ impl Scene {
         clear: Option<wgpu::Color>,
     ) {
         let (Some(bind_group), Some(blur_groups)) = (&self.bind_group, &self.blur_groups) else { return };
+        for (video, staged) in &self.copies {
+            let texture = if *video == Video::Screen { &self.screen } else { &self.camera };
+            encoder.copy_buffer_to_texture(
+                wgpu::TexelCopyBufferInfo {
+                    buffer: &staged.buffer,
+                    layout: wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(staged.stride), rows_per_image: None },
+                },
+                texture.texture.as_image_copy(),
+                wgpu::Extent3d { width: texture.size.0, height: texture.size.1, depth_or_array_layers: 1 },
+            );
+        }
         if self.backdrop_due {
             let passes: [(&wgpu::RenderPipeline, &Texture, &wgpu::BindGroup); 3] = [
                 (&self.capture_pipeline, &self.backdrop_small, &blur_groups[0]),
