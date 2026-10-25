@@ -18,7 +18,7 @@ composition supports it. “Partial” calls out a narrower implementation than 
 | Cursor rotation on movement | Done | Horizontal lookback rotation is computed in `crates/omareel_core/src/motion_track.rs` and applied in `src/ui/qml/CursorOverlay.qml` (Dot intentionally does not rotate). |
 | Motion blur for cursor, zoom, and screen movement | Partial | `zoomStyle.motionBlur` applies velocity-scaled stage blur during zoom-centre movement in `src/ui/qml/Composition.qml`. Cursor-only blur and zoom-scale blur are missing. |
 | Background: none | Done | The unframed path is implemented by `src/ui/qml/Composition.qml` and selectable in `src/ui/qml/BackgroundPanel.qml`. |
-| Background: wallpaper | Done | Theme wallpaper discovery is in `src/core/OmarchyPaths.cpp`; selection and rendering are in `BackgroundPanel.qml` and `Background.qml`. |
+| Background: wallpaper | Done | Theme wallpaper discovery is in `crates/omareel_core/src/omarchy_paths.rs`; selection and rendering are in `BackgroundPanel.qml` and `Background.qml`. |
 | Background: gradient | Done | Presets and custom stops are stored by `crates/omareel_core/src/project` and rendered by `src/ui/qml/Background.qml`. |
 | Background: plain colour | Done | `background.color` is exposed by `src/ui/qml/BackgroundPanel.qml` and rendered by `Background.qml`. |
 | Background: image | Done | File selection, persisted path resolution, and cover rendering are in `src/ui/qml/BackgroundPanel.qml`, `crates/omareel_core/src/editor`, and `Background.qml`. |
@@ -28,7 +28,7 @@ composition supports it. “Partial” calls out a narrower implementation than 
 | Frame shadow | Done | Direction, distance, blur, and intensity are rendered by `src/ui/qml/RoundedFrame.qml`. |
 | Frame inset | Done | Width, colour, and alpha are persisted in `crates/omareel_core/src/project` and rendered by `RoundedFrame.qml`. |
 | Device mockups | Missing | Add a licensed frame-asset catalog, content-safe-area metadata, a Shape panel picker, and an outer composition layer around `RoundedFrame.qml`. |
-| Camera bubble | Done | Persistent floating self-view from webcam enable through recording, draggable placement, warm camera adoption, private overlay masking, capture, timestamp alignment, preview/export rendering, positions, shapes, crop, rotation, and mirroring span `src/record/CameraCapture.cpp`, `crates/omareel_core/src/camera_timeline.rs`, and `src/ui/qml/CameraOverlay.qml`. |
+| Camera bubble | Done | Persistent floating self-view from webcam enable through recording, draggable placement, warm camera adoption, private overlay masking, capture, timestamp alignment, preview/export rendering, positions, shapes, crop, rotation, and mirroring span `src/plumbing/CameraCapture.cpp`, `crates/omareel_qt/src/recording_bar.rs`, `crates/omareel_core/src/camera_timeline.rs`, and `src/ui/qml/CameraOverlay.qml`. |
 | Camera layouts | Partial | `src/ui/qml/CameraPanel.qml` provides six positions, sizing, and shapes. Time-ranged layout tracks and full screen/camera layout presets are missing. |
 | Shrink camera during zoom | Done | `camera.scaleDuringZoom` is applied by `src/ui/qml/CameraOverlay.qml`. |
 | Keystroke overlay / show shortcuts | Done | `crates/omareel_core/src/keystroke_track.rs` groups recorded key-down events and calculates hold/fade samples; `KeystrokeOverlay.qml` is shared by preview and export and configured in `KeystrokesPanel.qml`. |

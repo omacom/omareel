@@ -13,7 +13,8 @@ same after each one: same commands, same files written byte for byte, same pixel
 | `crates/omareel_qt` | The one Rust static library linked into the C++ binary: CXX-Qt objects and C++-callable functions that expose `omareel_core` and `omareel_record` to QML and C++. |
 | `crates/omareel_qt/cpp` | C++ that calls into Rust and is compiled into the same archive by the crate's build script: `EditorBase` (the editor object's C++ base), `Exporter` (the export render loop over the Rust export job), and `LauncherBase` and `RecordingBarBase`, the C++ bases of the launcher and recording bar objects. |
 | `src/plumbing` | C++ that Rust drives: Qt-only pieces (the editor's players, GL export rendering, the camera, file watchers). |
-| `src/` (rest) | C++ that has not moved yet: what is left of the recording side (`src/record`, and `OmarchyPaths` and `RecordingPreferences` in `src/core`), the capture test client in `src/ui`, `FrameSource` and the video decoding setup in `src/render`, and `main.cpp`'s window setup. The editor's logic is all Rust: its C++ (`Project`, the timelines and tracks) is deleted, and its unit tests' cases are `#[test]`s in `omareel_core`. |
+| `src/` (rest) | The C++ above Rust that is left: `main.cpp` (command dispatch, fonts, and the windows: the editor's, the launcher's, and the recording bar's, countdown's and self-view's layer-shell surfaces), `FrameSource` and the video decoding setup in `src/render`, and the capture test client in `src/ui`. All of omareel's logic is Rust: the editor's C++ (`Project`, the timelines and tracks) and the recording side's (`src/record`, `OmarchyPaths` and `RecordingPreferences` in `src/core`, the launcher, recording bar and microphone meter in `src/ui`) are deleted, and their unit tests' cases are `#[test]`s in the crates. The C++ tests left are `test_editor` and `test_exporter_smoke`, which drive the Rust editor and exporter through QML, and `test_cameracapture`, for the camera's frame packing and pacing in plumbing. |
+| `plugin/` | The Hyprland capture exclusion plugin, C++ built against Hyprland's headers and loaded into the compositor; it stays C++. |
 
 The layering only goes one way, which keeps static-library linking free of cycles:
 
@@ -135,9 +136,14 @@ started (CXX-Qt 0.10, Qt 6.11):
   `omareel record` took a few milliseconds longer to its first frame.
 - The daemon's warnings go through `Omareel::Shims::warning` (`qWarning`), so they reach the
   journal as they did when there is no terminal.
-- `src/record/Recorder.cpp` and `CursorSampler.cpp` are thin C++ wrappers over the Rust state
-  layer and cursor query for the launcher, the recording bar and its windows, until those move;
-  state file objects cross the bridge as JSON text.
+- The launcher and the recording bar objects read and write the recorder's state files through
+  `omareel_record::recorder::state` themselves, so no state file crosses the bridge; `main.cpp`'s
+  record-bar windows go through the bar object for what they publish or ask
+  (`publishBarGeometry`, `publishCountdownGeometry`, `ownsStandbyHost`, `logUiStage`). The bar's
+  self-view drag asks where the pointer is through the daemon's cursor query
+  (`omareel_record::cursor_sampler::cursor_position`).
+- `compat::qprocess::run` and `Process` look a program up with `findExecutable` and pass the
+  path found as `argv[0]`, as QProcess does; the recording parity harness's shims log argv[0].
 - `tools/parity/recording/recording-parity.py` records the same sessions with two binaries in
   the nested compositor (`tests/tools/nested-hyprland.sh`) and compares what each did: CLI
   output, state files, bundles, the argv of every program it ran, notifications and journal
@@ -155,4 +161,7 @@ started (CXX-Qt 0.10, Qt 6.11):
 - The PKGBUILD builds into `build-pkg/` and CI tests that same build, so what ships is what was
   tested.
 - `ctest` runs the Rust crates' tests as the `rust` test. `omareel_qt` is excluded there; it only
-  links inside a Qt binary and its behaviour is covered by the C++ tests through QML.
+  links inside a Qt binary. The editor object's behaviour is covered by the C++ tests through
+  QML; the launcher's and the recording bar's by the goldens of what they compute
+  (`omareel_record::launcher` and `recording_bar`) and by the recording parity harness, which
+  runs the bar beside the `rust-migration-base` binary's.
