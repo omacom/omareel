@@ -95,7 +95,12 @@ fn utf8_at(s: &[u8], i: usize) -> Utf8 {
 /// `QFile::decodeName` (`QString::fromLocal8Bit`, stateless UTF-8): drops a leading BOM and
 /// replaces every byte that does not start a valid sequence with U+FFFD.
 pub(crate) fn decode_name(bytes: &[u8]) -> String {
-    let bytes = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(bytes);
+    decode_utf8_lossy(bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(bytes))
+}
+
+/// Qt's UTF-8 decoding with errors replaced: one U+FFFD per byte that does not start a valid
+/// sequence (a byte-order mark is kept).
+pub(crate) fn decode_utf8_lossy(bytes: &[u8]) -> String {
     let mut out = String::with_capacity(bytes.len());
     let mut i = 0;
     while i < bytes.len() {
@@ -425,6 +430,11 @@ fn absolute_file_path_in(dir: &str, name: &str, cwd: &[u8]) -> String {
     } else {
         base + "/" + name
     }
+}
+
+/// [`absolute_file_path`] with the working directory given (`QDir::currentPath()` and its bytes).
+pub(crate) fn absolute_file_path_with_cwd(dir: &str, name: &str, cwd: &[u8]) -> String {
+    absolute_file_path_in(dir, name, cwd)
 }
 
 fn current_dir_bytes() -> Vec<u8> {
@@ -1907,7 +1917,7 @@ pub fn sha256_hex(data: &[u8]) -> String {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
