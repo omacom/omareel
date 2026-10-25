@@ -166,9 +166,6 @@ fn cases_txt_without_qt_open_errors() {
 }
 
 #[test]
-#[ignore = "compat::qfile::open_read reports a directory as \"Is a directory\" where QFile says \
-            \"file to open is a directory\", and an empty path as \"No such file or directory\" \
-            where QFile says \"No file name specified\""]
 fn cases_txt_qt_open_errors() {
     let keep = |label: &str| QT_OPEN_ERRORS.contains(&label);
     let expected = keep_sections(&read_expected("inputlog/cases.txt"), keep);

@@ -48,6 +48,12 @@ fn whole_i64(v: f64) -> Option<i64> {
 }
 
 impl Value {
+    /// A `QJsonArray` of the values. Qt stores an `Undefined` element as null, so build
+    /// arrays through this (or `From<Vec<Value>>`) rather than `Value::Array` directly.
+    pub fn array(items: Vec<Value>) -> Value {
+        Value::Array(items.into_iter().map(|v| if v.is_undefined() { Value::Null } else { v }).collect())
+    }
+
     /// `QJsonValue(double)`: a whole number within ±2^53 becomes an integer, anything else
     /// stays a double. Non-finite doubles are kept and print as `null`.
     pub fn from_f64(v: f64) -> Value {
@@ -261,8 +267,9 @@ impl From<Object> for Value {
 }
 
 impl From<Vec<Value>> for Value {
+    /// `QJsonArray` of the values; it stores `Undefined` as null.
     fn from(v: Vec<Value>) -> Value {
-        Value::Array(v)
+        Value::array(v)
     }
 }
 

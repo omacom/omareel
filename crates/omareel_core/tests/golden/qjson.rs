@@ -315,10 +315,10 @@ fn built_documents() -> Vec<(&'static str, Value)> {
     undefined_object.insert("after", 2);
     documents.push(("undefined-in-object", Value::Object(undefined_object)));
     let undefined_array = vec![Value::Undefined, Value::from(1), Value::Undefined];
-    documents.push(("undefined-in-array", Value::Array(undefined_array)));
+    documents.push(("undefined-in-array", Value::array(undefined_array)));
     let undefined_nested = Object::from_iter([
         ("o", Value::Object(Object::from_iter([("u", Value::Undefined)]))),
-        ("a", Value::Array(vec![Value::Undefined])),
+        ("a", Value::array(vec![Value::Undefined])),
     ]);
     documents.push(("undefined-initializer-list", Value::Object(undefined_nested)));
 
@@ -450,10 +450,6 @@ fn built_typed_txt() {
 }
 
 #[test]
-#[ignore = "a Vec<Value> keeps Value::Undefined where QJsonArray::append and QJsonArray{...} \
-            store Null, so the elements of undefined-in-array and undefined-initializer-list's \
-            \"a\" read back as Undefined (type, typeName <invalid>) instead of Null \
-            (std::nullptr_t); their JSON text matches"]
 fn built_typed_txt_undefined_array_elements() {
     let keep = |name: &str| UNDEFINED_ARRAY_ELEMENTS.contains(&name);
     let expected = keep_sections(&read_expected("qjson/built-typed.txt"), keep);

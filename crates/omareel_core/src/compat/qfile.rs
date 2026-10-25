@@ -14,11 +14,16 @@ pub fn error_string(error: &io::Error) -> String {
     }
 }
 
-/// `QFile::open(QIODevice::ReadOnly)`: Qt refuses a directory with "Is a directory".
+/// `QFile::open(QIODevice::ReadOnly)`, with QFile's own messages for an empty name and a
+/// directory.
 pub fn open_read(path: impl AsRef<Path>) -> Result<File, String> {
+    let path = path.as_ref();
+    if path.as_os_str().is_empty() {
+        return Err("No file name specified".into());
+    }
     let file = File::open(path).map_err(|e| error_string(&e))?;
     match file.metadata() {
-        Ok(meta) if meta.is_dir() => Err(error_string(&io::Error::from_raw_os_error(21))),
+        Ok(meta) if meta.is_dir() => Err("file to open is a directory".into()),
         _ => Ok(file),
     }
 }
@@ -52,7 +57,8 @@ mod tests {
     #[test]
     fn errors_read_like_qt() {
         assert_eq!(open_read("/nonexistent/omareel").unwrap_err(), "No such file or directory");
-        assert_eq!(open_read("/").unwrap_err(), "Is a directory");
+        assert_eq!(open_read("/").unwrap_err(), "file to open is a directory");
+        assert_eq!(open_read("").unwrap_err(), "No file name specified");
     }
 
     #[test]
