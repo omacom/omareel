@@ -28,6 +28,8 @@ pollster = "0.4"
 smithay-client-toolkit = { version = "0.20", default-features = false }
 wayland-client = "0.31"
 libc = "0.2"
+# spike-pointer, the test helper that clicks through wlr-virtual-pointer.
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 
 [build-dependencies]
 slint-build = "=1.18.1"

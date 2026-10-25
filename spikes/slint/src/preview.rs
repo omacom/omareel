@@ -248,7 +248,35 @@ pub fn run(options: Options) -> Result<(), String> {
         _ => String::new(),
     };
     let background = scene::load_background(&background_path);
-    scene::apply_project(&comp, document.project(), &recording, background.as_ref());
+    // SPIKE_EXPERIMENT takes parts of the scene away, to see what Slint's frame time is made of:
+    // noclip (square corners, so no rounded clip renders into a layer), noshadow (no drop
+    // shadows), nocanvasshadow (no shadow under the preview canvas), canvasradius (round the
+    // canvas's corners, which clips the whole composition through a layer), nocamera, nokeys.
+    let experiment = std::env::var("SPIKE_EXPERIMENT").unwrap_or_default();
+    let mut project = document.project().clone();
+    if experiment.contains("noclip") {
+        project.frame.radius = 0.0;
+        project.camera.shape = "square".into();
+        project.camera.radius = 0.0;
+    }
+    if experiment.contains("noshadow") {
+        project.frame.shadow.enabled = false;
+        project.camera.shadow.enabled = false;
+    }
+    if experiment.contains("nocamera") {
+        project.camera.enabled = false;
+    }
+    if experiment.contains("nokeys") {
+        project.keystrokes.enabled = false;
+    }
+    app.set_canvas_shadow(!experiment.contains("nocanvasshadow"));
+    if experiment.contains("canvasradius") {
+        app.set_canvas_radius(8.0);
+    }
+    scene::apply_project(&comp, &project, &recording, background.as_ref());
+    if experiment.contains("nocamera") {
+        comp.set_camera_available(false);
+    }
     app.set_output_width(document.output_width());
     app.set_output_height(document.output_height());
     app.set_canvas_limit(options.canvas_height);

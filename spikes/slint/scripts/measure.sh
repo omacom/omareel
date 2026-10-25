@@ -2,7 +2,7 @@
 # Measures the Slint spike against the Qt build: the preview in a nested Hyprland on a
 # 1920x1080@60 headless output, and the export, for the 1080p and 4K bundles, RUNS times each.
 #
-#   measure.sh <spike binary> <omareel binary> <dir with b1080/ and b2160/> <results dir> [preview|export|uploads|all]
+#   measure.sh <spike binary> <omareel binary> <dir with b1080/ and b2160/> <results dir> [preview|slint-preview|export|uploads|all]
 #
 # Run from the repository root. Each run writes <app>-<what>-<bundle>-<n>.json with its logs.
 # Preview: frame times from the window surface's commits (WAYLAND_DEBUG, frames.py), CPU, RSS
@@ -67,6 +67,7 @@ for n in $(seq 1 "$runs"); do
             quiet; spike_preview "$bundle" "$n" wgpu
             quiet; qt_preview "$bundle" "$n"
         fi
+        if [[ "$what" == slint-preview ]]; then quiet; spike_preview "$bundle" "$n" wgpu; fi
         if [[ "$what" == uploads ]]; then
             for upload in wgpu wgpu-ui cpu; do quiet; spike_preview "$bundle" "$n" "$upload"; done
         fi

@@ -24,6 +24,8 @@ export component PreviewWindow inherits Window {
     // Keeps the window rendering every frame while playing (the Rust side advances the playhead
     // in the rendering notifier, just before each frame is drawn).
     in property <bool> animate;
+    in property <bool> canvas-shadow: true;
+    in property <length> canvas-radius: 0;
     callback toggle-play();
     callback seek(float);
     callback seek-finished();
@@ -44,10 +46,13 @@ export component PreviewWindow inherits Window {
                     width: self.height * root.output-width / max(1, root.output-height);
                     x: (parent.width - self.width) / 2;
                     y: (parent.height - self.height) / 2;
-                    border-radius: 8px;
-                    drop-shadow-blur: 30px;
+                    // Square corners, as the Qt editor shows (QML's clip ignores the radius): a
+                    // radius with clip makes Slint draw the whole composition into a layer
+                    // every frame. SPIKE_EXPERIMENT=canvasradius puts it back.
+                    border-radius: root.canvas-radius;
+                    drop-shadow-blur: root.canvas-shadow ? 30px : 0;
                     drop-shadow-offset-y: 14px;
-                    drop-shadow-color: #0008;
+                    drop-shadow-color: root.canvas-shadow ? #0008 : transparent;
                 }
             }
             // Ticks every frame while playing.
