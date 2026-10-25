@@ -1,4 +1,4 @@
-#include "ui/Editor.h"
+#include "omareel_qt/src/editor.cxxqt.h"
 #include "core/Project.h"
 #include "omareel_qt/src/theme.cxxqt.h"
 #include "render/VideoDecoding.h"

@@ -15,31 +15,8 @@ use std::collections::HashMap;
 use std::ffi::CString;
 use std::sync::Arc;
 
-/// What an inserted video holds, as `probeVideo` (src/render/MediaProbe.cpp) reports it. The
-/// same fields as MediaProbe's `VideoInfo`, which is being ported separately; once it lands this
-/// is that type.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct VideoInfo {
-    /// Display size: rotation and sample aspect ratio applied.
-    pub width: i32,
-    pub height: i32,
-    /// Of the video stream; of the container when the stream has none.
-    pub duration: f64,
-    pub fps: f64,
-    pub audio: bool,
-}
-
-impl Default for VideoInfo {
-    fn default() -> VideoInfo {
-        VideoInfo { width: 0, height: 0, duration: 0.0, fps: 30.0, audio: false }
-    }
-}
-
-impl VideoInfo {
-    pub fn is_valid(&self) -> bool {
-        self.width > 0 && self.height > 0 && self.duration > 0.0
-    }
-}
+/// What an inserted video holds, as `probeVideo` reports it (MediaProbe's `VideoInfo`).
+pub use crate::media_probe::VideoInfo;
 
 /// `probeVideo(path, &error)`: the video's facts, or the error it set (its result is then a
 /// default `VideoInfo`).

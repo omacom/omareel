@@ -860,6 +860,53 @@ fn inserted_videos_split_the_timeline_and_keep_their_file() {
     assert!(qt.document.import_error().is_empty());
 }
 
+// The split forms the Qt side pauses inside: their checks change nothing (but the id the cut
+// draws), and the edits queue what the whole operations queue after their pause.
+#[test]
+fn paused_operations_check_before_they_edit() {
+    let world = World::new("editor-split");
+    let bundle = world.bundle("split.omareel");
+    let demo = world.path("demo.mp4");
+    std::fs::write(&demo, b"demo video").unwrap();
+    let mut qt = world.open(&bundle);
+    qt.effects.clear();
+
+    let project = qt.document.project().to_json();
+    assert!(qt.document.prepare_delete_output_range(f64::NAN, 1.0).is_none());
+    assert!(qt.document.prepare_delete_output_range(-5.0, 50.0).is_none());
+    let cut = qt.document.prepare_delete_output_range(1.5, 0.5).unwrap();
+    assert_eq!(qt.document.project().to_json(), project);
+    assert!(!qt.document.can_undo());
+    assert!(qt.document.take_effects().is_empty());
+    qt.document.apply_delete_output_range(cut);
+    let effects = qt.drain();
+    assert_eq!(effects[0], Effect::HistoryChanged);
+    assert_eq!(effects[effects.len() - 2..], [Effect::Seek(0.5), Effect::SelectionChanged]);
+    assert!(!effects.contains(&Effect::Pause));
+    // The refused cut drew c-id1, the one that went through c-id2.
+    assert_eq!(qt.clip_id(1), "c-id2");
+    qt.run(Document::undo);
+
+    assert!(qt.document.can_insert_media(&demo));
+    assert!(!qt.document.can_insert_media(""));
+    qt.document.start_import(&demo);
+    assert!(!qt.document.can_insert_media(&demo));
+    assert_eq!(qt.drain()[..2], [Effect::ImportingChanged, Effect::StartImport(demo.clone())]);
+    let insert = qt.clip_id(1);
+    assert_eq!(text(&qt.clip(1), "kind"), "media");
+
+    let left = qt.clip_id(0);
+    assert!(!qt.document.can_reorder_clip(&left, 1));
+    assert!(!qt.document.can_reorder_clip("nothing", 1));
+    assert!(qt.document.can_reorder_clip(&insert, -1));
+    let steps = qt.undo_steps();
+    qt.document.apply_reorder_clip(&insert, -1);
+    let effects = qt.drain();
+    assert_eq!(effects[0], Effect::HistoryChanged);
+    assert_eq!(effects[effects.len() - 2..], [Effect::Seek(0.0), Effect::SelectionChanged]);
+    assert_eq!((qt.clip_id(0), qt.undo_steps()), (insert, steps + 1));
+}
+
 #[test]
 fn insert_media_queues_the_import() {
     let world = World::new("editor-insert-effects");

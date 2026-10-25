@@ -242,7 +242,7 @@ Interactive preview uses the multimedia scene-graph video item directly, with cr
 masking on the GPU. A precise 60 Hz timer samples playback position for composition bindings;
 camera correction seeks only when drift exceeds 250 ms.
 
-Exporter pipeline (`render/Exporter`):
+Exporter pipeline (`crates/omareel_qt/cpp/Exporter`, over `crates/omareel_core/src/export`):
 - Decode: `ffmpeg -hwaccel cuda|auto -i screen.mp4 -vf select+fps -f rawvideo -pix_fmt rgba -`
   read frames sequentially for the clip ranges (seek with `-ss` per clip).
 - For each output frame i at output time `T = i / fps`, map to source time via the clip list
@@ -304,10 +304,14 @@ src/record/ Recorder.{h,cpp} gsr process, ts file, bundle finalize, state file
             EvdevListener.{h,cpp} libevdev thread
             RegionPicker.{h,cpp} slurp / omarchy-capture-region wrapper, monitor math
 src/render/ FrameSource.{h,cpp} QQuickItem texture node
-            Exporter.{h,cpp} offscreen render loop over the Rust export job
-            (crates/omareel_core/src/export: plan, ffmpeg decode/encode pipes)
-src/ui/     Editor.{h,cpp} QObject facade exposed to QML (project, playback, timeline ops)
-            qml/Main.qml Composition.qml Timeline.qml ZoomTrack.qml ClipTrack.qml
+src/plumbing/ PlaybackDriver.{h,cpp} the editor's three QMediaPlayers
+            ExportRenderer.{h,cpp} offscreen Composition.qml rendering for export
+crates/omareel_core/src/editor  the editor's document: project, history, timeline ops,
+            playback decisions (crates/omareel_core/src/export: plan, ffmpeg decode/encode pipes)
+crates/omareel_qt/src/editor.rs the `editor`/`comp` object QML uses (CXX-Qt), over
+            crates/omareel_qt/cpp/EditorBase.{h,cpp} (players, timers) and Exporter.{h,cpp}
+            (offscreen render loop over the Rust export job)
+src/ui/     qml/Main.qml Composition.qml Timeline.qml ZoomTrack.qml ClipTrack.qml
                  SidePanel.qml panels/*.qml Launcher.qml
 assets/     cursors/arrow.svg, icons (Lucide-style inline SVG), gradients.json
 tests/      QtTest: test_zoomtimeline, test_cursorpath, test_cliptimeline, test_project,

@@ -6,6 +6,7 @@ pub mod geometry;
 pub mod qchar;
 pub mod qcolor;
 pub mod qdir;
+pub mod qenv;
 pub mod qfile;
 pub mod qjson;
 pub mod qnumber;

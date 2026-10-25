@@ -1,7 +1,8 @@
-//! The editor's document: everything `Editor` (src/ui/Editor.cpp) decides that is not Qt
-//! plumbing. A CXX-Qt object will replace the C++ `Editor` QObject (QML's `editor` and `comp`)
-//! and hold a [`Document`]; it converts what the document returns into `QVariant`s, owns the
-//! timers and threads, and drives playback through the C++ `PlaybackDriver`.
+//! The editor's document: everything the C++ `Editor` (src/ui/Editor.cpp at the tag
+//! `rust-migration-base`; function names and line numbers here refer to it) decided that is not
+//! Qt plumbing. The CXX-Qt `Editor` (crates/omareel_qt/src/editor.rs, QML's `editor` and `comp`)
+//! holds a [`Document`]; it converts what the document returns into `QVariant`s, owns the threads,
+//! and drives the players and timers through its C++ base, `EditorBase`.
 //!
 //! # How the Qt side uses it
 //!
@@ -10,8 +11,10 @@
 //! steps `Editor` called (its `seek`, `pause`, `syncCamera`, `updateInsertAudio`). After each
 //! call into the document the Qt side drains [`Document::take_effects`] and performs them in
 //! order. QML handlers run by those signals may call back into the editor; by then the
-//! document is in its final state, while the C++ answered them part-way through the operation
-//! (see [`Effect::Pause`] for the one place that shows in a value the C++ emitted).
+//! document is in its final state, while the C++ answered them part-way through the operation.
+//! Where that showed in what the C++ emitted (the pause before `deleteOutputRange`,
+//! `reorderClip` and `insertMedia`), the operation has a split form the Qt side pauses inside
+//! (see [`Effect::Pause`]).
 //!
 //! What stays on the Qt side, and why:
 //! - The players and their state (`PlaybackDriver`, `m_transportPlaying`, `m_activeClip`, the
@@ -31,8 +34,9 @@
 //!   [`ExportDialogSettings`] and [`ZoomTarget`]).
 //! - `ThemeFonts::setApplicationFont` in `projectMap`, `QQuickWindow::graphicsApi` in
 //!   `softwareRendering`, the clipboard, `xdg-open`, `OmarchyPaths::generateWallpaperThumbnail`
-//!   (QImage), `probeFrameTimes` and `probeVideo` (MediaProbe, being ported separately and
-//!   passed in as [`Probes::video`]), and the `OMAREEL_*` environment switches.
+//!   (QImage), and the `OMAREEL_*` environment switches. `probeVideo` comes in as
+//!   [`Probes::video`] (normally [`crate::media_probe::probe_video`]), and the Qt side runs
+//!   [`crate::media_probe::probe_frame_times`] for [`Document::set_screen_frame_times`].
 
 mod bundle;
 mod clips;
@@ -50,7 +54,7 @@ mod thumbnails;
 mod zooms;
 
 pub use bundle::*;
-pub use clips::ImportJob;
+pub use clips::{ImportJob, OutputCut};
 pub use composition::*;
 pub use document::*;
 pub use exporting::*;
@@ -103,11 +107,13 @@ pub enum Effect {
     /// the playhead clock, `positionChanged`, `compositionChanged`), `seekMedia` with
     /// [`Document::media_seek`], and start the next video thumbnail.
     Seek(f64),
-    /// `Editor::pause()`. The C++ paused before `deleteOutputRange` and `reorderClip` changed
-    /// the clips, so its `setTransportPlaying(false)` clamped the playhead to the duration before
-    /// the cut and muted the media player by the clip list before it; here the Qt side pauses
-    /// after the edit. Both operations end in a [`Effect::Seek`] that sets the playhead and the
-    /// audio again, so only the values emitted in between can differ.
+    /// `Editor::pause()`. `deleteOutputRange`, `reorderClip` and `insertMedia` paused before they
+    /// changed anything, so a handler of `playingChanged` saw the document as it was; the
+    /// operations that queue this effect first are for callers that do not mind. The Qt side
+    /// uses their split forms ([`Document::prepare_delete_output_range`] and
+    /// [`Document::apply_delete_output_range`], [`Document::can_reorder_clip`] and
+    /// [`Document::apply_reorder_clip`], [`Document::can_insert_media`] and
+    /// [`Document::start_import`]) and pauses in between, where the C++ did.
     Pause,
     /// `syncCamera(screenSourceTime, force)` with [`Document::camera_sync`].
     SyncCamera { screen_source_time: f64, force: bool },

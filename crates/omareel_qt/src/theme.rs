@@ -176,7 +176,13 @@ fn shell_font_base_size() -> i32 {
     theme::shell_font_base_size()
 }
 
-fn body_text_size() -> i32 {
+/// `ThemeFonts::setApplicationFont`, for the editor (a C++ function may be declared in one bridge
+/// only).
+pub(crate) fn set_application_font(family: &QString, pixel_size: i32) {
+    qobject::set_application_font(family, pixel_size);
+}
+
+pub(crate) fn body_text_size() -> i32 {
     let sources = theme::Sources::read();
     theme::Palette::from_files(&sources.colors, &sources.shell).body_size()
 }

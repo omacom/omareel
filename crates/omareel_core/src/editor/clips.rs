@@ -10,6 +10,14 @@ use crate::compat::qdir;
 use crate::compat::qround::q_fuzzy_compare;
 use crate::project::{allowed_clip_fits, allowed_clip_layouts, allowed_clip_speeds, Clip, ZoomSegment};
 
+/// A cut [`Document::prepare_delete_output_range`] worked out: where it starts, and the clips
+/// that are left.
+#[derive(Clone, Debug, PartialEq)]
+pub struct OutputCut {
+    from: f64,
+    clips: Vec<Clip>,
+}
+
 /// What `insertMedia` runs off the GUI thread: [`import_insert`].
 #[derive(Clone)]
 pub struct ImportJob {
@@ -161,11 +169,22 @@ impl Document {
     /// `deleteOutputRange(from, to)`: cuts an output span out of the clips (the right part of a
     /// clip cut in the middle gets a new id), as long as some recording is left. Zooms that no
     /// longer show are removed and the others shrink to what still shows; the clip at the cut is
-    /// selected and the playhead goes there. The new id is drawn before anything is checked, as
-    /// the C++ drew its UUID.
+    /// selected and the playhead goes there. The C++ paused before the edit, so this queues
+    /// [`Effect::Pause`] first; the Qt side pauses between [`Document::prepare_delete_output_range`]
+    /// and [`Document::apply_delete_output_range`] instead, where the C++ did.
     pub fn delete_output_range(&mut self, from: f64, to: f64) -> bool {
+        let Some(cut) = self.prepare_delete_output_range(from, to) else { return false };
+        self.emit(Effect::Pause);
+        self.apply_delete_output_range(cut);
+        true
+    }
+
+    /// The checks of `deleteOutputRange(from, to)`, changing nothing but the id generator: the cut
+    /// clip list, or `None` when the range is not finite, cuts nothing, or would leave no
+    /// recording. The new id is drawn before anything is checked, as the C++ drew its UUID.
+    pub fn prepare_delete_output_range(&mut self, from: f64, to: f64) -> Option<OutputCut> {
         if !from.is_finite() || !to.is_finite() {
-            return false;
+            return None;
         }
         let (from, to) = if from > to { (to, from) } else { (from, to) };
         let from = cpp::clamp(from, 0.0, self.duration());
@@ -173,19 +192,25 @@ impl Document {
         let mut edited = ClipTimeline::new(self.project.clips.clone());
         let remainder_id = self.next_id("c");
         if !edited.delete_range(from, to, &remainder_id) {
-            return false;
+            return None;
         }
         if edited.clips().iter().all(Clip::is_media) {
-            return false;
+            return None;
         }
-        self.emit(Effect::Pause);
+        Some(OutputCut { from, clips: edited.clips().to_vec() })
+    }
+
+    /// The edit of `deleteOutputRange` after its pause, for a cut
+    /// [`Document::prepare_delete_output_range`] made of the clips as they still are.
+    pub fn apply_delete_output_range(&mut self, cut: OutputCut) {
+        let OutputCut { from, clips } = cut;
         self.snapshot("");
         let mut surviving = Vec::new();
         let mut zooms_changed = false;
         for zoom in &self.project.zooms {
             let mut zoom = zoom.clone();
             let before = visible_source_span(&zoom, &self.project.clips);
-            let after = visible_source_span(&zoom, edited.clips());
+            let after = visible_source_span(&zoom, &clips);
             if before.0.is_finite() && !after.0.is_finite() {
                 zooms_changed = true;
                 continue;
@@ -197,7 +222,7 @@ impl Document {
             }
             surviving.push(zoom);
         }
-        self.project.clips = edited.clips().to_vec();
+        self.project.clips = clips;
         if zooms_changed {
             self.project.zooms = surviving;
         }
@@ -208,7 +233,6 @@ impl Document {
         self.changed(zooms_changed);
         self.emit(Effect::Seek(cpp::min(from, self.duration())));
         self.emit(Effect::SelectionChanged);
-        true
     }
 
     /// `mergeClip(id, direction)`: joins a recording clip with its neighbour (the earlier one
@@ -299,15 +323,29 @@ impl Document {
     }
 
     /// `reorderClip(id, direction)`: moves an inserted clip one place earlier (-1) or later; the
-    /// playhead goes to its new start.
+    /// playhead goes to its new start. [`Effect::Pause`] comes first, where the C++ paused; the
+    /// Qt side pauses between [`Document::can_reorder_clip`] and [`Document::apply_reorder_clip`].
     pub fn reorder_clip(&mut self, id: &str, direction: i32) -> bool {
-        let index = self.clip_index(id);
-        let other = index + if direction < 0 { -1 } else { 1 };
-        // Recording clips keep their order; only an inserted clip moves past its neighbour.
-        if index < 0 || other < 0 || other as usize >= self.project.clips.len() || !self.project.clips[index as usize].is_media() {
+        if !self.can_reorder_clip(id, direction) {
             return false;
         }
         self.emit(Effect::Pause);
+        self.apply_reorder_clip(id, direction);
+        true
+    }
+
+    /// Whether `reorderClip(id, direction)` moves anything: recording clips keep their order;
+    /// only an inserted clip moves past its neighbour.
+    pub fn can_reorder_clip(&self, id: &str, direction: i32) -> bool {
+        let index = self.clip_index(id);
+        let other = index + if direction < 0 { -1 } else { 1 };
+        index >= 0 && other >= 0 && (other as usize) < self.project.clips.len() && self.project.clips[index as usize].is_media()
+    }
+
+    /// The edit of `reorderClip` after its pause, once [`Document::can_reorder_clip`] said yes.
+    pub fn apply_reorder_clip(&mut self, id: &str, direction: i32) {
+        let index = self.clip_index(id);
+        let other = index + if direction < 0 { -1 } else { 1 };
         self.snapshot("");
         self.project.clips.swap(index as usize, other as usize);
         self.selected_clip_id = id.to_owned();
@@ -315,16 +353,26 @@ impl Document {
         let start = self.timeline().output_time(other, self.project.clips[other as usize].in_);
         self.emit(Effect::Seek(start));
         self.emit(Effect::SelectionChanged);
-        true
     }
 
     /// `insertMedia(url)` with the URL already a path (`isLocalFile() ? toLocalFile() :
-    /// toString()`): pauses and starts the import, unless one is running.
+    /// toString()`): pauses and starts the import, unless one is running. The Qt side pauses
+    /// between [`Document::can_insert_media`] and [`Document::start_import`], where the C++ did.
     pub fn insert_media(&mut self, source: &str) {
-        if self.importing || source.is_empty() {
+        if !self.can_insert_media(source) {
             return;
         }
         self.emit(Effect::Pause);
+        self.start_import(source);
+    }
+
+    /// Whether `insertMedia` goes ahead: no import running and a source.
+    pub fn can_insert_media(&self, source: &str) -> bool {
+        !self.importing && !source.is_empty()
+    }
+
+    /// `insertMedia` after its pause: the import starts ([`Effect::StartImport`]).
+    pub fn start_import(&mut self, source: &str) {
         self.importing = true;
         self.import_error.clear();
         self.emit(Effect::ImportingChanged);

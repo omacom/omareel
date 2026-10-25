@@ -1,6 +1,7 @@
 //! Bridges omareel_core to Qt and C++. Nothing here may panic across the FFI boundary.
 
 pub mod cli;
+pub mod editor;
 pub mod export;
 pub mod theme;
 

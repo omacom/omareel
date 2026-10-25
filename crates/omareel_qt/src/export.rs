@@ -284,7 +284,7 @@ fn qstring(text: &str) -> QString {
 
 /// `QJsonValue::toVariant`: integers as qlonglong, doubles, null as a null `QVariant` QML reads
 /// as `null`, arrays as `QVariantList` and objects as `QVariantMap`.
-fn json_variant(value: &Value) -> QVariant {
+pub(crate) fn json_variant(value: &Value) -> QVariant {
     match value {
         Value::Undefined => QVariant::default(),
         Value::Null => ffi::null_variant(),
@@ -297,11 +297,11 @@ fn json_variant(value: &Value) -> QVariant {
     }
 }
 
-fn json_map(object: &omareel_core::compat::qjson::Object) -> QMap<QMapPair_QString_QVariant> {
+pub(crate) fn json_map(object: &omareel_core::compat::qjson::Object) -> QMap<QMapPair_QString_QVariant> {
     object.iter().map(|(key, value)| (qstring(key), json_variant(value))).collect()
 }
 
-fn map<const N: usize>(entries: [(&str, QVariant); N]) -> QMap<QMapPair_QString_QVariant> {
+pub(crate) fn map<const N: usize>(entries: [(&str, QVariant); N]) -> QMap<QMapPair_QString_QVariant> {
     entries.into_iter().map(|(key, value)| (qstring(key), value)).collect()
 }
 
