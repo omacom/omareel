@@ -50,6 +50,16 @@ generate_wayland_protocol(ext-foreign-toplevel-list-v1
 qt_standard_project_setup()
 qt_policy(SET QTP0004 NEW)
 
+# C++ the Rust code drives: Qt-only pieces such as file watchers and font calls. It never calls
+# into Rust, so the static libraries link in one direction.
+add_library(omareel_plumbing STATIC
+    src/plumbing/QtShims.cpp
+    src/plumbing/ThemeBase.cpp
+)
+target_include_directories(omareel_plumbing PUBLIC src/plumbing)
+target_link_libraries(omareel_plumbing PUBLIC Qt6::Core Qt6::Gui)
+target_link_libraries(omareel_qt INTERFACE omareel_plumbing)
+
 add_library(omareel_core STATIC
     src/core/Project.cpp
     src/core/InputLog.cpp
@@ -60,9 +70,7 @@ add_library(omareel_core STATIC
     src/core/ClipTimeline.cpp
     src/core/CameraTimeline.cpp
     src/core/LayoutTimeline.cpp
-    src/core/Theme.cpp
     src/core/OmarchyPaths.cpp
-    src/core/RecordingMetadata.cpp
     src/core/RecordingPreferences.cpp
     src/record/CursorSampler.cpp
     src/record/CameraCapture.cpp
@@ -172,7 +180,6 @@ qt_add_qml_module(omareel_render
         src/render/MediaProbe.h src/render/MediaProbe.cpp
         src/render/Exporter.h src/render/Exporter.cpp
         src/render/EncoderPipe.h src/render/EncoderPipe.cpp
-        src/render/PreviewSink.h src/render/PreviewSink.cpp
         src/render/VideoDecoding.h src/render/VideoDecoding.cpp
         src/ui/Editor.h src/ui/Editor.cpp
         src/ui/Launcher.h src/ui/Launcher.cpp
@@ -248,7 +255,7 @@ qt_add_resources(omareel_render "omareel_assets"
         assets/sounds/click.wav
 )
 target_include_directories(omareel_render PUBLIC src src/render)
-target_link_libraries(omareel_render PUBLIC omareel_core omareel_ui Qt6::Concurrent Qt6::Quick Qt6::QuickControls2 Qt6::Multimedia Qt6::OpenGL)
+target_link_libraries(omareel_render PUBLIC omareel_core omareel_qt omareel_ui Qt6::Concurrent Qt6::Quick Qt6::QuickControls2 Qt6::Multimedia Qt6::OpenGL)
 
 qt_add_executable(omareel src/main.cpp src/ui/CaptureTestClient.cpp)
 target_link_libraries(omareel PRIVATE omareel_render omareel_qt Qt6::Quick Qt6::Multimedia Qt6::GuiPrivate LayerShellQt::Interface PkgConfig::WAYLAND_CLIENT)

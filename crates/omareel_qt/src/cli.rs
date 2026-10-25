@@ -8,6 +8,9 @@ pub mod ffi {
     extern "Rust" {
         /// Prints the help (to stdout) or a usage error (to stderr) and returns the exit status.
         fn usage(error: &str) -> i32;
+        /// `omareel probe <bundle>` for an absolute bundle path: prints the summary and returns
+        /// the exit status.
+        fn probe(bundle: &str) -> i32;
     }
 }
 
@@ -19,4 +22,16 @@ fn usage(error: &str) -> i32 {
         let _ = std::io::stderr().lock().write_all(text.as_bytes());
     }
     omareel_core::cli::usage_status(error)
+}
+
+fn probe(bundle: &str) -> i32 {
+    match omareel_core::probe::run(bundle) {
+        Ok(summary) => {
+            let mut out = std::io::stdout().lock();
+            let _ = out.write_all(summary.as_bytes());
+            let _ = out.flush();
+            0
+        }
+        Err(error) => usage(&error),
+    }
 }

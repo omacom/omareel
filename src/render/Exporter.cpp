@@ -12,7 +12,7 @@
 #include "core/MotionTrack.h"
 #include "core/OmarchyPaths.h"
 #include "core/Project.h"
-#include "core/Theme.h"
+#include "omareel_qt/src/theme.cxxqt.h"
 #include "core/ZoomTimeline.h"
 
 #include <QCoreApplication>
@@ -109,10 +109,9 @@ static double outputAspect(const QString &aspect, int sourceWidth, int sourceHei
 static QVariantMap projectMap(const Project &project)
 {
     QVariantMap map = project.toJson().toVariantMap();
-    Theme theme;
     map[QStringLiteral("renderTheme")] = QVariantMap{
-        {QStringLiteral("background"), theme.background()},
-        {QStringLiteral("foreground"), theme.foreground()}};
+        {QStringLiteral("background"), omareel::theme::renderBackground()},
+        {QStringLiteral("foreground"), omareel::theme::renderForeground()}};
     QVariantMap background = map.value(QStringLiteral("background")).toMap();
     QString image;
     if (project.background.type == QLatin1String("image")) image = project.background.image;

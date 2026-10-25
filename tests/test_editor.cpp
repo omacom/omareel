@@ -1,6 +1,6 @@
 #include "ui/Editor.h"
 #include "core/Project.h"
-#include "core/Theme.h"
+#include "omareel_qt/src/theme.cxxqt.h"
 #include "render/VideoDecoding.h"
 
 #include <QDir>
@@ -359,7 +359,7 @@ private slots:
         const QRect sample = QRect(handle->mapToScene(QPointF()).toPoint(),
                                    QSize(qRound(handle->width()), qRound(handle->height())))
                                  .adjusted(-1, -1, 1, 1);
-        const QColor accent = theme.accent();
+        const QColor accent = theme.getAccent();
         const auto accentBounds = [sample, accent](const QImage &image) {
             QRect bounds;
             const int accentHue = accent.hsvHue();

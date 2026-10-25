@@ -4,7 +4,7 @@
 #include "core/CameraTimeline.h"
 #include "core/ZoomTimeline.h"
 #include "core/OmarchyPaths.h"
-#include "core/Theme.h"
+#include "omareel_qt/src/theme.cxxqt.h"
 #include "render/Exporter.h"
 #include "render/FrameSource.h"
 
@@ -456,10 +456,9 @@ QVariantMap Editor::projectMap() const
 {
     if (m_projectMapCacheValid) return m_projectMapCache;
     QVariantMap result = m_project.toJson().toVariantMap();
-    Theme renderTheme;
     result[QStringLiteral("renderTheme")] = QVariantMap{
-        {QStringLiteral("background"), renderTheme.background()},
-        {QStringLiteral("foreground"), renderTheme.foreground()}};
+        {QStringLiteral("background"), omareel::theme::renderBackground()},
+        {QStringLiteral("foreground"), omareel::theme::renderForeground()}};
     QVariantMap background = result.value(QStringLiteral("background")).toMap();
     QString image;
     if (m_project.background.type == QLatin1String("image")) image = m_project.background.image;
