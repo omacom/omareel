@@ -86,9 +86,15 @@ pub mod ffi {
     }
 }
 
+/// A QString as Rust text, through `toUtf8` (which never fails, unlike a UTF-16 conversion of
+/// a string holding a lone surrogate).
+fn text(string: &QString) -> String {
+    String::from_utf8_lossy(string.to_utf8().as_slice()).into_owned()
+}
+
 /// The arguments as Rust strings.
 fn strings(arguments: &QStringList) -> Vec<String> {
-    QList::<QString>::from(arguments).iter().map(String::from).collect()
+    QList::<QString>::from(arguments).iter().map(text).collect()
 }
 
 fn record_command(arguments: &QStringList) -> i32 {
@@ -117,13 +123,13 @@ fn self_view_host_path() -> QString {
 }
 
 fn read_state_file(path: &QString) -> QByteArray {
-    let object = state::read_state_file(&String::from(path));
+    let object = state::read_state_file(&text(path));
     QByteArray::from(Value::Object(object).to_json(Format::Compact).as_str())
 }
 
 fn update_state_file(path: &QString, values: &QByteArray, error: &mut QString) -> bool {
     let values = qjson::object_from_json(values.as_slice()).unwrap_or_default();
-    match state::update_state_file(&String::from(path), &values) {
+    match state::update_state_file(&text(path), &values) {
         Ok(()) => {
             *error = QString::default();
             true
@@ -136,7 +142,7 @@ fn update_state_file(path: &QString, values: &QByteArray, error: &mut QString) -
 }
 
 fn send_host_command(command: &QString) -> bool {
-    state::send_host_command(&String::from(command))
+    state::send_host_command(&text(command))
 }
 
 fn is_recording() -> bool {

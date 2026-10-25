@@ -299,10 +299,10 @@ src/core/   Project.{h,cpp}  JSON model, load/save, defaults, undo snapshots
             ClipTimeline.{h,cpp} output↔source time mapping, split/trim ops
             Theme.{h,cpp}    Omarchy colors.toml watcher
             Easing.h
-src/record/ Recorder.{h,cpp} gsr process, ts file, bundle finalize, state file
-            CursorSampler.{h,cpp} Hyprland IPC poller thread
-            EvdevListener.{h,cpp} libevdev thread
-            RegionPicker.{h,cpp} slurp / omarchy-capture-region wrapper, monitor math
+src/record/ Recorder.{h,cpp} the state files for the C++ UI, over the Rust recorder
+            (crates/omareel_record: daemon, gsr process, Wayland capture, ts files, bundle
+            finalize, state files, Hyprland IPC cursor poller, libevdev thread, slurp /
+            omarchy-capture-region wrapper and monitor math)
 src/render/ FrameSource.{h,cpp} QQuickItem texture node
             Exporter.{h,cpp} offscreen render loop over the Rust export job
             (crates/omareel_core/src/export: plan, ffmpeg decode/encode pipes)
