@@ -11,8 +11,12 @@
 //! answering from a replay directory. Some scenarios wait for timeouts on purpose (hyprctl's 2 s,
 //! gpu-screen-recorder's 3 s, the state lock's 1 s waits), so these tests take some seconds.
 //!
-//! Gated to x86_64 as `omareel_core`'s `main.rs` explains: files whose values go through
-//! x86_64's `qRound` (add a half and truncate) where aarch64's rounds differently.
+//! Gated to x86_64 as `omareel_core`'s `main.rs` explains, because their values go through
+//! x86_64's `qRound` (add a half and truncate, where aarch64's uses `round()`):
+//! `recorder/self-view-placement.txt`, `launcher/helpers.txt` (`formatDuration` of
+//! 0.49999999999999994), `recordingbar/clamped-drag.txt` and `recordingbar/standby-placement.txt`.
+//! `recorder/helpers.txt` is compared without its one row for an out-of-range `CaptureMode`
+//! (`Mode7`), which a Rust enum cannot hold.
 
 #[allow(dead_code)]
 #[path = "../../../omareel_core/tests/golden/hermetic.rs"]

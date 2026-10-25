@@ -173,6 +173,15 @@ mod tests {
     }
 
     #[test]
+    fn upper_case_and_simplified() {
+        // QChar::toUpper's table: the long s is S; multi-character mappings stay as they are.
+        assert_eq!(to_upper("s\u{17f}l\u{ff}"), "SSL\u{178}");
+        assert_eq!(to_upper("\u{df}"), "\u{df}");
+        assert_eq!(simplified(" \t a \n\u{a0} b  "), "a b");
+        assert_eq!(simplified("\u{2028}"), "");
+    }
+
+    #[test]
     fn lower_case_has_no_context() {
         assert_eq!(to_lower("PAGE_UP"), "page_up");
         assert_eq!(to_lower("ΑΣ ΣΑΣ"), "ασ σασ");

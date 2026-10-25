@@ -9,6 +9,7 @@ same after each one: same commands, same files written byte for byte, same pixel
 | Path | What |
 |---|---|
 | `crates/omareel_core` | Plain Rust logic with no Qt. Any front end can use it. |
+| `crates/omareel_record` | The recording side's logic with no Qt (recorder state files, region picker, capture exclusion, camera and screen capture decisions, launcher and recording bar helpers), on top of `omareel_core`. |
 | `crates/omareel_qt` | The one Rust static library linked into the C++ binary: CXX-Qt objects and C++-callable functions that expose `omareel_core` to QML and C++. |
 | `src/plumbing` | C++ that Rust drives: Qt-only pieces (players, GL export rendering, camera, file watchers, timers). |
 | `src/` (rest) | C++ that has not moved yet, plus `main.cpp`'s window setup. |
@@ -19,6 +20,7 @@ The layering only goes one way, which keeps static-library linking free of cycle
 omareel (exe), C++ tests       may call Rust and plumbing
   omareel_render               QML modules, FrameSource
 omareel_qt (Rust staticlib)    calls plumbing through cxx
+  omareel_record               pure Rust, the recording side
   omareel_core                 pure Rust
 omareel_plumbing (C++)         never calls Rust; only emits Qt signals and implements virtuals
 ```

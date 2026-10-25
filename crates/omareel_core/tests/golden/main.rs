@@ -20,6 +20,7 @@
 //! - `composition/editor.txt`, whose rows sample that motion track and ease layouts with `pow`.
 //! - `composition/exporter.txt`, the exporter's per-frame state, which carries those motion
 //!   samples and the layout's eased transitions.
+//! - `microphone/peak-level.txt` and `meter.txt`, which print glibc `log10` results bit for bit.
 //!
 //! The Rust code follows each architecture's C++, so on aarch64 those files need not match.
 //! Everything else is byte formatting, parsing, or IEEE arithmetic that Rust evaluates the same
@@ -27,11 +28,11 @@
 //! cliptimeline, cameratimeline and keystroketrack only add, multiply, divide and compare), and
 //! runs on every architecture.
 //!
-//! The project, omarchypaths, theme and mediaprobe families read the environment and write
-//! under `$HOME` (mediaprobe runs the ffprobe shim); `hermetic` rebuilds the oracle's hermetic
-//! world for them (fresh `HOME` and XDG directories, the golden shims first on `PATH`, `umask
-//! 022`, `$HOME` as the working directory), one test at a time behind a mutex, and puts the
-//! process back afterwards.
+//! The project, omarchypaths, theme, recordingpreferences and mediaprobe families read the
+//! environment and write under `$HOME` (mediaprobe runs the ffprobe shim); `hermetic` rebuilds
+//! the oracle's hermetic world for them (fresh `HOME` and XDG directories, the golden shims
+//! first on `PATH`, `umask 022`, `$HOME` as the working directory), one test at a time behind a
+//! mutex, and puts the process back afterwards.
 //!
 //! Rows the Rust API cannot produce (no counterpart yet, or unpaired surrogates a Rust string
 //! cannot hold) are left out or normalised where each test says so; known differences from the
