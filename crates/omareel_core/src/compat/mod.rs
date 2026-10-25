@@ -8,6 +8,7 @@ pub mod qdir;
 pub mod qfile;
 pub mod qjson;
 pub mod qnumber;
+pub mod qprocess;
 pub mod qround;
 pub mod qsavefile;
 pub mod qstandardpaths;
