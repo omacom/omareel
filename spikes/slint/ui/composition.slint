@@ -195,21 +195,33 @@ component CursorOverlay {
 // Qt Quick captures the camera into a 24x24 texture and blurs it with MultiEffect; Slint has no
 // blur, so the Rust side makes the same tiny blurred picture (`Comp.camera-blurred`) on the CPU
 // and this only scales it up.
-component BlurredBackdrop inherits Rectangle {
+//
+// `fade` is QML's `opacity` here. QML multiplies an item's opacity into each child, which is
+// then blended on its own; Slint's `opacity` draws the element and its children into a layer and
+// blends that once, so the dark fill would no longer show through the half-faded picture. Each
+// child takes the fade itself to look as it does in Qt.
+component BlurredBackdrop {
     in property <float> source-aspect: 1;
-    clip: true;
-    background: #0b0b0e;
-    Image {
-        width: max(parent.width, parent.height * root.source-aspect) * 1.2;
-        height: self.width / max(0.01, root.source-aspect);
-        x: (parent.width - self.width) / 2;
-        y: (parent.height - self.height) / 2;
-        source: Comp.camera-blurred;
-        image-fit: fill;
-    }
+    in property <float> fade: 1;
     Rectangle {
-        background: black;
-        opacity: 0.22;
+        clip: true;
+        Rectangle {
+            background: #0b0b0e;
+            opacity: root.fade;
+        }
+        Image {
+            width: max(parent.width, parent.height * root.source-aspect) * 1.2;
+            height: self.width / max(0.01, root.source-aspect);
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            source: Comp.camera-blurred;
+            image-fit: fill;
+            opacity: root.fade;
+        }
+        Rectangle {
+            background: black;
+            opacity: 0.22 * root.fade;
+        }
     }
 }
 
@@ -273,7 +285,7 @@ component CameraOverlay {
         height: root.output-height;
         visible: root.square-mode && root.full-progress > 0;
         // Fades faster than the camera shrinks, so a morph does not wash the screen out.
-        opacity: root.full-progress * root.full-progress;
+        fade: root.full-progress * root.full-progress;
         source-aspect: root.width / max(1px, root.height);
     }
     // The shape casting the 45° shadow.

@@ -17,7 +17,7 @@ use std::cell::Cell;
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 /// A window that is only a size and a renderer.
 struct OffscreenWindow {
@@ -178,7 +178,7 @@ pub fn run(options: Options) -> Result<(), String> {
     let (mut upload_ns, mut render_ns, mut readback_ns) = (0u128, 0u128, 0u128);
     let mut error: Option<String> = None;
 
-    let take = |readback: &mut Readback, job: &mut ExportJob, readback_ns: &mut u128| -> Result<Vec<u8>, String> {
+    let take = |readback: &mut Readback, readback_ns: &mut u128| -> Result<Vec<u8>, String> {
         let started = Instant::now();
         let slice = readback.buffer.slice(..);
         let (sender, receiver) = std::sync::mpsc::channel();
@@ -198,7 +198,6 @@ pub fn run(options: Options) -> Result<(), String> {
         drop(mapped);
         readback.buffer.unmap();
         *readback_ns += started.elapsed().as_nanos();
-        let _ = job;
         Ok(bytes)
     };
     let write = |job: &mut ExportJob, bytes: Vec<u8>| -> Result<(), String> {
@@ -240,7 +239,7 @@ pub fn run(options: Options) -> Result<(), String> {
         if readbacks[slot].submission.is_some() {
             // The ring is full: the oldest frame goes to the encoder first.
             let (oldest, oldest_frame) = pending.pop_front().expect("pending readback");
-            let bytes = take(&mut readbacks[oldest], &mut job, &mut readback_ns)?;
+            let bytes = take(&mut readbacks[oldest], &mut readback_ns)?;
             maybe_png(&options, oldest_frame, &bytes, width, height);
             if let Err(e) = write(&mut job, bytes) {
                 error = Some(e);
@@ -263,7 +262,7 @@ pub fn run(options: Options) -> Result<(), String> {
     job.finish_decoder();
     if error.is_none() {
         while let Some((slot, frame)) = pending.pop_front() {
-            let bytes = take(&mut readbacks[slot], &mut job, &mut readback_ns)?;
+            let bytes = take(&mut readbacks[slot], &mut readback_ns)?;
             maybe_png(&options, frame, &bytes, width, height);
             if let Err(e) = write(&mut job, bytes) {
                 error = Some(e);
@@ -285,7 +284,6 @@ pub fn run(options: Options) -> Result<(), String> {
     }
     let seconds = total_timer.elapsed().as_secs_f64();
     eprintln!("exported {} frames in {seconds:.2} s ({:.1} frames/s) to {}", total, f64::from(total) / seconds, options.output);
-    let _ = Duration::ZERO;
     Ok(())
 }
 
