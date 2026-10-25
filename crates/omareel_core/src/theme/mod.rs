@@ -176,8 +176,7 @@ pub fn shell_font_base_size() -> i32 {
     let path = crate::compat::qdir::file_path(&omarchy_paths::state_root(), "theme/shell.toml");
     let Ok(bytes) = crate::compat::qfile::read_all(path) else { return 12 };
     let mut in_font = false;
-    for line in crate::compat::qfile::lines(&bytes) {
-        let line = String::from_utf8_lossy(line);
+    for line in toml::decoded_lines(&bytes) {
         if let Some(name) = toml::section(&line) {
             in_font = name == "font";
             continue;

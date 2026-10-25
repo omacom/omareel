@@ -297,25 +297,37 @@ pub fn typed(value: &Value) -> String {
     .join("\t")
 }
 
-/// **path**: the corpus directory written `$CORPUS`. (The other hermetic directories only
-/// occur in families these tests do not cover.)
+/// **path** for the families that only see the corpus directory: it is written `$CORPUS`.
+/// (The hermetic directories are put back by `Hermetic::sanitize`.)
 pub fn sanitize(text: &str) -> String {
     let corpus = corpus_root();
     let root = corpus.to_str().expect("UTF-8 corpus path");
+    sanitize_with(text, &[("$CORPUS".to_owned(), root.to_owned())])
+}
+
+/// **path** with the given `(name, path)` roots, tried in order (longest first, as the oracle
+/// sorts them): an occurrence of a path becomes its name unless the character after it is a
+/// letter, digit, `.`, `_` or `-`.
+pub fn sanitize_with(text: &str, roots: &[(String, String)]) -> String {
     let path_character = |c: char| c.is_alphanumeric() || matches!(c, '.' | '_' | '-');
     let mut out = String::new();
-    let mut rest = text;
-    while let Some(index) = rest.find(root) {
-        let after = &rest[index + root.len()..];
-        out += &rest[..index];
-        if after.chars().next().is_some_and(path_character) {
-            out += root;
-        } else {
-            out += "$CORPUS";
+    let mut i = 0;
+    'scan: while let Some(c) = text[i..].chars().next() {
+        let rest = &text[i..];
+        for (name, path) in roots {
+            if !path.is_empty()
+                && rest.starts_with(path.as_str())
+                && !rest[path.len()..].chars().next().is_some_and(path_character)
+            {
+                out += name;
+                i += path.len();
+                continue 'scan;
+            }
         }
-        rest = after;
+        out.push(c);
+        i += c.len_utf8();
     }
-    out + rest
+    out
 }
 
 // ---------------------------------------------------------------------------------------------

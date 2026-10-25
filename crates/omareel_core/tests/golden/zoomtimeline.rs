@@ -3,9 +3,9 @@
 use crate::cursorpath::{point, samples_from_json, synthetic_click_times, synthetic_samples};
 use crate::support::*;
 use omareel_core::compat::geometry::PointF;
-use omareel_core::compat::qjson::Value;
+use omareel_core::compat::qjson::{self, Value};
 use omareel_core::cursor_path::{self, CursorSample};
-use omareel_core::project::{ZoomSegment, ZoomStyle};
+use omareel_core::project::{Project, ZoomSegment, ZoomStyle};
 use omareel_core::zoom_timeline;
 
 fn segment_row(s: &ZoomSegment) -> Vec<String> {
@@ -79,11 +79,6 @@ fn segment_sets(cases: &Value) -> Vec<(String, Vec<ZoomSegment>)> {
     sets
 }
 
-/// Sections that need `Project::fromJson`, which is not ported yet.
-fn is_project_section(label: &str) -> bool {
-    label.starts_with("segments=project:")
-}
-
 #[test]
 fn target_at_txt() {
     let cases = cases();
@@ -133,9 +128,22 @@ fn target_at_txt() {
         &synthetic,
         &ZoomStyle::default(),
     );
-
-    let expected = keep_sections(&read_expected("zoomtimeline/target-at.txt"), |label| !is_project_section(label));
-    assert_same("zoomtimeline/target-at.txt (without the project: sections)", &expected, out.into_string().as_bytes());
+    // Zooms and zoom styles as projects store them: `Project::fromJson` of
+    // `QJsonDocument::fromJson(bytes).object()`.
+    for file in ["crafted-edited.json", "crafted-clamps.json", "crafted-wrong-types.json"] {
+        let object = qjson::object_from_json(&read_corpus(&format!("project/{file}"))).unwrap_or_default();
+        let project = Project::from_json(&object);
+        emit(
+            format!(
+                "segments=project:{file} samples=synthetic snapToEdgesRatio={}",
+                num(project.zoom_style.snap_to_edges_ratio)
+            ),
+            &project.zooms,
+            &synthetic,
+            &project.zoom_style,
+        );
+    }
+    assert_golden("zoomtimeline/target-at.txt", &out.into_string());
 }
 
 #[test]
