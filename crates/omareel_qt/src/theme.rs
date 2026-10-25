@@ -26,6 +26,9 @@ pub mod qobject {
         #[namespace = "Omareel::Shims"]
         #[cxx_name = "fromRgba64"]
         fn from_rgba64(red: u16, green: u16, blue: u16, alpha: u16) -> QColor;
+        #[namespace = "Omareel::Shims"]
+        #[cxx_name = "invalidWithAlpha"]
+        fn invalid_with_alpha(alpha: u16) -> QColor;
     }
 
     #[namespace = "Omareel"]
@@ -155,6 +158,9 @@ pub mod qobject {
         /// shell.toml's `[font] base-size`, 12 without one.
         #[cxx_name = "shellFontBaseSize"]
         fn shell_font_base_size() -> i32;
+        /// The theme's body text size, which Theme sets the application font to.
+        #[cxx_name = "bodyTextSize"]
+        fn body_text_size() -> i32;
     }
 }
 
@@ -168,6 +174,11 @@ fn render_foreground() -> QColor {
 
 fn shell_font_base_size() -> i32 {
     theme::shell_font_base_size()
+}
+
+fn body_text_size() -> i32 {
+    let sources = theme::Sources::read();
+    theme::Palette::from_files(&sources.colors, &sources.shell).body_size()
 }
 
 pub struct ThemeRust {
@@ -309,12 +320,13 @@ impl Default for ThemeRust {
     }
 }
 
-/// A colour with the same 16-bit channels, or an invalid one.
+/// A colour with the same 16-bit channels. An invalid one stays invalid but keeps its alpha:
+/// the palette's alpha variants of an unparsable colour are drawn at that alpha.
 pub fn to_qt(color: &qcolor::QColor) -> QColor {
-    if !color.is_valid() {
-        return QColor::default();
-    }
     let (r, g, b, a) = color.rgba64();
+    if !color.is_valid() {
+        return qobject::invalid_with_alpha(a);
+    }
     qobject::from_rgba64(r, g, b, a)
 }
 

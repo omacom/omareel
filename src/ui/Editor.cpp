@@ -456,6 +456,9 @@ QVariantMap Editor::projectMap() const
 {
     if (m_projectMapCacheValid) return m_projectMapCache;
     QVariantMap result = m_project.toJson().toVariantMap();
+    // A Theme built here used to set the application font as it loaded; the composition's
+    // text without a theme of its own falls back to that font.
+    ThemeFonts::setApplicationFont(ThemeFonts::interfaceFamily(), omareel::theme::bodyTextSize());
     result[QStringLiteral("renderTheme")] = QVariantMap{
         {QStringLiteral("background"), omareel::theme::renderBackground()},
         {QStringLiteral("foreground"), omareel::theme::renderForeground()}};

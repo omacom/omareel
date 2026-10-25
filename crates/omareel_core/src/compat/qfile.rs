@@ -4,13 +4,12 @@ use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
 
-/// `QFile::errorString()` after a failed system call: the C library's `strerror` text, which
-/// Rust's error display also starts with.
+/// `QFile::errorString()` after a failed system call: Qt's `qt_error_string`, which keeps a few
+/// messages in English whatever the locale and takes the rest from `strerror`.
 pub fn error_string(error: &io::Error) -> String {
-    let text = error.to_string();
     match error.raw_os_error() {
-        Some(code) => text.strip_suffix(&format!(" (os error {code})")).unwrap_or(&text).to_owned(),
-        None => text,
+        Some(code) => crate::compat::qdir::error_string(code),
+        None => error.to_string(),
     }
 }
 

@@ -13,5 +13,8 @@ QVariant nullVariant();
 QString variantToJson(const QVariant &value);
 // A colour with exactly these 16-bit channels.
 QColor fromRgba64(quint16 red, quint16 green, quint16 blue, quint16 alpha);
+// An invalid colour that still carries an alpha, as QColor::setAlphaF leaves one; Qt Quick
+// draws it as black at that alpha.
+QColor invalidWithAlpha(quint16 alpha);
 
 } // namespace Omareel::Shims

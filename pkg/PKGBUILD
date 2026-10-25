@@ -62,6 +62,7 @@ package() {
   install -Dm644 LICENSES/lucide.txt "$pkgdir/usr/share/licenses/$pkgname/lucide.txt"
   install -Dm644 LICENSES/inter.txt "$pkgdir/usr/share/licenses/$pkgname/inter.txt"
   install -Dm644 LICENSES/cxx-qt-cmake-MIT.txt "$pkgdir/usr/share/licenses/$pkgname/cxx-qt-cmake-MIT.txt"
+  install -Dm644 LICENSES/rust-crates.txt "$pkgdir/usr/share/licenses/$pkgname/rust-crates.txt"
   install -Dm644 "$startdir/omareel.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/omareel.svg"
   local size
   for size in 16 32 48 64 128 256 512; do

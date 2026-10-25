@@ -306,7 +306,6 @@ src/record/ Recorder.{h,cpp} gsr process, ts file, bundle finalize, state file
 src/render/ FrameSource.{h,cpp} QQuickItem texture node
             Exporter.{h,cpp} offscreen render + ffmpeg pipes
             FfmpegDecoder.{h,cpp} rawvideo pipe reader
-            PreviewSink.{h,cpp} QVideoSink → FrameSource bridge
 src/ui/     Editor.{h,cpp} QObject facade exposed to QML (project, playback, timeline ops)
             qml/Main.qml Composition.qml Timeline.qml ZoomTrack.qml ClipTrack.qml
                  SidePanel.qml panels/*.qml Launcher.qml
