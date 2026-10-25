@@ -1,7 +1,6 @@
 #include "ui/CaptureTestClient.h"
 #include <qpa/qplatformnativeinterface.h>
 #include <wayland-client.h>
-#include "record/CameraCapture.h"
 #include "record/Recorder.h"
 #include "Exporter.h"
 #include "render/VideoDecoding.h"
@@ -11,6 +10,7 @@
 #include "ui/RecordingBar.h"
 #include "omareel_qt/src/cli.cxxqt.h"
 #include "omareel_qt/src/editor.cxxqt.h"
+#include "omareel_qt/src/record.cxxqt.h"
 #include "omareel_qt/src/theme.cxxqt.h"
 
 #include <LayerShellQt/shell.h>
@@ -302,111 +302,6 @@ static int exportCommand(const QStringList &arguments)
     return 0;
 }
 
-static int recordCommand(const QStringList &arguments)
-{
-    if (Recorder::isRecording()) {
-        if (arguments.contains(QStringLiteral("--stop")) && arguments.contains(QStringLiteral("--cancel")))
-            return usage(QStringLiteral("choose either --stop or --cancel"));
-        const bool cancel = arguments.contains(QStringLiteral("--cancel"));
-        QString bundle, error;
-        const int result = Recorder::stopExisting(cancel, &bundle, &error);
-        if (result == 0)
-            QTextStream(stdout) << (cancel ? QStringLiteral("Recording discarded") : bundle) << '\n';
-        else QTextStream(stderr) << "omareel: " << error << '\n';
-        return result;
-    }
-    if (arguments.contains(QStringLiteral("--stop")) || arguments.contains(QStringLiteral("--cancel"))) {
-        QTextStream(stderr) << "omareel: no recording is active\n";
-        return 1;
-    }
-    if (arguments.contains(QStringLiteral("--with-webcam"))
-        && arguments.contains(QStringLiteral("--no-webcam")))
-        return usage(QStringLiteral("--with-webcam cannot be combined with --no-webcam"));
-    RecordOptions options;
-    options.outputDirectory = OmarchyPaths::recordingsDirectory();
-    const RecordingPreferences preferences = RecordingPreferences::load();
-    const bool explicitAudio = arguments.contains(QStringLiteral("--with-desktop-audio"))
-        || arguments.contains(QStringLiteral("--with-microphone-audio"))
-        || arguments.contains(QStringLiteral("--no-audio"));
-    if (!explicitAudio) {
-        options.desktopAudio = preferences.systemAudio;
-        options.microphoneAudio = preferences.microphone;
-    }
-    options.microphoneDevice = preferences.microphoneDevice;
-    const bool explicitWebcam = arguments.contains(QStringLiteral("--with-webcam"))
-        || arguments.contains(QStringLiteral("--no-webcam"));
-    if (!explicitWebcam) options.webcam = preferences.webcamEnabled;
-    // The launcher saves the camera it fell back to while the chosen one was unplugged.
-    options.webcamDevice = cameraNodePath(preferences.webcamChosenDevice).isEmpty()
-        ? preferences.webcamDevice : preferences.webcamChosenDevice;
-    options.webcamHeight = preferences.webcamHeight;
-    options.webcamRotation = preferences.webcamRotation;
-    options.webcamFlipHorizontal = preferences.webcamFlipHorizontal;
-    options.selfView = preferences.selfViewEnabled;
-    options.selfViewSize = preferences.selfViewSize;
-    options.captureBackend = preferences.captureBackend;
-    options.countdown = preferences.countdownBeforeRecording;
-    int modeCount = 0;
-    for (int i = 0; i < arguments.size(); ++i) {
-        const QString arg = arguments[i];
-        if (arg == QLatin1String("--fullscreen")) { options.mode = CaptureMode::Fullscreen; ++modeCount; }
-        else if (arg == QLatin1String("--region")) { options.mode = CaptureMode::Region; ++modeCount; }
-        else if (arg == QLatin1String("--window")) { options.mode = CaptureMode::Window; ++modeCount; }
-        else if (arg == QLatin1String("--with-desktop-audio")) options.desktopAudio = true;
-        else if (arg == QLatin1String("--with-microphone-audio")) options.microphoneAudio = true;
-        else if (arg == QLatin1String("--with-webcam")) options.webcam = true;
-        else if (arg == QLatin1String("--no-webcam")) options.webcam = false;
-        else if (arg == QLatin1String("--no-selfview")) options.selfView = false;
-        else if (arg.startsWith(QLatin1String("--webcam-device="))) {
-            options.webcamDevice = arg.section(QLatin1Char('='), 1);
-            options.webcam = true;
-        }
-        else if (arg == QLatin1String("--webcam-device")) {
-            if (++i >= arguments.size()) return usage(QStringLiteral("--webcam-device requires a value"));
-            options.webcamDevice = arguments[i];
-            options.webcam = true;
-        }
-        else if (arg == QLatin1String("--webcam-height")) {
-            if (++i >= arguments.size()) return usage(QStringLiteral("--webcam-height requires a value"));
-            options.webcamHeight = arguments[i].toInt();
-            options.webcam = true;
-        }
-        else if (arg == QLatin1String("--no-audio")) {
-            options.desktopAudio = false;
-            options.microphoneAudio = false;
-        }
-        else if (arg == QLatin1String("--microphone-device")) {
-            if (++i >= arguments.size()) return usage(QStringLiteral("--microphone-device requires a value"));
-            options.microphoneDevice = arguments[i];
-        }
-        else if (arg == QLatin1String("--no-open")) options.noOpen = true;
-        else if (arg == QLatin1String("--no-bar")) options.noBar = true;
-        else if (arg == QLatin1String("--fps") || arg == QLatin1String("--dir")) {
-            if (++i >= arguments.size()) return usage(QStringLiteral("%1 requires a value").arg(arg));
-            if (arg == QLatin1String("--fps")) options.fps = arguments[i].toInt();
-            else options.outputDirectory = QDir(arguments[i]).absolutePath();
-        } else {
-            return usage(QStringLiteral("unknown record option %1").arg(arg));
-        }
-    }
-    if (modeCount > 1) return usage(QStringLiteral("choose only one capture mode"));
-    if (arguments.contains(QStringLiteral("--no-audio"))
-        && (arguments.contains(QStringLiteral("--with-desktop-audio"))
-            || arguments.contains(QStringLiteral("--with-microphone-audio"))))
-        return usage(QStringLiteral("--no-audio cannot be combined with audio enable flags"));
-    if (options.fps <= 0 || options.fps > 240) return usage(QStringLiteral("fps must be between 1 and 240"));
-    if (options.webcam && !options.webcamDevice.startsWith(QLatin1String("/dev/video"))
-        && !options.webcamDevice.startsWith(QLatin1String("/dev/v4l/")))
-        return usage(QStringLiteral("webcam device must be a /dev/video device or a /dev/v4l link"));
-    if (options.webcamHeight != 720 && options.webcamHeight != 1080)
-        return usage(QStringLiteral("webcam height must be 720 or 1080"));
-    if (qEnvironmentVariable("OMAREEL_NO_BAR") == QLatin1String("1")) options.noBar = true;
-    QString message;
-    const int result = Recorder::startDetached(options, &message);
-    QTextStream(result == 0 ? stdout : stderr) << message << '\n';
-    return result;
-}
-
 static QScreen *recordBarScreen(const QString &recordedMonitor)
 {
     for (QScreen *screen : QGuiApplication::screens()) {
@@ -504,62 +399,9 @@ int main(int argc, char **argv)
     }
     const QString command = args[1];
     if (layerTest || windowTest) return runCaptureTestClient(app, args, layerTest);
-    if (command == QLatin1String("__record-daemon")) return Recorder::daemonMain(args.mid(2));
-    if (command == QLatin1String("__selfview-ipc")) {
-        return args.size() == 3 && Recorder::sendHostCommand(args[2]) ? 0 : 2;
-    }
-    if (command == QLatin1String("__record-bar-ipc")) {
-        if (args.size() < 3)
-            return usage(QStringLiteral("__record-bar-ipc requires rotate|flip|selfview hide|show|move|drag-sim"));
-        QJsonObject values;
-        if (args.size() == 3 && (args[2] == QLatin1String("rotate")
-                                || args[2] == QLatin1String("flip"))) {
-            const QJsonObject state = Recorder::recordingState();
-            values.insert(QStringLiteral("recording_bar_command"), args[2]);
-            values.insert(QStringLiteral("recording_bar_command_sequence"),
-                          state.value(QStringLiteral("recording_bar_command_sequence"))
-                              .toVariant().toLongLong() + 1);
-        } else if (args.size() == 4 && args[2] == QLatin1String("selfview")
-                   && (args[3] == QLatin1String("hide")
-                                || args[3] == QLatin1String("show"))) {
-            values.insert(QStringLiteral("selfview"), args[3] == QLatin1String("show"));
-        } else if (args.size() == 6 && args[2] == QLatin1String("selfview")
-                   && args[3] == QLatin1String("move")) {
-            bool xOk = false;
-            bool yOk = false;
-            const int x = args[4].toInt(&xOk);
-            const int y = args[5].toInt(&yOk);
-            if (!xOk || !yOk)
-                return usage(QStringLiteral("__record-bar-ipc selfview move requires integer x y"));
-            values.insert(QStringLiteral("selfview_x"), x);
-            values.insert(QStringLiteral("selfview_y"), y);
-        } else if (args.size() == 8 && args[2] == QLatin1String("selfview")
-                   && args[3] == QLatin1String("drag-sim")) {
-            bool ok[4] = {false, false, false, false};
-            int position[4];
-            for (int index = 0; index < 4; ++index)
-                position[index] = args[index + 4].toInt(&ok[index]);
-            if (!ok[0] || !ok[1] || !ok[2] || !ok[3])
-                return usage(QStringLiteral("__record-bar-ipc selfview drag-sim requires integer x0 y0 x1 y1"));
-            const QJsonObject state = Recorder::recordingState();
-            values.insert(QStringLiteral("recording_bar_command"), QStringLiteral("drag-sim"));
-            values.insert(QStringLiteral("recording_bar_command_sequence"),
-                          state.value(QStringLiteral("recording_bar_command_sequence"))
-                              .toVariant().toLongLong() + 1);
-            values.insert(QStringLiteral("drag_x0"), position[0]);
-            values.insert(QStringLiteral("drag_y0"), position[1]);
-            values.insert(QStringLiteral("drag_x1"), position[2]);
-            values.insert(QStringLiteral("drag_y1"), position[3]);
-        } else {
-            return usage(QStringLiteral("__record-bar-ipc requires rotate|flip|selfview hide|show|move|drag-sim"));
-        }
-        QString error;
-        if (!Recorder::updateRecordingState(values, &error)) {
-            QTextStream(stderr) << "omareel: " << error << '\n';
-            return 2;
-        }
-        return 0;
-    }
+    if (command == QLatin1String("__record-daemon")) return omareel::record::daemonMain(args.mid(2));
+    if (command == QLatin1String("__selfview-ipc")) return omareel::record::selfViewIpc(args.mid(2));
+    if (command == QLatin1String("__record-bar-ipc")) return omareel::record::recordBarIpc(args.mid(2));
     if (command == QLatin1String("__record-bar")) {
         Theme theme;
         const int ownerIndex = args.indexOf(QStringLiteral("--owner"));
@@ -742,7 +584,7 @@ int main(int argc, char **argv)
         configureDebugScreenshot(engine, app);
         return app.exec();
     }
-    if (command == QLatin1String("record")) return recordCommand(args.mid(2));
+    if (command == QLatin1String("record")) return omareel::record::recordCommand(args.mid(2));
     if (command == QLatin1String("probe")) {
         if (args.size() != 3) return usage(QStringLiteral("probe requires a bundle"));
         return omareel::cli::probe(QDir(args[2]).absolutePath().toStdString());

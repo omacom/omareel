@@ -6,9 +6,13 @@ rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
-# The recording side's logic without Qt: the recorder's state files and helpers, the region
-# picker, the capture exclusion plugin, the camera and screen capture decisions, and what the
-# launcher and the recording bar compute. The daemon, the Wayland capture and the QObjects call it.
+# The recording side without Qt: the recorder's daemon and command, its state files and helpers,
+# the in-process Wayland screen capture, the input and cursor sampling, the region picker, the
+# capture exclusion plugin, the camera decisions, and what the launcher and the recording bar
+# compute. The QObjects and the C++ that is left call it through omareel_qt.
 [dependencies]
 libc = "0.2"
 omareel_core = { path = "../omareel_core" }
+# The capture's own Wayland connection, with the pure-Rust backend (no libwayland).
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "staging"] }

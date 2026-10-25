@@ -12,7 +12,7 @@ fn main() {
         .qt_module("Gui")
         .qt_module("Multimedia")
         .qt_module("Quick")
-        .files(["src/cli.rs", "src/editor.rs", "src/export.rs", "src/theme.rs"])
+        .files(["src/cli.rs", "src/editor.rs", "src/export.rs", "src/record.rs", "src/theme.rs"])
         .cpp_files([
             CppFile::from(cpp.join("EditorBase.h")).moc_arguments(moc()),
             CppFile::from(cpp.join("EditorBase.cpp")),

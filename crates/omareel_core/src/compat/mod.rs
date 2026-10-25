@@ -5,6 +5,7 @@ pub mod cpp;
 pub mod geometry;
 pub mod qchar;
 pub mod qcolor;
+pub mod qcoreapplication;
 pub mod qdir;
 pub mod qenv;
 pub mod qfile;

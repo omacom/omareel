@@ -6,11 +6,15 @@
 //! the discard order, the daemon's argument lookups); [`files`] the files the daemon writes
 //! (`*.ts` timestamps, `input.jsonl`, the JSON files, the recorder's output tail); [`audio`] the
 //! separate ffmpeg audio capture and its mux; [`self_view`] the monitors and where the self-view
-//! starts; [`state`] the state files the daemon, the bar and the launcher share.
+//! starts; [`state`] the state files the daemon, the bar and the launcher share; [`daemon`] the
+//! recorder daemon (`daemonMain`) and [`start`] how `omareel record` starts it
+//! (`startDetached`).
 
 pub mod audio;
+pub mod daemon;
 pub mod files;
 pub mod self_view;
+pub mod start;
 pub mod state;
 
 use crate::capture::{CaptureMode, CaptureRegion};
@@ -236,4 +240,40 @@ fn clock_us(clock: libc::clockid_t) -> i64 {
     // SAFETY: clock_gettime writes one timespec.
     unsafe { libc::clock_gettime(clock, &mut now) };
     now.tv_sec * 1_000_000 + now.tv_nsec / 1000
+}
+
+/// `qEnvironmentVariable(name)`: the variable as UTF-8 text, empty when unset.
+pub(crate) fn environment_variable(name: &str) -> String {
+    use std::os::unix::ffi::OsStrExt;
+    std::env::var_os(name).map(|value| qstring::from_utf8(value.as_bytes())).unwrap_or_default()
+}
+
+/// The file-static `debugStartStage` of `Recorder.cpp` and `ScreenCapture.cpp`: with
+/// `OMAREEL_DEBUG=1`, a line in `/tmp/omareel.log` saying when a startup stage was reached and
+/// how long after `start_us`, with `detail` after it when there is one.
+pub fn debug_start_stage(stage: &str, start_us: i64, detail: &str) {
+    use std::io::Write;
+    if environment_variable("OMAREEL_DEBUG") != "1" {
+        return;
+    }
+    let Ok(mut file) = std::fs::OpenOptions::new().append(true).create(true).open("/tmp/omareel.log") else {
+        return;
+    };
+    let now = monotonic_us();
+    let mut line = format!(
+        "OMAREEL_START stage={stage} monotonic_us={now} elapsed_ms={}",
+        qnumber::number_f64((now - start_us) as f64 / 1000.0, 'f', 3)
+    );
+    if !detail.is_empty() {
+        line.push(' ');
+        line.push_str(detail);
+    }
+    line.push('\n');
+    let _ = file.write_all(line.as_bytes());
+}
+
+/// `QTextStream(stderr) << text`: the whole text in one write to standard error.
+pub(crate) fn write_stderr(text: &str) {
+    use std::io::Write;
+    let _ = std::io::stderr().lock().write_all(text.as_bytes());
 }

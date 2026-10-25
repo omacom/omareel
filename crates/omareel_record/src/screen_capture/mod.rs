@@ -3,17 +3,21 @@
 //! trim and the encoder arguments `ScreenCapture::start` decides on, the encoder probe and its
 //! cache ([`probe`]), and the writer thread's loop over an abstract encoder input ([`writer`]).
 //!
-//! The Wayland session (`ext-image-copy-capture-v1`), the shared-memory slots it captures into
-//! and the encoder process stay with the caller: it acquires a slot from the ring, lets the
-//! compositor fill it, and queues it for the writer with its presentation time.
+//! [`session`] is the capture itself: the Wayland session (`ext-image-copy-capture-v1`) on a
+//! connection of its own, the shared-memory slots it captures into, the encoder process
+//! ([`encoder`]) and the writer thread. It acquires a slot from the ring, lets the compositor
+//! fill it, and queues it for the writer with its presentation time.
 
+pub mod encoder;
 pub mod probe;
+pub mod session;
 pub mod writer;
 
 pub use probe::{
     EncoderProbeResults, cached_preferred_encoder_available, encoder_probe_cache_path, encoder_probe_key,
     encoder_probe_results,
 };
+pub use session::{ScreenCapture, ScreenCaptureConfig, is_supported};
 pub use writer::{EncoderSink, FdSink, FrameQueue, RawSlotMemory, SlotMemory, WriterConfig, writer_loop};
 
 /// `QSize`, as far as the capture uses it.

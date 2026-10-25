@@ -294,10 +294,10 @@ CMakeLists.txt
 src/main.cpp                 subcommand dispatch
 src/core/   OmarchyPaths.{h,cpp} Omarchy state, wallpapers, recordings directory (recording side)
             RecordingPreferences.{h,cpp} the launcher's settings.json
-src/record/ Recorder.{h,cpp} gsr process, ts file, bundle finalize, state file
-            CursorSampler.{h,cpp} Hyprland IPC poller thread
-            EvdevListener.{h,cpp} libevdev thread
-            RegionPicker.{h,cpp} slurp / omarchy-capture-region wrapper, monitor math
+src/record/ Recorder.{h,cpp} the state files for the C++ UI, over the Rust recorder
+            (crates/omareel_record: daemon, gsr process, Wayland capture, ts files, bundle
+            finalize, state files, Hyprland IPC cursor poller, libevdev thread, slurp /
+            omarchy-capture-region wrapper and monitor math)
 src/render/ FrameSource.{h,cpp} QQuickItem texture node
 src/plumbing/ PlaybackDriver.{h,cpp} the editor's three QMediaPlayers
             ExportRenderer.{h,cpp} offscreen Composition.qml rendering for export

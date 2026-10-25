@@ -1,8 +1,10 @@
-//! Bridges omareel_core to Qt and C++. Nothing here may panic across the FFI boundary.
+//! Bridges omareel_core and omareel_record to Qt and C++. Nothing here may panic across the FFI
+//! boundary.
 
 pub mod cli;
 pub mod editor;
 pub mod export;
+pub mod record;
 pub mod theme;
 
 // cxx-qt-build registers cxx-qt-lib's initializers with the binary, so the crate must be
