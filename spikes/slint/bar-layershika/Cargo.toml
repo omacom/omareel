@@ -1,0 +1,13 @@
+[package]
+name = "omareel-slint-bar-layershika"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "The recording bar as a wlr-layer-shell surface through layer-shika (a community Slint layer-shell crate)"
+
+# Its own workspace, so that layer-shika's slint-interpreter and OpenGL femtovg stay out of the
+# main spike's build.
+[workspace]
+
+[dependencies]
+layer-shika = "=0.3.1"

@@ -1,0 +1,484 @@
+// A port of src/ui/qml/Composition.qml and the pieces it uses (Background, RoundedFrame,
+// CursorOverlay, CameraOverlay with BlurredBackdrop, KeystrokeOverlay), with the same formulas.
+// The state comes from the `Comp` global, which the Rust side fills from omareel_core's
+// per-frame composition (the editor's preview variant or the exporter's), as QML reads `comp`.
+//
+// The composition draws at whatever size it is given (the preview pane's or the export's), so
+// everything is relative to its own width and height, as in QML.
+
+export enum CameraShape { round, square, rectangle }
+export enum FullFrame { fill, square }
+export enum Corner { top-left, top-right, bottom-left, bottom-right }
+export enum KeysPosition { top-left, top-center, top-right, bottom-left, bottom-center, bottom-right }
+export enum CursorStyle { light-arrow, dark-arrow, hand, dot }
+
+export struct ShadowSettings { enabled: bool, intensity: float, blur: float, distance: float, angle: float }
+export struct BorderSettings { enabled: bool, width: float, color: color, alpha: float }
+export struct FrameSettings { padding: float, radius: float, shadow: ShadowSettings, border: BorderSettings }
+export struct CameraSettings {
+    shape: CameraShape,
+    full-frame: FullFrame,
+    position: Corner,
+    size: float,
+    radius: float,
+    flip-horizontal: bool,
+    rotation: int,
+    shadow: ShadowSettings,
+    border: BorderSettings,
+    scale-during-zoom: float,
+    offset-x: float,
+    offset-y: float,
+}
+export struct CursorSettings { visible: bool, size: float, style: CursorStyle, ring-color: color }
+export struct KeystrokeSettings { enabled: bool, position: KeysPosition, size: float }
+export struct CropRect { x: float, y: float, w: float, h: float }
+
+export struct ZoomState { scale: float, cx: float, cy: float, velocity: float }
+export struct LayoutState { camera-full: float, bubble: float }
+export struct CursorState { x: float, y: float, visible: bool, scale: float, opacity: float, rotation: float }
+export struct RippleState { x: float, y: float, progress: float }
+export struct PillState { keys: [string], opacity: float }
+
+// QML's `comp`: the project's settings and the frame's state.
+export global Comp {
+    // Settings (the project map).
+    in property <bool> no-background;
+    in property <brush> background-fill;
+    in property <image> background-image;
+    in property <bool> has-background-image;
+    in property <FrameSettings> frame;
+    in property <CropRect> crop: { x: 0, y: 0, w: 1, h: 1 };
+    in property <CameraSettings> camera;
+    in property <CursorSettings> cursor-settings;
+    in property <KeystrokeSettings> keystrokes;
+    in property <color> theme-background: #1a1b26;
+    in property <color> theme-foreground: #a9b1d6;
+    // fontconfig's monospace (Slint's "monospace" does not resolve to it).
+    in property <string> mono-family: "monospace";
+
+    // The recording.
+    in property <int> source-width: 1920;
+    in property <int> source-height: 1080;
+    in property <float> capture-scale: 1;
+    in property <bool> camera-available;
+    in property <int> camera-source-width: 640;
+    in property <int> camera-source-height: 480;
+
+    // This frame.
+    in property <ZoomState> zoom: { scale: 1, cx: 0.5, cy: 0.5, velocity: 0 };
+    in property <LayoutState> layout: { camera-full: 0, bubble: 1 };
+    in property <CursorState> cursor: { x: 0.5, y: 0.5, visible: true, scale: 1, opacity: 1, rotation: 0 };
+    in property <[RippleState]> ripples;
+    in property <[PillState]> pills;
+    in property <bool> camera-visible;
+
+    // The pictures: the screen and camera frames, and the camera's tiny blurred copy.
+    in property <image> screen;
+    in property <image> camera-frame;
+    in property <image> camera-blurred;
+}
+
+// Background.qml: a colour or gradient, or the wallpaper covering the canvas.
+component Background inherits Rectangle {
+    background: Comp.background-fill;
+    Image {
+        width: parent.width;
+        height: parent.height;
+        visible: Comp.has-background-image;
+        source: Comp.background-image;
+        image-fit: cover;
+    }
+}
+
+// RoundedFrame.qml: the screen with rounded corners, an optional border, and a soft shadow.
+component RoundedFrame {
+    in property <float> ref: 1;
+    in property <bool> unframed;
+    property <FrameSettings> settings: Comp.frame;
+    property <length> border-width: !unframed && settings.border.enabled ? settings.border.width * ref * 1px : 0;
+    property <length> outer-radius: unframed ? 0 : settings.radius * ref * 1px + border-width;
+    property <angle> shadow-angle: settings.shadow.angle * 1deg;
+
+    // The shape that casts the shadow (QML: shadowShape under a MultiEffect).
+    Rectangle {
+        x: -root.border-width;
+        y: -root.border-width;
+        width: parent.width + 2 * root.border-width;
+        height: parent.height + 2 * root.border-width;
+        border-radius: root.outer-radius;
+        background: black;
+        drop-shadow-color: root.settings.shadow.enabled && !root.unframed ? rgba(0, 0, 0, root.settings.shadow.intensity) : transparent;
+        // MultiEffect: shadowBlur = min(1, blur / 64) of blurMax 32.
+        drop-shadow-blur: min(1, root.settings.shadow.blur / 64) * 32px * root.ref;
+        drop-shadow-offset-x: cos(root.shadow-angle) * root.settings.shadow.distance * root.ref * 1px;
+        drop-shadow-offset-y: sin(root.shadow-angle) * root.settings.shadow.distance * root.ref * 1px;
+    }
+    // The border, under the video (z: 1 in QML).
+    Rectangle {
+        x: -root.border-width;
+        y: -root.border-width;
+        width: parent.width + 2 * root.border-width;
+        height: parent.height + 2 * root.border-width;
+        visible: !root.unframed;
+        border-radius: root.outer-radius;
+        background: root.settings.border.enabled
+            ? root.settings.border.color.with-alpha(root.settings.border.alpha) : transparent;
+    }
+    // The video, masked to the inner radius (z: 2 in QML).
+    Rectangle {
+        width: parent.width;
+        height: parent.height;
+        border-radius: root.unframed ? 0 : root.settings.radius * root.ref * 1px;
+        clip: true;
+        Image {
+            x: -Comp.crop.x * self.width;
+            y: -Comp.crop.y * self.height;
+            width: parent.width / max(0.0001, Comp.crop.w);
+            height: parent.height / max(0.0001, Comp.crop.h);
+            source: Comp.screen;
+            image-fit: fill;
+        }
+    }
+}
+
+// CursorOverlay.qml: click ripples and the pointer.
+component CursorOverlay {
+    in property <float> ref: 1;
+    property <CursorSettings> settings: Comp.cursor-settings;
+    property <CursorState> cursor: Comp.cursor;
+    property <bool> dot-style: settings.style == CursorStyle.dot;
+    property <bool> hand-style: settings.style == CursorStyle.hand;
+    property <bool> cursor-inside: cursor.x >= 0 && cursor.x <= 1 && cursor.y >= 0 && cursor.y <= 1;
+
+    for ripple in Comp.ripples: Rectangle {
+        width: 32px * root.settings.size * root.ref * (0.2 + 3.3 * min(1, ripple.progress / (0.15 / 0.45)));
+        height: self.width;
+        x: ripple.x * root.width - self.width / 2;
+        y: ripple.y * root.height - self.height / 2;
+        visible: ripple.x >= 0 && ripple.x <= 1 && ripple.y >= 0 && ripple.y <= 1;
+        opacity: 0.6 * (ripple.progress < 0.05 ? ripple.progress / 0.05
+            : ripple.progress < 0.8 ? 1 - (ripple.progress - 0.05) / 0.75 : 0);
+        border-radius: self.width / 2;
+        border-width: 2px * root.ref;
+        border-color: root.settings.ring-color;
+    }
+    Image {
+        source: root.settings.style == CursorStyle.dark-arrow ? @image-url("../../../assets/cursors/arrow-dark.svg")
+            : root.hand-style ? @image-url("../../../assets/cursors/pointer.svg")
+            : @image-url("../../../assets/cursors/arrow.svg");
+        width: 24px * root.settings.size * root.ref;
+        height: self.width;
+        x: root.cursor.x * root.width - (root.hand-style ? 8 / 24 : 3 / 24) * self.width;
+        y: root.cursor.y * root.height - (root.hand-style ? 1.5 / 24 : 2 / 24) * self.height;
+        visible: root.settings.visible && !root.dot-style && root.cursor-inside;
+        opacity: root.cursor.opacity;
+        transform-origin: { x: 0, y: 0 };
+        transform-scale: root.cursor.scale;
+        transform-rotation: root.cursor.rotation * 1deg;
+    }
+    Rectangle {
+        width: 28px * root.settings.size * root.ref;
+        height: self.width;
+        border-radius: self.width / 2;
+        x: root.cursor.x * root.width - self.width / 2;
+        y: root.cursor.y * root.height - self.height / 2;
+        visible: root.settings.visible && root.dot-style && root.cursor-inside;
+        background: root.settings.ring-color.with-alpha(0.68);
+        border-width: 1.5px * root.ref;
+        border-color: white.with-alpha(0.45);
+        opacity: root.cursor.opacity;
+        transform-scale: root.cursor.scale;
+    }
+}
+
+// BlurredBackdrop.qml: a heavily blurred, desaturated copy of the camera covering the canvas.
+// Qt Quick captures the camera into a 24x24 texture and blurs it with MultiEffect; Slint has no
+// blur, so the Rust side makes the same tiny blurred picture (`Comp.camera-blurred`) on the CPU
+// and this only scales it up.
+//
+// `fade` is QML's `opacity` here. QML multiplies an item's opacity into each child, which is
+// then blended on its own; Slint's `opacity` draws the element and its children into a layer and
+// blends that once, so the dark fill would no longer show through the half-faded picture. Each
+// child takes the fade itself to look as it does in Qt.
+component BlurredBackdrop {
+    in property <float> source-aspect: 1;
+    in property <float> fade: 1;
+    Rectangle {
+        clip: true;
+        Rectangle {
+            background: #0b0b0e;
+            opacity: root.fade;
+        }
+        Image {
+            width: max(parent.width, parent.height * root.source-aspect) * 1.2;
+            height: self.width / max(0.01, root.source-aspect);
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            source: Comp.camera-blurred;
+            image-fit: fill;
+            opacity: root.fade;
+        }
+        Rectangle {
+            background: black;
+            opacity: 0.22 * root.fade;
+        }
+    }
+}
+
+// CameraOverlay.qml: the webcam bubble, morphing into the full-frame camera.
+component CameraOverlay {
+    in property <length> output-width;
+    in property <length> output-height;
+    in property <float> zoom-scale: 1;
+    // 0 shows the bubble, 1 the full-frame camera; values between morph one into the other.
+    in property <float> full-progress: 0;
+    // How visible the bubble is while the camera is not full frame.
+    in property <float> bubble-opacity: 1;
+    property <CameraSettings> settings: Comp.camera;
+    property <float> ref: output-height / 1080px;
+    property <bool> square-mode: settings.full-frame == FullFrame.square;
+    property <length> source-border-width: settings.border.enabled ? settings.border.width * ref * 1px : 0;
+    property <length> border-width: source-border-width * (1 - full-progress);
+    property <bool> square-crop: settings.shape != CameraShape.rectangle;
+    property <bool> quarter-turn: settings.rotation == 90 || settings.rotation == 270;
+    property <float> source-aspect: Comp.camera-source-width / max(1, Comp.camera-source-height);
+    property <float> aspect: square-crop ? 1 : (quarter-turn ? 1 / source-aspect : source-aspect);
+    property <float> zoom-progress: max(0, min(1, (zoom-scale - 1.05) / 0.1));
+    property <float> zoom-multiplier: 1 - (1 - settings.scale-during-zoom) * zoom-progress;
+    property <length> bubble-height: output-height * settings.size * zoom-multiplier;
+    property <length> bubble-width: bubble-height * aspect;
+    // The gap to the corner is a share of the shorter side, and ends at the outside of the border.
+    property <length> margin-x: min(output-width, output-height) * settings.offset-x + source-border-width;
+    property <length> margin-y: min(output-width, output-height) * settings.offset-y + source-border-width;
+    property <bool> left: settings.position == Corner.top-left || settings.position == Corner.bottom-left;
+    property <bool> top: settings.position == Corner.top-left || settings.position == Corner.top-right;
+    property <length> bubble-x: left ? margin-x : output-width - margin-x - bubble-width;
+    property <length> bubble-y: top ? margin-y : output-height - margin-y - bubble-height;
+    property <length> bubble-radius: settings.shape == CameraShape.round ? min(bubble-width, bubble-height) / 2
+        : settings.radius * ref * 1px;
+    // Fill covers the whole canvas; square keeps the largest centred square over a blurred copy.
+    property <length> full-side: min(output-width, output-height);
+    property <length> full-width: square-mode ? full-side : output-width;
+    property <length> full-height: square-mode ? full-side : output-height;
+    // The corner radius shrinks while the camera grows.
+    property <length> corner-radius: bubble-radius * (1 - full-progress);
+    property <length> outer-radius: corner-radius > 0 ? corner-radius + border-width : 0;
+    property <angle> shadow-angle: settings.shadow.angle * 1deg;
+    property <length> shadow-x: cos(shadow-angle) * settings.shadow.distance * ref * 1px;
+    property <length> shadow-y: sin(shadow-angle) * settings.shadow.distance * ref * 1px;
+    // The sum of full frame and bubble stays at 1 while one turns into the other.
+    property <float> presence: min(1, full-progress + bubble-opacity);
+
+    x: bubble-x + ((output-width - full-width) / 2 - bubble-x) * full-progress;
+    y: bubble-y + ((output-height - full-height) / 2 - bubble-y) * full-progress;
+    width: bubble-width + (full-width - bubble-width) * full-progress;
+    height: bubble-height + (full-height - bubble-height) * full-progress;
+    opacity: presence;
+    transform-origin: { x: self.width / 2, y: self.height / 2 };
+    transform-scale: 0.85 + 0.15 * presence;
+
+    // Spans the canvas, not the camera, so it is placed back at the canvas origin (z: -1).
+    BlurredBackdrop {
+        x: -root.x;
+        y: -root.y;
+        width: root.output-width;
+        height: root.output-height;
+        visible: root.square-mode && root.full-progress > 0;
+        // Fades faster than the camera shrinks, so a morph does not wash the screen out.
+        fade: root.full-progress * root.full-progress;
+        source-aspect: root.width / max(1px, root.height);
+    }
+    // The shape casting the 45° shadow.
+    Rectangle {
+        x: -root.border-width;
+        y: -root.border-width;
+        width: parent.width + 2 * root.border-width;
+        height: parent.height + 2 * root.border-width;
+        border-radius: root.outer-radius;
+        background: black;
+        drop-shadow-color: root.settings.shadow.enabled
+            ? rgba(0, 0, 0, root.settings.shadow.intensity * (1 - root.full-progress)) : transparent;
+        drop-shadow-blur: min(1, root.settings.shadow.blur / 64) * 32px * root.ref;
+        drop-shadow-offset-x: root.shadow-x;
+        drop-shadow-offset-y: root.shadow-y;
+    }
+    // The border (z: 1).
+    Rectangle {
+        x: -root.border-width;
+        y: -root.border-width;
+        width: parent.width + 2 * root.border-width;
+        height: parent.height + 2 * root.border-width;
+        border-radius: root.outer-radius;
+        background: root.settings.border.enabled
+            ? root.settings.border.color.with-alpha(root.settings.border.alpha * (1 - root.full-progress)) : transparent;
+    }
+    // The camera, cover-cropped, turned and mirrored, masked to the shape (z: 2).
+    Rectangle {
+        width: parent.width;
+        height: parent.height;
+        border-radius: root.outer-radius;
+        clip: true;
+        Image {
+            width: root.quarter-turn ? parent.height : parent.width;
+            height: root.quarter-turn ? parent.width : parent.height;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            source: Comp.camera-frame;
+            image-fit: cover;
+            transform-origin: { x: self.width / 2, y: self.height / 2 };
+            transform-rotation: root.settings.rotation * 1deg;
+            transform-scale-x: root.settings.flip-horizontal ? -1 : 1;
+        }
+    }
+}
+
+// One key of a pill.
+component KeyCap inherits Rectangle {
+    in property <string> text;
+    in property <float> unit: 1;
+    in property <color> text-color;
+    height: 30px * unit;
+    border-radius: 6px * unit;
+    background: text-color.with-alpha(0.10);
+    border-width: 1px * unit;
+    border-color: text-color.with-alpha(0.22);
+    HorizontalLayout {
+        padding-left: 7px * root.unit;
+        padding-right: 7px * root.unit;
+        Text {
+            text: root.text;
+            color: root.text-color;
+            font-family: Comp.mono-family;
+            font-size: 14px * root.unit;
+            font-weight: 600;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+        }
+    }
+}
+
+// KeystrokeOverlay.qml: a stack of pills, each a row of key caps joined by "+".
+component KeystrokeOverlay {
+    in property <float> ref: 1;
+    property <KeystrokeSettings> settings: Comp.keystrokes;
+    property <float> unit: settings.size * ref;
+    property <color> pill-color: Comp.theme-background.with-alpha(0.85);
+    property <color> text-color: Comp.theme-foreground;
+    property <length> margin: 40px * ref;
+    property <bool> at-left: settings.position == KeysPosition.top-left || settings.position == KeysPosition.bottom-left;
+    property <bool> at-right: settings.position == KeysPosition.top-right || settings.position == KeysPosition.bottom-right;
+    property <bool> at-top: settings.position == KeysPosition.top-left || settings.position == KeysPosition.top-center
+        || settings.position == KeysPosition.top-right;
+
+    stack := VerticalLayout {
+        spacing: 8px * root.ref;
+        width: self.preferred-width;
+        height: self.preferred-height;
+        x: root.at-left ? root.margin : root.at-right ? root.width - self.width - root.margin : (root.width - self.width) / 2;
+        y: root.at-top ? root.margin : root.height - self.height - root.margin;
+        for pill in Comp.pills: Rectangle {
+            height: 52px * root.unit;
+            border-radius: 10px * root.unit;
+            background: root.pill-color;
+            opacity: pill.opacity;
+            border-width: 1px * root.ref;
+            border-color: root.text-color.with-alpha(0.12);
+            HorizontalLayout {
+                padding-left: 12px * root.unit;
+                padding-right: 12px * root.unit;
+                spacing: 6px * root.unit;
+                alignment: center;
+                for key[index] in pill.keys: HorizontalLayout {
+                    spacing: 6px * root.unit;
+                    alignment: center;
+                    VerticalLayout {
+                        alignment: center;
+                        KeyCap {
+                            text: key;
+                            unit: root.unit;
+                            text-color: root.text-color;
+                        }
+                    }
+                    if index < pill.keys.length - 1: Text {
+                        text: "+";
+                        color: root.text-color.with-alpha(0.65);
+                        font-family: Comp.mono-family;
+                        font-size: 14px * root.unit;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Composition.qml.
+export component Composition inherits Rectangle {
+    property <float> ref: self.height / 1080px;
+    property <bool> no-background: Comp.no-background;
+    property <length> pad: no-background ? 0 : min(self.width, self.height) * Comp.frame.padding;
+    property <length> available-width: self.width - 2 * pad;
+    property <length> available-height: self.height - 2 * pad;
+    property <length> frame-border: !no-background && Comp.frame.border.enabled ? Comp.frame.border.width * ref * 1px : 0;
+    property <float> source-aspect: (Comp.source-width * Comp.crop.w) / max(1, Comp.source-height * Comp.crop.h);
+    property <length> video-width: no-background ? self.width
+        : max(1px, min(available-width - 2 * frame-border, (available-height - 2 * frame-border) * source-aspect));
+    property <length> video-height: no-background ? self.height : video-width / source-aspect;
+    // The cursor keeps the size it had on screen.
+    property <float> cursor-ref: (Comp.capture-scale > 0 ? Comp.capture-scale : 1)
+        * video-width / max(1px, Comp.source-width * Comp.crop.w * 1px);
+    property <bool> camera-shown: Comp.camera-available && Comp.camera-visible;
+    // How far the current clip's layout has grown the camera to full frame.
+    property <float> camera-full: camera-shown ? Comp.layout.camera-full : 0;
+    // Once the camera covers the canvas, nothing beneath needs drawing.
+    property <bool> screen-covered: camera-full >= 1;
+    property <bool> background-covered: camera-full >= 1;
+    clip: true;
+    background: black;
+
+    Background {
+        width: parent.width;
+        height: parent.height;
+        visible: !root.background-covered && !root.no-background;
+    }
+    stage := Rectangle {
+        width: parent.width;
+        height: parent.height;
+        visible: !root.screen-covered;
+        transform-origin: {
+            x: frame.x + Comp.zoom.cx * frame.width,
+            y: frame.y + Comp.zoom.cy * frame.height,
+        };
+        transform-scale: Comp.zoom.scale;
+        frame := RoundedFrame {
+            x: (root.width - self.width) / 2;
+            y: (root.height - self.height) / 2;
+            width: root.video-width;
+            height: root.video-height;
+            ref: root.ref;
+            unframed: root.no-background;
+        }
+        CursorOverlay {
+            x: frame.x;
+            y: frame.y;
+            width: frame.width;
+            height: frame.height;
+            ref: root.cursor-ref;
+        }
+    }
+    CameraOverlay {
+        visible: root.camera-shown && (root.camera-full > 0 || Comp.layout.bubble > 0);
+        output-width: root.width;
+        output-height: root.height;
+        zoom-scale: Comp.zoom.scale;
+        full-progress: root.camera-full;
+        bubble-opacity: Comp.layout.bubble;
+    }
+    KeystrokeOverlay {
+        width: parent.width;
+        height: parent.height;
+        visible: Comp.keystrokes.enabled && Comp.pills.length > 0 && !root.screen-covered;
+        opacity: 1 - root.camera-full;
+        ref: root.ref;
+    }
+}

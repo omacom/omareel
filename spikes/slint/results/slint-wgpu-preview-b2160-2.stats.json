@@ -1,0 +1,1 @@
+{"seconds": 9.99, "frames": 600, "fps": 59.94, "frame_ms_median": 16.87, "frame_ms_p95": 20.19, "frame_ms_max": 26.49, "missed_vsyncs": 2, "prepare_ms_mean": 0.138, "prepare_ms_max": 6.266, "render_ms_mean": 8.252, "screen_frames_shown": 592, "screen_frames_skipped": 9, "starved_frames": 0, "recording_frames_in_span": 600}
