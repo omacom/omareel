@@ -8,7 +8,6 @@
 #include "render/Exporter.h"
 #include "render/FrameSource.h"
 
-#include <QAudioOutput>
 #include <QClipboard>
 #include <QCoreApplication>
 #include <QCryptographicHash>
@@ -26,7 +25,6 @@
 #include <QStandardPaths>
 #include <QTextStream>
 #include <QUrl>
-#include <QVideoSink>
 #include <QUuid>
 #include <QtConcurrent>
 #include <algorithm>
@@ -297,6 +295,16 @@ Editor::Editor(const QString &bundlePath, QObject *parent)
         emit videoThumbnailRevisionChanged();
         startNextVideoThumbnail();
     });
+    // The camera follows the transport; the screen and media players play while their clip is
+    // the active one.
+    m_playback.setPlayingQuery([this](PlaybackDriver::Player player) {
+        return player == PlaybackDriver::Camera ? playing()
+                                                : playing() && playerFor(m_activeClip) == player;
+    });
+    m_playback.setScreenRestQuery([this] { return qRound64(sourcePosition() * 1000.0); });
+    connect(&m_playback, &PlaybackDriver::frameShown, this, &Editor::handleFrameShown);
+    connect(&m_playback, &PlaybackDriver::mediaFrameReadyChanged, this, &Editor::updatePreview);
+    connect(&m_playback, &PlaybackDriver::warmingChanged, this, &Editor::updateInsertAudio);
 
     QFile gradientsFile(QStringLiteral(":/omareel/assets/gradients.json"));
     if (gradientsFile.open(QIODevice::ReadOnly))
@@ -304,40 +312,28 @@ Editor::Editor(const QString &bundlePath, QObject *parent)
 
     if (!loadBundle()) return;
     thumbnailSource(QStringLiteral("screen"));
-    m_audioOutput = std::make_unique<QAudioOutput>();
-    m_player.setAudioOutput(m_audioOutput.get());
-    connect(&m_player, &QMediaPlayer::mediaStatusChanged, this,
-            [this](QMediaPlayer::MediaStatus status) {
-        if (status == QMediaPlayer::LoadedMedia || status == QMediaPlayer::BufferedMedia
-            || status == QMediaPlayer::EndOfMedia || status == QMediaPlayer::InvalidMedia)
-            QTimer::singleShot(0, this, &Editor::finishLoading);
-        // The video can end a little before the clip's out point; the clip is over either way.
-        if (status == QMediaPlayer::EndOfMedia && playing() && !clipIsMedia(m_activeClip))
-            QTimer::singleShot(0, this, &Editor::advanceClip);
-    });
-    m_player.setSource(QUrl::fromLocalFile(m_videoPath));
-    m_mediaAudioOutput = std::make_unique<QAudioOutput>();
-    m_mediaPlayer.setAudioOutput(m_mediaAudioOutput.get());
-    connect(&m_mediaPlayer, &QMediaPlayer::mediaStatusChanged, this,
-            [this](QMediaPlayer::MediaStatus status) {
-        if ((status == QMediaPlayer::LoadedMedia || status == QMediaPlayer::BufferedMedia)
-            && m_pendingMediaSeekMs >= 0) {
-            const qint64 target = std::exchange(m_pendingMediaSeekMs, -1);
-            seekPlayer(m_mediaPlayer, target, m_pendingMediaWillPlay);
-            if (playing() && clipIsMedia(m_activeClip)) m_mediaPlayer.play();
+    connect(&m_playback, &PlaybackDriver::mediaStatusChanged, this,
+            [this](PlaybackDriver::Player player, QMediaPlayer::MediaStatus status) {
+        if (player == PlaybackDriver::Screen) {
+            if (status == QMediaPlayer::LoadedMedia || status == QMediaPlayer::BufferedMedia
+                || status == QMediaPlayer::EndOfMedia || status == QMediaPlayer::InvalidMedia)
+                QTimer::singleShot(0, this, &Editor::finishLoading);
+            // The video can end a little before the clip's out point; the clip is over either way.
+            if (status == QMediaPlayer::EndOfMedia && playing() && !clipIsMedia(m_activeClip))
+                QTimer::singleShot(0, this, &Editor::advanceClip);
+        } else if (player == PlaybackDriver::Media) {
+            if (status == QMediaPlayer::EndOfMedia && playing() && clipIsMedia(m_activeClip))
+                QTimer::singleShot(0, this, &Editor::advanceClip);
         }
-        if (status == QMediaPlayer::EndOfMedia && playing() && clipIsMedia(m_activeClip))
-            QTimer::singleShot(0, this, &Editor::advanceClip);
     });
+    m_playback.loadScreen(m_videoPath);
     connect(&m_importWatcher, &QFutureWatcher<ImportedInsert>::finished, this, &Editor::finishImport);
     m_previewTimer.setTimerType(Qt::PreciseTimer);
     m_previewTimer.setInterval(16);
     connect(&m_previewTimer, &QTimer::timeout, this, [this] {
         // While an inserted clip's file is still opening, its player has no position yet.
-        const bool insert = clipIsMedia(m_activeClip);
-        if (!insert || (m_pendingMediaSeekMs < 0
-                        && m_mediaPlayer.mediaStatus() >= QMediaPlayer::LoadedMedia))
-            handlePlayerPosition(playerFor(m_activeClip).position());
+        const PlaybackDriver::Player player = playerFor(m_activeClip);
+        if (m_playback.positionReady(player)) handlePlayerPosition(m_playback.position(player));
         updatePlayheadPosition();
     });
     m_previewStatsEnabled = qEnvironmentVariableIntValue("OMAREEL_PREVIEW_STATS") == 1;
@@ -345,11 +341,14 @@ Editor::Editor(const QString &bundlePath, QObject *parent)
     m_previewStatsTimer.setInterval(1000);
     connect(&m_previewStatsTimer, &QTimer::timeout, this, &Editor::handlePreviewStats);
     if (m_previewStatsEnabled)
-        connect(&m_player, &QMediaPlayer::playbackStateChanged, this, [this] {
-            QTextStream(stderr) << "preview state=" << int(m_player.playbackState()) << '\n';
+        connect(&m_playback, &PlaybackDriver::playbackStateChanged, this,
+                [this](PlaybackDriver::Player player) {
+            if (player != PlaybackDriver::Screen) return;
+            QTextStream(stderr) << "preview state="
+                                << int(m_playback.playbackState(PlaybackDriver::Screen)) << '\n';
         });
     if (m_hasCamera) {
-        m_cameraPlayer.setSource(QUrl::fromLocalFile(m_cameraVideoPath));
+        m_playback.loadCamera(m_cameraVideoPath);
     }
     m_valid = true;
     connect(&m_screenFrameTimesWatcher, &QFutureWatcher<QList<double>>::finished, this,
@@ -556,7 +555,7 @@ QVariantMap Editor::previewMedia() const
     const Clip &clip = m_project.clips[index];
     const VideoInfo info = m_inserts.value(clip.media);
     return {{QStringLiteral("active"), true},
-            {QStringLiteral("ready"), m_mediaFrameReady && m_mediaPlayerSource == clip.media},
+            {QStringLiteral("ready"), m_playback.mediaFrameReady() && m_mediaPlayerSource == clip.media},
             {QStringLiteral("fit"), clip.fit}, {QStringLiteral("width"), std::max(1, info.width)},
             {QStringLiteral("height"), std::max(1, info.height)},
             {QStringLiteral("missing"), !info.isValid()}};
@@ -603,83 +602,50 @@ bool Editor::cameraVisible() const
 
 void Editor::attachVideoOutput(QObject *output)
 {
-    m_videoSink = output ? output->property("videoSink").value<QVideoSink *>() : nullptr;
-    m_player.setVideoSink(m_videoSink);
-    if (m_videoSink) connect(m_videoSink, &QVideoSink::videoFrameChanged, this,
-        [this](const QVideoFrame &frame) {
-            QElapsedTimer cost;
-            cost.start();
-            ++m_previewStatsFrames;
-            if (playing() && !m_warmingPreview && !m_scrubbing && !m_internalSeek
-                && frame.isValid() && frame.startTime() >= 0
-                && m_activeClip >= 0 && m_activeClip < m_project.clips.size()
-                && !clipIsMedia(m_activeClip)) {
-                const Clip &clip = m_project.clips[m_activeClip];
-                const double source = frame.startTime() / 1000000.0;
-                const double output = sourceToOutput(source, m_activeClip);
-                // A seek can deliver queued frames from the previous location. Only a frame
-                // near the current clip and transport position may anchor the display clock.
-                if (source >= clip.in - 0.01 && source < clip.out
-                    && output >= m_outputPosition - 0.1
-                    && output <= m_outputPosition + 0.5) {
-                    m_playheadClockPosition = std::max(m_playheadPosition, output);
-                    m_playheadClock.restart();
-                }
-            }
-            if (m_warmingPreview) {
-                QTimer::singleShot(0, this, [this] {
-                    // play() may have taken over since this frame arrived.
-                    if (!m_warmingPreview) return;
-                    m_warmingPreview = false;
-                    m_player.pause();
-                    m_cameraPlayer.pause();
-                    // The decoder may have advanced a frame or two during warm-up; re-seek so
-                    // the paused frame is the one the playhead points at.
-                    m_internalSeek = true;
-                    m_player.setPosition(qRound64(sourcePosition() * 1000.0));
-                    m_internalSeek = false;
-                });
-            }
-            m_previewStatsCostNs += cost.nsecsElapsed();
-        });
-    if (m_player.mediaStatus() != QMediaPlayer::InvalidMedia) {
-        m_warmingPreview = true;
-        m_player.play();
-    }
+    m_playback.attachVideoOutput(PlaybackDriver::Screen, output);
+    m_playback.warmUp(PlaybackDriver::Screen);
 }
 
 void Editor::attachCameraVideoOutput(QObject *output)
 {
-    m_cameraVideoSink = output ? output->property("videoSink").value<QVideoSink *>() : nullptr;
-    m_cameraPlayer.setVideoSink(m_cameraVideoSink);
-    if (m_cameraVideoSink) connect(m_cameraVideoSink, &QVideoSink::videoFrameChanged, this,
-        [this](const QVideoFrame &) {
-            if (!m_warmingCameraPreview) return;
-            m_warmingCameraPreview = false;
-            if (!playing()) m_cameraPlayer.pause();
-        });
+    m_playback.attachVideoOutput(PlaybackDriver::Camera, output);
     syncCamera(sourcePosition(), true);
-    if (m_hasCamera && m_cameraPlayer.mediaStatus() != QMediaPlayer::InvalidMedia) {
-        m_warmingCameraPreview = true;
-        m_cameraPlayer.play();
-    }
+    if (m_hasCamera) m_playback.warmUp(PlaybackDriver::Camera);
 }
 
 void Editor::attachMediaVideoOutput(QObject *output)
 {
-    m_mediaVideoSink = output ? output->property("videoSink").value<QVideoSink *>() : nullptr;
-    m_mediaPlayer.setVideoSink(m_mediaVideoSink);
-    if (!m_mediaVideoSink) return;
-    connect(m_mediaVideoSink, &QVideoSink::videoFrameChanged, this, [this](const QVideoFrame &frame) {
-        if (!frame.isValid()) return;
-        if (!m_mediaFrameReady) {
-            m_mediaFrameReady = true;
-            updatePreview();
-        }
-        if (playing() && clipIsMedia(m_activeClip) && !m_warmingMediaPreview && !m_scrubbing
-            && !m_internalSeek && frame.startTime() >= 0) {
+    if (!m_playback.attachVideoOutput(PlaybackDriver::Media, output)) return;
+    if (clipIsMedia(m_activeClip)) seekMedia(m_outputPosition);
+}
+
+void Editor::handleFrameShown(PlaybackDriver::Player player, qint64 startTimeUs, bool live)
+{
+    if (player == PlaybackDriver::Screen) {
+        QElapsedTimer cost;
+        cost.start();
+        ++m_previewStatsFrames;
+        if (playing() && live && !m_scrubbing && !m_internalSeek && startTimeUs >= 0
+            && m_activeClip >= 0 && m_activeClip < m_project.clips.size()
+            && !clipIsMedia(m_activeClip)) {
             const Clip &clip = m_project.clips[m_activeClip];
-            const double source = frame.startTime() / 1000000.0;
+            const double source = startTimeUs / 1000000.0;
+            const double output = sourceToOutput(source, m_activeClip);
+            // A seek can deliver queued frames from the previous location. Only a frame
+            // near the current clip and transport position may anchor the display clock.
+            if (source >= clip.in - 0.01 && source < clip.out
+                && output >= m_outputPosition - 0.1
+                && output <= m_outputPosition + 0.5) {
+                m_playheadClockPosition = std::max(m_playheadPosition, output);
+                m_playheadClock.restart();
+            }
+        }
+        m_previewStatsCostNs += cost.nsecsElapsed();
+    } else if (player == PlaybackDriver::Media) {
+        if (playing() && clipIsMedia(m_activeClip) && live && !m_scrubbing
+            && !m_internalSeek && startTimeUs >= 0) {
+            const Clip &clip = m_project.clips[m_activeClip];
+            const double source = startTimeUs / 1000000.0;
             const double output = sourceToOutput(source, m_activeClip);
             if (source >= clip.in - 0.01 && source < clip.out
                 && output >= m_outputPosition - 0.1 && output <= m_outputPosition + 0.5) {
@@ -687,21 +653,7 @@ void Editor::attachMediaVideoOutput(QObject *output)
                 m_playheadClock.restart();
             }
         }
-        if (m_warmingMediaPreview) {
-            QTimer::singleShot(0, this, [this] {
-                if (!m_warmingMediaPreview) return;
-                m_warmingMediaPreview = false;
-                if (!(playing() && clipIsMedia(m_activeClip))) {
-                    m_mediaPlayer.pause();
-                    m_internalSeek = true;
-                    m_mediaPlayer.setPosition(m_mediaWarmTargetMs);
-                    m_internalSeek = false;
-                }
-                updateInsertAudio();
-            });
-        }
-    });
-    if (clipIsMedia(m_activeClip)) seekMedia(m_outputPosition);
+    }
 }
 
 bool Editor::clipIsMedia(int index) const
@@ -716,9 +668,9 @@ VideoInfo Editor::insertInfo(const QString &path)
     return m_inserts.value(path);
 }
 
-QMediaPlayer &Editor::playerFor(int clipIndex)
+PlaybackDriver::Player Editor::playerFor(int clipIndex) const
 {
-    return clipIsMedia(clipIndex) ? m_mediaPlayer : m_player;
+    return clipIsMedia(clipIndex) ? PlaybackDriver::Media : PlaybackDriver::Screen;
 }
 
 void Editor::setTransportPlaying(bool value)
@@ -745,61 +697,11 @@ void Editor::setTransportPlaying(bool value)
     if (!value) startNextVideoThumbnail();
 }
 
-void Editor::seekPlayer(QMediaPlayer &player, qint64 milliseconds, bool willPlay)
-{
-    const bool insert = &player == &m_mediaPlayer;
-    // An inserted clip's file may still be opening; the seek waits for it.
-    if (insert && (player.mediaStatus() == QMediaPlayer::NoMedia
-                   || player.mediaStatus() == QMediaPlayer::LoadingMedia)) {
-        m_pendingMediaSeekMs = milliseconds;
-        m_pendingMediaWillPlay = willPlay;
-        return;
-    }
-    // A player already paused on this exact frame (loaded ahead of its clip) keeps it; seeking
-    // again would flush the frame it shows. Anything further off, a frame step included, seeks.
-    if (player.playbackState() == QMediaPlayer::PausedState
-        && player.mediaStatus() != QMediaPlayer::EndOfMedia
-        && std::abs(player.position() - milliseconds) <= 1
-        && (!insert || m_mediaFrameReady)) return;
-    // After the player has run off the end it sits in EndOfMedia/Stopped, where a bare
-    // setPosition() does not decode a frame, so scrubbing keeps showing the last (black)
-    // frame. play() on a Stopped player restarts from 0 and drops any pending seek, so move to
-    // Paused first (play+pause leaves the position alone), seek, then, unless it is about to
-    // play anyway, let the decoder run until the sink reports one frame at the new position
-    // and pause on that frame. (Calling play() and pause() back to back does not work: it
-    // flushes the sink without decoding.)
-    const bool stalled = player.mediaStatus() == QMediaPlayer::EndOfMedia
-        || player.playbackState() == QMediaPlayer::StoppedState;
-    if (!stalled) {
-        player.setPosition(milliseconds);
-        return;
-    }
-    player.play();
-    player.pause();
-    player.setPosition(milliseconds);
-    if (willPlay) return;
-    bool &warming = insert ? m_warmingMediaPreview : m_warmingPreview;
-    if (insert) m_mediaWarmTargetMs = milliseconds;
-    warming = true;
-    updateInsertAudio();
-    player.play();
-    // Safety net in case the sink never reports a frame (no video output attached).
-    QTimer::singleShot(250, this, [this, &player, &warming] {
-        if (!warming) return;
-        warming = false;
-        if (!(playing() && &playerFor(m_activeClip) == &player)) player.pause();
-        updateInsertAudio();
-    });
-}
-
 void Editor::loadInsert(const QString &path)
 {
     if (m_mediaPlayerSource == path) return;
     m_mediaPlayerSource = path;
-    m_mediaFrameReady = false;
-    m_pendingMediaSeekMs = -1;
-    m_warmingMediaPreview = false;
-    m_mediaPlayer.setSource(QUrl::fromLocalFile(QDir(m_bundlePath).filePath(path)));
+    m_playback.loadMedia(QDir(m_bundlePath).filePath(path));
     updatePreview();
 }
 
@@ -812,17 +714,17 @@ void Editor::prepareNextClip()
     if (!clipIsMedia(m_activeClip) && clip.isMedia()) {
         // The inserted clip after this one opens and waits on its first frame, so the cut to it
         // is immediate.
-        if (m_mediaPlayerSource == clip.media && m_mediaFrameReady
-            && m_mediaPlayer.playbackState() == QMediaPlayer::PausedState
-            && std::abs(m_mediaPlayer.position() - target) <= 1) return;
+        if (m_mediaPlayerSource == clip.media && m_playback.mediaFrameReady()
+            && m_playback.playbackState(PlaybackDriver::Media) == QMediaPlayer::PausedState
+            && std::abs(m_playback.position(PlaybackDriver::Media) - target) <= 1) return;
         loadInsert(clip.media);
-        m_mediaPlayer.setPlaybackRate(clip.speed);
-        seekPlayer(m_mediaPlayer, target, false);
+        m_playback.setPlaybackRate(PlaybackDriver::Media, clip.speed);
+        m_playback.seek(PlaybackDriver::Media, target, false);
     } else if (clipIsMedia(m_activeClip) && !clip.isMedia()
-               && m_player.playbackState() != QMediaPlayer::PlayingState) {
+               && m_playback.playbackState(PlaybackDriver::Screen) != QMediaPlayer::PlayingState) {
         // Likewise the screen waits where the recording resumes.
-        m_player.setPlaybackRate(clip.speed);
-        seekPlayer(m_player, target, false);
+        m_playback.setPlaybackRate(PlaybackDriver::Screen, clip.speed);
+        m_playback.seek(PlaybackDriver::Screen, target, false);
     }
 }
 
@@ -840,10 +742,9 @@ void Editor::advanceClip()
 
 void Editor::updateInsertAudio()
 {
-    if (!m_mediaAudioOutput) return;
-    m_mediaAudioOutput->setVolume(std::clamp(m_project.audio.volume, 0.0, 1.0));
     // Silent while it decodes ahead of its clip or warms up on a paused frame.
-    m_mediaAudioOutput->setMuted(m_warmingMediaPreview || !clipIsMedia(m_activeClip));
+    m_playback.setAudio(PlaybackDriver::Media, std::clamp(m_project.audio.volume, 0.0, 1.0),
+                        m_playback.warming(PlaybackDriver::Media) || !clipIsMedia(m_activeClip));
 }
 
 QString Editor::cameraStatus() const
@@ -883,10 +784,8 @@ void Editor::changed(bool motion)
 {
     m_projectMapCacheValid = false;
     m_keystrokeTrack = KeystrokeTrack::build(m_input.events(), m_project.keystrokes);
-    if (m_audioOutput) {
-        m_audioOutput->setVolume(std::clamp(m_project.audio.volume, 0.0, 1.0));
-        m_audioOutput->setMuted(!m_project.audio.desktop && !m_project.audio.mic);
-    }
+    m_playback.setAudio(PlaybackDriver::Screen, std::clamp(m_project.audio.volume, 0.0, 1.0),
+                        !m_project.audio.desktop && !m_project.audio.mic);
     updateInsertAudio();
     if (!m_dirty) { m_dirty = true; emit dirtyChanged(); }
     m_autosaveTimer.start();
@@ -1308,16 +1207,16 @@ void Editor::seekMedia(double outputTime)
     // waits on a paused pair.
     if (clip.isMedia()) {
         loadInsert(clip.media);
-        m_mediaPlayer.setPlaybackRate(clip.speed);
-        seekPlayer(m_mediaPlayer, targetMs, playing());
-        if (playing()) m_mediaPlayer.play();
-        m_player.pause();
-        m_cameraPlayer.pause();
+        m_playback.setPlaybackRate(PlaybackDriver::Media, clip.speed);
+        m_playback.seek(PlaybackDriver::Media, targetMs, playing());
+        if (playing()) m_playback.play(PlaybackDriver::Media);
+        m_playback.pause(PlaybackDriver::Screen);
+        m_playback.pause(PlaybackDriver::Camera);
     } else {
-        m_player.setPlaybackRate(clip.speed);
-        seekPlayer(m_player, targetMs, playing());
-        if (playing()) m_player.play();
-        m_mediaPlayer.pause();
+        m_playback.setPlaybackRate(PlaybackDriver::Screen, clip.speed);
+        m_playback.seek(PlaybackDriver::Screen, targetMs, playing());
+        if (playing()) m_playback.play(PlaybackDriver::Screen);
+        m_playback.pause(PlaybackDriver::Media);
         syncCamera(source, true);
     }
     updateInsertAudio();
@@ -1336,16 +1235,16 @@ void Editor::play()
     } else if (m_outputPosition >= duration() - 0.0001) seek(0);
     // The opening preview, or a seek from a stalled player, may still be warming up; its pause
     // on the first decoded frame must not stop playback asked for in the meantime.
-    m_warmingPreview = false;
-    m_warmingMediaPreview = false;
+    m_playback.cancelWarmUp(PlaybackDriver::Screen);
+    m_playback.cancelWarmUp(PlaybackDriver::Media);
     m_activeClip = clipForOutput(m_outputPosition);
     setTransportPlaying(true);
     if (clipIsMedia(m_activeClip)) {
-        m_mediaPlayer.play();
-        m_player.pause();
+        m_playback.play(PlaybackDriver::Media);
+        m_playback.pause(PlaybackDriver::Screen);
     } else {
-        m_player.play();
-        m_mediaPlayer.pause();
+        m_playback.play(PlaybackDriver::Screen);
+        m_playback.pause(PlaybackDriver::Media);
         syncCamera(sourcePosition(), true);
     }
     updateInsertAudio();
@@ -1354,9 +1253,9 @@ void Editor::play()
 void Editor::pause()
 {
     setTransportPlaying(false);
-    m_player.pause();
-    m_cameraPlayer.pause();
-    m_mediaPlayer.pause();
+    m_playback.pause(PlaybackDriver::Screen);
+    m_playback.pause(PlaybackDriver::Camera);
+    m_playback.pause(PlaybackDriver::Media);
 }
 
 void Editor::stepFrames(int frames)
@@ -1408,27 +1307,10 @@ void Editor::syncCamera(double screenSourceTime, bool force)
 {
     if (!m_hasCamera) return;
     const CameraTime mapped = mapCameraTime(screenSourceTime, m_cameraOffset, m_cameraDuration);
-    const qint64 target = qRound64(mapped.seconds * 1000.0);
-    m_cameraPlayer.setPlaybackRate(m_player.playbackRate());
     // A bubble tolerates some drift; a full-frame talking head needs its lips on the audio.
     const qint64 tolerance = layoutAt(m_outputPosition).cameraFull > 0.0 ? 80 : 250;
-    if (force || std::abs(m_cameraPlayer.position() - target) > tolerance) {
-        const bool cameraStalled = m_cameraPlayer.mediaStatus() == QMediaPlayer::EndOfMedia
-            || m_cameraPlayer.playbackState() == QMediaPlayer::StoppedState;
-        m_cameraPlayer.setPosition(target);
-        if (cameraStalled && m_player.playbackState() != QMediaPlayer::PlayingState) {
-            m_cameraPlayer.play();
-            QTimer::singleShot(250, this, [this] {
-                if (m_player.playbackState() != QMediaPlayer::PlayingState) m_cameraPlayer.pause();
-            });
-        }
-    }
-    if (m_player.playbackState() == QMediaPlayer::PlayingState
-        && !mapped.beforeStart && !mapped.beyondEnd) {
-        if (m_cameraPlayer.playbackState() != QMediaPlayer::PlayingState) m_cameraPlayer.play();
-    } else if (m_cameraPlayer.playbackState() != QMediaPlayer::PausedState) {
-        m_cameraPlayer.pause();
-    }
+    m_playback.syncCamera(qRound64(mapped.seconds * 1000.0), tolerance, force,
+                          !mapped.beforeStart && !mapped.beyondEnd);
 }
 
 void Editor::updatePreview() { emit compositionChanged(); }

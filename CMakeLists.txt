@@ -168,6 +168,7 @@ qt_add_qml_module(omareel_render
         src/render/PreviewSink.h src/render/PreviewSink.cpp
         src/render/VideoDecoding.h src/render/VideoDecoding.cpp
         src/ui/Editor.h src/ui/Editor.cpp
+        src/ui/PlaybackDriver.h src/ui/PlaybackDriver.cpp
         src/ui/Launcher.h src/ui/Launcher.cpp
         src/ui/MicrophoneMeter.h src/ui/MicrophoneMeter.cpp
         src/ui/RecordingBar.h src/ui/RecordingBar.cpp
