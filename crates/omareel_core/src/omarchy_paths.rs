@@ -1,6 +1,7 @@
 //! Where Omarchy keeps its state, and what omareel reads from there (`OmarchyPaths`).
 //!
-//! `generateWallpaperThumbnail` stays in C++: it decodes and scales the image with `QImage`.
+//! `generateWallpaperThumbnail` stays in C++ (`EditorShims`, crates/omareel_qt/cpp/EditorBase.cpp):
+//! it decodes and scales the image with `QImage`.
 
 use crate::compat::qdir::{self, Filters, SortFlags};
 use crate::compat::qfile;
@@ -309,6 +310,20 @@ mod tests {
         symlink(&b, scratch.path("state/background")).unwrap();
         assert_eq!(current_background_in(&state), b);
         assert_eq!(background_groups(&roots, &state).len(), 2);
+    }
+
+    // test_omarchypaths.cpp's currentBackgroundUsesSymlinkThenFallback.
+    #[test]
+    fn current_background_uses_symlink_then_fallback() {
+        let scratch = Scratch::new("symlink");
+        let state = scratch.path("state");
+        let first = scratch.touch("state/theme/backgrounds/a-first.jpg");
+        let current = scratch.touch("state/theme/backgrounds/z-current.jpg");
+        let link = scratch.path("state/background");
+        symlink(&current, &link).unwrap();
+        assert_eq!(current_background_in(&state), current);
+        std::fs::remove_file(&link).unwrap();
+        assert_eq!(current_background_in(&state), first);
     }
 
     #[test]

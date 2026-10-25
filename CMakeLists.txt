@@ -50,20 +50,6 @@ target_link_libraries(omareel_plumbing
     PRIVATE PkgConfig::TURBOJPEG)
 target_link_libraries(omareel_qt INTERFACE omareel_plumbing PkgConfig::LIBEVDEV)
 
-add_library(omareel_core STATIC
-    src/core/OmarchyPaths.cpp
-    src/core/RecordingPreferences.cpp
-    src/record/CursorSampler.cpp
-    src/record/Recorder.cpp
-    src/record/CaptureExclusion.cpp
-)
-target_include_directories(omareel_core PUBLIC src)
-# Recorder.cpp and CursorSampler.cpp call the recording side in Rust.
-target_link_libraries(omareel_core
-    PUBLIC Qt6::Core Qt6::Gui Qt6::Quick Qt6::Multimedia Qt6::Svg
-    PRIVATE omareel_qt
-)
-
 add_library(omareel_render STATIC)
 qt_add_qml_module(omareel_ui STATIC
     URI Omareel.Ui
@@ -224,7 +210,7 @@ qt_add_resources(omareel_render "omareel_assets"
         assets/sounds/click.wav
 )
 target_include_directories(omareel_render PUBLIC src src/render)
-target_link_libraries(omareel_render PUBLIC omareel_core omareel_qt omareel_ui Qt6::Concurrent Qt6::Quick Qt6::QuickControls2 Qt6::Multimedia Qt6::OpenGL)
+target_link_libraries(omareel_render PUBLIC omareel_qt omareel_ui Qt6::Concurrent Qt6::Quick Qt6::QuickControls2 Qt6::Multimedia Qt6::OpenGL Qt6::Svg)
 
 qt_add_executable(omareel src/main.cpp src/ui/CaptureTestClient.cpp)
 target_link_libraries(omareel PRIVATE omareel_render omareel_qt Qt6::Quick Qt6::Multimedia Qt6::GuiPrivate LayerShellQt::Interface PkgConfig::WAYLAND_CLIENT)
@@ -235,14 +221,11 @@ add_custom_command(TARGET omareel POST_BUILD
 
 include(CTest)
 if(BUILD_TESTING)
-    foreach(test_name IN ITEMS omarchypaths recorder)
-        qt_add_executable(test_${test_name} tests/test_${test_name}.cpp)
-        target_link_libraries(test_${test_name} PRIVATE omareel_core Qt6::Test)
-        add_test(NAME ${test_name} COMMAND test_${test_name})
-    endforeach()
-    # The camera's frame packing, timestamp file and pacing are plumbing, which omareel_qt carries
-    # (and orders after itself on the link line).
-    target_link_libraries(test_recorder PRIVATE omareel_qt)
+    # The camera's frame packing, timestamp file, pacing and device matching: plumbing, which
+    # needs no Rust.
+    qt_add_executable(test_cameracapture tests/test_cameracapture.cpp)
+    target_link_libraries(test_cameracapture PRIVATE omareel_plumbing Qt6::Test)
+    add_test(NAME cameracapture COMMAND test_cameracapture)
     qt_add_executable(test_exporter_smoke tests/test_exporter_smoke.cpp)
     target_link_libraries(test_exporter_smoke PRIVATE omareel_render Qt6::Test)
     add_test(NAME exporter_smoke COMMAND test_exporter_smoke)

@@ -3,7 +3,8 @@
 //! decide, ported from the C++ at `rust-migration-base` and checked against its goldens
 //! (`tests/golden/README.md`, recorder to launcher), and the recording runtime itself: the
 //! recorder daemon, the Wayland screen capture, the input and cursor sampling and the `omareel
-//! record` command. The camera and the QObjects stay in C++ for now and call this.
+//! record` command. The launcher and recording bar QObjects (omareel_qt) call it; the camera
+//! itself (`CameraCapture`) is Qt plumbing.
 //!
 //! The modules follow the C++ files: [`capture`] holds the data types they share, [`recorder`]
 //! is `Recorder.cpp` (its state files in [`recorder::state`], the daemon in

@@ -1,12 +1,12 @@
 //! `tests/test_recorder.cpp`'s and `tests/test_regionpicker.cpp`'s cases for the code that moved
-//! to Rust with the recorder (Recorder.cpp, ScreenCapture.cpp, RegionPicker.cpp), as the C++
-//! tests had them. The goldens check the same functions over many more inputs; these keep the
+//! to Rust with the recorder (Recorder.cpp, ScreenCapture.cpp, RegionPicker.cpp,
+//! CaptureExclusion.cpp), as the C++ tests had them. The goldens check the same functions over many more inputs; these keep the
 //! scenarios the C++ tests were written for, including the ones that run ffmpeg.
 
 use omareel_core::compat::qprocess::{Process, ProcessState};
 use omareel_core::compat::qstandardpaths;
 use omareel_record::capture::CaptureRegion;
-use omareel_record::capture_exclusion::HardwareCursorHold;
+use omareel_record::capture_exclusion::{self, HardwareCursorHold};
 use omareel_record::recorder::audio::finish_audio_capture;
 use omareel_record::recorder::{
     DiscardActions, GsrExitClassification, camera_capture_block, classify_gsr_exit, discard_timeline,
@@ -334,6 +334,79 @@ fn recording_holds_hardware_cursors() {
         std::env::remove_var("OMAREEL_TEST_CURSOR");
         std::env::remove_var("OMAREEL_TEST_EVAL_EXIT");
     }
+}
+
+/// Environment variables set while the programs lock is held, put back when dropped.
+struct ScopedEnvironment(Vec<(&'static str, Option<std::ffi::OsString>)>);
+
+impl ScopedEnvironment {
+    fn new() -> ScopedEnvironment {
+        ScopedEnvironment(Vec::new())
+    }
+
+    fn set(&mut self, name: &'static str, value: impl AsRef<std::ffi::OsStr>) {
+        if !self.0.iter().any(|(saved, _)| *saved == name) {
+            self.0.push((name, std::env::var_os(name)));
+        }
+        // SAFETY: the programs lock keeps the other tests that start programs out meanwhile.
+        unsafe { std::env::set_var(name, value) };
+    }
+}
+
+impl Drop for ScopedEnvironment {
+    fn drop(&mut self) {
+        for (name, value) in self.0.drain(..).rev() {
+            // SAFETY: as in set.
+            unsafe {
+                match value {
+                    Some(value) => std::env::set_var(name, value),
+                    None => std::env::remove_var(name),
+                }
+            }
+        }
+    }
+}
+
+// test_recorder.cpp's captureExclusionChecksHashBeforeLoading: a plugin whose .hash names another
+// Hyprland commit is not loaded, one that matches is, and Hyprland's refusal and a configured path
+// that does not exist are reported.
+#[test]
+fn capture_exclusion_checks_hash_before_loading() {
+    let _programs = programs();
+    let scratch = Scratch::new("exclusion-hash");
+    let plugin = scratch.file("plugin.so");
+    std::fs::write(&plugin, "fixture").unwrap();
+    let log = scratch.file("calls");
+    let mock = scratch.file("hyprctl");
+    std::fs::write(
+        &mock,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{log}'\n\
+             case \"$*\" in\n \
+             '-j plugin list') printf '[]';;\n \
+             '-j version') printf '{{\"commit\":\"{}\"}}';;\n \
+             *) printf 'Plugin could not be loaded';;\nesac\n",
+            "a".repeat(40)
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&mock, std::os::unix::fs::PermissionsExt::from_mode(0o700)).unwrap();
+    let mut environment = ScopedEnvironment::new();
+    environment.set("PATH", &scratch.0);
+    environment.set("OMAREEL_PLUGIN_PATH", &plugin);
+    let sidecar = format!("{plugin}.hash");
+    std::fs::write(&sidecar, "b".repeat(40)).unwrap();
+    let mismatch = capture_exclusion::ensure_loaded("");
+    assert!(!mismatch.loaded);
+    assert!(mismatch.reason.contains("rebuilding"), "{}", mismatch.reason);
+    assert!(!std::fs::read_to_string(&log).unwrap().contains("plugin load"));
+    std::fs::write(&sidecar, "a".repeat(40)).unwrap();
+    let refused = capture_exclusion::ensure_loaded("");
+    assert!(!refused.loaded);
+    assert!(refused.reason.contains("refused"), "{}", refused.reason);
+    assert!(std::fs::read_to_string(&log).unwrap().contains("plugin load"));
+    environment.set("OMAREEL_PLUGIN_PATH", scratch.file("absent.so"));
+    assert!(capture_exclusion::ensure_loaded("").reason.contains("does not exist"));
 }
 
 #[test]

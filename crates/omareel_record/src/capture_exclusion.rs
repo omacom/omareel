@@ -260,4 +260,25 @@ mod tests {
         assert_eq!(overlay_monitor(false, "DP-1", &monitors[..1]), "");
         assert_eq!(qstring::simplified(" \t a \n\u{a0} b  "), "a b");
     }
+
+    // test_recorder.cpp's captureExclusionRequiresExactValidHash.
+    #[test]
+    fn capture_exclusion_requires_exact_valid_hash() {
+        let hash = "a".repeat(40);
+        assert!(compatible_hash(&hash, &hash));
+        assert!(!compatible_hash("", ""));
+        assert!(!compatible_hash("unknown", "unknown"));
+        assert!(!compatible_hash(&hash, &"b".repeat(40)));
+    }
+
+    // test_recorder.cpp's captureExclusionPlacesOverlaysAwayInFallback.
+    #[test]
+    fn capture_exclusion_places_overlays_away_in_fallback() {
+        let monitors = ["DP-3".to_owned(), "DP-5".to_owned()];
+        assert_eq!(overlay_monitor(true, "DP-3", &monitors), "DP-3");
+        assert_eq!(overlay_monitor(false, "DP-3", &monitors), "DP-5");
+        assert_eq!(overlay_monitor(false, "DP-5", &monitors), "DP-3");
+        assert_eq!(overlay_monitor(false, "DP-3", &monitors[..1]), "");
+        assert_eq!(overlay_monitor(false, "DP-3", &[]), "");
+    }
 }
