@@ -16,6 +16,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 #[cxx_qt::bridge]
 pub mod ffi {
     unsafe extern "C++" {
+        // QtShims.h first: it brings in QString whole before cxx-qt-lib's qstring.h, whose
+        // QStringList include otherwise makes GCC 16 warn about an incomplete QChar.
+        include!("QtShims.h");
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
         include!("cxx-qt-lib/qbytearray.h");
@@ -28,7 +31,6 @@ pub mod ffi {
         include!("cxx-qt-lib/qvariant.h");
         type QVariant = cxx_qt_lib::QVariant;
 
-        include!("QtShims.h");
         #[namespace = "Omareel::Shims"]
         #[cxx_name = "nullVariant"]
         fn null_variant() -> QVariant;
