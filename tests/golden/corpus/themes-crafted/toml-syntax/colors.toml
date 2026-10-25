@@ -1,0 +1,14 @@
+# comment line
+accent='#ff0000'   # single quotes and a comment
+  background   =   "#101010"  
+foreground = #eeeeee
+color4 = 00ff00 # unquoted
+red = "#00ff00" "#0000ff"
+mode = dark
+bright_foreground = "#ffffff
+lighter_background = "#202020"#trailing
+dark_background = "#0a0a0a" ; not a comment
+dotted.key = "#123456"
+accent = "#00aaff"
+[section]
+accent = "#ff00ff"

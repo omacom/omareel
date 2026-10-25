@@ -1,0 +1,241 @@
+{
+    "aspect": null,
+    "audio": {
+        "desktop": false,
+        "mic": false,
+        "volume": 0.35
+    },
+    "background": {
+        "blur": 12.5,
+        "color": "#ff00ff",
+        "gradient": {
+            "angle": 90,
+            "stops": [
+                [
+                    "#112233",
+                    0
+                ],
+                [
+                    "#ff0000",
+                    0.5
+                ],
+                [
+                    "#000000",
+                    1
+                ],
+                [
+                    "#aabbcc",
+                    0
+                ]
+            ]
+        },
+        "image": "media/bg.png",
+        "type": "gradient",
+        "wallpaper": "/some/wall.png"
+    },
+    "camera": {
+        "border": {
+            "alpha": 0.7,
+            "color": "#ffffff",
+            "enabled": true,
+            "width": 6
+        },
+        "enabled": true,
+        "flipHorizontal": true,
+        "fullFrame": "square",
+        "offset": {
+            "x": 0.035,
+            "y": 0.035
+        },
+        "position": "top-left",
+        "radius": 4,
+        "rotation": 90,
+        "scaleDuringZoom": 1,
+        "shadow": {
+            "angle": 45,
+            "blur": 23,
+            "distance": 20,
+            "enabled": true,
+            "intensity": 0.28
+        },
+        "shape": "rectangle",
+        "size": 0.4
+    },
+    "clips": [
+        {
+            "id": "c1",
+            "in": 0,
+            "out": 2.5,
+            "speed": 1
+        },
+        {
+            "id": "c1-s1",
+            "in": 2.5,
+            "layout": "camera",
+            "out": 5.125,
+            "speed": 1.6
+        },
+        {
+            "id": "c2",
+            "in": 5.125,
+            "layout": "screen",
+            "out": 8.25,
+            "speed": 0.75
+        },
+        {
+            "fit": "framed",
+            "id": "m1",
+            "in": 0.5,
+            "media": "media/demo.mp4",
+            "out": 3,
+            "speed": 1
+        },
+        {
+            "fit": "fit",
+            "id": "m2",
+            "in": 0,
+            "media": "media/b.mp4",
+            "out": 1,
+            "speed": 2
+        },
+        {
+            "id": "c3",
+            "in": 8.25,
+            "out": 9,
+            "speed": 1
+        },
+        {
+            "id": "",
+            "in": 0,
+            "out": 0,
+            "speed": 1
+        },
+        {
+            "id": "",
+            "in": 0,
+            "out": 0,
+            "speed": 1
+        },
+        {
+            "id": "",
+            "in": 0,
+            "out": 0,
+            "speed": 1
+        }
+    ],
+    "crop": {
+        "h": 0.6,
+        "w": 0.5,
+        "x": 0.1,
+        "y": 0.2
+    },
+    "cursor": {
+        "clickEffect": "none",
+        "clickShrink": 0.5,
+        "clickSound": "soft",
+        "hideWhenIdleMs": 1500,
+        "ringColor": "#ff8800",
+        "rotateOnXMovementRatio": 0,
+        "size": 2,
+        "smoothing": false,
+        "spring": {
+            "damping": 10,
+            "mass": 3,
+            "stiffness": 470
+        },
+        "style": "dot",
+        "visible": false
+    },
+    "defaultsVersion": 4,
+    "export": {
+        "format": "gif",
+        "fps": 30,
+        "gif": {
+            "fps": 10,
+            "height": 360,
+            "loop": false,
+            "quality": "small"
+        },
+        "height": 720,
+        "quality": "web"
+    },
+    "frame": {
+        "border": {
+            "alpha": 1,
+            "color": "#000000",
+            "enabled": false,
+            "width": 7
+        },
+        "padding": 0.1,
+        "radius": 12,
+        "shadow": {
+            "angle": 90,
+            "blur": 40,
+            "distance": 10,
+            "enabled": true,
+            "intensity": 0.25
+        }
+    },
+    "keystrokes": {
+        "enabled": true,
+        "holdMs": 100,
+        "position": "top-left",
+        "showOnlyShortcuts": false,
+        "size": 2
+    },
+    "name": "Edited é€😀 \"quoted\"\n",
+    "version": 1,
+    "zoomStyle": {
+        "instantAnimation": true,
+        "motionBlur": 1,
+        "snapToEdgesRatio": 0.4,
+        "spring": {
+            "damping": 40,
+            "mass": 1,
+            "stiffness": 150
+        }
+    },
+    "zooms": [
+        {
+            "end": 3.7,
+            "id": "z1",
+            "level": 2,
+            "start": 1.2,
+            "target": "auto"
+        },
+        {
+            "end": 6.5,
+            "id": "z2",
+            "level": 3.5,
+            "start": 4,
+            "target": {
+                "x": 0.25,
+                "y": 0.75
+            }
+        },
+        {
+            "end": 7.5,
+            "id": "z3",
+            "level": 2,
+            "start": 7,
+            "target": {
+                "x": 0.5,
+                "y": 0.5
+            }
+        },
+        {
+            "end": 9,
+            "id": "z4",
+            "level": 2,
+            "start": 8,
+            "target": "auto"
+        },
+        {
+            "end": 0,
+            "id": "",
+            "level": 2,
+            "start": 9.5,
+            "target": "auto"
+        }
+    ]
+}

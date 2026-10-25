@@ -1,0 +1,7 @@
+accent = "nonsense"
+background = "#12345"
+foreground = ""
+lighter_background = "x"
+dark_background = "#zzzzzz"
+color4 = "#1234567"
+bright_foreground = "nope"

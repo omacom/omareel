@@ -1,0 +1,138 @@
+{
+    "aspect": null,
+    "audio": {
+        "desktop": true,
+        "mic": true,
+        "volume": 1
+    },
+    "background": {
+        "blur": 0,
+        "color": "#1a1b26",
+        "gradient": {
+            "angle": 135,
+            "stops": [
+                [
+                    "#ff8a00",
+                    0
+                ],
+                [
+                    "#e52e71",
+                    1
+                ]
+            ]
+        },
+        "image": null,
+        "type": "wallpaper",
+        "wallpaper": "omarchy:current"
+    },
+    "camera": {
+        "border": {
+            "alpha": 0.7,
+            "color": "#ffffff",
+            "enabled": true,
+            "width": 6
+        },
+        "enabled": false,
+        "flipHorizontal": false,
+        "fullFrame": "fill",
+        "offset": {
+            "x": 0.035,
+            "y": 0.035
+        },
+        "position": "bottom-right",
+        "radius": 16,
+        "rotation": 0,
+        "scaleDuringZoom": 0.7,
+        "shadow": {
+            "angle": 45,
+            "blur": 23,
+            "distance": 20,
+            "enabled": true,
+            "intensity": 0.28
+        },
+        "shape": "round",
+        "size": 0.25
+    },
+    "clips": [
+        {
+            "id": "c1",
+            "in": 0,
+            "out": 1e-09,
+            "speed": 1
+        }
+    ],
+    "crop": {
+        "h": 1,
+        "w": 1,
+        "x": 0,
+        "y": 0
+    },
+    "cursor": {
+        "clickEffect": "ripple",
+        "clickShrink": 0.8,
+        "clickSound": "none",
+        "hideWhenIdleMs": null,
+        "ringColor": "#7aa2f7",
+        "rotateOnXMovementRatio": 0.5,
+        "size": 1.5,
+        "smoothing": true,
+        "spring": {
+            "damping": 70,
+            "mass": 3,
+            "stiffness": 470
+        },
+        "style": "light-arrow",
+        "visible": true
+    },
+    "defaultsVersion": 4,
+    "export": {
+        "format": "mp4",
+        "fps": 60,
+        "gif": {
+            "fps": 15,
+            "height": 480,
+            "loop": true,
+            "quality": "studio"
+        },
+        "height": 1080,
+        "quality": "social"
+    },
+    "frame": {
+        "border": {
+            "alpha": 1,
+            "color": "#000000",
+            "enabled": false,
+            "width": 7
+        },
+        "padding": 0.1,
+        "radius": 12,
+        "shadow": {
+            "angle": 90,
+            "blur": 40,
+            "distance": 10,
+            "enabled": true,
+            "intensity": 0.25
+        }
+    },
+    "keystrokes": {
+        "enabled": false,
+        "holdMs": 900,
+        "position": "bottom-center",
+        "showOnlyShortcuts": true,
+        "size": 1
+    },
+    "name": "Résumé 🎬 \"q\"",
+    "version": 1,
+    "zoomStyle": {
+        "instantAnimation": false,
+        "motionBlur": 0,
+        "snapToEdgesRatio": 0.25,
+        "spring": {
+            "damping": 40,
+            "mass": 2.25,
+            "stiffness": 200
+        }
+    },
+    "zooms": [
+    ]
+}

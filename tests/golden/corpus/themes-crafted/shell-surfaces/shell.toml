@@ -1,0 +1,24 @@
+[popups]
+background = #000000
+background-alpha = 0.5
+text = "#ffffff"
+border = "rgba(7aa2f7ee) rgba(c4a7e7ee) 45deg"
+border-alpha = 0.75
+[tooltip]
+background = "#7aa2f7 #bb9af7 45deg"
+background-alpha = 0.9
+text = foreground
+border = urgent
+[menu]
+background = "#112233"
+background-alpha = 1.5
+text = accent
+border = ""
+border-alpha = 0
+scrim = black
+scrim-alpha = 0.25
+selected-background = "#ff0000"
+selected-background-alpha = 0.12
+selected-text = "#00ff00"
+[bar]
+active = "  Accent  "

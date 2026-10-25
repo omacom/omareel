@@ -1,0 +1,14 @@
+[ font ]
+base-size = 20
+[font]
+body = 13
+[font] # trailing comment
+caption = 9
+  [spacing]  
+scale = 2
+[spacing.extra]
+xs = 100
+[controls
+normal-fill-alpha = 0.9
+[]
+xxs = 50

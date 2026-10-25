@@ -1,0 +1,5 @@
+new file	true	""	matches-toJson	0644
+missing directory	false	"No such file or directory"	-	-
+path is a directory	false	"Filename refers to a directory"	-	0755
+read-only directory	false	"Permission denied"	-	-
+empty path	false	"No such file or directory"	-	-

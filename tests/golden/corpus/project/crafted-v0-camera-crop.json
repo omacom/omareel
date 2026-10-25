@@ -1,0 +1,8 @@
+{
+    "name": "No version",
+    "camera": {
+        "shape": "rounded",
+        "crop": "square",
+        "radius": 9
+    }
+}

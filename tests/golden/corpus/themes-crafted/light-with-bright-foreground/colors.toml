@@ -1,0 +1,5 @@
+background = "#ffffff"
+foreground = "#222222"
+accent = "#0055ff"
+bright_foreground = "#000000"
+dark_background = "#eeeeee"

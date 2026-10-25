@@ -1,0 +1,21 @@
+{
+    "audio": {
+        "desktop": false,
+        "mic": false
+    },
+    "first_frame_us": 1000000,
+    "fps": 60,
+    "height": 360,
+    "monitor": "synthetic",
+    "region": {
+        "h": 360,
+        "w": 640,
+        "x": 0,
+        "y": 0
+    },
+    "scale": 1,
+    "started_us": 1000000,
+    "stopped_us": 9000000,
+    "version": 1,
+    "width": 640
+}
