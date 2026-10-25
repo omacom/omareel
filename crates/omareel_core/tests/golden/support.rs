@@ -500,6 +500,7 @@ pub fn rows(text: &[u8]) -> Vec<Vec<String>> {
 }
 
 #[test]
+#[allow(clippy::excessive_precision)]
 fn num_prints_like_glibc() {
     let cases: &[(f64, &str)] = &[
         (0.1, "0.10000000000000001"),
@@ -512,7 +513,8 @@ fn num_prints_like_glibc() {
         (-0.0, "-0"),
         (-2.5, "-2.5"),
         (1e300, "1.0000000000000001e+300"),
-        // Exactly halfway at the 17th digit: glibc keeps the even digit.
+        // Exactly halfway at the 17th digit: glibc keeps the even digit. The literals are
+        // exact doubles, written out in full on purpose.
         (1000000000000000.25, "1000000000000000.2"),
         (1000000000000000.75, "1000000000000000.8"),
         (f64::NAN, "nan"),
