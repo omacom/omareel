@@ -20,6 +20,12 @@ pub fn trimmed(s: &str) -> &str {
     s.trim_matches(is_qchar_space)
 }
 
+/// `QString::simplified()`: whitespace (as `QChar::isSpace` has it) trimmed from both ends and
+/// every inner run of it made one space.
+pub fn simplified(s: &str) -> String {
+    s.split(is_qchar_space).filter(|piece| !piece.is_empty()).collect::<Vec<_>>().join(" ")
+}
+
 /// `QString::toLower()`: each code point lowercased on its own, by its full mapping (U+0130 `İ`
 /// becomes `i` and U+0307). There is no context: unlike `str::to_lowercase`, a final `Σ` becomes
 /// `σ`, not `ς`. The table is Qt's (see `qchar`), so the result does not depend on the Unicode
