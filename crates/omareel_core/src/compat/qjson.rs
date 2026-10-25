@@ -14,6 +14,7 @@
 //! lone surrogate from a `\ud800`-style escape and writes it back escaped, while a Rust string
 //! cannot hold one, so it becomes U+FFFD. omareel never writes such strings.
 
+use crate::compat::qnumber;
 use std::cmp::Ordering;
 use std::fmt;
 
@@ -124,7 +125,7 @@ impl Value {
             Value::Double(d) if d.is_nan() => 0,
             Value::Double(d) => d.round() as i64,
             Value::Bool(b) => i64::from(*b),
-            Value::String(s) => s.trim().parse().unwrap_or(0),
+            Value::String(s) => qnumber::to_long_long(s).unwrap_or(0),
             _ => 0,
         }
     }
@@ -387,7 +388,7 @@ fn write_value(value: &Value, out: &mut String, level: usize, format: Format) {
         Value::Int(n) => out.push_str(&n.to_string()),
         Value::Double(d) => {
             if d.is_finite() {
-                out.push_str(&shortest(*d));
+                out.push_str(&qnumber::byte_array_number(*d, 'g', qnumber::FLOATING_POINT_SHORTEST));
             } else {
                 out.push_str("null");
             }
@@ -455,100 +456,6 @@ fn write_string(s: &str, out: &mut String) {
         }
     }
     out.push('"');
-}
-
-/// `QByteArray::number(d, 'g', QLocale::FloatingPointShortest)` for a finite double: the
-/// shortest digits that read back as `d`, in fixed or exponent form, whichever Qt's
-/// `resolveFormat` picks.
-fn shortest(d: f64) -> String {
-    if d == 0.0 {
-        return "0".to_owned(); // Qt never writes "-0"
-    }
-    let (digits, decpt) = shortest_digits(d.abs());
-    let length = digits.len() as i32;
-
-    // resolveFormat: the exponent form adds a separator, sign and two exponent digits.
-    let mut bias = 4;
-    if length <= decpt && length > 1 {
-        bias += 1;
-    } else if length == 1 && decpt <= 0 {
-        bias -= 1;
-    }
-    let use_decimal = if decpt <= 0 {
-        1 - decpt <= bias
-    } else if decpt <= length {
-        true
-    } else {
-        decpt <= length + bias
-    };
-
-    let mut out = String::new();
-    if d < 0.0 {
-        out.push('-');
-    }
-    if use_decimal {
-        if decpt <= 0 {
-            out.push_str("0.");
-            out.extend(std::iter::repeat_n('0', (-decpt) as usize));
-            out.push_str(&digits);
-        } else if decpt >= length {
-            out.push_str(&digits);
-            out.extend(std::iter::repeat_n('0', (decpt - length) as usize));
-        } else {
-            out.push_str(&digits[..decpt as usize]);
-            out.push('.');
-            out.push_str(&digits[decpt as usize..]);
-        }
-    } else {
-        out.push_str(&digits[..1]);
-        if length > 1 {
-            out.push('.');
-            out.push_str(&digits[1..]);
-        }
-        let e = decpt - 1;
-        out.push_str(&format!("e{}{:02}", if e < 0 { '-' } else { '+' }, e.abs()));
-    }
-    out
-}
-
-/// The shortest digits that read back as `v` (positive, finite) and the position of the
-/// decimal point: `v ≈ 0.digits × 10^decpt`. Qt gets them from double-conversion, which picks
-/// the candidate nearest the exact value like Rust does, but breaks an exact tie between two
-/// candidates towards an even last digit where Rust rounds up.
-fn shortest_digits(v: f64) -> (String, i32) {
-    // Rust's `{:e}` gives the shortest round-trip digits: "d.ddde±x".
-    let sci = format!("{v:e}");
-    let (mantissa, exponent) = sci.split_once('e').expect("{:e} always has an exponent");
-    let digits: String = mantissa.chars().filter(|c| *c != '.').collect();
-    let decpt = exponent.parse::<i32>().expect("{:e} exponent is an integer") + 1;
-
-    // A tie needs an exact value with one digit more than the shortest form, ending in 5.
-    // That only happens for v = m × 2^-k with m odd and small k, where the exact value is
-    // m × 5^k × 10^-k and fits in a u128.
-    let bits = v.to_bits();
-    let biased = ((bits >> 52) & 0x7ff) as i32;
-    let fraction = bits & ((1u64 << 52) - 1);
-    let (mut m, mut e) = if biased == 0 { (fraction, -1074) } else { (fraction | 1 << 52, biased - 1075) };
-    let zeros = m.trailing_zeros() as i32;
-    m >>= zeros;
-    e += zeros;
-    if e >= 0 || -e > 26 {
-        return (digits, decpt);
-    }
-    let k = -e;
-    let exact = (m as u128 * 5u128.pow(k as u32)).to_string();
-    if exact.len() != digits.len() + 1 || exact.len() as i32 - k != decpt {
-        return (digits, decpt);
-    }
-    let lower = &exact[..digits.len()];
-    let even = lower.as_bytes()[lower.len() - 1] % 2 == 0;
-    if even && lower != digits {
-        let candidate = format!("0.{lower}e{decpt}");
-        if candidate.parse::<f64>() == Ok(v) {
-            return (lower.trim_end_matches('0').to_owned(), decpt);
-        }
-    }
-    (digits, decpt)
 }
 
 /// `QJsonParseError::ParseError`.
