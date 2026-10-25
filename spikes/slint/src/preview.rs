@@ -9,7 +9,7 @@
 //! every frame.
 
 use crate::scene::{self, FrameState, Models, Upload, VideoLayer};
-use crate::video::Stream;
+use crate::video::{GpuSink, Pixels, Stream};
 use crate::{Comp, PreviewWindow};
 use omareel_core::editor::{Document, Probes};
 use omareel_core::media_probe;
@@ -81,14 +81,19 @@ impl Player {
         let scale = (w, h) != (self.document.source_width(), self.document.source_height());
         // Fewer 4K frames fit in memory; a few are plenty to ride out ffmpeg's jitter.
         let ahead = if w * h > 2_500_000 { 4 } else { 8 };
-        self.screen = Some(Stream::start(self.document.video_path(), source, duration, self.document.fps(), w, h, scale, ahead));
+        let sink = |keep_cpu_copy| match (&self.gpu, self.upload) {
+            (Some((device, _)), Upload::Wgpu) => Some(GpuSink { device: device.clone(), keep_cpu_copy }),
+            _ => None,
+        };
+        self.screen =
+            Some(Stream::start(self.document.video_path(), source, duration, self.document.fps(), w, h, scale, ahead, sink(false)));
         self.camera = None;
         if let Some(sync) = self.document.camera_sync(source) {
             let (cw, ch) = (self.document.camera_source_width(), self.document.camera_source_height());
             let camera_fps = self.document.recording().camera.map_or(30.0, |c| c.fps);
             let camera_duration = self.document.recording().camera.map_or(duration, |c| c.duration);
             let start = sync.target_ms as f64 / 1000.0;
-            self.camera = Some(Stream::start(&self.camera_path, start, camera_duration, camera_fps, cw, ch, false, 6));
+            self.camera = Some(Stream::start(&self.camera_path, start, camera_duration, camera_fps, cw, ch, false, 6, sink(true)));
         }
         self.last_restart = Instant::now();
         self.busy = true;
@@ -154,7 +159,13 @@ impl Player {
         if let Some(stream) = self.screen.as_mut() {
             if stream.advance(source, &mut skipped) {
                 if let Some(frame) = &stream.current {
-                    comp.set_screen(self.screen_layer.image(self.upload, gpu, &frame.pixels, frame.width, frame.height));
+                    comp.set_screen(match (&frame.pixels, gpu) {
+                        (Pixels::Staged(buffer), Some((device, queue))) => {
+                            self.screen_layer.staged(device, queue, buffer, frame.width, frame.height)
+                        }
+                        (Pixels::Cpu(pixels), _) => self.screen_layer.image(self.upload, gpu, pixels, frame.width, frame.height),
+                        _ => slint::Image::default(),
+                    });
                     self.stats.shown += 1;
                 }
             } else if self.playing && self.clock.is_some() && stream.starved(source) {
@@ -165,9 +176,19 @@ impl Player {
             let mut camera_skipped = 0;
             if stream.advance(sync.target_ms as f64 / 1000.0, &mut camera_skipped) {
                 if let Some(frame) = &stream.current {
-                    comp.set_camera_frame(self.camera_layer.image(self.upload, gpu, &frame.pixels, frame.width, frame.height));
-                    if composition.layout.camera_full > 0.0 {
-                        comp.set_camera_blurred(scene::blurred_camera(&frame.pixels, frame.width as usize, frame.height as usize, 1.0));
+                    let cpu = match (&frame.pixels, gpu) {
+                        (Pixels::Staged(buffer), Some((device, queue))) => {
+                            comp.set_camera_frame(self.camera_layer.staged(device, queue, buffer, frame.width, frame.height));
+                            frame.cpu_copy.as_deref()
+                        }
+                        (Pixels::Cpu(pixels), _) => {
+                            comp.set_camera_frame(self.camera_layer.image(self.upload, gpu, pixels, frame.width, frame.height));
+                            Some(pixels.as_slice())
+                        }
+                        _ => None,
+                    };
+                    if let (true, Some(pixels)) = (composition.layout.camera_full > 0.0, cpu) {
+                        comp.set_camera_blurred(scene::blurred_camera(pixels, frame.width as usize, frame.height as usize, 1.0));
                     }
                 }
             }

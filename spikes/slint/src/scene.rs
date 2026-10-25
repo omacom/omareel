@@ -261,9 +261,12 @@ impl Models {
 /// How decoded frames reach the renderer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Upload {
-    /// `queue.write_texture` into one of two wgpu textures per video, imported with
-    /// `Image::try_from(wgpu::Texture)` (Slint's `unstable-wgpu-30`).
+    /// The preview's decode threads `queue.write_texture` each frame into a ring of wgpu
+    /// textures, imported with `Image::try_from(wgpu::Texture)` (Slint's `unstable-wgpu-30`).
+    /// The export has no UI thread to spare, so there it is `WgpuUi`.
     Wgpu,
+    /// The same on the UI (or export) thread, into one of two textures per video.
+    WgpuUi,
     /// A new `SharedPixelBuffer` image per frame, which the renderer uploads itself.
     Cpu,
 }
@@ -322,6 +325,29 @@ impl VideoTexture {
     }
 }
 
+impl VideoTexture {
+    /// Records a copy of a staging buffer (rows padded to 256 bytes) into the next texture.
+    pub fn copy_from(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, buffer: &wgpu::Buffer) -> Image {
+        let texture = &self.textures[self.next];
+        self.next = (self.next + 1) % self.textures.len();
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("frame upload") });
+        encoder.copy_buffer_to_texture(
+            wgpu::TexelCopyBufferInfo {
+                buffer,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(crate::video::padded_row(self.width)),
+                    rows_per_image: Some(self.height),
+                },
+            },
+            wgpu::TexelCopyTextureInfo { texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+            wgpu::Extent3d { width: self.width, height: self.height, depth_or_array_layers: 1 },
+        );
+        queue.submit([encoder.finish()]);
+        Image::try_from(texture.clone()).expect("an Rgba8Unorm texture with TEXTURE_BINDING | RENDER_ATTACHMENT")
+    }
+}
+
 /// A frame as a CPU image.
 pub fn cpu_image(pixels: &[u8], width: u32, height: u32) -> Image {
     Image::from_rgba8(SharedPixelBuffer::<Rgba8Pixel>::clone_from_slice(pixels, width, height))
@@ -338,9 +364,17 @@ impl VideoLayer {
         VideoLayer { label, texture: None }
     }
 
+    /// A frame a decode thread staged in a buffer.
+    pub fn staged(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, buffer: &wgpu::Buffer, width: u32, height: u32) -> Image {
+        if self.texture.as_ref().map(VideoTexture::size) != Some((width, height)) {
+            self.texture = Some(VideoTexture::new(device, width, height, self.label));
+        }
+        self.texture.as_mut().map(|t| t.copy_from(device, queue, buffer)).unwrap_or_default()
+    }
+
     pub fn image(&mut self, upload: Upload, gpu: Option<(&wgpu::Device, &wgpu::Queue)>, pixels: &[u8], width: u32, height: u32) -> Image {
         match (upload, gpu) {
-            (Upload::Wgpu, Some((device, queue))) => {
+            (Upload::Wgpu | Upload::WgpuUi, Some((device, queue))) => {
                 if self.texture.as_ref().map(VideoTexture::size) != Some((width, height)) {
                     self.texture = Some(VideoTexture::new(device, width, height, self.label));
                 }

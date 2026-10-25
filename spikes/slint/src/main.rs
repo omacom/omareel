@@ -1,8 +1,8 @@
 //! omareel's preview, export and recording bar in Slint, over omareel_core.
 //!
 //!   omareel-slint-spike setup <bundle>
-//!   omareel-slint-spike preview <bundle> [--upload wgpu|cpu] [--canvas-height <px>] [--measure <s>] [--stats <json>]
-//!   omareel-slint-spike export <bundle> -o <out.mp4> [--quality social] [--width <px>] [--upload wgpu|cpu] [--timing] [--png <frame,...>]
+//!   omareel-slint-spike preview <bundle> [--upload wgpu|wgpu-ui|cpu] [--canvas-height <px>] [--measure <s>] [--stats <json>]
+//!   omareel-slint-spike export <bundle> -o <out.mp4> [--quality social] [--width <px>] [--upload wgpu|wgpu-ui|cpu] [--timing] [--png <frame,...>]
 //!   omareel-slint-spike bar
 
 slint::include_modules!();
@@ -23,6 +23,7 @@ fn value<'a>(args: &'a [String], flag: &str) -> Option<&'a str> {
 fn upload(args: &[String]) -> Upload {
     match value(args, "--upload") {
         Some("cpu") => Upload::Cpu,
+        Some("wgpu-ui") => Upload::WgpuUi,
         _ => Upload::Wgpu,
     }
 }
