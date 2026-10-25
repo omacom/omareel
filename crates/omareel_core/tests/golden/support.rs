@@ -5,6 +5,7 @@
 use omareel_core::compat::qcolor::{QColor, Spec};
 use omareel_core::compat::qjson::{self, Format, Value};
 use omareel_core::compat::qnumber;
+use omareel_core::project::Clip;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -106,6 +107,32 @@ pub fn parse_num(cell: &str) -> f64 {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Grids (README "Grids")
+
+/// prev(x): the double just below `x`.
+pub fn before(x: f64) -> f64 {
+    next_after(x, f64::NEG_INFINITY)
+}
+
+/// next(x): the double just above `x`.
+pub fn after(x: f64) -> f64 {
+    next_after(x, f64::INFINITY)
+}
+
+/// `i / denominator` for `i = from..=to`, as the oracle's `uniform` divides (`i / double(d)`).
+pub fn uniform(denominator: i32, from: i32, to: i32) -> Vec<f64> {
+    (from..=to).map(|i| f64::from(i) / f64::from(denominator)).collect()
+}
+
+/// The oracle's `sortedUnique`: ascending, exact duplicates removed (`std::sort` then
+/// `std::unique`). Grids hold no NaN at this point; the extra values are appended after.
+pub fn sorted_unique(mut values: Vec<f64>) -> Vec<f64> {
+    values.sort_by(|a, b| a.partial_cmp(b).expect("no NaN in a grid"));
+    values.dedup();
+    values
+}
+
+// ---------------------------------------------------------------------------------------------
 // Cell formats
 
 /// **num**: glibc's `printf("%.17g")`, with every NaN `nan` and the infinities `inf`/`-inf`.
@@ -201,6 +228,49 @@ pub fn quote_bytes(value: &[u8]) -> String {
 pub fn quote_list<S: AsRef<str>>(values: &[S]) -> String {
     let items: Vec<String> = values.iter().map(|v| quote(v.as_ref())).collect();
     format!("[{}]", items.join(","))
+}
+
+/// **clips**: `[<id> <in> <out> <speed> <layout> <media> <fit>;...]`.
+pub fn clips_text(clips: &[Clip]) -> String {
+    let items: Vec<String> = clips
+        .iter()
+        .map(|c| {
+            [quote(&c.id), num(c.in_), num(c.out), num(c.speed), quote(&c.layout), quote(&c.media), quote(&c.fit)]
+                .join(" ")
+        })
+        .collect();
+    format!("[{}]", items.join(";"))
+}
+
+/// The `QVariant` types the composition family prints (README "composition").
+pub enum Variant {
+    Double(f64),
+    Int(i32),
+    Bool(bool),
+    String(String),
+    StringList(Vec<String>),
+    /// A `QVariantMap`; [`variant`] puts the keys in its order.
+    Map(Vec<(String, Variant)>),
+    List(Vec<Variant>),
+}
+
+/// **variant**: a double as num, an int as `int(<n>)`, a map as `{key=value,...}` with the keys
+/// in `QVariantMap` order (ascending UTF-16 code units, raw UTF-8), a list as `[...]`.
+pub fn variant(value: &Variant) -> String {
+    match value {
+        Variant::Double(d) => num(*d),
+        Variant::Int(n) => format!("int({n})"),
+        Variant::Bool(b) => boolean(*b).into(),
+        Variant::String(s) => quote(s),
+        Variant::StringList(list) => quote_list(list),
+        Variant::Map(entries) => {
+            let mut entries: Vec<&(String, Variant)> = entries.iter().collect();
+            entries.sort_by(|(a, _), (b, _)| a.encode_utf16().cmp(b.encode_utf16()));
+            let items: Vec<String> = entries.iter().map(|(key, value)| format!("{key}={}", variant(value))).collect();
+            format!("{{{}}}", items.join(","))
+        }
+        Variant::List(items) => format!("[{}]", items.iter().map(variant).collect::<Vec<_>>().join(",")),
+    }
 }
 
 pub fn spec_name(spec: Spec) -> &'static str {
@@ -326,6 +396,55 @@ pub fn sanitize_with(text: &str, roots: &[(String, String)]) -> String {
         }
         out.push(c);
         i += c.len_utf8();
+    }
+    out
+}
+
+/// Qt keeps an unpaired surrogate that a `\ud800`-style escape produced; a Rust string
+/// cannot hold one, so the port's parser makes it U+FFFD (documented in `compat::qjson`). The
+/// goldens show such a surrogate as `\u{d800}` in **str** cells and as `\ud800` in Qt's JSON,
+/// and this maps both to U+FFFD so everything around them is still compared byte for byte.
+/// Both formats double every literal backslash, so an escape is only one when an even number
+/// of backslashes precedes it; **bytes** cells never contain one.
+pub fn lone_surrogates_as_replacement(text: &[u8]) -> Vec<u8> {
+    let surrogate = |hex: &[u8]| {
+        !hex.is_empty()
+            && hex.iter().all(u8::is_ascii_hexdigit)
+            && std::str::from_utf8(hex)
+                .ok()
+                .and_then(|h| u32::from_str_radix(h, 16).ok())
+                .is_some_and(|code| (0xd800..=0xdfff).contains(&code))
+    };
+    let mut out = Vec::with_capacity(text.len());
+    let mut i = 0;
+    while i < text.len() {
+        if text[i] != b'\\' {
+            out.push(text[i]);
+            i += 1;
+            continue;
+        }
+        let rest = &text[i + 1..];
+        if rest.first() == Some(&b'\\') {
+            out.extend_from_slice(b"\\\\");
+            i += 2;
+        } else if let Some(braced) = rest.strip_prefix(b"u{") {
+            match braced.iter().position(|&b| b == b'}') {
+                Some(end) if surrogate(&braced[..end]) => {
+                    out.extend_from_slice("\u{fffd}".as_bytes());
+                    i += 1 + 2 + end + 1;
+                }
+                _ => {
+                    out.push(b'\\');
+                    i += 1;
+                }
+            }
+        } else if rest.len() >= 5 && rest[0] == b'u' && surrogate(&rest[1..5]) {
+            out.extend_from_slice("\u{fffd}".as_bytes());
+            i += 6;
+        } else {
+            out.push(b'\\');
+            i += 1;
+        }
     }
     out
 }
@@ -525,4 +644,39 @@ fn num_prints_like_glibc() {
     for &(value, text) in cases {
         assert_eq!(num(value), text, "{:016x}", value.to_bits());
     }
+}
+
+/// The variant cells of `composition/editor.txt` (whose rows come from Editor code with no Rust
+/// counterpart yet), rebuilt by hand with map keys out of order.
+#[test]
+fn variant_prints_like_the_oracle() {
+    use Variant::*;
+    let map = |entries: Vec<(&str, Variant)>| Map(entries.into_iter().map(|(k, v)| (k.to_owned(), v)).collect());
+    let golden = rows(&read_expected("composition/editor.txt"));
+    let first = golden.iter().find(|row| row.len() > 1).expect("a row");
+    let cells = [
+        map(vec![("velocity", Double(0.0)), ("scale", Double(1.0)), ("cy", Double(0.5)), ("cx", Double(0.5))]),
+        map(vec![("cameraFull", Double(1.0)), ("bubble", Double(0.0))]),
+        map(vec![
+            ("width", Int(16)),
+            ("ready", Bool(true)),
+            ("missing", Bool(false)),
+            ("height", Int(9)),
+            ("fit", String("fit".into())),
+            ("active", Bool(false)),
+        ]),
+    ];
+    for (i, cell) in cells.iter().enumerate() {
+        assert_eq!(variant(cell), first[2 + i]);
+    }
+    assert_eq!(variant(&List(Vec::new())), first[6]);
+    let keys = ["Ctrl", "S", "H", "I"];
+    let pills = List(vec![map(vec![
+        ("text", String(keys.join(" + "))),
+        ("opacity", Double(1.0)),
+        ("keys", StringList(keys.iter().map(|k| (*k).to_owned()).collect())),
+    ])]);
+    assert!(golden.iter().any(|row| row.get(7) == Some(&variant(&pills))));
+    // Keys sort by UTF-16 code units: U+1F600 (0xD83D 0xDE00) before U+FF5E, unlike their UTF-8.
+    assert_eq!(variant(&map(vec![("\u{ff5e}", Int(2)), ("\u{1f600}", Int(1))])), "{\u{1f600}=int(1),\u{ff5e}=int(2)}");
 }
