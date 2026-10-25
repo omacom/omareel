@@ -12,7 +12,7 @@ ApplicationWindow {
     objectName: "recordingBarWindow"
     visible: false
     // The window leaves room for the discard confirmation to unfold; the pill stays centred.
-    width: recordingBar.webcam ? 384 : 288
+    width: recordingBar.webcam ? 448 : 288
     height: 40
     font.family: theme.fontFamily
     font.pixelSize: theme.type.body
@@ -118,6 +118,19 @@ ApplicationWindow {
                 iconSource: "qrc:/omareel/assets/icons/lucide/rotate-cw.svg"
                 onClicked: recordingBar.rotateCamera()
                 Accessible.name: "Rotate camera"
+            }
+            BarIcon {
+                visible: recordingBar.webcam
+                iconSource: recordingBar.cameraShape === "round" ? "qrc:/omareel/assets/icons/lucide/circle.svg"
+                                                                 : "qrc:/omareel/assets/icons/lucide/square.svg"
+                onClicked: recordingBar.cycleCameraShape()
+                Accessible.name: "Camera shape"
+            }
+            BarIcon {
+                visible: recordingBar.webcam
+                iconSource: "qrc:/omareel/assets/icons/lucide/scan.svg"
+                onClicked: recordingBar.snapSelfViewToNextCorner()
+                Accessible.name: "Move self-view to the next corner"
             }
 
             Rectangle {
@@ -308,6 +321,8 @@ ApplicationWindow {
                 anchors.centerIn: parent
                 width: parent.width - 10
                 height: width
+                readonly property real cornerRadius: recordingBar.cameraShape === "round"
+                    ? width / 2 : Math.min(width / 2, recordingBar.cameraRadius)
                 states: [
                     State { name: "pressed"; when: dragArea.pressed
                         PropertyChanges { target: cameraClip; scale: .98 } },
@@ -329,7 +344,7 @@ ApplicationWindow {
                 Rectangle {
                     id: cameraMask
                     anchors.fill: parent
-                    radius: width / 2
+                    radius: cameraClip.cornerRadius
                     color: "white"
                     visible: false
                     layer.enabled: true
@@ -359,7 +374,7 @@ ApplicationWindow {
                 }
                 Rectangle {
                     anchors.fill: parent
-                    radius: width / 2
+                    radius: cameraClip.cornerRadius
                     color: "transparent"
                     border.width: dragArea.pressed ? 2 : 1.5
                     border.color: dragArea.pressed ? Qt.alpha(theme.accent, .7) : Qt.alpha("white", .16)

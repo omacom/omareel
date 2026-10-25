@@ -84,6 +84,13 @@ RecordingBar::RecordingBar(bool hidden, bool standby, qint64 owner, QObject *par
     }
     m_cameraRotation = state.value(QStringLiteral("camera_rotation")).toInt(0);
     m_cameraFlipHorizontal = state.value(QStringLiteral("camera_flip_horizontal")).toBool(false);
+    {
+        const auto prefs = RecordingPreferences::load();
+        // The project's vocabulary: round, or square with a corner radius (0 for sharp corners).
+        m_cameraShape = prefs.webcam.value(QStringLiteral("shape")).toString() == QLatin1String("square")
+            ? QStringLiteral("square") : QStringLiteral("round");
+        m_cameraRadius = qBound(0, prefs.webcam.value(QStringLiteral("radius")).toInt(16), 80);
+    }
     m_selfViewVisible = state.value(QStringLiteral("selfview")).toBool(false);
     m_selfViewSafe = state.value(QStringLiteral("selfview_safe")).toBool(false);
     m_selfViewMonitor = state.value(QStringLiteral("selfview_monitor")).toString(m_recordedMonitor);
@@ -144,6 +151,7 @@ void RecordingBar::poll()
             publishGeometry();
             Recorder::updateRecordingState({{"host_acknowledged", true}, {"countdown_ready", true},
                 {"camera_rotation", m_cameraRotation}, {"camera_flip_horizontal", m_cameraFlipHorizontal},
+                {"camera_shape", m_cameraShape}, {"camera_radius", m_cameraRadius},
                 {"camera_status", m_cameraFailed ? "failed" : m_cameraCapture->ready() ? "ready" : "starting"},
                 {"camera_width", m_cameraCapture->captureSize().width()},
                 {"camera_height_actual", m_cameraCapture->captureSize().height()},
@@ -279,6 +287,42 @@ void RecordingBar::poll()
         m_elapsed = elapsed;
         emit elapsedChanged();
     }
+}
+
+void RecordingBar::cycleCameraShape()
+{
+    // Round, then square with rounded corners, then square with sharp corners.
+    if (m_cameraShape == QLatin1String("round")) {
+        m_cameraShape = QStringLiteral("square");
+        if (m_cameraRadius == 0) m_cameraRadius = 16;
+    } else if (m_cameraRadius > 0) {
+        m_cameraRadius = 0;
+    } else {
+        m_cameraShape = QStringLiteral("round");
+        m_cameraRadius = 16;
+    }
+    RecordingPreferences preferences = RecordingPreferences::load();
+    preferences.webcam.insert(QStringLiteral("shape"), m_cameraShape);
+    preferences.webcam.insert(QStringLiteral("radius"), m_cameraRadius);
+    preferences.save();
+    if (!m_standby || m_adopted)
+        Recorder::updateRecordingState({{"camera_shape", m_cameraShape},
+                                        {"camera_radius", m_cameraRadius}});
+    publishHost();
+    emit cameraSettingsChanged();
+}
+
+void RecordingBar::snapSelfViewToNextCorner()
+{
+    if (m_selfViewScreenSize.isEmpty())
+        return;
+    m_corner = (m_corner + 1) % 4;
+    const int margin = 24;
+    const int maxX = std::max(margin, m_selfViewScreenSize.width() - m_selfViewPixels - margin);
+    const int maxY = std::max(margin, m_selfViewScreenSize.height() - m_selfViewPixels - margin);
+    const int x = (m_corner == 0 || m_corner == 2) ? margin : maxX;
+    const int y = (m_corner == 0 || m_corner == 1) ? margin : maxY;
+    setSelfViewPosition(x, y);
 }
 
 void RecordingBar::attachCameraOutput(QObject *output)
@@ -456,6 +500,8 @@ void RecordingBar::hostCommand(const QString &command)
     }
     else if (command == "rotate") rotateCamera();
     else if (command == "flip") flipCamera();
+    else if (command == "shape") cycleCameraShape();
+    else if (command == "corner") snapSelfViewToNextCorner();
     else if (command == "show" || command == "hide") setSelfViewVisible(command == "show");
     else if (command == "S" || command == "M" || command == "L") {
         m_selfViewPixels = command == "S" ? 120 : command == "L" ? 220 : 160;
