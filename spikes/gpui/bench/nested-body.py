@@ -64,6 +64,22 @@ def cpu_seconds(pid, children=False):
     except (OSError, IndexError):
         return 0.0
 
+def threads(pid):
+    """CPU seconds per thread name (threads of one name summed)."""
+    result = {}
+    try:
+        tasks = list(Path(f'/proc/{pid}/task').iterdir())
+    except OSError:
+        return result
+    for task in tasks:
+        try:
+            comm = (task / 'comm').read_text().strip()
+            fields = (task / 'stat').read_text().rsplit(')', 1)[1].split()
+            result[comm] = result.get(comm, 0) + (int(fields[11]) + int(fields[12])) / ticks
+        except (OSError, IndexError):
+            pass
+    return result
+
 def rss_mb(pid):
     try:
         return int(Path(f'/proc/{pid}/statm').read_text().split()[1]) * page / 1e6
@@ -109,6 +125,7 @@ while process.poll() is None and time.monotonic() < launched + args.timeout:
         'rss_main': rss_mb(process.pid),
         'rss_tree': sum(rss_mb(p) for p in pids),
         'gpu': gpu_ns(process.pid),
+        'threads': threads(process.pid),
     })
     if marker is None and args.start_marker in stderr_path.read_text(errors='replace'):
         marker = time.time()

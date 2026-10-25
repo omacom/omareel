@@ -61,6 +61,9 @@ print(json.dumps({
     'rss_tree_mb': round(max(s['rss_tree'] for s in inside)),
     'gpu_pct': {k: round(100 * (b['gpu'].get(k, 0) - a['gpu'].get(k, 0)) / (span * 1e9), 1)
                 for k in b['gpu'] if b['gpu'].get(k, 0) != a['gpu'].get(k, 0)},
+    'threads_pct': {k: round(100 * (v - a['threads'].get(k, 0)) / span, 1)
+                    for k, v in sorted(b['threads'].items(), key=lambda kv: -(kv[1] - a['threads'].get(kv[0], 0)))
+                    if v - a['threads'].get(k, 0) > 0.02 * span},
     'app': app,
     'qt_preview_stats_drops': sum(int(l.rsplit('drops=', 1)[1]) for l in stats) if stats else None,
 }))

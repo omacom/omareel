@@ -118,8 +118,10 @@ pub fn run(bundle: &str, output: &str, quality: &str) -> Result<(), String> {
             window
                 .update(&mut cx, |view, window, cx| {
                     // Pictures the last frame showed and this one replaced leave the atlas.
-                    for image in old {
-                        let _ = window.drop_image(image);
+                    if std::env::var_os("SPIKE_NO_DROP").is_none() {
+                        for image in old {
+                            let _ = window.drop_image(image);
+                        }
                     }
                     view.frame = Some(frame);
                     cx.notify();

@@ -29,6 +29,8 @@ pub struct Options {
 }
 
 struct Bench {
+    #[cfg(feature = "gpui-profiler")]
+    profile_start: Option<gpui::profiler::FrameDurationSnapshot>,
     seconds: f64,
     requested: bool,
     started: Option<Instant>,
@@ -148,6 +150,8 @@ impl Preview {
             scrub_bounds: Rc::new(Cell::new(Bounds::default())),
             max_height: options.max_height,
             bench: options.bench.map(|seconds| Bench {
+                #[cfg(feature = "gpui-profiler")]
+                profile_start: None,
                 seconds,
                 requested: false,
                 started: None,
@@ -305,16 +309,23 @@ impl Preview {
             cursor_rotation: comp.cursor.rotation,
             ripples: comp.ripples,
             pills: comp.keystroke_pills,
-            screen: self.shown_screen.clone(),
+            // Experiment: decode as usual but leave the screen out of the scene.
+            screen: self.shown_screen.clone().filter(|_| std::env::var_os("SPIKE_NO_SCREEN").is_none()),
             camera: self.shown_camera.as_ref().map(|(image, _)| image.clone()),
             camera_blur: self.shown_camera.as_ref().and_then(|(_, backdrop)| backdrop.clone()),
             wallpaper: self.wallpaper.clone(),
         }
     }
 
-    fn record_bench(&mut self, cost: Duration, cx: &mut Context<Self>) {
+    fn record_bench(&mut self, cost: Duration, window: &mut Window, cx: &mut Context<Self>) {
         let Some(bench) = &mut self.bench else { return };
         let Some(started) = bench.started else { return };
+        #[cfg(feature = "gpui-profiler")]
+        if bench.profile_start.is_none() {
+            bench.profile_start = Some(window.frame_duration_snapshot());
+        }
+        #[cfg(not(feature = "gpui-profiler"))]
+        let _ = window;
         let now = Instant::now();
         if let Some(last) = bench.last_frame {
             bench.intervals.push((now - last).as_secs_f64() * 1000.0);
@@ -348,6 +359,29 @@ impl Preview {
                 (expected - bench.screen_frames as i64).max(0),
                 skipped,
             );
+            #[cfg(feature = "gpui-profiler")]
+            if let Some(start) = &bench.profile_start {
+                let end = window.frame_duration_snapshot();
+                let ms = |h: &hdrhistogram::Histogram<u64>, q: f64| h.value_at_quantile(q) as f64 / 1e6;
+                let mut line = String::from("{\"gpui_profiler\":{");
+                for (name, mut histogram, before) in [
+                    ("draw", end.draw_duration_histogram, &start.draw_duration_histogram),
+                    ("dirty_to_present", end.dirty_to_present_histogram, &start.dirty_to_present_histogram),
+                    ("present_interval", end.present_interval_histogram, &start.present_interval_histogram),
+                ] {
+                    let _ = histogram.subtract(before);
+                    line += &format!(
+                        "\"{name}_ms\":{{\"count\":{},\"median\":{:.3},\"p95\":{:.3},\"max\":{:.3}}},",
+                        histogram.len(),
+                        ms(&histogram, 0.5),
+                        ms(&histogram, 0.95),
+                        histogram.max() as f64 / 1e6
+                    );
+                }
+                line.pop();
+                line += "}}";
+                eprintln!("{line}");
+            }
             cx.quit();
         }
     }
@@ -482,7 +516,7 @@ impl Render for Preview {
                     .child(div().flex_none().whitespace_nowrap().font_family(mono).child(label)),
             )
             .child(probe);
-        self.record_bench(cost.elapsed(), cx);
+        self.record_bench(cost.elapsed(), window, cx);
         element
     }
 }
