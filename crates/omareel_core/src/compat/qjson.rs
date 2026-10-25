@@ -38,7 +38,7 @@ static UNDEFINED: Value = Value::Undefined;
 /// The whole number `v` holds, if it holds one inside `i64`'s range (Qt's `convertDoubleTo`).
 fn whole_i64(v: f64) -> Option<i64> {
     // 2^63 is exact as a double; NaN fails both comparisons.
-    if v >= -9_223_372_036_854_775_808.0 && v < 9_223_372_036_854_775_808.0 {
+    if (-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0).contains(&v) {
         let n = v as i64;
         if n as f64 == v {
             return Some(n);

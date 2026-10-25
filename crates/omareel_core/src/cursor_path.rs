@@ -36,7 +36,9 @@ pub fn position_at(samples: &[CursorSample], time: f64) -> PointF {
     if samples.is_empty() {
         return PointF::new(0.5, 0.5);
     }
-    // std::upper_bound: the first sample whose time is greater than `time`.
+    // std::upper_bound: the first sample whose time is greater than `time`, with its NaN
+    // behaviour, hence the negated comparison.
+    #[allow(clippy::neg_cmp_op_on_partial_ord)]
     let upper = samples.partition_point(|sample| !(time < sample.time));
     if upper == 0 {
         return samples[0].position;

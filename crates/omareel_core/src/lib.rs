@@ -7,6 +7,8 @@ pub mod compat;
 pub mod cursor_path;
 pub mod easing;
 pub mod input_log;
+pub mod omarchy_paths;
+pub mod probe;
 pub mod project;
 pub mod theme;
 pub mod zoom_timeline;
