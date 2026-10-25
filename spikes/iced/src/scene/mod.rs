@@ -551,17 +551,8 @@ impl Scene {
         ]
     }
 
-    /// Encodes the frame prepared last. `viewport` is where the canvas goes on the target, in
-    /// pixels, and `scissor` what of the target may be drawn; `clear` clears the target first.
-    pub fn render(
-        &self,
-        encoder: &mut wgpu::CommandEncoder,
-        target: &wgpu::TextureView,
-        viewport: [f32; 4],
-        scissor: [u32; 4],
-        clear: Option<wgpu::Color>,
-    ) {
-        let (Some(bind_group), Some(blur_groups)) = (&self.bind_group, &self.blur_groups) else { return };
+    /// Copies this frame's staging buffers into the video textures (part of [`Scene::render`]).
+    pub fn record_copies(&self, encoder: &mut wgpu::CommandEncoder) {
         for (video, staged) in &self.copies {
             let texture = if *video == Video::Screen { &self.screen } else { &self.camera };
             encoder.copy_buffer_to_texture(
@@ -573,6 +564,20 @@ impl Scene {
                 wgpu::Extent3d { width: texture.size.0, height: texture.size.1, depth_or_array_layers: 1 },
             );
         }
+    }
+
+    /// Encodes the frame prepared last. `viewport` is where the canvas goes on the target, in
+    /// pixels, and `scissor` what of the target may be drawn; `clear` clears the target first.
+    pub fn render(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        target: &wgpu::TextureView,
+        viewport: [f32; 4],
+        scissor: [u32; 4],
+        clear: Option<wgpu::Color>,
+    ) {
+        let (Some(bind_group), Some(blur_groups)) = (&self.bind_group, &self.blur_groups) else { return };
+        self.record_copies(encoder);
         if self.backdrop_due {
             let passes: [(&wgpu::RenderPipeline, &Texture, &wgpu::BindGroup); 3] = [
                 (&self.capture_pipeline, &self.backdrop_small, &blur_groups[0]),

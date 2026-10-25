@@ -7,6 +7,7 @@ use crate::scene::composition::RenderTheme;
 use crate::scene::{Scene, Video, VideoFrame, load_wallpaper};
 use crate::video::Stream;
 use iced::widget::{button, column, container, row, shader, slider, text};
+use iced::keyboard::{self, key::Named};
 use iced::{Element, Length, Rectangle, Subscription, Task, mouse, wgpu, window};
 use omareel_core::camera_timeline::map_camera_time;
 use omareel_core::editor::{Document, Probes};
@@ -74,6 +75,7 @@ enum Message {
     Toggle,
     Scrub(f64),
     ScrubReleased,
+    Key(keyboard::Event),
 }
 
 pub fn run(options: Options) -> Result<(), String> {
@@ -217,6 +219,18 @@ impl Preview {
                 }
                 self.anchor = Some((Instant::now(), self.document.output_position()));
             }
+            // Space plays and pauses, the arrows step a second, Home goes to the start.
+            Message::Key(keyboard::Event::KeyPressed { key: keyboard::Key::Named(named), .. }) => {
+                let position = self.document.output_position();
+                match named {
+                    Named::Space => return self.update(Message::Toggle),
+                    Named::ArrowLeft => self.seek((position - 1.0).max(0.0)),
+                    Named::ArrowRight => self.seek((position + 1.0).min(self.duration)),
+                    Named::Home => self.seek(0.0),
+                    _ => {}
+                }
+            }
+            Message::Key(_) => {}
             Message::Scrub(time) => {
                 self.scrubbing = true;
                 self.seek(time);
@@ -232,11 +246,12 @@ impl Preview {
     fn subscription(&self) -> Subscription<Message> {
         // Frames drive playback; while paused, a slow tick lets decoded frames come in.
         let waiting = self.screen_frame.is_none() || self.options.measure.is_some();
-        if self.playing || self.scrubbing || waiting {
+        let ticks = if self.playing || self.scrubbing || waiting {
             window::frames().map(Message::Frame)
         } else {
             iced::time::every(Duration::from_millis(100)).map(Message::Frame)
-        }
+        };
+        Subscription::batch([ticks, keyboard::listen().map(Message::Key)])
     }
 
     fn view(&self) -> Element<'_, Message> {
@@ -391,6 +406,13 @@ impl shader::Primitive for ScenePrimitive {
     }
 
     fn render(&self, pipeline: &ScenePipeline, encoder: &mut wgpu::CommandEncoder, target: &wgpu::TextureView, clip_bounds: &Rectangle<u32>) {
+        // OMAREEL_SPIKE_NO_SCENE=1 leaves the scene undrawn (uploads still happen), to tell its
+        // GPU time from the rest of the window's.
+        static NO_SCENE: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| std::env::var_os("OMAREEL_SPIKE_NO_SCENE").is_some());
+        if *NO_SCENE {
+            pipeline.scene.record_copies(encoder);
+            return;
+        }
         let [x, y, w, h] = pipeline.canvas;
         let left = (x.max(0.0) as u32).max(clip_bounds.x);
         let top = (y.max(0.0) as u32).max(clip_bounds.y);

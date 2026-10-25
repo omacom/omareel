@@ -11,6 +11,7 @@
 set -euo pipefail
 spike="$1"; qt="$2"; bundles="$3"; out="$4"; what="${5:-all}"
 runs="${RUNS:-3}"
+apps="${APPS:-qt iced}"
 here="$(cd "$(dirname "$0")" && pwd)"
 mkdir -p "$out"
 nested() { timeout 180 tests/tools/nested-hyprland.sh --directory /tmp/omareel-nested/iced-measure --timeout 120 -- "$here/in-nested.sh" "$@"; }
@@ -18,6 +19,7 @@ nested() { timeout 180 tests/tools/nested-hyprland.sh --directory /tmp/omareel-n
 preview() {
     local bundle="$1" n="$2" base
     base="$out/iced-preview-$bundle-$n"
+    if [[ " $apps " == *" iced "* ]]; then
     WAYLAND_DEBUG=client SAMPLE="$base.sample.json" SAMPLE_AFTER=3.2 SAMPLE_SECONDS=9.5 \
         nested "$spike" preview "$bundles/$bundle" --measure 10 --canvas-height 620 --stats "$base.stats.json" > "$base.log" 2>&1 || true
     python3 "$here/frames.py" "$base.log" 9.5 3.2 > "$base.frames.json"
@@ -27,7 +29,9 @@ base = sys.argv[1]
 r = {'frames': json.load(open(base + '.frames.json')), 'sample': json.load(open(base + '.sample.json')), 'app': json.load(open(base + '.stats.json'))}
 json.dump(r, open(base + '.json', 'w'), indent=1)
 EOF
+    fi
     base="$out/qt-preview-$bundle-$n"
+    [[ " $apps " == *" qt "* ]] || return 0
     WAYLAND_DEBUG=client OMAREEL_PREVIEW_STATS=1 SAMPLE="$base.sample.json" SAMPLE_AFTER=2.7 SAMPLE_SECONDS=9.5 STOP_AFTER=13.5 \
         nested "$qt" edit "$bundles/$bundle" > "$base.log" 2>&1 || true
     python3 "$here/frames.py" "$base.log" 9.5 0.5 > "$base.frames.json"
@@ -47,10 +51,13 @@ EOF
 
 export_run() {
     local bundle="$1" n="$2" start end
+    if [[ " $apps " == *" iced "* ]]; then
     start=$(date +%s.%N)
     "$spike" export "$bundles/$bundle" -o "$out/iced-$bundle.mp4" --quality social --timing > "$out/iced-export-$bundle-$n.log" 2>&1
     end=$(date +%s.%N)
     python3 -c "import json,sys; print(json.dumps({'seconds': round($end - $start, 3), 'fps': round(600 / ($end - $start), 1), 'load': open('/proc/loadavg').read().split()[:3]}))" > "$out/iced-export-$bundle-$n.json"
+    fi
+    [[ " $apps " == *" qt "* ]] || return 0
     start=$(date +%s.%N)
     "$qt" export "$bundles/$bundle" -o "$out/qt-$bundle.mp4" --quality social --timing > "$out/qt-export-$bundle-$n.log" 2>&1
     end=$(date +%s.%N)

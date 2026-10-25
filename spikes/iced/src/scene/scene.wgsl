@@ -47,10 +47,17 @@ const KIND_RING: u32 = 4u;
 @group(0) @binding(7) var tex_text: texture_2d<f32>;
 @group(0) @binding(8) var tex_backdrop: texture_2d<f32>;
 
+// The item's fields travel as flat varyings: reading the 144-byte item from the storage buffer
+// in every fragment cost the Iris Xe about 3 ms a frame.
 struct VertexOut {
     @builtin(position) position: vec4<f32>,
     @location(0) local: vec2<f32>,
-    @location(1) @interpolate(flat) index: u32,
+    @location(1) @interpolate(flat) shape: vec4<f32>,
+    @location(2) @interpolate(flat) color: vec4<f32>,
+    @location(3) @interpolate(flat) color2: vec4<f32>,
+    @location(4) @interpolate(flat) uv: vec4<f32>,
+    @location(5) @interpolate(flat) p: vec4<f32>,
+    @location(6) @interpolate(flat) k: vec4<u32>,
 };
 
 @vertex
@@ -65,7 +72,12 @@ fn vs_main(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance
     var out: VertexOut;
     out.position = vec4<f32>(canvas.x / globals.canvas.x * 2.0 - 1.0, 1.0 - canvas.y / globals.canvas.y * 2.0, 0.0, 1.0);
     out.local = local;
-    out.index = instance;
+    out.shape = item.shape;
+    out.color = item.color;
+    out.color2 = item.color2;
+    out.uv = item.uv;
+    out.p = item.p;
+    out.k = item.k;
     return out;
 }
 
@@ -158,7 +170,7 @@ fn srgb_to_linear(c: vec3<f32>) -> vec3<f32> {
 
 @fragment
 fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
-    let item = items[in.index];
+    let item = in;
     // Derivatives are only defined in uniform control flow, so take them before the switch.
     let fw = fwidth(in.local);
     let pixel = max(max(fw.x, fw.y), 1e-4);

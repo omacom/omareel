@@ -56,8 +56,9 @@ def rss(pid):
     return 0.0
 
 
-def gpu_ns(pid):
-    """Sum of drm-engine-* over this process's DRM clients, each client counted once."""
+def gpu_ns(pid, prefix='drm-engine-', unit=' ns'):
+    """Sum of drm-engine-* (or another fdinfo key family) over this process's DRM clients,
+    each client counted once."""
     clients = {}
     try:
         for fd in os.listdir(f'/proc/{pid}/fdinfo'):
@@ -74,8 +75,9 @@ def gpu_ns(pid):
                 value = value.strip()
                 if key == 'drm-client-id':
                     client = value
-                elif key.startswith('drm-engine-') and not key.startswith('drm-engine-capacity') and value.endswith(' ns'):
-                    busy[key] = int(value.split()[0])
+                elif key.startswith(prefix) and not key.startswith('drm-engine-capacity') and value.endswith(unit):
+                    amount = int(value.split()[0])
+                    busy[key] = amount * {'KiB': 1024, 'MiB': 1 << 20}.get(value.split()[-1], 1)
             if client is not None:
                 clients[client] = busy
     except OSError:
@@ -92,7 +94,7 @@ def main():
     start = time.monotonic()
     cpu0 = {p: cpu(p) for p in [pid] + tree(pid)}
     gpu0 = gpu_ns(pid)
-    peak_rss, peak_tree_rss, samples = 0.0, 0.0, []
+    peak_rss, peak_tree_rss, samples, peak_gpu_memory = 0.0, 0.0, [], 0.0
     while time.monotonic() - start < seconds:
         procs = [pid] + tree(pid)
         for p in procs:
@@ -102,6 +104,10 @@ def main():
         total = own + sum(rss(p) for p in procs[1:])
         peak_rss, peak_tree_rss = max(peak_rss, own), max(peak_tree_rss, total)
         samples.append(round(own, 1))
+        # GPU buffers in system memory (i915/xe report them per client): textures and staging
+        # buffers that VmRSS does not show.
+        resident = gpu_ns(pid, 'drm-resident-', 'iB')
+        peak_gpu_memory = max(peak_gpu_memory, sum(resident.values()) / (1 << 20))
         time.sleep(0.25)
     wall = time.monotonic() - start
     procs = [pid] + tree(pid)
@@ -118,6 +124,7 @@ def main():
         'rss_peak_mb': round(peak_rss, 1),
         'tree_rss_peak_mb': round(peak_tree_rss, 1),
         'gpu_busy_percent': gpu,
+        'gpu_resident_peak_mb': round(peak_gpu_memory, 1),
         'loadavg': open('/proc/loadavg').read().split()[:3],
     }
     with open(out, 'w') as f:
