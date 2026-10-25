@@ -18,8 +18,6 @@ using namespace Omareel;
 
 LauncherBase::LauncherBase(QObject *parent) : QObject(parent)
 {
-    connect(&m_mediaDevices, &QMediaDevices::videoInputsChanged, this, [this] { handleVideoInputsChanged(); });
-    connect(&m_mediaDevices, &QMediaDevices::audioInputsChanged, this, [this] { handleAudioInputsChanged(); });
     connect(&m_recordingTimer, &QTimer::timeout, this, [this] { recordingTimerFired(); });
     m_startTimer.setInterval(50);
     connect(&m_startTimer, &QTimer::timeout, this, [this] { startTimerFired(); });
@@ -91,6 +89,12 @@ void LauncherBase::readMicrophone()
 {
     if (!m_input) return;
     microphoneRead(int(m_source->format().sampleFormat()), m_input->readAll());
+}
+
+void LauncherBase::watchMediaDevices()
+{
+    connect(&m_mediaDevices, &QMediaDevices::videoInputsChanged, this, [this] { handleVideoInputsChanged(); });
+    connect(&m_mediaDevices, &QMediaDevices::audioInputsChanged, this, [this] { handleAudioInputsChanged(); });
 }
 
 void LauncherBase::startRecordingTimer()

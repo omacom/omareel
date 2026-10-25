@@ -56,6 +56,9 @@ protected:
     // default_input; empty stops listening. Opens the device again when it has changed or the
     // previous one stopped. True when the meter stopped first, which drops the level to 0.
     bool listenToMicrophone(const QString &device);
+    // Connects QMediaDevices' change signals, which also starts Qt Multimedia's device monitoring
+    // (QMediaDevices::connectNotify); the C++ launcher connected after its first device refresh.
+    void watchMediaDevices();
     void startRecordingTimer();
     void startStartTimer();
     void stopStartTimer();

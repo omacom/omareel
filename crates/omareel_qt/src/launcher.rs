@@ -207,6 +207,8 @@ pub mod qobject {
         #[inherit]
         fn listen_to_microphone(self: Pin<&mut Launcher>, device: &QString) -> bool;
         #[inherit]
+        fn watch_media_devices(self: Pin<&mut Launcher>);
+        #[inherit]
         fn start_recording_timer(self: Pin<&mut Launcher>);
         #[inherit]
         fn start_start_timer(self: Pin<&mut Launcher>);
@@ -439,6 +441,7 @@ impl cxx_qt::Initialize for qobject::Launcher {
         {
             self.as_mut().save_recording_preferences();
         }
+        self.as_mut().watch_media_devices();
         self.as_mut().start_recording_timer();
         self.as_mut().refresh_recording();
         self.as_mut().update_microphone_meter();
