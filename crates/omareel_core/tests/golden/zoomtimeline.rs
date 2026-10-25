@@ -21,7 +21,7 @@ fn segment_row(s: &ZoomSegment) -> Vec<String> {
 }
 
 /// `{id, start, end, level, auto, x, y}` objects, read with `QJsonValue`'s defaults.
-fn segments_from_json(array: &Value) -> Vec<ZoomSegment> {
+pub fn segments_from_json(array: &Value) -> Vec<ZoomSegment> {
     array
         .to_array()
         .iter()

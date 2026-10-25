@@ -1,0 +1,22 @@
+{
+    "programs": [
+
+    ],
+    "stream_groups": [
+
+    ],
+    "streams": [
+        {
+            "codec_type": "audio",
+            "r_frame_rate": "0/0",
+            "avg_frame_rate": "0/0",
+            "duration": "1.000000",
+            "tags": {
+
+            }
+        }
+    ],
+    "format": {
+        "duration": "1.000000"
+    }
+}

@@ -3,6 +3,8 @@
 mod json;
 mod model;
 mod styles;
+#[cfg(test)]
+mod tests;
 
 pub use json::*;
 pub use model::*;

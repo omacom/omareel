@@ -30,55 +30,6 @@ fn error_cells(error: &ParseError) -> [String; 4] {
 /// What a successful parse leaves in `QJsonParseError`.
 const NO_ERROR: &str = "no error occurred";
 
-/// Qt keeps an unpaired surrogate that a `\ud800`-style escape produced; a Rust string
-/// cannot hold one, so the port's parser makes it U+FFFD (documented in `compat::qjson`). The
-/// goldens show such a surrogate as `\u{d800}` in **str** cells and as `\ud800` in Qt's JSON,
-/// and this maps both to U+FFFD so everything around them is still compared byte for byte.
-/// Both formats double every literal backslash, so an escape is only one when an even number
-/// of backslashes precedes it; **bytes** cells never contain one.
-fn lone_surrogates_as_replacement(text: &[u8]) -> Vec<u8> {
-    let surrogate = |hex: &[u8]| {
-        !hex.is_empty()
-            && hex.iter().all(u8::is_ascii_hexdigit)
-            && std::str::from_utf8(hex)
-                .ok()
-                .and_then(|h| u32::from_str_radix(h, 16).ok())
-                .is_some_and(|code| (0xd800..=0xdfff).contains(&code))
-    };
-    let mut out = Vec::with_capacity(text.len());
-    let mut i = 0;
-    while i < text.len() {
-        if text[i] != b'\\' {
-            out.push(text[i]);
-            i += 1;
-            continue;
-        }
-        let rest = &text[i + 1..];
-        if rest.first() == Some(&b'\\') {
-            out.extend_from_slice(b"\\\\");
-            i += 2;
-        } else if let Some(braced) = rest.strip_prefix(b"u{") {
-            match braced.iter().position(|&b| b == b'}') {
-                Some(end) if surrogate(&braced[..end]) => {
-                    out.extend_from_slice("\u{fffd}".as_bytes());
-                    i += 1 + 2 + end + 1;
-                }
-                _ => {
-                    out.push(b'\\');
-                    i += 1;
-                }
-            }
-        } else if rest.len() >= 5 && rest[0] == b'u' && surrogate(&rest[1..5]) {
-            out.extend_from_slice("\u{fffd}".as_bytes());
-            i += 6;
-        } else {
-            out.push(b'\\');
-            i += 1;
-        }
-    }
-    out
-}
-
 #[track_caller]
 fn assert_golden_qjson(relative: &str, actual: &str) {
     let expected = lone_surrogates_as_replacement(&read_expected(relative));

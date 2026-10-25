@@ -3,8 +3,10 @@
 
 pub mod cpp;
 pub mod geometry;
+pub mod qchar;
 pub mod qcolor;
 pub mod qdir;
+pub mod qenv;
 pub mod qfile;
 pub mod qjson;
 pub mod qnumber;
@@ -12,3 +14,6 @@ pub mod qprocess;
 pub mod qround;
 pub mod qsavefile;
 pub mod qstandardpaths;
+pub mod qstring;
+pub mod qtemporaryfile;
+pub mod qurl;

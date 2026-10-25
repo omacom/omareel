@@ -10,8 +10,9 @@ same after each one: same commands, same files written byte for byte, same pixel
 |---|---|
 | `crates/omareel_core` | Plain Rust logic with no Qt. Any front end can use it. |
 | `crates/omareel_qt` | The one Rust static library linked into the C++ binary: CXX-Qt objects and C++-callable functions that expose `omareel_core` to QML and C++. |
-| `src/plumbing` | C++ that Rust drives: Qt-only pieces (players, GL export rendering, camera, file watchers, timers). |
-| `src/` (rest) | C++ that has not moved yet, plus `main.cpp`'s window setup. |
+| `crates/omareel_qt/cpp` | C++ that calls into Rust and is compiled into the same archive by the crate's build script: `EditorBase` (the editor object's C++ base) and `Exporter` (the export render loop over the Rust export job). |
+| `src/plumbing` | C++ that Rust drives: Qt-only pieces (the editor's players, GL export rendering, camera, file watchers). |
+| `src/` (rest) | C++ that has not moved yet: the recording side (`src/record`; the launcher, recording bar, microphone meter and capture test client in `src/ui`; and `OmarchyPaths` and `RecordingPreferences` in `src/core`, which it uses), `FrameSource` and the video decoding setup in `src/render`, and `main.cpp`'s window setup. The editor's logic is all Rust: its C++ (`Project`, the timelines and tracks) is deleted, and its unit tests' cases are `#[test]`s in `omareel_core`. |
 
 The layering only goes one way, which keeps static-library linking free of cycles:
 
@@ -19,9 +20,22 @@ The layering only goes one way, which keeps static-library linking free of cycle
 omareel (exe), C++ tests       may call Rust and plumbing
   omareel_render               QML modules, FrameSource
 omareel_qt (Rust staticlib)    calls plumbing through cxx
+  crates/omareel_qt/cpp        C++ in the same archive: calls Rust and plumbing
   omareel_core                 pure Rust
 omareel_plumbing (C++)         never calls Rust; only emits Qt signals and implements virtuals
 ```
+
+The editor object needed C++ on both sides of Rust: its players (`PlaybackDriver`) below it,
+and the exporter, which drives the Rust export job, above it. The exporter is therefore compiled
+into `omareel_qt`'s own archive (`CxxQtBuilder::cpp_files`, which also runs moc on the headers),
+with `EditorBase`, which starts it. Within one archive the linker resolves references in any
+direction, so nothing depends on link order; CMake only adds `crates/omareel_qt/cpp` to the
+include path of what links `omareel_qt`, and the Qt modules that C++ needs to `QT_MODULES` (they
+must match the build script's `qt_module` calls). That C++ is built by the `cc` crate with the
+crate's flags rather than CMake's, so it should not lean on `Q_ASSERT` or `NDEBUG`. A CMake cycle between two static libraries, or
+the Rust editor running the export loop itself, were the other options: the first depends on
+CMake repeating archives on the link line, the second would have changed when the event loop
+runs during an export.
 
 ## Rules for ported code
 
@@ -58,6 +72,25 @@ started (CXX-Qt 0.10, Qt 6.11):
   `QColor` values stay colours.
 - Values coming in from QML go through `QJsonValue::fromVariant`, the same conversion the C++
   editor uses.
+
+- CXX-Qt generates an `Omareel::rust` namespace for the objects declared in `Omareel`, so C++
+  in that namespace spells cxx's types `::rust::Box` and `::rust::Slice`.
+- A C++ base class can own Qt objects the Rust object drives (`EditorBase` owns the players and
+  timers): Rust calls its protected methods with `#[inherit]` and it reports through pure
+  virtuals the Rust object overrides. Override signatures must match exactly; a Rust `i64` is
+  `std::int64_t`, which is not `qint64`. The base disconnects its players in its destructor, since
+  the Rust object (and its overrides) is gone by then.
+- The generated class derives from the base, then `CxxQtType` (which owns the Rust object), then
+  `CxxQtThreading`, so the threading guard is cleared before the Rust object drops: a worker that
+  queues a result while `Drop` waits for it gets an error instead of a deadlock, and nothing runs
+  for a destroyed object.
+- A C++ function can be declared in one bridge only (cxx emits a shim symbol per declaration);
+  other modules call it through a Rust wrapper. A shared struct of one bridge can be used in
+  another as `type ExportOptions = crate::export::ffi::ExportOptions;`.
+- cxx-qt-lib's Qt containers are trivially relocatable, so C++ can hand Rust a `QByteArray` by
+  value; the export job moves each rendered frame to its encode thread that way, in a `Send`
+  wrapper, without copying. Decoded frames go the other way as `QImage`s over Rust's pixels,
+  whose cleanup function drops the Rust box.
 
 ## Build notes
 

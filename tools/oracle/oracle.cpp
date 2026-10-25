@@ -70,6 +70,14 @@ int main(int argc, char **argv)
         {QStringLiteral("project"), runProject},
         {QStringLiteral("omarchypaths"), runOmarchyPaths},
         {QStringLiteral("theme"), runTheme},
+        {QStringLiteral("cliptimeline"), runClipTimeline},
+        {QStringLiteral("cameratimeline"), runCameraTimeline},
+        {QStringLiteral("layouttimeline"), runLayoutTimeline},
+        {QStringLiteral("keystroketrack"), runKeystrokeTrack},
+        {QStringLiteral("motiontrack"), runMotionTrack},
+        {QStringLiteral("recordingpreferences"), runRecordingPreferences},
+        {QStringLiteral("mediaprobe"), runMediaProbe},
+        {QStringLiteral("composition"), runComposition},
     };
     // For development only: OMAREEL_ORACLE_ONLY=qjson,theme runs a subset.
     const QStringList only = qEnvironmentVariable("OMAREEL_ORACLE_ONLY")

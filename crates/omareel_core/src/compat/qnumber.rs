@@ -74,6 +74,19 @@ pub fn to_double_with_ok(text: &str) -> (f64, bool) {
     ascii_to_double(trimmed.as_bytes())
 }
 
+/// `QByteArray::toDouble(&ok)`: `Some(value)` when `ok` would be true. ASCII whitespace may
+/// surround the number; otherwise the rules are `QString::toDouble`'s (the two differ only in
+/// what they return when `ok` is false).
+pub fn byte_array_to_double(bytes: &[u8]) -> Option<f64> {
+    let space = |b: &u8| matches!(b, b' ' | b'\t' | b'\n' | 0x0b | 0x0c | b'\r');
+    let start = bytes.iter().position(|b| !space(b)).unwrap_or(bytes.len());
+    let end = bytes.iter().rposition(|b| !space(b)).map_or(start, |i| i + 1);
+    match ascii_to_double(&bytes[start..end]) {
+        (value, true) => Some(value),
+        (_, false) => None,
+    }
+}
+
 /// `QString::toInt(&ok)` with base 10: [`to_long_long`], then `None` unless the value fits in
 /// an `i32`. Qt returns 0 on failure.
 pub fn to_int(text: &str) -> Option<i32> {
@@ -120,7 +133,7 @@ fn skip_ascii_space(bytes: &[u8], from: usize) -> usize {
 }
 
 /// `QChar::isSpace`: Unicode categories Zs, Zl and Zp plus U+0009..U+000D and U+0085.
-fn is_qchar_space(c: char) -> bool {
+pub(crate) fn is_qchar_space(c: char) -> bool {
     matches!(
         c,
         '\u{9}'..='\u{d}'

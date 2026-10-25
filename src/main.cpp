@@ -3,14 +3,14 @@
 #include <wayland-client.h>
 #include "record/CameraCapture.h"
 #include "record/Recorder.h"
-#include "render/Exporter.h"
+#include "Exporter.h"
 #include "render/VideoDecoding.h"
 #include "core/OmarchyPaths.h"
 #include "core/RecordingPreferences.h"
-#include "ui/Editor.h"
 #include "ui/Launcher.h"
 #include "ui/RecordingBar.h"
 #include "omareel_qt/src/cli.cxxqt.h"
+#include "omareel_qt/src/editor.cxxqt.h"
 #include "omareel_qt/src/theme.cxxqt.h"
 
 #include <LayerShellQt/shell.h>

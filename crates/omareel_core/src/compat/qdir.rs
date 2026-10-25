@@ -1430,7 +1430,7 @@ fn compare_utf16_ignore_case(a: &[u16], b: &[u16]) -> i64 {
 /// libstdc++'s `std::sort` (introsort, median-of-three pivot, heapsort below the depth limit,
 /// final insertion sort over runs of 16), so that elements comparing equal end up where Qt's
 /// sort puts them. Index checks keep an inconsistent comparator from reading out of bounds.
-fn std_sort<T>(v: &mut [T], less: &dyn Fn(&T, &T) -> bool) {
+pub(crate) fn std_sort<T>(v: &mut [T], less: &dyn Fn(&T, &T) -> bool) {
     let n = v.len();
     if n < 2 {
         return;

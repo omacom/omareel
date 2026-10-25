@@ -1,0 +1,36 @@
+#!/bin/sh
+# Stand-in for ffprobe while the oracle runs: MediaProbe's probeVideo and probeFrameTimes call it.
+# It accepts exactly the two argument lists MediaProbe.cpp passes, followed by a path, and replays
+# the recording $OMAREEL_ORACLE_FFPROBE_DIR/<file name of the path>/<probeVideo|probeFrameTimes>.*:
+# .stdout and .stderr with every @PATH@ replaced by the path it was given, then exits with the
+# status in .status. Other arguments exit 64; a file name without a recording exits 65.
+video='-v error -show_entries stream=codec_type,width,height,r_frame_rate,avg_frame_rate,duration,sample_aspect_ratio:stream_side_data=rotation:stream_tags=rotate:format=duration -of json'
+frames='-v error -select_streams v:0 -show_entries packet=pts_time -of csv=p=0'
+count=$#
+index=0
+arguments=''
+path=''
+for argument in "$@"; do
+    index=$((index + 1))
+    if [ "$index" -eq "$count" ]; then path=$argument
+    else arguments="${arguments:+$arguments }$argument"; fi
+done
+case "$arguments" in
+    "$video") kind=probeVideo ;;
+    "$frames") kind=probeFrameTimes ;;
+    *) echo "ffprobe shim: unexpected arguments: $*" >&2; exit 64 ;;
+esac
+recording="${OMAREEL_ORACLE_FFPROBE_DIR:?}/${path##*/}/$kind"
+if [ ! -f "$recording.status" ]; then
+    echo "ffprobe shim: no recording for ${path##*/}" >&2
+    exit 65
+fi
+replay() {
+    PATH_TEXT=$path awk 'BEGIN { RS = "\001"; ORS = "" }
+        { n = index($0, "@PATH@")
+          while (n > 0) { printf "%s%s", substr($0, 1, n - 1), ENVIRON["PATH_TEXT"]; $0 = substr($0, n + 6); n = index($0, "@PATH@") }
+          printf "%s", $0 }' "$1"
+}
+replay "$recording.stdout"
+replay "$recording.stderr" >&2
+exit "$(cat "$recording.status")"
