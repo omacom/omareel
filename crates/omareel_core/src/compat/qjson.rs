@@ -115,6 +115,20 @@ impl Value {
         }
     }
 
+    /// `QJsonValue::toVariant().toLongLong()`: doubles round half away from zero and
+    /// saturate, strings parse as `QString::toLongLong` (0 when they don't), and booleans
+    /// count as 0 or 1.
+    pub fn to_variant_long_long(&self) -> i64 {
+        match self {
+            Value::Int(n) => *n,
+            Value::Double(d) if d.is_nan() => 0,
+            Value::Double(d) => d.round() as i64,
+            Value::Bool(b) => i64::from(*b),
+            Value::String(s) => s.trim().parse().unwrap_or(0),
+            _ => 0,
+        }
+    }
+
     /// `QJsonValue::toDouble`.
     pub fn to_double(&self, default: f64) -> f64 {
         match self {

@@ -4,3 +4,6 @@
 
 pub mod cli;
 pub mod compat;
+pub mod cursor_path;
+pub mod easing;
+pub mod input_log;
