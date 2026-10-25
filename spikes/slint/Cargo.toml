@@ -19,10 +19,15 @@ slint = { version = "=1.18.1", default-features = false, features = [
     "backend-winit-wayland",
     "renderer-femtovg-wgpu",
     "renderer-software",
+    "software-renderer-systemfonts",
     "unstable-wgpu-30",
 ] }
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 pollster = "0.4"
+# The recording bar's layer surface (Slint's winit backend has no wlr-layer-shell).
+smithay-client-toolkit = { version = "0.20", default-features = false }
+wayland-client = "0.31"
+libc = "0.2"
 
 [build-dependencies]
 slint-build = "=1.18.1"

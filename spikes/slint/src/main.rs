@@ -7,6 +7,7 @@
 
 slint::include_modules!();
 
+mod bar;
 mod export;
 mod preview;
 mod scene;
@@ -48,6 +49,7 @@ fn main() {
             measure: value(&args, "--measure").and_then(|v| v.parse().ok()),
             stats: value(&args, "--stats").map(str::to_owned),
         }),
+        Some("bar") => bar::run(),
         _ => Err("usage: omareel-slint-spike setup|preview|export|bar ...".into()),
     };
     if let Err(error) = result {
