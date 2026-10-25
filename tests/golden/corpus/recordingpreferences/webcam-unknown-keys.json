@@ -1,0 +1,1 @@
+{"webcam": {"enabled": true, "device": "/dev/video1", "future": {"nested": [1, "two", null]}, "label": "Caméra 📷", "size": "large", "zz": 1.5}}

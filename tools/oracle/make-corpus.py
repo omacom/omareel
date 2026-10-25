@@ -3,8 +3,9 @@
 
 The oracle reads these files; it never generates inputs itself, so the Rust tests can read the
 same inputs. Everything here is deterministic (fixed seeds), and running the script again must
-leave `git status` clean. The Omarchy themes and the historical project files come from
-import-omarchy-themes.sh and make-historical-projects.sh instead.
+leave `git status` clean. The Omarchy themes, the historical project files and the real ffprobe
+recordings come from import-omarchy-themes.sh, make-historical-projects.sh and record-ffprobe.sh
+instead.
 
 Usage: make-corpus.py [corpus-dir]   (default: tests/golden/corpus next to this script)
 """
@@ -974,6 +975,547 @@ def make_themes() -> None:
     theme("theme-name-unicode", 'accent = "#7aa2f7"\n', None, "thème-ü\U0001F600\n")
 
 
+# ---------------------------------------------------------------------------------------------
+# cliptimeline/, layouttimeline/: clip lists
+
+
+def clip(id_: str, in_: float, out: float, speed: float = 1.0, layout: str = None,
+         media: str = None, fit: str = None) -> dict:
+    """A Clip as the oracle builds it: missing keys keep Clip's defaults."""
+    value = {"id": id_, "in": in_, "out": out, "speed": speed}
+    if layout is not None:
+        value["layout"] = layout
+    if media is not None:
+        value["media"] = media
+    if fit is not None:
+        value["fit"] = fit
+    return value
+
+
+def speed_run(prefix: str, speeds: list, span: float) -> list:
+    return [clip(f"{prefix}{i + 1}", i * span, (i + 1) * span, speed) for i, speed in enumerate(speeds)]
+
+
+def make_timelines() -> None:
+    out = CORPUS / "cliptimeline"
+    reset(out)
+    timelines = {
+        "empty": [],
+        "single": [clip("c1", 0.0, 8.0)],
+        "single-zero-length": [clip("c1", 2.0, 2.0)],
+        "speeds-slow": speed_run("s", [0.5, 0.75, 1.0, 1.2, 1.4], 1.0),
+        "speeds-fast": speed_run("f", [1.6, 1.8, 2.0, 3.0, 4.0], 1.5),
+        "speeds-fastest": speed_run("x", [8.0, 16.0, 24.0], 4.0),
+        "cuts": [clip("c1", 0.0, 2.0), clip("c2", 3.0, 5.0), clip("c3", 6.5, 8.0)],
+        "unsorted": [clip("c1", 5.0, 7.0), clip("c2", 1.0, 3.0), clip("c3", 3.0, 4.5, 2.0)],
+        "overlapping": [clip("c1", 0.0, 4.0), clip("c2", 2.0, 6.0, 2.0), clip("c3", 3.5, 5.0, 0.5)],
+        "zero-length-clips": [clip("c1", 0.0, 2.0), clip("c2", 2.0, 2.0), clip("c3", 2.0, 4.0, 1.2),
+                              clip("c4", 4.0, 4.0, 3.0)],
+        "inserted-media": [clip("c1", 0.0, 3.0), clip("m1", 0.0, 2.0, media="media/a.mp4", fit="fill"),
+                           clip("c2", 3.0, 6.0, 1.5), clip("m2", 1.0, 4.0, 2.0, media="media/b.mp4",
+                                                            fit="framed"),
+                           clip("c3", 6.0, 8.0, layout="camera")],
+        "media-first": [clip("m1", 0.0, 1.5, media="media/a.mp4"), clip("c1", 1.0, 5.0)],
+        "media-last": [clip("c1", 0.0, 4.0), clip("m1", 0.5, 3.0, media="media/a.mp4")],
+        "media-only": [clip("m1", 0.0, 2.0, media="media/a.mp4"),
+                       clip("m2", 0.5, 1.5, 0.5, media="media/b.mp4")],
+        "media-adjacent": [clip("c1", 0.0, 2.0), clip("m1", 0.0, 1.0, media="media/a.mp4"),
+                           clip("m2", 0.0, 1.0, media="media/b.mp4"), clip("c2", 2.0, 4.0)],
+        "inverted": [clip("c1", 0.0, 2.0), clip("c2", 4.0, 3.0), clip("c3", 5.0, 6.0)],
+        "degenerate-speeds": [clip("c1", 0.0, 1.0, 0.0), clip("c2", 1.0, 2.0, -1.0),
+                              clip("c3", 2.0, 3.0)],
+        "tiny": [clip("c1", 0.0, 1e-10), clip("c2", 1.0, 1.05), clip("c3", 2.0, 2.3, 3.0)],
+    }
+    write(out / "cases.json", json.dumps({
+        "timelines": timelines,
+        "splitSequences": {
+            "single": [2.0, 4.0, 1.0, 1.0, 6.5, 0.0, 8.0, 3.999999999, 3.9999999995],
+            "inserted-media": [1.0, 4.0, 4.5, 6.0, 1.0],
+            "speeds-fast": [0.5, 0.5, 2.0, 3.25],
+        },
+    }, indent=1) + "\n")
+
+    out = CORPUS / "layouttimeline"
+    reset(out)
+    layouts = {
+        "empty": [],
+        "single-camera": [clip("c1", 0.0, 3.0, layout="camera")],
+        "single-default": [clip("c1", 0.0, 3.0)],
+        "layouts": [clip("c1", 0.0, 2.0), clip("c2", 2.0, 4.0, layout="camera"),
+                    clip("c3", 4.0, 6.0, layout="screen"), clip("c4", 6.0, 8.0, layout="default"),
+                    clip("c5", 8.0, 9.0, layout="camera")],
+        "short-clips": [clip("c1", 0.0, 1.0, layout="camera"), clip("c2", 1.0, 1.2),
+                        clip("c3", 1.2, 1.25, layout="screen"), clip("c4", 1.25, 3.0, layout="camera"),
+                        clip("c5", 3.0, 3.5, layout="screen")],
+        "speeds": [clip("c1", 0.0, 2.0), clip("c2", 2.0, 4.0, 4.0, layout="camera"),
+                   clip("c3", 4.0, 6.0, 0.5, layout="screen"), clip("c4", 6.0, 7.0, 24.0, layout="camera"),
+                   clip("c5", 7.0, 8.0, 1.4)],
+        "media-between": [clip("c1", 0.0, 2.0, layout="camera"),
+                          clip("m1", 0.0, 1.0, media="media/a.mp4", layout="camera"),
+                          clip("c2", 2.0, 4.0), clip("m2", 0.0, 1.0, media="media/a.mp4"),
+                          clip("m3", 0.0, 0.5, media="media/b.mp4", fit="fill"),
+                          clip("c3", 4.0, 6.0, layout="screen"), clip("c4", 6.0, 7.0, layout="camera")],
+        "media-first": [clip("m1", 0.0, 1.0, media="media/a.mp4"), clip("c1", 0.0, 2.0, layout="camera")],
+        "zero-length": [clip("c1", 0.0, 2.0, layout="camera"), clip("c2", 2.0, 2.0, layout="screen"),
+                        clip("c3", 2.0, 4.0), clip("c4", 4.0, 4.0, layout="camera")],
+        "unknown-layouts": [clip("c1", 0.0, 1.0, layout="camera"), clip("c2", 1.0, 2.0, layout="bogus"),
+                            clip("c3", 2.0, 3.0, layout=""), clip("c4", 3.0, 4.0, layout="Camera"),
+                            clip("c5", 4.0, 5.0, layout="screen ")],
+        "inverted": [clip("c1", 0.0, 2.0, layout="camera"), clip("c2", 3.0, 2.0, layout="screen"),
+                     clip("c3", 3.0, 5.0)],
+    }
+    write(out / "cases.json", json.dumps({"timelines": layouts}, indent=1) + "\n")
+
+
+# ---------------------------------------------------------------------------------------------
+# keystroketrack/: key logs and Keystrokes settings
+
+
+def key_line(t_us: int, name, mods=None, kind: str = "kd", code: int = 30) -> str:
+    value = {"t": t_us, "k": kind, "code": code}
+    if name is not None:
+        value["name"] = name
+    if mods is not None:
+        value["mods"] = mods
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+
+def key_log(path: Path, entries: list) -> None:
+    """entries: (seconds after the first frame, name, mods[, kind]); first frame is 1000000 us."""
+    lines = []
+    for entry in entries:
+        seconds, name, mods = entry[0], entry[1], entry[2]
+        kind = entry[3] if len(entry) > 3 else "kd"
+        lines.append(key_line(1000000 + round(seconds * 1e6), name, mods, kind))
+    write(path, "".join(f"{line}\n" for line in lines))
+
+
+def make_keystrokes() -> None:
+    out = CORPUS / "keystroketrack"
+    reset(out)
+    labels = ["KEY_ESC", "KEY_ENTER", "KEY_SPACE", "KEY_TAB", "KEY_BACKSPACE", "KEY_DELETE", "KEY_UP",
+              "KEY_DOWN", "KEY_LEFT", "KEY_RIGHT", "KEY_PAGEUP", "KEY_PAGEDOWN", "KEY_LEFTBRACE",
+              "KEY_RIGHTBRACE", "KEY_MINUS", "KEY_EQUAL", "KEY_COMMA", "KEY_DOT", "KEY_SLASH",
+              "KEY_SEMICOLON", "KEY_APOSTROPHE", "ESC", "ENTER", "Esc", "KEY_KP1", "KEY_KP0", "KP7",
+              "KEY_KPPLUS", "KEY_KPENTER", "KEY_KP", "KEY_KPA", "KEY_F1", "KEY_F12", "KEY_F24",
+              "KEY_CAPSLOCK", "KEY_PRINT_SCREEN", "KEY_SYSRQ", "KEY_HOME", "KEY_END", "KEY_INSERT",
+              "KEY_GRAVE", "KEY_BACKSLASH", "KEY_102ND", "KEY_VOLUMEUP", "KEY_BRIGHTNESS_CYCLE",
+              "KEY_MULTI__UNDERSCORE", "KEY__LEADING", "KEY_TRAILING_", "KEY_ spaced  words ",
+              "KEY_", "KEY__", "KEY_KEY_A", "key_a", "Return", "PAGE UP", "kEy_tAb",
+              "KEY_ÉCLAIR", "KEY_ßTRASSE", "KEY_ǆUNGLA", "KEY_İSTANBUL", "KEY_ΣΊΣΥΦΟΣ",
+              "KEY_😀SMILE", "KEY_ÀB_ÇD", "KEY_ĳSSEL", "KEY_ŉ_X"]
+    key_log(out / "labels.jsonl", [(0.5 + i * 0.1, name, []) for i, name in enumerate(labels)])
+
+    singles = ["a", "Z", "KEY_a", "KEY_Q", "7", "KEY_0", "_", "KEY_-", " ", ".", "é", "KEY_É", "ß",
+               "ǅ", "ǆ", "Ⅻ", "½", "٣", "ж", "ー", "中", "́", " ", "😀", "KEY_😀", "ﬀ",
+               "ŉ", "\ud800", "KEY_\udc00", "\u0000", "\t", "", "KEY_"]
+    entries = []
+    t = 0.25
+    for name in singles:
+        entries.append((t, name, []))
+        entries.append((t + 0.7, name, ["shift"]))
+        t += 1.5
+    # Python's json writes lone surrogates as \udXXX escapes, which QJsonDocument turns into
+    # unpaired UTF-16 units; NUL and TAB are escaped as well.
+    lines = [json.dumps({"t": 1000000 + round(s * 1e6), "k": "kd", "code": 30, "name": n, "mods": m},
+                        ensure_ascii=True, separators=(",", ":")) for s, n, m in entries]
+    write(out / "single-characters.jsonl", "".join(f"{line}\n" for line in lines))
+
+    key_log(out / "modifiers.jsonl", [
+        (0.5, "KEY_LEFTCTRL", []), (0.55, "KEY_RIGHTSHIFT", []), (0.6, "KEY_LEFTALT", []),
+        (0.65, "KEY_LEFTMETA", []), (0.7, "KEY_RIGHTCTRL", ["ctrl"]), (0.75, "CTRL", []),
+        (0.8, "KEY_FN_SHIFTED", []), (0.85, "KEY_ALTERNATE", []), (0.9, "KEY_METADATA", []),
+        (2.0, "KEY_C", ["ctrl"]), (3.0, "KEY_C", ["shift"]), (4.0, "KEY_C", ["alt"]),
+        (5.0, "KEY_C", ["meta"]), (6.0, "KEY_T", ["ctrl", "shift", "alt", "meta"]),
+        (7.0, "KEY_T", ["meta", "alt", "shift", "ctrl"]), (8.0, "KEY_X", ["ctrl", "ctrl", "shift"]),
+        (9.0, "KEY_X", ["Ctrl", "SHIFT", "hyper", "super", ""]), (10.0, "KEY_X", ["hyper"]),
+        (11.0, "KEY_Y", None), (12.0, "KEY_1", ["shift"]), (13.0, "KEY_ENTER", ["meta"]),
+        (14.0, "KEY_KP5", ["alt", "ctrl"]), (15.0, "a", ["ctrl"]),
+    ])
+    key_log(out / "grouping.jsonl", [
+        # Gaps around the 0.6 s threshold: microsecond times make 0.6 not exactly 0.6.
+        (0.5, "KEY_A", ["ctrl"]), (1.1, "KEY_B", ["ctrl"]), (1.699999, "KEY_C", ["ctrl"]),
+        (2.300001, "KEY_D", ["ctrl"]), (2.9, "KEY_E", ["ctrl"]),
+        # The six-key cap: three two-key shortcuts fill a group; the fourth starts a new one.
+        (5.0, "KEY_F", ["ctrl"]), (5.1, "KEY_G", ["ctrl"]), (5.2, "KEY_H", ["ctrl"]),
+        (5.3, "KEY_I", ["ctrl"]),
+        # A five-key chord after a two-key group overflows it; one more key still fits.
+        (7.0, "KEY_J", ["alt"]), (7.2, "KEY_K", ["ctrl", "shift", "alt", "meta"]),
+        (7.3, "KEY_ESC", []),
+        # A single event can't hold more than five keys (four modifiers and its key).
+        (9.0, "KEY_L", ["ctrl", "shift", "alt", "meta", "ctrl"]),
+        # Same time, then going back in time.
+        (11.0, "KEY_M", ["ctrl"]), (11.0, "KEY_N", ["ctrl"]), (10.5, "KEY_O", ["ctrl"]),
+        (12.5, "KEY_P", ["ctrl"]),
+        # Plain typing between shortcuts.
+        (14.0, "KEY_A", []), (14.1, "KEY_B", []), (14.2, "KEY_S", ["ctrl"]), (14.3, "KEY_C", []),
+        (14.4, "KEY_SPACE", []), (14.5, "KEY_D", []),
+    ])
+    repeats = [(0.5, "KEY_RIGHT", [])]
+    repeats += [(0.5 + 0.5 + i * 0.033, "KEY_RIGHT", []) for i in range(30)]
+    repeats += [(2.5, "KEY_RIGHT", [], "ku")]
+    repeats += [(3.0, "KEY_Z", ["ctrl"])] + [(3.5 + i * 0.05, "KEY_Z", ["ctrl"]) for i in range(8)]
+    repeats += [(4.5, "KEY_Z", [], "ku"), (5.0, "KEY_LEFTSHIFT", []), (5.2, "KEY_A", ["shift"]),
+                (8.0, "KEY_LEFTSHIFT", [], "ku"), (8.5, "KEY_B", [], "ku"), (9.0, None, ["ctrl"]),
+                (9.1, "", ["ctrl"]), (9.2, "KEY_Q", ["ctrl"], "kd"), (9.25, "KEY_Q", ["ctrl"], "ku")]
+    key_log(out / "repeats-and-holds.jsonl", repeats)
+
+    settings = {
+        "disabled": {},
+        "enabled": {"enabled": True},
+        "all-keys": {"enabled": True, "showOnlyShortcuts": False},
+        "hold-0": {"enabled": True, "showOnlyShortcuts": False, "holdMs": 0},
+        "hold-1": {"enabled": True, "holdMs": 1},
+        "hold-negative": {"enabled": True, "showOnlyShortcuts": False, "holdMs": -400},
+        "hold-max": {"enabled": True, "holdMs": 2147483647},
+        "hold-min": {"enabled": True, "holdMs": -2147483648},
+        "hold-5000": {"enabled": True, "holdMs": 5000},
+        "size-position": {"enabled": True, "size": 3.5, "position": "top-left"},
+    }
+    every = sorted(settings)
+    logs = ["inputlog/fixture-input.jsonl", "inputlog/kinds.jsonl", "inputlog/unicode.jsonl",
+            "keystroketrack/labels.jsonl", "keystroketrack/single-characters.jsonl",
+            "keystroketrack/modifiers.jsonl", "keystroketrack/grouping.jsonl",
+            "keystroketrack/repeats-and-holds.jsonl"]
+    runs = [[log, ["enabled", "all-keys"]] for log in logs]
+    runs[0][1] = every
+    runs[3][1] = ["all-keys"]
+    runs[6][1] = every
+    runs[7][1] = ["enabled"]
+    write(out / "cases.json", json.dumps({"settings": settings, "runs": runs}, indent=1) + "\n")
+
+
+# ---------------------------------------------------------------------------------------------
+# motiontrack/: MotionTrack::build inputs
+
+
+def event_log(path: Path, events: list) -> None:
+    """events: dicts with t in seconds after the first frame (1000000 us)."""
+    lines = []
+    for event in events:
+        value = dict(event)
+        value["t"] = 1000000 + round(value["t"] * 1e6)
+        lines.append(json.dumps(value, separators=(",", ":")))
+    write(path, "".join(f"{line}\n" for line in lines))
+
+
+def make_motiontrack() -> None:
+    out = CORPUS / "motiontrack"
+    reset(out)
+    clicks = [{"t": 0.0, "k": "m", "x": 960, "y": 540}]
+    for i in range(1, 80):
+        t = i * 0.05
+        clicks.append({"t": round(t, 6), "k": "m", "x": round(960 + 700 * math.sin(t * 1.7), 3),
+                       "y": round(540 + 400 * math.cos(t * 2.3), 3)})
+    clicks += [
+        {"t": 0.4, "k": "d", "b": "left", "x": 1200, "y": 300},
+        {"t": 0.52, "k": "u", "b": "left", "x": 1200, "y": 300},
+        {"t": 0.9, "k": "d", "b": "right", "x": 100, "y": 900},
+        {"t": 1.3, "k": "d", "b": "left", "x": 500, "y": 500},
+        {"t": 1.35, "k": "d", "b": "left", "x": 500, "y": 500},
+        {"t": 1.4, "k": "u", "b": "left", "x": 500, "y": 500},
+        {"t": 1.45, "k": "u", "b": "left", "x": 500, "y": 500},
+        {"t": 1.8, "k": "u", "b": "middle", "x": 10, "y": 10},
+        {"t": 2.0, "k": "d", "b": "middle", "x": 1900, "y": 1000},
+        {"t": 3.2, "k": "u", "b": "middle", "x": 1900, "y": 1000},
+        {"t": 3.6, "k": "s", "dx": 0, "dy": -1, "x": 800, "y": 400},
+        {"t": 3.95, "k": "d", "b": "left", "x": 960, "y": 540},
+        {"t": 4.2, "k": "d", "b": "left", "x": 0, "y": 0},
+    ]
+    clicks.sort(key=lambda e: e["t"])
+    event_log(out / "clicks-1080p.jsonl", clicks)
+    event_log(out / "no-moves.jsonl", [
+        {"t": 0.5, "k": "d", "b": "left", "x": 100, "y": 100},
+        {"t": 0.6, "k": "u", "b": "left", "x": 100, "y": 100},
+        {"t": 1.5, "k": "d", "b": "left", "x": 300, "y": 200},
+    ])
+    event_log(out / "single-move.jsonl", [{"t": 1.0, "k": "m", "x": 50, "y": 300}])
+    idle = []
+    for start, end, x0, x1 in ((0.0, 0.5, 100, 500), (2.0, 2.2, 500, 520), (2.9, 3.0, 520, 100),
+                               (5.5, 5.6, 100, 600)):
+        steps = round((end - start) / 0.01)
+        for i in range(steps + 1):
+            idle.append({"t": round(start + (end - start) * i / steps, 6), "k": "m",
+                         "x": round(x0 + (x1 - x0) * i / steps, 3), "y": 180})
+    idle.append({"t": 4.0, "k": "d", "b": "left", "x": 100, "y": 180})
+    idle.append({"t": 4.1, "k": "u", "b": "left", "x": 100, "y": 180})
+    event_log(out / "idle-gaps.jsonl", idle)
+
+    synthetic = {"input": "inputlog/bundles/synthetic", "duration": 8.0, "width": 640,
+                 "height": 360, "captureFps": 60.0, "zooms": "generate"}
+    cases = {
+        "synthetic-defaults": {},
+        "synthetic-no-zooms": {"zooms": []},
+        "synthetic-no-smoothing": {"set": {"cursor.smoothing": False}},
+        "synthetic-instant-zoom": {"set": {"zoomStyle.instantAnimation": True, "zoomStyle.motionBlur": 0.5}},
+        "synthetic-bouncy-springs": {"set": {"cursor.spring": [0.5, 600.0, 4.0],
+                                             "zoomStyle.spring": [1.0, 300.0, 3.0]}},
+        "synthetic-snapping-springs": {"set": {"cursor.spring": [0.0, 470.0, 70.0],
+                                               "zoomStyle.spring": [2.25, 0.0, 40.0]}},
+        "synthetic-hide-idle-300": {"set": {"cursor.hideWhenIdleMs": 300, "cursor.clickShrink": 0.5,
+                                            "cursor.rotateOnXMovementRatio": 2.0}},
+        "synthetic-hide-idle-0": {"set": {"cursor.hideWhenIdleMs": 0,
+                                          "cursor.rotateOnXMovementRatio": -1.0}},
+        "synthetic-cursor-hidden": {"set": {"cursor.visible": False, "cursor.clickEffect": "none",
+                                            "cursor.rotateOnXMovementRatio": 0.0}},
+        "synthetic-short-30fps": {"duration": 3.0, "captureFps": 30.0,
+                                  "set": {"zoomStyle.snapToEdgesRatio": 0.0}},
+        "synthetic-duration-0": {"duration": 0.0},
+        "synthetic-duration-negative": {"duration": -1.0},
+        "clicks-1080p": {"input": "motiontrack/clicks-1080p.jsonl", "duration": 4.0, "width": 1920,
+                         "height": 1080, "zooms": [
+                             {"id": "z1", "start": 0.5, "end": 2.0, "level": 2.0, "auto": True, "x": 0.5, "y": 0.5},
+                             {"id": "z2", "start": 2.5, "end": 3.5, "level": 3.0, "auto": False, "x": 0.9, "y": 0.1}],
+                         "set": {"zoomStyle.instantAnimation": True, "cursor.clickShrink": 1.2}},
+        "clicks-zero-size": {"input": "motiontrack/clicks-1080p.jsonl", "duration": 1.0, "width": 0,
+                             "height": 0, "captureFps": 0.0, "zooms": []},
+        "no-moves": {"input": "motiontrack/no-moves.jsonl", "duration": 2.0, "zooms": "generate"},
+        "single-move": {"input": "motiontrack/single-move.jsonl", "duration": 2.0, "zooms": [],
+                        "set": {"cursor.hideWhenIdleMs": 100}},
+        "idle-gaps": {"input": "motiontrack/idle-gaps.jsonl", "duration": 6.0, "zooms": "generate",
+                      "set": {"cursor.hideWhenIdleMs": 500, "cursor.smoothing": False}},
+    }
+    for name, case in cases.items():
+        merged = dict(synthetic)
+        merged.update(case)
+        cases[name] = merged
+    write(out / "cases.json", json.dumps(cases, indent=1) + "\n")
+
+
+# ---------------------------------------------------------------------------------------------
+# recordingpreferences/: settings.json shapes
+
+
+def make_recordingpreferences() -> None:
+    out = CORPUS / "recordingpreferences"
+    reset(out)
+    files = {}
+    files["valid-full"] = json.dumps({
+        "captureBackend": "portal", "countdownBeforeRecording": True, "microphone": False,
+        "microphoneDevice": "alsa_input.usb-Blue_Yeti", "selfViewEnabled": False,
+        "selfViewPosition": {"x": 0.25, "y": 0.75}, "selfViewSize": "L", "systemAudio": False,
+        "webcam": {"enabled": True, "device": "/dev/video0", "chosenDevice": "/dev/video4",
+                   "captureHeight": 720, "rotation": 270, "flipHorizontal": True,
+                   "position": "top-left", "size": 0.3, "shape": "square", "radius": 8,
+                   "crop": "square", "shadow": {"enabled": False, "intensity": 0.5, "blur": 10,
+                                                "distance": 5, "angle": 90},
+                   "border": {"enabled": False, "width": 2, "color": "#000000", "alpha": 1},
+                   "scaleDuringZoom": 1, "offset": {"x": 0.05, "y": 0.02}},
+    }, indent=4) + "\n"
+    files["empty-object"] = "{}"
+    files["empty-file"] = ""
+    files["invalid-json"] = '{"systemAudio": false, "microphone": false,'
+    files["top-level-array"] = '[{"systemAudio": false}]'
+    files["bom"] = '﻿{"systemAudio": false, "selfViewSize": "S"}'
+    files["duplicate-keys"] = '{"microphone": false, "microphone": true, "selfViewSize": "S", "selfViewSize": "L"}'
+    files["null-values"] = json.dumps({key: None for key in (
+        "systemAudio", "microphone", "microphoneDevice", "selfViewEnabled", "selfViewSize",
+        "selfViewPosition", "captureBackend", "countdownBeforeRecording", "webcam")})
+    files["wrong-types"] = json.dumps({
+        "systemAudio": "false", "microphone": 0, "microphoneDevice": 5, "selfViewEnabled": [],
+        "selfViewSize": 2, "selfViewPosition": "1,1", "captureBackend": False,
+        "countdownBeforeRecording": "true", "webcam": "on"})
+    files["self-view-small-lowercase"] = '{"selfViewSize": "s", "selfViewPosition": {"x": 0, "y": 0}}'
+    files["self-view-unknown-size"] = '{"selfViewSize": "xl", "selfViewPosition": {"x": -0.5, "y": 1.5}}'
+    files["self-view-eszett"] = '{"selfViewSize": "ß", "selfViewPosition": {"x": "0.2", "y": null}}'
+    files["self-view-dotless-i"] = '{"selfViewSize": " l ", "selfViewPosition": [0.1, 0.2]}'
+    files["self-view-position-extremes"] = ('{"selfViewSize": "M", "selfViewPosition": '
+                                           '{"x": 1e308, "y": -0.0, "z": 3}}')
+    webcam = {
+        "unknown-keys": {"enabled": True, "device": "/dev/video1", "future": {"nested": [1, "two", None]},
+                         "label": "Caméra 📷", "size": "large", "zz": 1.5},
+        "legacy-inset": {"inset": {"enabled": True, "width": 3, "color": "#ff0000", "alpha": 0.5},
+                         "shape": "round"},
+        "inset-and-border": {"inset": {"width": 3}, "border": {"width": 9}},
+        "legacy-mirror": {"mirror": True},
+        "mirror-and-flip": {"mirror": True, "flipHorizontal": False},
+        "mirror-not-bool": {"mirror": "yes"},
+        "height-720-rotation-90": {"captureHeight": 720, "rotation": 90},
+        "height-480-rotation-45": {"captureHeight": 480, "rotation": 45},
+        "height-string-rotation-string": {"captureHeight": "720", "rotation": "90"},
+        "height-fraction-rotation-negative": {"captureHeight": 720.5, "rotation": -90},
+        "height-720.0-rotation-180.0": {"captureHeight": 720.0, "rotation": 180.0},
+        "height-huge-rotation-360": {"captureHeight": 1e10, "rotation": 360},
+        "height-1080-rotation-270": {"captureHeight": 1080, "rotation": 270, "flipHorizontal": 1},
+        "device-missing": {},
+        "chosen-device-missing": {"device": "/dev/video0"},
+        "device-wrong-types": {"device": 3, "chosenDevice": None, "enabled": "true"},
+        "not-object": None,
+    }
+    for name, value in webcam.items():
+        files[f"webcam-{name}"] = json.dumps({"webcam": [] if value is None else value},
+                                             ensure_ascii=False)
+    for name, text in files.items():
+        write(out / f"{name}.json", text)
+
+
+# ---------------------------------------------------------------------------------------------
+# mediaprobe/ffprobe/crafted-*: ffprobe answers no real file gives (record-ffprobe.sh records
+# the real ones)
+
+
+def make_mediaprobe() -> None:
+    out = CORPUS / "mediaprobe" / "ffprobe"
+    out.mkdir(parents=True, exist_ok=True)
+    for path in out.glob("crafted-*"):
+        shutil.rmtree(path)
+
+    def stream(**fields) -> dict:
+        value = {"codec_type": "video", "width": 320, "height": 240, "sample_aspect_ratio": "1:1",
+                 "r_frame_rate": "30/1", "avg_frame_rate": "30/1", "duration": "2.000000"}
+        value.update(fields)
+        return {k: v for k, v in value.items() if v is not None}
+
+    def answer(streams, format_=None) -> str:
+        root = {"programs": [], "stream_groups": [], "streams": streams,
+                "format": {"duration": "2.000000"} if format_ is None else format_}
+        return json.dumps(root, indent=4) + "\n"
+
+    audio = {"codec_type": "audio", "r_frame_rate": "0/0", "avg_frame_rate": "0/0", "duration": "2.000000"}
+    frames = "".join(f"{i / 30:.6f}\n" for i in range(60))
+    short_frames = "0.000000\n1.000000\n"
+    cases = {
+        "rotate-tag": {"video": answer([stream(tags={"rotate": "90"})])},
+        "rotate-tag-number": {"video": answer([stream(tags={"rotate": 90})])},
+        "rotate-tag-and-side-data": {"video": answer([stream(tags={"rotate": "90"},
+                                                             side_data_list=[{"rotation": 180}])])},
+        "rotate-side-data-several": {"video": answer([stream(side_data_list=[
+            {"rotation": 90}, {"side_data_type": "Display Matrix"}, {"rotation": -180}])])},
+        "rotate-minus-270": {"video": answer([stream(side_data_list=[{"rotation": -270}])])},
+        "rotate-450": {"video": answer([stream(side_data_list=[{"rotation": 450}])])},
+        "rotate-fraction": {"video": answer([stream(side_data_list=[{"rotation": 90.5}])])},
+        "rotate-string": {"video": answer([stream(side_data_list=[{"rotation": "90"}])])},
+        "sar-zero": {"video": answer([stream(sample_aspect_ratio="0:1")])},
+        "sar-na": {"video": answer([stream(sample_aspect_ratio="N/A")])},
+        "sar-slash": {"video": answer([stream(sample_aspect_ratio="3/2")])},
+        "sar-plain-number": {"video": answer([stream(sample_aspect_ratio="1.5")])},
+        "sar-divide-by-zero": {"video": answer([stream(sample_aspect_ratio="1:0")])},
+        "sar-three-parts": {"video": answer([stream(sample_aspect_ratio="1:2:3")])},
+        "sar-missing": {"video": answer([stream(sample_aspect_ratio=None)])},
+        "sar-rounding-half": {"video": answer([stream(width=1, height=3, sample_aspect_ratio="5:2",
+                                                      side_data_list=[{"rotation": 90}])])},
+        "sar-rounding-853": {"video": answer([stream(width=853, height=480, sample_aspect_ratio="3:2")])},
+        "fps-average-unknown": {"video": answer([stream(avg_frame_rate="0/0", r_frame_rate="30000/1001")])},
+        "fps-average-too-high": {"video": answer([stream(avg_frame_rate="500/1", r_frame_rate="25/1")])},
+        "fps-average-240": {"video": answer([stream(avg_frame_rate="240/1", r_frame_rate="25/1")])},
+        "fps-none": {"video": answer([stream(avg_frame_rate="N/A", r_frame_rate="0/0")])},
+        "fps-negative": {"video": answer([stream(avg_frame_rate="-30/1", r_frame_rate=None)])},
+        "fps-plain-number": {"video": answer([stream(avg_frame_rate="29.97", r_frame_rate="1:0")])},
+        "duration-na": {"video": answer([stream(duration="N/A")], {"duration": "2.5"})},
+        "duration-number": {"video": answer([stream(duration=2.5)], {"duration": "3.25"})},
+        "duration-zero-no-format": {"video": answer([stream(duration="0")], {})},
+        "duration-negative": {"video": answer([stream(duration="-1")], {"duration": "-2"})},
+        "duration-format-number": {"video": answer([stream(duration=None)], {"duration": 4})},
+        "width-string": {"video": answer([stream(width="640")])},
+        "height-zero": {"video": answer([stream(height=0)])},
+        "two-video-streams": {"video": answer([stream(), stream(width=1920, height=1080,
+                                                               duration="9.000000"), audio])},
+        "audio-before-video": {"video": answer([audio, stream(width=640, height=360)])},
+        "no-streams": {"video": json.dumps({"format": {"duration": "3.0"}}) + "\n"},
+        "streams-not-array": {"video": json.dumps({"streams": {"0": stream()}}) + "\n"},
+        "garbage-stdout": {"video": "not json\n"},
+        "empty-stdout": {"video": ""},
+        "exit-1-with-json": {"video": answer([stream()]), "video-stderr": "  something failed \n\n",
+                             "video-status": 1},
+        "exit-2-no-stderr": {"video": "", "video-status": 2},
+        "exit-0-with-stderr": {"video": answer([stream()]), "video-stderr": "[h264 @ 0x0] warning\n"},
+        "frames-unsorted-and-odd-lines": {
+            "video": answer([stream()]),
+            "frames": "0.500000\n0.100000\n\n N/A\n0.300000\r\n 0.200000 \n1e1\n-0.033333\n"
+                      "0.400000,\ninf\n+0.250000\n0x10\n1.5e-3\n.75\n0.300000\n"},
+        "frames-exit-1": {"video": answer([stream()]), "frames": frames, "frames-status": 1},
+        "frames-empty": {"video": answer([stream()]), "frames": ""},
+        "frames-no-trailing-newline": {"video": answer([stream()]), "frames": "0.000000\n0.033333"},
+    }
+    for name, case in cases.items():
+        directory = out / f"crafted-{name}.mp4"
+        for kind, key in (("probeVideo", "video"), ("probeFrameTimes", "frames")):
+            write(directory / f"{kind}.stdout", case.get(key, short_frames if key == "frames" else ""))
+            write(directory / f"{kind}.stderr", case.get(f"{key}-stderr", ""))
+            write(directory / f"{kind}.status", f"{case.get(f'{key}-status', 0)}\n")
+
+
+# ---------------------------------------------------------------------------------------------
+# composition/: projects and editor/exporter environments
+
+
+def make_composition() -> None:
+    out = CORPUS / "composition"
+    reset(out)
+    synthetic = ROOT / "tests" / "fixtures" / "synthetic"
+    bundle = out / "bundles" / "keys"
+    bundle.mkdir(parents=True)
+    shutil.copy(synthetic / "capture.json", bundle / "capture.json")
+    lines = (synthetic / "input.jsonl").read_text().splitlines()
+    keys = [(1.2, "KEY_S", ["ctrl"]), (1.5, "KEY_H", []), (1.6, "KEY_I", []), (2.6, "KEY_Z", ["ctrl"]),
+            (2.8, "KEY_Z", ["ctrl", "shift"]), (4.4, "KEY_ENTER", []), (5.1, "KEY_TAB", ["alt"]),
+            (6.9, "KEY_SPACE", ["meta"]), (7.7, "KEY_Q", ["ctrl"])]
+    for seconds, name, mods in keys:
+        lines.append(key_line(1000000 + round(seconds * 1e6), name, mods))
+        lines.append(json.dumps({"t": 1000000 + round(seconds * 1e6) + 80000, "k": "ku", "code": 30},
+                                separators=(",", ":")))
+    lines.sort(key=lambda line: json.loads(line)["t"])
+    write(bundle / "input.jsonl", "".join(f"{line}\n" for line in lines))
+
+    def project(**sections) -> dict:
+        value = {"version": 1, "defaultsVersion": 4, "name": "Composition", "clips": [clip("c1", 0.0, 8.0)],
+                 "zooms": []}
+        value.update(sections)
+        return value
+
+    zooms = [{"id": "z1", "start": 1.0, "end": 3.0, "level": 2.0, "auto": True},
+             {"id": "z2", "start": 4.5, "end": 6.0, "level": 3.0, "auto": False, "x": 0.8, "y": 0.2}]
+    cases = {
+        "plain": {"project": project(cursor={"clickEffect": "none"})},
+        "zooms-and-cuts": {"project": project(
+            clips=[clip("c1", 0.0, 3.0), clip("c2", 4.0, 8.0, 2.0)],
+            zooms=[{"id": z["id"], "start": z["start"], "end": z["end"], "level": z["level"],
+                    "target": "auto" if z["auto"] else {"x": z["x"], "y": z["y"]}} for z in zooms],
+            cursor={"clickEffect": "ripple", "hideWhenIdleMs": 400})},
+        "camera-layouts": {
+            "project": project(camera={"enabled": True},
+                               clips=[clip("c1", 0.0, 2.0), clip("c2", 2.0, 4.0, layout="camera"),
+                                      clip("c3", 4.0, 6.0, layout="screen"), clip("c4", 6.0, 8.0)],
+                               cursor={"clickEffect": "circle"}),
+            "camera": {"offset": 0.75, "duration": 6.0}},
+        "camera-bubble-off": {
+            "project": project(camera={"enabled": False},
+                               clips=[clip("c1", 0.0, 3.0, layout="camera"), clip("c2", 3.0, 8.0, 1.5)]),
+            "camera": {"offset": -0.5, "duration": 20.0}},
+        "inserted-media": {
+            "project": project(
+                camera={"enabled": True}, keystrokes={"enabled": True, "showOnlyShortcuts": False},
+                clips=[clip("c1", 0.0, 2.5), clip("m1", 0.0, 1.5, media="media/a.mp4", fit="fill"),
+                       clip("c2", 2.5, 6.0, 1.5), clip("m2", 0.5, 2.0, 2.0, media="media/b.mp4", fit="framed"),
+                       clip("c3", 6.0, 8.0, layout="camera")],
+                cursor={"clickEffect": "ripple", "visible": False}),
+            "bundle": "composition/bundles/keys", "camera": {"offset": 0.25, "duration": 8.0},
+            "inserts": {"media/a.mp4": [1280, 720, 3.0, 30.0, True],
+                        "media/b.mp4": [720, 1280, 4.0, 25.0, False]},
+            "mediaPlayerSource": "media/a.mp4"},
+        "inserted-media-missing": {
+            "project": project(clips=[clip("m1", 0.0, 2.0, media="media/missing.mp4"), clip("c1", 0.0, 8.0),
+                                      clip("m2", 0.0, 1.0, media="media/a.mp4", fit="framed")]),
+            "inserts": {"media/a.mp4": [1920, 1080, 1.0, 60.0, True], "media/missing.mp4": None},
+            "mediaFrameReady": False, "mediaPlayerSource": "media/a.mp4"},
+        "keystrokes": {
+            "project": project(keystrokes={"enabled": True, "holdMs": 400},
+                               clips=[clip("c1", 0.0, 4.0), clip("c2", 5.0, 8.0, 0.75)]),
+            "bundle": "composition/bundles/keys"},
+        "no-motion-yet": {"project": project(keystrokes={"enabled": True}), "motion": False,
+                          "bundle": "composition/bundles/keys",
+                          "camera": {"offset": 0.0, "duration": 8.0}},
+    }
+    defaults = {"bundle": "inputlog/bundles/synthetic", "sourceDuration": 8.0, "width": 640,
+                "height": 360, "captureFps": 60.0, "camera": None, "inserts": {},
+                "mediaFrameReady": True, "mediaPlayerSource": "", "motion": True}
+    for name, case in cases.items():
+        merged = dict(defaults)
+        merged.update(case)
+        cases[name] = merged
+    write(out / "cases.json", json.dumps(cases, indent=1, ensure_ascii=False) + "\n")
+
+
 def main() -> None:
     os.umask(0o022)
     make_numbers()
@@ -983,6 +1525,12 @@ def main() -> None:
     make_motion()
     make_project()
     make_themes()
+    make_timelines()
+    make_keystrokes()
+    make_motiontrack()
+    make_recordingpreferences()
+    make_mediaprobe()
+    make_composition()
 
 
 if __name__ == "__main__":

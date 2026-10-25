@@ -1,0 +1,381 @@
+{
+ "plain": {
+  "bundle": "inputlog/bundles/synthetic",
+  "sourceDuration": 8.0,
+  "width": 640,
+  "height": 360,
+  "captureFps": 60.0,
+  "camera": null,
+  "inserts": {},
+  "mediaFrameReady": true,
+  "mediaPlayerSource": "",
+  "motion": true,
+  "project": {
+   "version": 1,
+   "defaultsVersion": 4,
+   "name": "Composition",
+   "clips": [
+    {
+     "id": "c1",
+     "in": 0.0,
+     "out": 8.0,
+     "speed": 1.0
+    }
+   ],
+   "zooms": [],
+   "cursor": {
+    "clickEffect": "none"
+   }
+  }
+ },
+ "zooms-and-cuts": {
+  "bundle": "inputlog/bundles/synthetic",
+  "sourceDuration": 8.0,
+  "width": 640,
+  "height": 360,
+  "captureFps": 60.0,
+  "camera": null,
+  "inserts": {},
+  "mediaFrameReady": true,
+  "mediaPlayerSource": "",
+  "motion": true,
+  "project": {
+   "version": 1,
+   "defaultsVersion": 4,
+   "name": "Composition",
+   "clips": [
+    {
+     "id": "c1",
+     "in": 0.0,
+     "out": 3.0,
+     "speed": 1.0
+    },
+    {
+     "id": "c2",
+     "in": 4.0,
+     "out": 8.0,
+     "speed": 2.0
+    }
+   ],
+   "zooms": [
+    {
+     "id": "z1",
+     "start": 1.0,
+     "end": 3.0,
+     "level": 2.0,
+     "target": "auto"
+    },
+    {
+     "id": "z2",
+     "start": 4.5,
+     "end": 6.0,
+     "level": 3.0,
+     "target": {
+      "x": 0.8,
+      "y": 0.2
+     }
+    }
+   ],
+   "cursor": {
+    "clickEffect": "ripple",
+    "hideWhenIdleMs": 400
+   }
+  }
+ },
+ "camera-layouts": {
+  "bundle": "inputlog/bundles/synthetic",
+  "sourceDuration": 8.0,
+  "width": 640,
+  "height": 360,
+  "captureFps": 60.0,
+  "camera": {
+   "offset": 0.75,
+   "duration": 6.0
+  },
+  "inserts": {},
+  "mediaFrameReady": true,
+  "mediaPlayerSource": "",
+  "motion": true,
+  "project": {
+   "version": 1,
+   "defaultsVersion": 4,
+   "name": "Composition",
+   "clips": [
+    {
+     "id": "c1",
+     "in": 0.0,
+     "out": 2.0,
+     "speed": 1.0
+    },
+    {
+     "id": "c2",
+     "in": 2.0,
+     "out": 4.0,
+     "speed": 1.0,
+     "layout": "camera"
+    },
+    {
+     "id": "c3",
+     "in": 4.0,
+     "out": 6.0,
+     "speed": 1.0,
+     "layout": "screen"
+    },
+    {
+     "id": "c4",
+     "in": 6.0,
+     "out": 8.0,
+     "speed": 1.0
+    }
+   ],
+   "zooms": [],
+   "camera": {
+    "enabled": true
+   },
+   "cursor": {
+    "clickEffect": "circle"
+   }
+  }
+ },
+ "camera-bubble-off": {
+  "bundle": "inputlog/bundles/synthetic",
+  "sourceDuration": 8.0,
+  "width": 640,
+  "height": 360,
+  "captureFps": 60.0,
+  "camera": {
+   "offset": -0.5,
+   "duration": 20.0
+  },
+  "inserts": {},
+  "mediaFrameReady": true,
+  "mediaPlayerSource": "",
+  "motion": true,
+  "project": {
+   "version": 1,
+   "defaultsVersion": 4,
+   "name": "Composition",
+   "clips": [
+    {
+     "id": "c1",
+     "in": 0.0,
+     "out": 3.0,
+     "speed": 1.0,
+     "layout": "camera"
+    },
+    {
+     "id": "c2",
+     "in": 3.0,
+     "out": 8.0,
+     "speed": 1.5
+    }
+   ],
+   "zooms": [],
+   "camera": {
+    "enabled": false
+   }
+  }
+ },
+ "inserted-media": {
+  "bundle": "composition/bundles/keys",
+  "sourceDuration": 8.0,
+  "width": 640,
+  "height": 360,
+  "captureFps": 60.0,
+  "camera": {
+   "offset": 0.25,
+   "duration": 8.0
+  },
+  "inserts": {
+   "media/a.mp4": [
+    1280,
+    720,
+    3.0,
+    30.0,
+    true
+   ],
+   "media/b.mp4": [
+    720,
+    1280,
+    4.0,
+    25.0,
+    false
+   ]
+  },
+  "mediaFrameReady": true,
+  "mediaPlayerSource": "media/a.mp4",
+  "motion": true,
+  "project": {
+   "version": 1,
+   "defaultsVersion": 4,
+   "name": "Composition",
+   "clips": [
+    {
+     "id": "c1",
+     "in": 0.0,
+     "out": 2.5,
+     "speed": 1.0
+    },
+    {
+     "id": "m1",
+     "in": 0.0,
+     "out": 1.5,
+     "speed": 1.0,
+     "media": "media/a.mp4",
+     "fit": "fill"
+    },
+    {
+     "id": "c2",
+     "in": 2.5,
+     "out": 6.0,
+     "speed": 1.5
+    },
+    {
+     "id": "m2",
+     "in": 0.5,
+     "out": 2.0,
+     "speed": 2.0,
+     "media": "media/b.mp4",
+     "fit": "framed"
+    },
+    {
+     "id": "c3",
+     "in": 6.0,
+     "out": 8.0,
+     "speed": 1.0,
+     "layout": "camera"
+    }
+   ],
+   "zooms": [],
+   "camera": {
+    "enabled": true
+   },
+   "keystrokes": {
+    "enabled": true,
+    "showOnlyShortcuts": false
+   },
+   "cursor": {
+    "clickEffect": "ripple",
+    "visible": false
+   }
+  }
+ },
+ "inserted-media-missing": {
+  "bundle": "inputlog/bundles/synthetic",
+  "sourceDuration": 8.0,
+  "width": 640,
+  "height": 360,
+  "captureFps": 60.0,
+  "camera": null,
+  "inserts": {
+   "media/a.mp4": [
+    1920,
+    1080,
+    1.0,
+    60.0,
+    true
+   ],
+   "media/missing.mp4": null
+  },
+  "mediaFrameReady": false,
+  "mediaPlayerSource": "media/a.mp4",
+  "motion": true,
+  "project": {
+   "version": 1,
+   "defaultsVersion": 4,
+   "name": "Composition",
+   "clips": [
+    {
+     "id": "m1",
+     "in": 0.0,
+     "out": 2.0,
+     "speed": 1.0,
+     "media": "media/missing.mp4"
+    },
+    {
+     "id": "c1",
+     "in": 0.0,
+     "out": 8.0,
+     "speed": 1.0
+    },
+    {
+     "id": "m2",
+     "in": 0.0,
+     "out": 1.0,
+     "speed": 1.0,
+     "media": "media/a.mp4",
+     "fit": "framed"
+    }
+   ],
+   "zooms": []
+  }
+ },
+ "keystrokes": {
+  "bundle": "composition/bundles/keys",
+  "sourceDuration": 8.0,
+  "width": 640,
+  "height": 360,
+  "captureFps": 60.0,
+  "camera": null,
+  "inserts": {},
+  "mediaFrameReady": true,
+  "mediaPlayerSource": "",
+  "motion": true,
+  "project": {
+   "version": 1,
+   "defaultsVersion": 4,
+   "name": "Composition",
+   "clips": [
+    {
+     "id": "c1",
+     "in": 0.0,
+     "out": 4.0,
+     "speed": 1.0
+    },
+    {
+     "id": "c2",
+     "in": 5.0,
+     "out": 8.0,
+     "speed": 0.75
+    }
+   ],
+   "zooms": [],
+   "keystrokes": {
+    "enabled": true,
+    "holdMs": 400
+   }
+  }
+ },
+ "no-motion-yet": {
+  "bundle": "composition/bundles/keys",
+  "sourceDuration": 8.0,
+  "width": 640,
+  "height": 360,
+  "captureFps": 60.0,
+  "camera": {
+   "offset": 0.0,
+   "duration": 8.0
+  },
+  "inserts": {},
+  "mediaFrameReady": true,
+  "mediaPlayerSource": "",
+  "motion": false,
+  "project": {
+   "version": 1,
+   "defaultsVersion": 4,
+   "name": "Composition",
+   "clips": [
+    {
+     "id": "c1",
+     "in": 0.0,
+     "out": 8.0,
+     "speed": 1.0
+    }
+   ],
+   "zooms": [],
+   "keystrokes": {
+    "enabled": true
+   }
+  }
+ }
+}

@@ -9,8 +9,8 @@ only in a commit that says why.
 | Path | What |
 |---|---|
 | `corpus/` | Inputs. Committed; the oracle only reads them. |
-| `expected/` | Outputs (about 9.2 MB, 2.3 MB compressed). Committed; written only by `tools/oracle/generate-golden.sh`. |
-| `shims/` | Stand-ins for `fc-match` and `hyprctl`, first on `PATH` while the oracle runs. |
+| `expected/` | Outputs (about 13 MB, 2.7 MB compressed). Committed; written only by `tools/oracle/generate-golden.sh`. |
+| `shims/` | Stand-ins for `fc-match`, `hyprctl` and `ffprobe`, first on `PATH` while the oracle runs. |
 | `.gitattributes` | `-text` everywhere: BOMs, CRLF and NUL bytes in these files are on purpose. |
 
 `expected/qt-version.txt` holds the Qt version the oracle ran against (`qVersion()` and a newline;
@@ -57,6 +57,18 @@ The oracle's working directory is `$HOME` for every family, and its scratch file
   versions 2, 3 and 4.
 - `corpus/inputlog/fixture-input.jsonl` and `corpus/inputlog/bundles/synthetic/` are copies of the
   tag's `tests/fixtures/input.jsonl` and `tests/fixtures/synthetic/` (640x360, 60 fps, 8 s).
+- `corpus/mediaprobe/ffprobe/<file>/` (except `crafted-*`): what the real ffprobe printed and
+  returned for small files `tools/oracle/record-ffprobe.sh` generates with ffmpeg (testsrc at
+  several sizes and rates, with audio, NTSC rate in Matroska, an odd size, 480 fps, B-frames,
+  display rotations 90, 180 and 270, sample aspect 4:3 and 2:1 with a rotation, variable frame
+  rate in MP4 and Matroska, audio only, a PNG, an animated GIF, a text file, an empty file) and a
+  path that does not exist, called with exactly MediaProbe.cpp's arguments. Each directory holds
+  `probeVideo.{stdout,stderr,status}` and `probeFrameTimes.{stdout,stderr,status}`; the path
+  ffprobe was given is written `@PATH@` and FFmpeg's log-context addresses (`[mov,mp4,... @
+  0x…]`) `0x0`. `FFPROBE_VERSION` names the FFmpeg that made them (n9.0.1). The media files are
+  not kept. Rerunning the script with the same FFmpeg reproduces the files.
+- `corpus/composition/bundles/keys/` is the synthetic bundle with key presses added, written by
+  `make-corpus.py`.
 - Everything else is written by `tools/oracle/make-corpus.py` (fixed seeds; rerunning it must not
   change anything). Read it for what each crafted file is for; the file names say it too.
 
@@ -91,6 +103,9 @@ The cell formats, named in the per-file descriptions below:
 - **bytes**: raw bytes as `"` + contents + `"`: bytes 0x20–0x7E stay (except `"` → `\"` and
   `\` → `\\`), every other byte is `\xNN` (lowercase hex).
 - **strlist** (a `QStringList`): `[` + the items as **str** joined by `,` + `]`; `[]` when empty.
+- **clips** (a `QVector<Clip>`): `[` + the clips joined by `;` + `]` (`[]` when empty), a clip
+  being `<id str> <in num> <out num> <speed num> <layout str> <media str> <fit str>` joined by
+  single spaces.
 - **color** (a `QColor`): `<spec> <rgba64> <argb>` separated by single spaces. `<spec>` is the
   `QColor::Spec` name (`Invalid`, `Rgb`, `Hsv`, `Cmyk`, `Hsl`, `ExtendedRgb`); `<rgba64>` is
   `rgba64()` as four 4-digit lowercase hex numbers, red green blue alpha, with no separators;
@@ -422,10 +437,280 @@ replaces the output or `OMAREEL_ORACLE_HYPRCTL_EXIT` sets its exit status;
 `OMAREEL_ORACLE_FC_MATCH` / `OMAREEL_ORACLE_FC_MATCH_EXIT` say otherwise. Both reject other
 arguments with exit status 64.
 
+## Grids
+
+The families below sample functions of time on grids. prev(x) and next(x) are the doubles just
+below and above x (`nextafter` towards −∞ and +∞). A grid is a list of doubles sorted ascending
+with exact duplicates removed (no grid contains −0 or NaN before its extra values); "then −∞, +∞,
+NaN" appends those after the sorted part, in that order. Sums are evaluated as written, left to
+right, in doubles: `b + 1e-9`, `e + h + 0.25` is `(e + h) + 0.25`.
+
+## cliptimeline: ClipTimeline
+
+Inputs: `corpus/cliptimeline/cases.json`. `timelines` holds clip lists, taken in key order; each
+clip `{id, in, out, speed[, layout][, media][, fit]}` is made into a `Clip` directly (a missing key
+keeps `Clip`'s default: speed 1, layout `"default"`, no media, fit `"fit"`; nothing is validated or
+dropped as `Project::fromJson` would). They cover every speed of `allowedClipSpeeds`, cuts,
+unsorted and overlapping source ranges, zero-length, inverted (out < in), speed 0 and −1, tiny and
+inserted-media clips, and the empty list. `splitSequences` lists times to split one timeline at in
+turn.
+
+For a timeline of n clips, b₀ = 0 and b_k = b_{k−1} + (out − in) / max(0.000001, speed) of clip k
+(1-based): where each clip starts in output time and where the last ends, accumulated as `clipAt`
+does (negative lengths included). T is `totalDuration()`.
+
+- `queries.txt`: a section `== <timeline>` per timeline, with rows:
+  - `clips <clips>` (`clips()` of the timeline) and `totalDuration <num>`;
+  - `at <t num> <clipAt(t, &start) int> <start num> <sourceTime(t) num>
+    <recordingSourceTime(t) num>`, start being set to −7 before the call (it stays −7 when the
+    timeline is empty), for t in the grid of i/20 for i = −10..⌈20·min(T, 12)⌉ + 10 and of
+    b_k − 1e−9, prev(b_k), b_k, next(b_k), b_k + 1e−9 for k = 0..n; then −∞, +∞, NaN;
+  - `recordingBounds <index int> <sourceDuration num> <lower num> <upper num>` for index −1..n
+    (outer) and sourceDuration 8, then 100;
+  - `outputTime <clipIndex int> <source num> <result num>` for clipIndex −1..n (outer) and source
+    in the grid of i/2 for i = −2..24 and of prev(x), x, next(x) for x every clip's in and out;
+    then −∞, +∞, NaN;
+  - `outputRange <sourceStart num> <sourceEnd num> <first num> <second num>` for every ordered
+    pair (sourceStart outer) of the grid of −1, 0, 100 and every clip's in, out and
+    (in + out) / 2.
+- `edits.txt`: a section `== <timeline>` per timeline. Every edit runs on a fresh copy of the
+  timeline (so its split counter starts at 1) except the split sequence. Rows:
+  - `split <t num> <ok bool> <clips after>` for t in the grid of i/4 for i = −2..⌈4·min(T, 12)⌉ + 2
+    and, for k = 0..n, of prev(b_k − 1e−9), b_k − 1e−9, next(b_k − 1e−9), b_k, prev(b_k + 1e−9),
+    b_k + 1e−9, next(b_k + 1e−9) (split's own tolerance); then −∞, +∞, NaN;
+  - `splitSequence <t num> <ok bool> <clips after>` for every time of the timeline's
+    `splitSequences` entry, all on one timeline, so ids count up (`c1-s1`, `c1-s1-s2`, `c1-s3`);
+  - `trim <index int> <newIn num> <newOut num> <ok bool> <clips after>` for index −1..n (outer) and
+    (newIn, newOut) = (0, 1), (0.5, 7.5), (−0, 2), (−1e−300, 2), (2, 2), (3, 2), (0, 1e−300),
+    (5, +∞), (NaN, 1), (1, NaN);
+  - `remove <index int> <ok bool> <clips after>` for index −1..n;
+  - `deleteRange <from num> <to num> <ok bool> <ok bool> <ok bool> <clips after>`: three calls, each
+    on a fresh copy, with remainderId `"r"`, `""` and the first clip's id (`"c1"` when there is
+    none); the clips are those after the `"r"` call. The oracle checks that the other two either
+    return false and leave the clips as they were or return true with exactly the `"r"` result
+    (the remainder id is used only when a clip loses its middle), so their clips are not printed.
+    The points are the grid of −1, 0, T, T + 1, of b_k − 0.05, b_k, b_k + 0.05 for 1 ≤ k ≤ n − 1 and
+    of (b_{k−1} + b_k) / 2 for 1 ≤ k ≤ n; the pairs are every (from, to) of two points with
+    from < to (from outer), then (T, 0), (NaN, T), (0, NaN), (−∞, T), (0, +∞), (−∞, +∞).
+
+## cameratimeline: mapCameraTime
+
+- `map.txt`: a section `== offset=<num> duration=<num>` for offset in −2, −0.5, 0, 0.25, 1.5, 3,
+  NaN (outer) and duration in −1, 0, 0.5, 4, 8, +∞, NaN, with rows `<screenTime num> <seconds num>
+  <beforeStart bool> <beyondEnd bool>` of `mapCameraTime(screenTime, offset, duration)`, for
+  screenTime in the grid of i/4 for i = −12..48 and of prev(x), x, next(x) for x = offset and
+  x = offset + duration (each only when finite); then −0, −∞, +∞, NaN.
+
+## layouttimeline: sampleLayout
+
+Inputs: `corpus/layouttimeline/cases.json` `timelines`, clip lists as in cliptimeline (layouts
+`default`, `camera`, `screen` and ones `sampleLayout` treats as default, clips shorter than the
+transition, speeds, inserted videos between and at the start, zero-length and inverted clips).
+
+- `sample.txt`: for every timeline (key order), nine sections `== <timeline>
+  cameraAvailable=<bool> bubbleEnabled=<bool> transition=<num or default>`: (false, true, default),
+  then bubbleEnabled false and then true, each with transition default, 0, 0.25, 1.5. `default` is
+  the call without its transition argument (0.5). Rows `<t num> <cameraFull num> <bubble num>` of
+  `sampleLayout(clips, t, cameraAvailable, bubbleEnabled[, transition])`. With s₀ = 0,
+  s_k = s_{k−1} + max(0, (out − in) / max(0.000001, speed)) (as `sampleLayout` accumulates) and
+  τ the transition (0.5 for default), t is in the grid of i/20 for i = −10..⌈20·min(s_n, 12)⌉ + 10
+  and of prev(x), x, next(x) for x = s_k and x = s_k + τ, k = 0..n; then −∞, +∞, NaN.
+
+## keystroketrack: KeystrokeTrack
+
+Inputs: `corpus/keystroketrack/cases.json`. `settings` are named `Keystrokes` values: each key
+given replaces the struct's default (enabled false, position `"bottom-center"`, size 1,
+showOnlyShortcuts true, holdMs 900), written straight into the struct (`Project::fromJson` would
+keep holdMs within 100..5000; the track is tested beyond that, up to the int limits). `runs`
+pairs a log with the settings it is built with, in order. A log is
+`InputLog::load(<corpus>/<log>, 1000000, -1).events()`: `inputlog/fixture-input.jsonl`,
+`kinds.jsonl` and `unicode.jsonl`, and the crafted `keystroketrack/*.jsonl` (every label of
+`keyLabel`, `KP` keys, words with case-mapping traps such as `ß`, `ǆ`, `İ`, final sigma and a
+non-BMP first letter; single-character names for `QChar::isLetterOrNumber` and the
+"names of one UTF-16 unit stay as they are" rule, lone surrogates, NUL; modifier keys, modifier
+lists with repeats, unknown and capitalised names; the 0.6 s grouping threshold either side of
+it, the six-key cap, times that go back; auto-repeat, holds, key-ups and empty names).
+
+- `sample.txt`: a section `== <log> settings=<name>` per run and setting, with rows
+  `<t num> <pill count int>` followed, per pill of `KeystrokeTrack::build(events,
+  settings).sample(t)`, by `<keys strlist> <text str> <opacity num>`. With L the latest KeyDown
+  time of the log (0 when there is none), h = holdMs / 1000 and E = L + min(max(h, 0), 2) + 0.5,
+  t is in the grid of i/10 for i = −5..⌈10·E⌉ and, for every KeyDown time e, of prev(e), e,
+  next(e) and, when −0.5 ≤ e + h + 0.25 ≤ E, of e + h, prev(e + h + 0.25), e + h + 0.25,
+  next(e + h + 0.25).
+
+## motiontrack: MotionTrack
+
+Inputs: `corpus/motiontrack/cases.json`, in key order. A case has `input` (a bundle directory,
+read with `InputLog::loadBundle(<dir>, duration)` as the editor reads it, or a log file, read
+with `InputLog::load(<file>, 1000000, -1)`), `duration`, `width`, `height`, `captureFps`,
+`zooms` (`"generate"`: `ZoomTimeline::generate` of the `clickDowns(true)` times and duration, as
+a new project gets them; or segments `{id, start, end, level, auto, x, y}` as in zoomtimeline)
+and `set`, fields written straight into `Project::defaults("Motion", duration)`:
+`cursor.visible`, `cursor.smoothing`, `cursor.spring` (`[mass, stiffness, damping]`),
+`cursor.clickEffect`, `cursor.clickShrink`, `cursor.rotateOnXMovementRatio`,
+`cursor.hideWhenIdleMs`, `zoomStyle.spring`, `zoomStyle.instantAnimation`,
+`zoomStyle.motionBlur`, `zoomStyle.snapToEdgesRatio` (clickEffect and motionBlur do not reach
+MotionTrack; the cases show that). The track is `MotionTrack::build(duration, width, height,
+events, project, captureFps)`.
+
+- `sample.txt`: a section `== <case>` per case with `duration <num>` (`duration()`) and
+  `size <int>` (`size()`), then rows `<t num> <zoomScale> <zoomCx> <zoomCy> <zoomCenterVelocity>
+  <cursorX> <cursorY> <cursorScale> <cursorOpacity> <cursorRotation>` (the `sample(t)` fields, all
+  num) `<ripple count int>` and, per ripple of `ripples(t)`, `<x num> <y num> <progress num>`.
+  With D = `duration()`, t is in the grid of i/50 for i = −5..⌈50·D⌉ + 5, of prev(D), D, next(D)
+  and of prev(x), x, next(x) for x = d and x = d + 0.45, d being every ButtonDown time of the
+  events; then −∞, +∞. NaN is left out: `sample(NaN)` converts NaN to `int`, which is undefined
+  (it reads out of bounds on x86_64). Last, `== default-constructed`: `MotionTrack{}` with its
+  duration and size rows and rows at −1, 0, 0.5, +∞.
+
+## recordingpreferences: RecordingPreferences
+
+Every state runs in a fresh `$HOME/oracle-scratch/recordingpreferences/<label>/`, with its
+`config/` as `XDG_CONFIG_HOME` and its `home/` as `HOME` (both set back afterwards). "current"
+is `<config>/omareel/settings.json` and "legacy" `<config>/omarecord/settings.json`.
+
+The states, in order: `current-<name>` for every file of `corpus/recordingpreferences/` (byte
+order; `<name>` is the file name without `.json`), copied to current with mode 0644: valid,
+empty, invalid and BOM-prefixed JSON, a top-level array, duplicate keys, nulls and wrong types,
+self-view sizes and positions, `webcam` blobs with unknown keys (kept and saved back as they are),
+the legacy `inset` (moved to `border` when there is none) and `mirror` keys, captureHeight and
+rotation values; `legacy-<name>` for `valid-full`, `invalid-json` and `webcam-legacy-inset`,
+copied to legacy only (load copies it over to current); then `special-no-file`,
+`special-config-home-missing` (`XDG_CONFIG_HOME` points at a directory that does not exist),
+`special-legacy-and-current` (current wins), `special-legacy-omareel-is-file` (a file where
+`omareel/` should be: the copy fails and load reads legacy), `special-legacy-omareel-read-only`
+(`omareel/` mode 0500), `special-legacy-is-directory`, `special-legacy-unreadable` (mode 0000),
+`special-current-is-directory`, `special-current-unreadable` (0000), `special-current-read-only`
+(0444), `special-current-dangling-symlink` (current links to a missing `missing-target.json`, with
+a legacy file: the copy goes through the link), `special-current-symlink` (current links to
+`real.json`), `special-config-home-read-only` (`config/` mode 0500, no files),
+`special-xdg-config-home-unset` and `special-xdg-config-home-relative` (`XDG_CONFIG_HOME` unset,
+or `config`, which Qt ignores: the file is `$HOME/.config/omareel/settings.json`). The legacy and
+special files hold `valid-full.json`, except that `special-legacy-and-current` and the two
+`special-xdg-*` states have `self-view-small-lowercase.json` as current.
+
+- `cases.txt`: a section `== <label>` per state, with rows `path <RecordingPreferences::path()
+  path>`; the fields of what `load()` returned, `<field> <value>`: `systemAudio` bool, `microphone`
+  bool, `microphoneDevice` str, `webcamEnabled` bool, `webcamDevice` str, `webcamChosenDevice` str,
+  `webcamHeight` int, `webcamRotation` int, `webcamFlipHorizontal` bool, `selfViewEnabled` bool,
+  `selfViewSize` str, `selfViewX` num, `selfViewY` num, `captureBackend` str,
+  `countdownBeforeRecording` bool, `webcam` json; `after-load current <file state>` and `after-load
+  legacy <file state>`; `save <ok bool> <error path>` of `save(&error)` with the error set to
+  `<untouched>` before; `after-save current <file state>`, which holds the bytes `save()` wrote when
+  it succeeded; and `reload same`, or `reload differs` followed by the names of the fields (in the
+  order above) in which a second `load()` differs from what was saved. A file state is `missing`,
+  `directory <mode>`, `file <mode>` followed by the file's **bytes** when it can be read, or
+  `symlink <target str>` followed by the state of what the link points to; modes are 4-digit octal.
+- Then three sections for preferences built in C++ and saved into an empty `config/`:
+  `constructed-defaults` (`RecordingPreferences{}`), `constructed-edge-values` (every field
+  changed, out-of-range self-view position, captureHeight 480, rotation 45, size `xl`, a `webcam`
+  blob with `inset`, `mirror` and unknown keys) and `constructed-non-finite` (selfViewX NaN,
+  selfViewY −∞), with the `path` row, the fields, and the save rows as above.
+
+## mediaprobe: probeVideo, probeFrameTimes
+
+The oracle never runs ffprobe. `tests/golden/shims/ffprobe` is first on `PATH`: it accepts exactly
+the argument list each function passes (then the path) and replays
+`$OMAREEL_ORACLE_FFPROBE_DIR/<file name of the path>/<probeVideo|probeFrameTimes>.stdout`,
+`.stderr` (with every `@PATH@` replaced by the path it was given) and exits with `.status`; other
+arguments exit 64 and a name without a recording 65. The oracle points that variable at
+`corpus/mediaprobe/ffprobe`, which holds recordings of the real ffprobe (see "Where the corpus
+came from") and `crafted-*` answers no real file gives (rotation in tags, several side-data
+entries, fractional or string rotations, sample aspect ratios `0:1`, `N/A`, `3/2`, `1.5`, `1:0`,
+`1:2:3`, rounding at .5, frame rates 0/0, above 240, negative, `N/A`; durations `N/A`, numeric,
+zero, negative; string widths, two video streams, audio first, no streams, garbage or empty
+output, non-zero exits, stderr noise; frame lists unsorted, with blank, `N/A`, CRLF, padded,
+exponent, `inf`, `+`, hex and trailing-comma lines, an empty list and a failing run).
+
+Both functions only call ffprobe for a path that is a file, so the oracle probes empty files
+named after each recording, `$HOME/oracle-scratch/mediaprobe/files/<name>`, for every directory of
+`corpus/mediaprobe/ffprobe` (byte order); then `<missing file>` (`files/missing.mp4`),
+`<directory>` (`files/directory.mp4/`, a directory), `<empty path>`, `<relative path>`
+(`oracle-scratch/mediaprobe/files/testsrc-320x240-30.mp4`, relative to the working directory
+`$HOME`) and `<ffprobe not on PATH>` (`files/testsrc-320x240-30.mp4` with `PATH` set to an empty
+directory, so the process never starts).
+
+- `probe-video.txt`: `<label> <width int> <height int> <duration num> <fps num> <audio bool>
+  <isValid() bool> <error path>` of `probeVideo(path, &error)`, the error set to `<untouched>`
+  before the call.
+- `probe-frame-times.txt`: `<label> <count int>` followed by every time of
+  `probeFrameTimes(path)` as num.
+
+## composition: the editor's and the exporter's per-time state
+
+What the QML composition is told at each time exists twice in the C++: Editor's preview getters
+(`src/ui/Editor.cpp`) and the frame loop of `Exporter::run` (`src/render/Exporter.cpp`, filling
+`CompositionState`). Both sit in QObject classes the oracle can't link, so
+`tools/oracle/cases/composition.cpp` holds verbatim copies, with comments giving the exact lines at
+the tag: Editor.cpp 513, 528–602, 707–710 and 999–1016 as methods of a struct with Editor's members,
+and Exporter.cpp 61 (`MediaInfo`), 426–434 (the initial state) and 872–873 plus 881–916 (one frame,
+re-indented) as functions. The two differ on purpose and both are recorded: during an inserted video
+the editor shows no cursor (`visible` false, default sample) but keeps the zoom of the recording
+time, while the exporter keeps `visible` as the project has it and resets the zoom; the editor's
+media map has a `missing` key, `width`/`height` of at least 1 and a `ready` that depends on the
+media player, while the exporter's has no `missing` key, takes `width`/`height` as probed, always
+says ready, and, because a recording frame only sets `active` to false, keeps the last insert's
+`fit`, `width` and `height`; the editor clamps the output time to [0, duration] before mapping it
+and finds the clip with its own loop (`clipForOutput`), the exporter uses `ClipTimeline::clipAt` and
+`recordingSourceTime` unclamped; the exporter's `cameraVisible` does not look at whether there is a
+camera (it is true without one), the editor's does; and before its motion track is built the editor
+shows the default sample and no ripples.
+
+Cell format **variant** (a `QVariant`): by type, `double` → num; `int` → `int(<int>)`; `bool` →
+bool; `QString` → str; `QStringList` → strlist; `QVariantMap` → `{` + `<key>=<variant>` joined by
+`,` + `}` with keys in `QVariantMap` order (ascending UTF-16 code units) and the key as raw
+UTF-8; `QVariantList` → `[` + items joined by `,` + `]`; anything else `<typeName>` + str (none
+occurs).
+
+Inputs: `corpus/composition/cases.json`, in key order. A case has `project` (read with
+`Project::fromJson`), `bundle` (`InputLog::loadBundle(<corpus>/<bundle>, sourceDuration)`; the
+synthetic recording, or `composition/bundles/keys`, the same with key presses added),
+`sourceDuration`, `width`, `height`, `captureFps` (the motion track is
+`MotionTrack::build(sourceDuration, width, height, events, project, captureFps)`, the keystroke
+track `KeystrokeTrack::build(events, project.keystrokes)`), `camera` (null for no camera, or
+`{offset, duration}`), `inserts` (per media path `[width, height, duration, fps, audio]` of its
+`VideoInfo`, or null for one that did not probe), `mediaFrameReady` and `mediaPlayerSource` (the
+editor's media-player state), and `motion` (false: the editor's motion track is not built yet).
+The editor's inputs are `m_project`, `m_motion`, `m_keystrokeTrack`, `m_hasCamera` (camera not
+null), `m_cameraOffset`, `m_cameraDuration`, `m_inserts`, `m_mediaFrameReady`,
+`m_mediaPlayerSource` and `m_outputPosition`; the exporter's are the clip timeline of the
+project's clips, the project, the motion and keystroke tracks, `cameraMedia` (`MediaInfo{1280, 720,
+duration, 30, false}` with a camera, `MediaInfo{}` without), `cameraOffset` and `inserts`.
+
+- `editor.txt`: a section `== <case>` per case, with rows `<outputPosition num>
+  <sourcePosition() num> <previewZoom() variant> <previewLayout() variant> <previewMedia()
+  variant> <previewCursor() variant> <previewRipples() variant> <previewKeystrokePills() variant>
+  <cameraVisible() bool>` for outputPosition in the grid of i/30 for i = −3..⌈30·duration()⌉ + 3
+  and of prev(x), x, next(x) for x = 0 and every clip end as `clipForOutput` accumulates them
+  (`(out − in) / speed`).
+- `exporter.txt`: a section `== <case>` per case whose inserts all probed (`Exporter::run`
+  refuses the others), with the row `initial` and then one row per frame of a 30 fps export,
+  frame = 0..max(1, ⌈totalDuration() · 30⌉) − 1 and outputTime = frame / 30.0 (`frame /
+  double(fps)`): `<initial or outputTime num> <time num> <zoom variant> <layout variant> <media
+  variant> <cursor variant> <ripples variant> <keystrokePills variant> <cameraVisible bool>`, the
+  members of `CompositionState` after the frame (or before the first). The state carries over
+  from frame to frame.
+
 ## Machine dependence and what is not captured
 
 - Float results are defined on x86_64. qRound there is add-half-and-truncate (ARM64 uses
-  `round()`), and `pow` (Easing, Theme's luminance) comes from glibc.
+  `round()`), and `pow` (Easing, Theme's luminance) comes from glibc. motiontrack and
+  composition are float-heavy (240 Hz spring integration over thousands of steps, glibc's
+  `std::hypot` in MotionTrack and `CursorPath::decimate`, compiled with `-ffp-contract=off`), so
+  they are defined on x86_64 only; layouttimeline and composition also go through Easing's `pow`.
+- `std::clamp(v, lo, hi)` with lo > hi is undefined in C++, and ClipTimeline reaches it for an
+  inverted clip (out < in) in `sourceTime`, `outputTime` and `deleteRange`. The goldens record the
+  oracle's libstdc++ (GCC 16), which computes `min(max(v, lo), hi)` and so returns hi; the form
+  `v < lo ? lo : hi < v ? hi : v` would return lo for v < lo, and a build with
+  `_GLIBCXX_ASSERTIONS` (as makepkg's default flags have it) aborts. Only the `inverted` timelines
+  are affected.
+- mediaprobe's ffprobe answers are recordings, so its goldens do not depend on the installed
+  FFmpeg; what a newer FFmpeg prints for the same files is not checked. The 15 s and 60 s
+  timeouts and the kill of a hung ffprobe are not exercised.
+- composition records the state the QML composition is given, not what it draws. The camera
+  `MediaInfo` and the inserts' `VideoInfo` come from the corpus rather than from probing files,
+  and the exporter's decoding (and its errors) is not run.
 - `fontFamily` is `sans-serif` because the oracle does not link the app's resources, so
   `bundledUiFamily()` finds no Inter and returns `""` (the app shows `Inter`). `monoFamily` and the
   radius come from the shims; on a desktop they come from fontconfig and Hyprland.
@@ -435,5 +720,5 @@ arguments with exit status 64.
   which appear as `$HOME/oracle-scratch/...`.
 - Theme's file watcher and its 220 ms reload timer need an event loop, which the oracle does not
   run; `reload()` is called directly instead.
-- Not covered yet (later pull requests): ClipTimeline, CameraTimeline, LayoutTimeline,
-  KeystrokeTrack, MotionTrack, RecordingMetadata and RecordingPreferences.
+- Not covered: RecordingMetadata (dead code at the tag), and the rest of `src/render` and `src/ui`
+  beyond MediaProbe and the composition state.

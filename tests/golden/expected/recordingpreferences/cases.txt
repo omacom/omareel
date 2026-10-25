@@ -1,0 +1,1190 @@
+== current-bom
+path	"$HOME/oracle-scratch/recordingpreferences/current-bom/config/omareel/settings.json"
+systemAudio	false
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"S"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"border":{"alpha":0.7,"color":"#ffffff","enabled":true,"width":6},"crop":"original","enabled":false,"flipHorizontal":false,"offset":{"x":0.035,"y":0.035},"position":"bottom-right","radius":16,"rotation":0,"scaleDuringZoom":0.7,"shadow":{"angle":45,"blur":23,"distance":20,"enabled":true,"intensity":0.28},"shape":"round","size":0.25}
+after-load	current	file	0644	"\xef\xbb\xbf{\"systemAudio\": false, \"selfViewSize\": \"S\"}"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"S\",\x0a    \"systemAudio\": false,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"alpha\": 0.7,\x0a            \"color\": \"#ffffff\",\x0a            \"enabled\": true,\x0a            \"width\": 6\x0a        },\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"crop\": \"original\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"offset\": {\x0a            \"x\": 0.035,\x0a            \"y\": 0.035\x0a        },\x0a        \"position\": \"bottom-right\",\x0a        \"radius\": 16,\x0a        \"rotation\": 0,\x0a        \"scaleDuringZoom\": 0.7,\x0a        \"shadow\": {\x0a            \"angle\": 45,\x0a            \"blur\": 23,\x0a            \"distance\": 20,\x0a            \"enabled\": true,\x0a            \"intensity\": 0.28\x0a        },\x0a        \"shape\": \"round\",\x0a        \"size\": 0.25\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== current-duplicate-keys
+path	"$HOME/oracle-scratch/recordingpreferences/current-duplicate-keys/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"L"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"border":{"alpha":0.7,"color":"#ffffff","enabled":true,"width":6},"crop":"original","enabled":false,"flipHorizontal":false,"offset":{"x":0.035,"y":0.035},"position":"bottom-right","radius":16,"rotation":0,"scaleDuringZoom":0.7,"shadow":{"angle":45,"blur":23,"distance":20,"enabled":true,"intensity":0.28},"shape":"round","size":0.25}
+after-load	current	file	0644	"{\"microphone\": false, \"microphone\": true, \"selfViewSize\": \"S\", \"selfViewSize\": \"L\"}"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"L\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"alpha\": 0.7,\x0a            \"color\": \"#ffffff\",\x0a            \"enabled\": true,\x0a            \"width\": 6\x0a        },\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"crop\": \"original\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"offset\": {\x0a            \"x\": 0.035,\x0a            \"y\": 0.035\x0a        },\x0a        \"position\": \"bottom-right\",\x0a        \"radius\": 16,\x0a        \"rotation\": 0,\x0a        \"scaleDuringZoom\": 0.7,\x0a        \"shadow\": {\x0a            \"angle\": 45,\x0a            \"blur\": 23,\x0a            \"distance\": 20,\x0a            \"enabled\": true,\x0a            \"intensity\": 0.28\x0a        },\x0a        \"shape\": \"round\",\x0a        \"size\": 0.25\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== current-empty-file
+path	"$HOME/oracle-scratch/recordingpreferences/current-empty-file/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"border":{"alpha":0.7,"color":"#ffffff","enabled":true,"width":6},"crop":"original","enabled":false,"flipHorizontal":false,"offset":{"x":0.035,"y":0.035},"position":"bottom-right","radius":16,"rotation":0,"scaleDuringZoom":0.7,"shadow":{"angle":45,"blur":23,"distance":20,"enabled":true,"intensity":0.28},"shape":"round","size":0.25}
+after-load	current	file	0644	""
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"alpha\": 0.7,\x0a            \"color\": \"#ffffff\",\x0a            \"enabled\": true,\x0a            \"width\": 6\x0a        },\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"crop\": \"original\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"offset\": {\x0a            \"x\": 0.035,\x0a            \"y\": 0.035\x0a        },\x0a        \"position\": \"bottom-right\",\x0a        \"radius\": 16,\x0a        \"rotation\": 0,\x0a        \"scaleDuringZoom\": 0.7,\x0a        \"shadow\": {\x0a            \"angle\": 45,\x0a            \"blur\": 23,\x0a            \"distance\": 20,\x0a            \"enabled\": true,\x0a            \"intensity\": 0.28\x0a        },\x0a        \"shape\": \"round\",\x0a        \"size\": 0.25\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== current-empty-object
+path	"$HOME/oracle-scratch/recordingpreferences/current-empty-object/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"border":{"alpha":0.7,"color":"#ffffff","enabled":true,"width":6},"crop":"original","enabled":false,"flipHorizontal":false,"offset":{"x":0.035,"y":0.035},"position":"bottom-right","radius":16,"rotation":0,"scaleDuringZoom":0.7,"shadow":{"angle":45,"blur":23,"distance":20,"enabled":true,"intensity":0.28},"shape":"round","size":0.25}
+after-load	current	file	0644	"{}"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"alpha\": 0.7,\x0a            \"color\": \"#ffffff\",\x0a            \"enabled\": true,\x0a            \"width\": 6\x0a        },\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"crop\": \"original\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"offset\": {\x0a            \"x\": 0.035,\x0a            \"y\": 0.035\x0a        },\x0a        \"position\": \"bottom-right\",\x0a        \"radius\": 16,\x0a        \"rotation\": 0,\x0a        \"scaleDuringZoom\": 0.7,\x0a        \"shadow\": {\x0a            \"angle\": 45,\x0a            \"blur\": 23,\x0a            \"distance\": 20,\x0a            \"enabled\": true,\x0a            \"intensity\": 0.28\x0a        },\x0a        \"shape\": \"round\",\x0a        \"size\": 0.25\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== current-invalid-json
+path	"$HOME/oracle-scratch/recordingpreferences/current-invalid-json/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"border":{"alpha":0.7,"color":"#ffffff","enabled":true,"width":6},"crop":"original","enabled":false,"flipHorizontal":false,"offset":{"x":0.035,"y":0.035},"position":"bottom-right","radius":16,"rotation":0,"scaleDuringZoom":0.7,"shadow":{"angle":45,"blur":23,"distance":20,"enabled":true,"intensity":0.28},"shape":"round","size":0.25}
+after-load	current	file	0644	"{\"systemAudio\": false, \"microphone\": false,"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"alpha\": 0.7,\x0a            \"color\": \"#ffffff\",\x0a            \"enabled\": true,\x0a            \"width\": 6\x0a        },\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"crop\": \"original\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"offset\": {\x0a            \"x\": 0.035,\x0a            \"y\": 0.035\x0a        },\x0a        \"position\": \"bottom-right\",\x0a        \"radius\": 16,\x0a        \"rotation\": 0,\x0a        \"scaleDuringZoom\": 0.7,\x0a        \"shadow\": {\x0a            \"angle\": 45,\x0a            \"blur\": 23,\x0a            \"distance\": 20,\x0a            \"enabled\": true,\x0a            \"intensity\": 0.28\x0a        },\x0a        \"shape\": \"round\",\x0a        \"size\": 0.25\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== current-null-values
+path	"$HOME/oracle-scratch/recordingpreferences/current-null-values/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"border":{"alpha":0.7,"color":"#ffffff","enabled":true,"width":6},"crop":"original","enabled":false,"flipHorizontal":false,"offset":{"x":0.035,"y":0.035},"position":"bottom-right","radius":16,"rotation":0,"scaleDuringZoom":0.7,"shadow":{"angle":45,"blur":23,"distance":20,"enabled":true,"intensity":0.28},"shape":"round","size":0.25}
+after-load	current	file	0644	"{\"systemAudio\": null, \"microphone\": null, \"microphoneDevice\": null, \"selfViewEnabled\": null, \"selfViewSize\": null, \"selfViewPosition\": null, \"captureBackend\": null, \"countdownBeforeRecording\": null, \"webcam\": null}"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"alpha\": 0.7,\x0a            \"color\": \"#ffffff\",\x0a            \"enabled\": true,\x0a            \"width\": 6\x0a        },\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"crop\": \"original\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"offset\": {\x0a            \"x\": 0.035,\x0a            \"y\": 0.035\x0a        },\x0a        \"position\": \"bottom-right\",\x0a        \"radius\": 16,\x0a        \"rotation\": 0,\x0a        \"scaleDuringZoom\": 0.7,\x0a        \"shadow\": {\x0a            \"angle\": 45,\x0a            \"blur\": 23,\x0a            \"distance\": 20,\x0a            \"enabled\": true,\x0a            \"intensity\": 0.28\x0a        },\x0a        \"shape\": \"round\",\x0a        \"size\": 0.25\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== current-self-view-dotless-i
+path	"$HOME/oracle-scratch/recordingpreferences/current-self-view-dotless-i/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"border":{"alpha":0.7,"color":"#ffffff","enabled":true,"width":6},"crop":"original","enabled":false,"flipHorizontal":false,"offset":{"x":0.035,"y":0.035},"position":"bottom-right","radius":16,"rotation":0,"scaleDuringZoom":0.7,"shadow":{"angle":45,"blur":23,"distance":20,"enabled":true,"intensity":0.28},"shape":"round","size":0.25}
+after-load	current	file	0644	"{\"selfViewSize\": \" l \", \"selfViewPosition\": [0.1, 0.2]}"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"alpha\": 0.7,\x0a            \"color\": \"#ffffff\",\x0a            \"enabled\": true,\x0a            \"width\": 6\x0a        },\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"crop\": \"original\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"offset\": {\x0a            \"x\": 0.035,\x0a            \"y\": 0.035\x0a        },\x0a        \"position\": \"bottom-right\",\x0a        \"radius\": 16,\x0a        \"rotation\": 0,\x0a        \"scaleDuringZoom\": 0.7,\x0a        \"shadow\": {\x0a            \"angle\": 45,\x0a            \"blur\": 23,\x0a            \"distance\": 20,\x0a            \"enabled\": true,\x0a            \"intensity\": 0.28\x0a        },\x0a        \"shape\": \"round\",\x0a        \"size\": 0.25\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== current-self-view-eszett
+path	"$HOME/oracle-scratch/recordingpreferences/current-self-view-eszett/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"border":{"alpha":0.7,"color":"#ffffff","enabled":true,"width":6},"crop":"original","enabled":false,"flipHorizontal":false,"offset":{"x":0.035,"y":0.035},"position":"bottom-right","radius":16,"rotation":0,"scaleDuringZoom":0.7,"shadow":{"angle":45,"blur":23,"distance":20,"enabled":true,"intensity":0.28},"shape":"round","size":0.25}
+after-load	current	file	0644	"{\"selfViewSize\": \"\xc3\x9f\", \"selfViewPosition\": {\"x\": \"0.2\", \"y\": null}}"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"alpha\": 0.7,\x0a            \"color\": \"#ffffff\",\x0a            \"enabled\": true,\x0a            \"width\": 6\x0a        },\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"crop\": \"original\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"offset\": {\x0a            \"x\": 0.035,\x0a            \"y\": 0.035\x0a        },\x0a        \"position\": \"bottom-right\",\x0a        \"radius\": 16,\x0a        \"rotation\": 0,\x0a        \"scaleDuringZoom\": 0.7,\x0a        \"shadow\": {\x0a            \"angle\": 45,\x0a            \"blur\": 23,\x0a            \"distance\": 20,\x0a            \"enabled\": true,\x0a            \"intensity\": 0.28\x0a        },\x0a        \"shape\": \"round\",\x0a        \"size\": 0.25\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== current-self-view-position-extremes
+path	"$HOME/oracle-scratch/recordingpreferences/current-self-view-position-extremes/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	0
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"border":{"alpha":0.7,"color":"#ffffff","enabled":true,"width":6},"crop":"original","enabled":false,"flipHorizontal":false,"offset":{"x":0.035,"y":0.035},"position":"bottom-right","radius":16,"rotation":0,"scaleDuringZoom":0.7,"shadow":{"angle":45,"blur":23,"distance":20,"enabled":true,"intensity":0.28},"shape":"round","size":0.25}
+after-load	current	file	0644	"{\"selfViewSize\": \"M\", \"selfViewPosition\": {\"x\": 1e308, \"y\": -0.0, \"z\": 3}}"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 0\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"alpha\": 0.7,\x0a            \"color\": \"#ffffff\",\x0a            \"enabled\": true,\x0a            \"width\": 6\x0a        },\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"crop\": \"original\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"offset\": {\x0a            \"x\": 0.035,\x0a            \"y\": 0.035\x0a        },\x0a        \"position\": \"bottom-right\",\x0a        \"radius\": 16,\x0a        \"rotation\": 0,\x0a        \"scaleDuringZoom\": 0.7,\x0a        \"shadow\": {\x0a            \"angle\": 45,\x0a            \"blur\": 23,\x0a            \"distance\": 20,\x0a            \"enabled\": true,\x0a            \"intensity\": 0.28\x0a        },\x0a        \"shape\": \"round\",\x0a        \"size\": 0.25\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== current-self-view-small-lowercase
+path	"$HOME/oracle-scratch/recordingpreferences/current-self-view-small-lowercase/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"S"
+selfViewX	0
+selfViewY	0
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"border":{"alpha":0.7,"color":"#ffffff","enabled":true,"width":6},"crop":"original","enabled":false,"flipHorizontal":false,"offset":{"x":0.035,"y":0.035},"position":"bottom-right","radius":16,"rotation":0,"scaleDuringZoom":0.7,"shadow":{"angle":45,"blur":23,"distance":20,"enabled":true,"intensity":0.28},"shape":"round","size":0.25}
+after-load	current	file	0644	"{\"selfViewSize\": \"s\", \"selfViewPosition\": {\"x\": 0, \"y\": 0}}"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 0,\x0a        \"y\": 0\x0a    },\x0a    \"selfViewSize\": \"S\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"alpha\": 0.7,\x0a            \"color\": \"#ffffff\",\x0a            \"enabled\": true,\x0a            \"width\": 6\x0a        },\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"crop\": \"original\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"offset\": {\x0a            \"x\": 0.035,\x0a            \"y\": 0.035\x0a        },\x0a        \"position\": \"bottom-right\",\x0a        \"radius\": 16,\x0a        \"rotation\": 0,\x0a        \"scaleDuringZoom\": 0.7,\x0a        \"shadow\": {\x0a            \"angle\": 45,\x0a            \"blur\": 23,\x0a            \"distance\": 20,\x0a            \"enabled\": true,\x0a            \"intensity\": 0.28\x0a        },\x0a        \"shape\": \"round\",\x0a        \"size\": 0.25\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== current-self-view-unknown-size
+path	"$HOME/oracle-scratch/recordingpreferences/current-self-view-unknown-size/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	0
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"border":{"alpha":0.7,"color":"#ffffff","enabled":true,"width":6},"crop":"original","enabled":false,"flipHorizontal":false,"offset":{"x":0.035,"y":0.035},"position":"bottom-right","radius":16,"rotation":0,"scaleDuringZoom":0.7,"shadow":{"angle":45,"blur":23,"distance":20,"enabled":true,"intensity":0.28},"shape":"round","size":0.25}
+after-load	current	file	0644	"{\"selfViewSize\": \"xl\", \"selfViewPosition\": {\"x\": -0.5, \"y\": 1.5}}"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 0,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"alpha\": 0.7,\x0a            \"color\": \"#ffffff\",\x0a            \"enabled\": true,\x0a            \"width\": 6\x0a        },\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"crop\": \"original\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"offset\": {\x0a            \"x\": 0.035,\x0a            \"y\": 0.035\x0a        },\x0a        \"position\": \"bottom-right\",\x0a        \"radius\": 16,\x0a        \"rotation\": 0,\x0a        \"scaleDuringZoom\": 0.7,\x0a        \"shadow\": {\x0a            \"angle\": 45,\x0a            \"blur\": 23,\x0a            \"distance\": 20,\x0a            \"enabled\": true,\x0a            \"intensity\": 0.28\x0a        },\x0a        \"shape\": \"round\",\x0a        \"size\": 0.25\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== current-top-level-array
+path	"$HOME/oracle-scratch/recordingpreferences/current-top-level-array/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"border":{"alpha":0.7,"color":"#ffffff","enabled":true,"width":6},"crop":"original","enabled":false,"flipHorizontal":false,"offset":{"x":0.035,"y":0.035},"position":"bottom-right","radius":16,"rotation":0,"scaleDuringZoom":0.7,"shadow":{"angle":45,"blur":23,"distance":20,"enabled":true,"intensity":0.28},"shape":"round","size":0.25}
+after-load	current	file	0644	"[{\"systemAudio\": false}]"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"alpha\": 0.7,\x0a            \"color\": \"#ffffff\",\x0a            \"enabled\": true,\x0a            \"width\": 6\x0a        },\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"crop\": \"original\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"offset\": {\x0a            \"x\": 0.035,\x0a            \"y\": 0.035\x0a        },\x0a        \"position\": \"bottom-right\",\x0a        \"radius\": 16,\x0a        \"rotation\": 0,\x0a        \"scaleDuringZoom\": 0.7,\x0a        \"shadow\": {\x0a            \"angle\": 45,\x0a            \"blur\": 23,\x0a            \"distance\": 20,\x0a            \"enabled\": true,\x0a            \"intensity\": 0.28\x0a        },\x0a        \"shape\": \"round\",\x0a        \"size\": 0.25\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== current-valid-full
+path	"$HOME/oracle-scratch/recordingpreferences/current-valid-full/config/omareel/settings.json"
+systemAudio	false
+microphone	false
+microphoneDevice	"alsa_input.usb-Blue_Yeti"
+webcamEnabled	true
+webcamDevice	"/dev/video0"
+webcamChosenDevice	"/dev/video4"
+webcamHeight	720
+webcamRotation	270
+webcamFlipHorizontal	true
+selfViewEnabled	false
+selfViewSize	"L"
+selfViewX	0.25
+selfViewY	0.75
+captureBackend	"portal"
+countdownBeforeRecording	true
+webcam	{"border":{"alpha":1,"color":"#000000","enabled":false,"width":2},"captureHeight":720,"chosenDevice":"/dev/video4","crop":"square","device":"/dev/video0","enabled":true,"flipHorizontal":true,"offset":{"x":0.05,"y":0.02},"position":"top-left","radius":8,"rotation":270,"scaleDuringZoom":1,"shadow":{"angle":90,"blur":10,"distance":5,"enabled":false,"intensity":0.5},"shape":"square","size":0.3}
+after-load	current	file	0644	"{\x0a    \"captureBackend\": \"portal\",\x0a    \"countdownBeforeRecording\": true,\x0a    \"microphone\": false,\x0a    \"microphoneDevice\": \"alsa_input.usb-Blue_Yeti\",\x0a    \"selfViewEnabled\": false,\x0a    \"selfViewPosition\": {\x0a        \"x\": 0.25,\x0a        \"y\": 0.75\x0a    },\x0a    \"selfViewSize\": \"L\",\x0a    \"systemAudio\": false,\x0a    \"webcam\": {\x0a        \"enabled\": true,\x0a        \"device\": \"/dev/video0\",\x0a        \"chosenDevice\": \"/dev/video4\",\x0a        \"captureHeight\": 720,\x0a        \"rotation\": 270,\x0a        \"flipHorizontal\": true,\x0a        \"position\": \"top-left\",\x0a        \"size\": 0.3,\x0a        \"shape\": \"square\",\x0a        \"radius\": 8,\x0a        \"crop\": \"square\",\x0a        \"shadow\": {\x0a            \"enabled\": false,\x0a            \"intensity\": 0.5,\x0a            \"blur\": 10,\x0a            \"distance\": 5,\x0a            \"angle\": 90\x0a        },\x0a        \"border\": {\x0a            \"enabled\": false,\x0a            \"width\": 2,\x0a            \"color\": \"#000000\",\x0a            \"alpha\": 1\x0a        },\x0a        \"scaleDuringZoom\": 1,\x0a        \"offset\": {\x0a            \"x\": 0.05,\x0a            \"y\": 0.02\x0a        }\x0a    }\x0a}\x0a"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"portal\",\x0a    \"countdownBeforeRecording\": true,\x0a    \"microphone\": false,\x0a    \"microphoneDevice\": \"alsa_input.usb-Blue_Yeti\",\x0a    \"selfViewEnabled\": false,\x0a    \"selfViewPosition\": {\x0a        \"x\": 0.25,\x0a        \"y\": 0.75\x0a    },\x0a    \"selfViewSize\": \"L\",\x0a    \"systemAudio\": false,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"alpha\": 1,\x0a            \"color\": \"#000000\",\x0a            \"enabled\": false,\x0a            \"width\": 2\x0a        },\x0a        \"captureHeight\": 720,\x0a        \"chosenDevice\": \"/dev/video4\",\x0a        \"crop\": \"square\",\x0a        \"device\": \"/dev/video0\",\x0a        \"enabled\": true,\x0a        \"flipHorizontal\": true,\x0a        \"offset\": {\x0a            \"x\": 0.05,\x0a            \"y\": 0.02\x0a        },\x0a        \"position\": \"top-left\",\x0a        \"radius\": 8,\x0a        \"rotation\": 270,\x0a        \"scaleDuringZoom\": 1,\x0a        \"shadow\": {\x0a            \"angle\": 90,\x0a            \"blur\": 10,\x0a            \"distance\": 5,\x0a            \"enabled\": false,\x0a            \"intensity\": 0.5\x0a        },\x0a        \"shape\": \"square\",\x0a        \"size\": 0.3\x0a    }\x0a}\x0a"
+reload	same
+== current-webcam-chosen-device-missing
+path	"$HOME/oracle-scratch/recordingpreferences/current-webcam-chosen-device-missing/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video0"
+webcamChosenDevice	"/dev/video0"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"device":"/dev/video0"}
+after-load	current	file	0644	"{\"webcam\": {\"device\": \"/dev/video0\"}}"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video0\",\x0a        \"device\": \"/dev/video0\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"rotation\": 0\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== current-webcam-device-missing
+path	"$HOME/oracle-scratch/recordingpreferences/current-webcam-device-missing/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{}
+after-load	current	file	0644	"{\"webcam\": {}}"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"rotation\": 0\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== current-webcam-device-wrong-types
+path	"$HOME/oracle-scratch/recordingpreferences/current-webcam-device-wrong-types/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"chosenDevice":null,"device":3,"enabled":"true"}
+after-load	current	file	0644	"{\"webcam\": {\"device\": 3, \"chosenDevice\": null, \"enabled\": \"true\"}}"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"rotation\": 0\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== current-webcam-height-1080-rotation-270
+path	"$HOME/oracle-scratch/recordingpreferences/current-webcam-height-1080-rotation-270/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	270
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"captureHeight":1080,"flipHorizontal":1,"rotation":270}
+after-load	current	file	0644	"{\"webcam\": {\"captureHeight\": 1080, \"rotation\": 270, \"flipHorizontal\": 1}}"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"rotation\": 270\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== current-webcam-height-480-rotation-45
+path	"$HOME/oracle-scratch/recordingpreferences/current-webcam-height-480-rotation-45/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"captureHeight":480,"rotation":45}
+after-load	current	file	0644	"{\"webcam\": {\"captureHeight\": 480, \"rotation\": 45}}"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"rotation\": 0\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== current-webcam-height-720-rotation-90
+path	"$HOME/oracle-scratch/recordingpreferences/current-webcam-height-720-rotation-90/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	720
+webcamRotation	90
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"captureHeight":720,"rotation":90}
+after-load	current	file	0644	"{\"webcam\": {\"captureHeight\": 720, \"rotation\": 90}}"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"captureHeight\": 720,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"rotation\": 90\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== current-webcam-height-720.0-rotation-180.0
+path	"$HOME/oracle-scratch/recordingpreferences/current-webcam-height-720.0-rotation-180.0/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	720
+webcamRotation	180
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"captureHeight":720,"rotation":180}
+after-load	current	file	0644	"{\"webcam\": {\"captureHeight\": 720.0, \"rotation\": 180.0}}"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"captureHeight\": 720,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"rotation\": 180\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== current-webcam-height-fraction-rotation-negative
+path	"$HOME/oracle-scratch/recordingpreferences/current-webcam-height-fraction-rotation-negative/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"captureHeight":720.5,"rotation":-90}
+after-load	current	file	0644	"{\"webcam\": {\"captureHeight\": 720.5, \"rotation\": -90}}"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"rotation\": 0\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== current-webcam-height-huge-rotation-360
+path	"$HOME/oracle-scratch/recordingpreferences/current-webcam-height-huge-rotation-360/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"captureHeight":10000000000,"rotation":360}
+after-load	current	file	0644	"{\"webcam\": {\"captureHeight\": 10000000000.0, \"rotation\": 360}}"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"rotation\": 0\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== current-webcam-height-string-rotation-string
+path	"$HOME/oracle-scratch/recordingpreferences/current-webcam-height-string-rotation-string/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"captureHeight":"720","rotation":"90"}
+after-load	current	file	0644	"{\"webcam\": {\"captureHeight\": \"720\", \"rotation\": \"90\"}}"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"rotation\": 0\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== current-webcam-inset-and-border
+path	"$HOME/oracle-scratch/recordingpreferences/current-webcam-inset-and-border/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"border":{"width":9},"inset":{"width":3}}
+after-load	current	file	0644	"{\"webcam\": {\"inset\": {\"width\": 3}, \"border\": {\"width\": 9}}}"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"width\": 9\x0a        },\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"inset\": {\x0a            \"width\": 3\x0a        },\x0a        \"rotation\": 0\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== current-webcam-legacy-inset
+path	"$HOME/oracle-scratch/recordingpreferences/current-webcam-legacy-inset/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"border":{"alpha":0.5,"color":"#ff0000","enabled":true,"width":3},"shape":"round"}
+after-load	current	file	0644	"{\"webcam\": {\"inset\": {\"enabled\": true, \"width\": 3, \"color\": \"#ff0000\", \"alpha\": 0.5}, \"shape\": \"round\"}}"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"alpha\": 0.5,\x0a            \"color\": \"#ff0000\",\x0a            \"enabled\": true,\x0a            \"width\": 3\x0a        },\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"rotation\": 0,\x0a        \"shape\": \"round\"\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== current-webcam-legacy-mirror
+path	"$HOME/oracle-scratch/recordingpreferences/current-webcam-legacy-mirror/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	true
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"mirror":true}
+after-load	current	file	0644	"{\"webcam\": {\"mirror\": true}}"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": true,\x0a        \"mirror\": true,\x0a        \"rotation\": 0\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== current-webcam-mirror-and-flip
+path	"$HOME/oracle-scratch/recordingpreferences/current-webcam-mirror-and-flip/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"flipHorizontal":false,"mirror":true}
+after-load	current	file	0644	"{\"webcam\": {\"mirror\": true, \"flipHorizontal\": false}}"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"mirror\": true,\x0a        \"rotation\": 0\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== current-webcam-mirror-not-bool
+path	"$HOME/oracle-scratch/recordingpreferences/current-webcam-mirror-not-bool/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"mirror":"yes"}
+after-load	current	file	0644	"{\"webcam\": {\"mirror\": \"yes\"}}"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"mirror\": \"yes\",\x0a        \"rotation\": 0\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== current-webcam-not-object
+path	"$HOME/oracle-scratch/recordingpreferences/current-webcam-not-object/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"border":{"alpha":0.7,"color":"#ffffff","enabled":true,"width":6},"crop":"original","enabled":false,"flipHorizontal":false,"offset":{"x":0.035,"y":0.035},"position":"bottom-right","radius":16,"rotation":0,"scaleDuringZoom":0.7,"shadow":{"angle":45,"blur":23,"distance":20,"enabled":true,"intensity":0.28},"shape":"round","size":0.25}
+after-load	current	file	0644	"{\"webcam\": []}"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"alpha\": 0.7,\x0a            \"color\": \"#ffffff\",\x0a            \"enabled\": true,\x0a            \"width\": 6\x0a        },\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"crop\": \"original\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"offset\": {\x0a            \"x\": 0.035,\x0a            \"y\": 0.035\x0a        },\x0a        \"position\": \"bottom-right\",\x0a        \"radius\": 16,\x0a        \"rotation\": 0,\x0a        \"scaleDuringZoom\": 0.7,\x0a        \"shadow\": {\x0a            \"angle\": 45,\x0a            \"blur\": 23,\x0a            \"distance\": 20,\x0a            \"enabled\": true,\x0a            \"intensity\": 0.28\x0a        },\x0a        \"shape\": \"round\",\x0a        \"size\": 0.25\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== current-webcam-unknown-keys
+path	"$HOME/oracle-scratch/recordingpreferences/current-webcam-unknown-keys/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	true
+webcamDevice	"/dev/video1"
+webcamChosenDevice	"/dev/video1"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"device":"/dev/video1","enabled":true,"future":{"nested":[1,"two",null]},"label":"Caméra 📷","size":"large","zz":1.5}
+after-load	current	file	0644	"{\"webcam\": {\"enabled\": true, \"device\": \"/dev/video1\", \"future\": {\"nested\": [1, \"two\", null]}, \"label\": \"Cam\xc3\xa9ra \xf0\x9f\x93\xb7\", \"size\": \"large\", \"zz\": 1.5}}"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video1\",\x0a        \"device\": \"/dev/video1\",\x0a        \"enabled\": true,\x0a        \"flipHorizontal\": false,\x0a        \"future\": {\x0a            \"nested\": [\x0a                1,\x0a                \"two\",\x0a                null\x0a            ]\x0a        },\x0a        \"label\": \"Cam\xc3\xa9ra \xf0\x9f\x93\xb7\",\x0a        \"rotation\": 0,\x0a        \"size\": \"large\",\x0a        \"zz\": 1.5\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== current-wrong-types
+path	"$HOME/oracle-scratch/recordingpreferences/current-wrong-types/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"border":{"alpha":0.7,"color":"#ffffff","enabled":true,"width":6},"crop":"original","enabled":false,"flipHorizontal":false,"offset":{"x":0.035,"y":0.035},"position":"bottom-right","radius":16,"rotation":0,"scaleDuringZoom":0.7,"shadow":{"angle":45,"blur":23,"distance":20,"enabled":true,"intensity":0.28},"shape":"round","size":0.25}
+after-load	current	file	0644	"{\"systemAudio\": \"false\", \"microphone\": 0, \"microphoneDevice\": 5, \"selfViewEnabled\": [], \"selfViewSize\": 2, \"selfViewPosition\": \"1,1\", \"captureBackend\": false, \"countdownBeforeRecording\": \"true\", \"webcam\": \"on\"}"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"alpha\": 0.7,\x0a            \"color\": \"#ffffff\",\x0a            \"enabled\": true,\x0a            \"width\": 6\x0a        },\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"crop\": \"original\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"offset\": {\x0a            \"x\": 0.035,\x0a            \"y\": 0.035\x0a        },\x0a        \"position\": \"bottom-right\",\x0a        \"radius\": 16,\x0a        \"rotation\": 0,\x0a        \"scaleDuringZoom\": 0.7,\x0a        \"shadow\": {\x0a            \"angle\": 45,\x0a            \"blur\": 23,\x0a            \"distance\": 20,\x0a            \"enabled\": true,\x0a            \"intensity\": 0.28\x0a        },\x0a        \"shape\": \"round\",\x0a        \"size\": 0.25\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== legacy-valid-full
+path	"$HOME/oracle-scratch/recordingpreferences/legacy-valid-full/config/omareel/settings.json"
+systemAudio	false
+microphone	false
+microphoneDevice	"alsa_input.usb-Blue_Yeti"
+webcamEnabled	true
+webcamDevice	"/dev/video0"
+webcamChosenDevice	"/dev/video4"
+webcamHeight	720
+webcamRotation	270
+webcamFlipHorizontal	true
+selfViewEnabled	false
+selfViewSize	"L"
+selfViewX	0.25
+selfViewY	0.75
+captureBackend	"portal"
+countdownBeforeRecording	true
+webcam	{"border":{"alpha":1,"color":"#000000","enabled":false,"width":2},"captureHeight":720,"chosenDevice":"/dev/video4","crop":"square","device":"/dev/video0","enabled":true,"flipHorizontal":true,"offset":{"x":0.05,"y":0.02},"position":"top-left","radius":8,"rotation":270,"scaleDuringZoom":1,"shadow":{"angle":90,"blur":10,"distance":5,"enabled":false,"intensity":0.5},"shape":"square","size":0.3}
+after-load	current	file	0644	"{\x0a    \"captureBackend\": \"portal\",\x0a    \"countdownBeforeRecording\": true,\x0a    \"microphone\": false,\x0a    \"microphoneDevice\": \"alsa_input.usb-Blue_Yeti\",\x0a    \"selfViewEnabled\": false,\x0a    \"selfViewPosition\": {\x0a        \"x\": 0.25,\x0a        \"y\": 0.75\x0a    },\x0a    \"selfViewSize\": \"L\",\x0a    \"systemAudio\": false,\x0a    \"webcam\": {\x0a        \"enabled\": true,\x0a        \"device\": \"/dev/video0\",\x0a        \"chosenDevice\": \"/dev/video4\",\x0a        \"captureHeight\": 720,\x0a        \"rotation\": 270,\x0a        \"flipHorizontal\": true,\x0a        \"position\": \"top-left\",\x0a        \"size\": 0.3,\x0a        \"shape\": \"square\",\x0a        \"radius\": 8,\x0a        \"crop\": \"square\",\x0a        \"shadow\": {\x0a            \"enabled\": false,\x0a            \"intensity\": 0.5,\x0a            \"blur\": 10,\x0a            \"distance\": 5,\x0a            \"angle\": 90\x0a        },\x0a        \"border\": {\x0a            \"enabled\": false,\x0a            \"width\": 2,\x0a            \"color\": \"#000000\",\x0a            \"alpha\": 1\x0a        },\x0a        \"scaleDuringZoom\": 1,\x0a        \"offset\": {\x0a            \"x\": 0.05,\x0a            \"y\": 0.02\x0a        }\x0a    }\x0a}\x0a"
+after-load	legacy	file	0644	"{\x0a    \"captureBackend\": \"portal\",\x0a    \"countdownBeforeRecording\": true,\x0a    \"microphone\": false,\x0a    \"microphoneDevice\": \"alsa_input.usb-Blue_Yeti\",\x0a    \"selfViewEnabled\": false,\x0a    \"selfViewPosition\": {\x0a        \"x\": 0.25,\x0a        \"y\": 0.75\x0a    },\x0a    \"selfViewSize\": \"L\",\x0a    \"systemAudio\": false,\x0a    \"webcam\": {\x0a        \"enabled\": true,\x0a        \"device\": \"/dev/video0\",\x0a        \"chosenDevice\": \"/dev/video4\",\x0a        \"captureHeight\": 720,\x0a        \"rotation\": 270,\x0a        \"flipHorizontal\": true,\x0a        \"position\": \"top-left\",\x0a        \"size\": 0.3,\x0a        \"shape\": \"square\",\x0a        \"radius\": 8,\x0a        \"crop\": \"square\",\x0a        \"shadow\": {\x0a            \"enabled\": false,\x0a            \"intensity\": 0.5,\x0a            \"blur\": 10,\x0a            \"distance\": 5,\x0a            \"angle\": 90\x0a        },\x0a        \"border\": {\x0a            \"enabled\": false,\x0a            \"width\": 2,\x0a            \"color\": \"#000000\",\x0a            \"alpha\": 1\x0a        },\x0a        \"scaleDuringZoom\": 1,\x0a        \"offset\": {\x0a            \"x\": 0.05,\x0a            \"y\": 0.02\x0a        }\x0a    }\x0a}\x0a"
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"portal\",\x0a    \"countdownBeforeRecording\": true,\x0a    \"microphone\": false,\x0a    \"microphoneDevice\": \"alsa_input.usb-Blue_Yeti\",\x0a    \"selfViewEnabled\": false,\x0a    \"selfViewPosition\": {\x0a        \"x\": 0.25,\x0a        \"y\": 0.75\x0a    },\x0a    \"selfViewSize\": \"L\",\x0a    \"systemAudio\": false,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"alpha\": 1,\x0a            \"color\": \"#000000\",\x0a            \"enabled\": false,\x0a            \"width\": 2\x0a        },\x0a        \"captureHeight\": 720,\x0a        \"chosenDevice\": \"/dev/video4\",\x0a        \"crop\": \"square\",\x0a        \"device\": \"/dev/video0\",\x0a        \"enabled\": true,\x0a        \"flipHorizontal\": true,\x0a        \"offset\": {\x0a            \"x\": 0.05,\x0a            \"y\": 0.02\x0a        },\x0a        \"position\": \"top-left\",\x0a        \"radius\": 8,\x0a        \"rotation\": 270,\x0a        \"scaleDuringZoom\": 1,\x0a        \"shadow\": {\x0a            \"angle\": 90,\x0a            \"blur\": 10,\x0a            \"distance\": 5,\x0a            \"enabled\": false,\x0a            \"intensity\": 0.5\x0a        },\x0a        \"shape\": \"square\",\x0a        \"size\": 0.3\x0a    }\x0a}\x0a"
+reload	same
+== legacy-invalid-json
+path	"$HOME/oracle-scratch/recordingpreferences/legacy-invalid-json/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"border":{"alpha":0.7,"color":"#ffffff","enabled":true,"width":6},"crop":"original","enabled":false,"flipHorizontal":false,"offset":{"x":0.035,"y":0.035},"position":"bottom-right","radius":16,"rotation":0,"scaleDuringZoom":0.7,"shadow":{"angle":45,"blur":23,"distance":20,"enabled":true,"intensity":0.28},"shape":"round","size":0.25}
+after-load	current	file	0644	"{\"systemAudio\": false, \"microphone\": false,"
+after-load	legacy	file	0644	"{\"systemAudio\": false, \"microphone\": false,"
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"alpha\": 0.7,\x0a            \"color\": \"#ffffff\",\x0a            \"enabled\": true,\x0a            \"width\": 6\x0a        },\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"crop\": \"original\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"offset\": {\x0a            \"x\": 0.035,\x0a            \"y\": 0.035\x0a        },\x0a        \"position\": \"bottom-right\",\x0a        \"radius\": 16,\x0a        \"rotation\": 0,\x0a        \"scaleDuringZoom\": 0.7,\x0a        \"shadow\": {\x0a            \"angle\": 45,\x0a            \"blur\": 23,\x0a            \"distance\": 20,\x0a            \"enabled\": true,\x0a            \"intensity\": 0.28\x0a        },\x0a        \"shape\": \"round\",\x0a        \"size\": 0.25\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== legacy-webcam-legacy-inset
+path	"$HOME/oracle-scratch/recordingpreferences/legacy-webcam-legacy-inset/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"border":{"alpha":0.5,"color":"#ff0000","enabled":true,"width":3},"shape":"round"}
+after-load	current	file	0644	"{\"webcam\": {\"inset\": {\"enabled\": true, \"width\": 3, \"color\": \"#ff0000\", \"alpha\": 0.5}, \"shape\": \"round\"}}"
+after-load	legacy	file	0644	"{\"webcam\": {\"inset\": {\"enabled\": true, \"width\": 3, \"color\": \"#ff0000\", \"alpha\": 0.5}, \"shape\": \"round\"}}"
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"alpha\": 0.5,\x0a            \"color\": \"#ff0000\",\x0a            \"enabled\": true,\x0a            \"width\": 3\x0a        },\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"rotation\": 0,\x0a        \"shape\": \"round\"\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== special-no-file
+path	"$HOME/oracle-scratch/recordingpreferences/special-no-file/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"border":{"alpha":0.7,"color":"#ffffff","enabled":true,"width":6},"crop":"original","enabled":false,"flipHorizontal":false,"offset":{"x":0.035,"y":0.035},"position":"bottom-right","radius":16,"rotation":0,"scaleDuringZoom":0.7,"shadow":{"angle":45,"blur":23,"distance":20,"enabled":true,"intensity":0.28},"shape":"round","size":0.25}
+after-load	current	missing
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"alpha\": 0.7,\x0a            \"color\": \"#ffffff\",\x0a            \"enabled\": true,\x0a            \"width\": 6\x0a        },\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"crop\": \"original\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"offset\": {\x0a            \"x\": 0.035,\x0a            \"y\": 0.035\x0a        },\x0a        \"position\": \"bottom-right\",\x0a        \"radius\": 16,\x0a        \"rotation\": 0,\x0a        \"scaleDuringZoom\": 0.7,\x0a        \"shadow\": {\x0a            \"angle\": 45,\x0a            \"blur\": 23,\x0a            \"distance\": 20,\x0a            \"enabled\": true,\x0a            \"intensity\": 0.28\x0a        },\x0a        \"shape\": \"round\",\x0a        \"size\": 0.25\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== special-config-home-missing
+path	"$HOME/oracle-scratch/recordingpreferences/special-config-home-missing/missing-config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"border":{"alpha":0.7,"color":"#ffffff","enabled":true,"width":6},"crop":"original","enabled":false,"flipHorizontal":false,"offset":{"x":0.035,"y":0.035},"position":"bottom-right","radius":16,"rotation":0,"scaleDuringZoom":0.7,"shadow":{"angle":45,"blur":23,"distance":20,"enabled":true,"intensity":0.28},"shape":"round","size":0.25}
+after-load	current	missing
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"alpha\": 0.7,\x0a            \"color\": \"#ffffff\",\x0a            \"enabled\": true,\x0a            \"width\": 6\x0a        },\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"crop\": \"original\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"offset\": {\x0a            \"x\": 0.035,\x0a            \"y\": 0.035\x0a        },\x0a        \"position\": \"bottom-right\",\x0a        \"radius\": 16,\x0a        \"rotation\": 0,\x0a        \"scaleDuringZoom\": 0.7,\x0a        \"shadow\": {\x0a            \"angle\": 45,\x0a            \"blur\": 23,\x0a            \"distance\": 20,\x0a            \"enabled\": true,\x0a            \"intensity\": 0.28\x0a        },\x0a        \"shape\": \"round\",\x0a        \"size\": 0.25\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== special-legacy-and-current
+path	"$HOME/oracle-scratch/recordingpreferences/special-legacy-and-current/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"S"
+selfViewX	0
+selfViewY	0
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"border":{"alpha":0.7,"color":"#ffffff","enabled":true,"width":6},"crop":"original","enabled":false,"flipHorizontal":false,"offset":{"x":0.035,"y":0.035},"position":"bottom-right","radius":16,"rotation":0,"scaleDuringZoom":0.7,"shadow":{"angle":45,"blur":23,"distance":20,"enabled":true,"intensity":0.28},"shape":"round","size":0.25}
+after-load	current	file	0644	"{\"selfViewSize\": \"s\", \"selfViewPosition\": {\"x\": 0, \"y\": 0}}"
+after-load	legacy	file	0644	"{\x0a    \"captureBackend\": \"portal\",\x0a    \"countdownBeforeRecording\": true,\x0a    \"microphone\": false,\x0a    \"microphoneDevice\": \"alsa_input.usb-Blue_Yeti\",\x0a    \"selfViewEnabled\": false,\x0a    \"selfViewPosition\": {\x0a        \"x\": 0.25,\x0a        \"y\": 0.75\x0a    },\x0a    \"selfViewSize\": \"L\",\x0a    \"systemAudio\": false,\x0a    \"webcam\": {\x0a        \"enabled\": true,\x0a        \"device\": \"/dev/video0\",\x0a        \"chosenDevice\": \"/dev/video4\",\x0a        \"captureHeight\": 720,\x0a        \"rotation\": 270,\x0a        \"flipHorizontal\": true,\x0a        \"position\": \"top-left\",\x0a        \"size\": 0.3,\x0a        \"shape\": \"square\",\x0a        \"radius\": 8,\x0a        \"crop\": \"square\",\x0a        \"shadow\": {\x0a            \"enabled\": false,\x0a            \"intensity\": 0.5,\x0a            \"blur\": 10,\x0a            \"distance\": 5,\x0a            \"angle\": 90\x0a        },\x0a        \"border\": {\x0a            \"enabled\": false,\x0a            \"width\": 2,\x0a            \"color\": \"#000000\",\x0a            \"alpha\": 1\x0a        },\x0a        \"scaleDuringZoom\": 1,\x0a        \"offset\": {\x0a            \"x\": 0.05,\x0a            \"y\": 0.02\x0a        }\x0a    }\x0a}\x0a"
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 0,\x0a        \"y\": 0\x0a    },\x0a    \"selfViewSize\": \"S\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"alpha\": 0.7,\x0a            \"color\": \"#ffffff\",\x0a            \"enabled\": true,\x0a            \"width\": 6\x0a        },\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"crop\": \"original\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"offset\": {\x0a            \"x\": 0.035,\x0a            \"y\": 0.035\x0a        },\x0a        \"position\": \"bottom-right\",\x0a        \"radius\": 16,\x0a        \"rotation\": 0,\x0a        \"scaleDuringZoom\": 0.7,\x0a        \"shadow\": {\x0a            \"angle\": 45,\x0a            \"blur\": 23,\x0a            \"distance\": 20,\x0a            \"enabled\": true,\x0a            \"intensity\": 0.28\x0a        },\x0a        \"shape\": \"round\",\x0a        \"size\": 0.25\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== special-legacy-omareel-is-file
+path	"$HOME/oracle-scratch/recordingpreferences/special-legacy-omareel-is-file/config/omareel/settings.json"
+systemAudio	false
+microphone	false
+microphoneDevice	"alsa_input.usb-Blue_Yeti"
+webcamEnabled	true
+webcamDevice	"/dev/video0"
+webcamChosenDevice	"/dev/video4"
+webcamHeight	720
+webcamRotation	270
+webcamFlipHorizontal	true
+selfViewEnabled	false
+selfViewSize	"L"
+selfViewX	0.25
+selfViewY	0.75
+captureBackend	"portal"
+countdownBeforeRecording	true
+webcam	{"border":{"alpha":1,"color":"#000000","enabled":false,"width":2},"captureHeight":720,"chosenDevice":"/dev/video4","crop":"square","device":"/dev/video0","enabled":true,"flipHorizontal":true,"offset":{"x":0.05,"y":0.02},"position":"top-left","radius":8,"rotation":270,"scaleDuringZoom":1,"shadow":{"angle":90,"blur":10,"distance":5,"enabled":false,"intensity":0.5},"shape":"square","size":0.3}
+after-load	current	missing
+after-load	legacy	file	0644	"{\x0a    \"captureBackend\": \"portal\",\x0a    \"countdownBeforeRecording\": true,\x0a    \"microphone\": false,\x0a    \"microphoneDevice\": \"alsa_input.usb-Blue_Yeti\",\x0a    \"selfViewEnabled\": false,\x0a    \"selfViewPosition\": {\x0a        \"x\": 0.25,\x0a        \"y\": 0.75\x0a    },\x0a    \"selfViewSize\": \"L\",\x0a    \"systemAudio\": false,\x0a    \"webcam\": {\x0a        \"enabled\": true,\x0a        \"device\": \"/dev/video0\",\x0a        \"chosenDevice\": \"/dev/video4\",\x0a        \"captureHeight\": 720,\x0a        \"rotation\": 270,\x0a        \"flipHorizontal\": true,\x0a        \"position\": \"top-left\",\x0a        \"size\": 0.3,\x0a        \"shape\": \"square\",\x0a        \"radius\": 8,\x0a        \"crop\": \"square\",\x0a        \"shadow\": {\x0a            \"enabled\": false,\x0a            \"intensity\": 0.5,\x0a            \"blur\": 10,\x0a            \"distance\": 5,\x0a            \"angle\": 90\x0a        },\x0a        \"border\": {\x0a            \"enabled\": false,\x0a            \"width\": 2,\x0a            \"color\": \"#000000\",\x0a            \"alpha\": 1\x0a        },\x0a        \"scaleDuringZoom\": 1,\x0a        \"offset\": {\x0a            \"x\": 0.05,\x0a            \"y\": 0.02\x0a        }\x0a    }\x0a}\x0a"
+save	false	"Could not create the settings directory"
+after-save	current	missing
+reload	same
+== special-legacy-omareel-read-only
+path	"$HOME/oracle-scratch/recordingpreferences/special-legacy-omareel-read-only/config/omareel/settings.json"
+systemAudio	false
+microphone	false
+microphoneDevice	"alsa_input.usb-Blue_Yeti"
+webcamEnabled	true
+webcamDevice	"/dev/video0"
+webcamChosenDevice	"/dev/video4"
+webcamHeight	720
+webcamRotation	270
+webcamFlipHorizontal	true
+selfViewEnabled	false
+selfViewSize	"L"
+selfViewX	0.25
+selfViewY	0.75
+captureBackend	"portal"
+countdownBeforeRecording	true
+webcam	{"border":{"alpha":1,"color":"#000000","enabled":false,"width":2},"captureHeight":720,"chosenDevice":"/dev/video4","crop":"square","device":"/dev/video0","enabled":true,"flipHorizontal":true,"offset":{"x":0.05,"y":0.02},"position":"top-left","radius":8,"rotation":270,"scaleDuringZoom":1,"shadow":{"angle":90,"blur":10,"distance":5,"enabled":false,"intensity":0.5},"shape":"square","size":0.3}
+after-load	current	missing
+after-load	legacy	file	0644	"{\x0a    \"captureBackend\": \"portal\",\x0a    \"countdownBeforeRecording\": true,\x0a    \"microphone\": false,\x0a    \"microphoneDevice\": \"alsa_input.usb-Blue_Yeti\",\x0a    \"selfViewEnabled\": false,\x0a    \"selfViewPosition\": {\x0a        \"x\": 0.25,\x0a        \"y\": 0.75\x0a    },\x0a    \"selfViewSize\": \"L\",\x0a    \"systemAudio\": false,\x0a    \"webcam\": {\x0a        \"enabled\": true,\x0a        \"device\": \"/dev/video0\",\x0a        \"chosenDevice\": \"/dev/video4\",\x0a        \"captureHeight\": 720,\x0a        \"rotation\": 270,\x0a        \"flipHorizontal\": true,\x0a        \"position\": \"top-left\",\x0a        \"size\": 0.3,\x0a        \"shape\": \"square\",\x0a        \"radius\": 8,\x0a        \"crop\": \"square\",\x0a        \"shadow\": {\x0a            \"enabled\": false,\x0a            \"intensity\": 0.5,\x0a            \"blur\": 10,\x0a            \"distance\": 5,\x0a            \"angle\": 90\x0a        },\x0a        \"border\": {\x0a            \"enabled\": false,\x0a            \"width\": 2,\x0a            \"color\": \"#000000\",\x0a            \"alpha\": 1\x0a        },\x0a        \"scaleDuringZoom\": 1,\x0a        \"offset\": {\x0a            \"x\": 0.05,\x0a            \"y\": 0.02\x0a        }\x0a    }\x0a}\x0a"
+save	false	"Permission denied"
+after-save	current	missing
+reload	same
+== special-legacy-is-directory
+path	"$HOME/oracle-scratch/recordingpreferences/special-legacy-is-directory/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"border":{"alpha":0.7,"color":"#ffffff","enabled":true,"width":6},"crop":"original","enabled":false,"flipHorizontal":false,"offset":{"x":0.035,"y":0.035},"position":"bottom-right","radius":16,"rotation":0,"scaleDuringZoom":0.7,"shadow":{"angle":45,"blur":23,"distance":20,"enabled":true,"intensity":0.28},"shape":"round","size":0.25}
+after-load	current	missing
+after-load	legacy	directory	0755
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"alpha\": 0.7,\x0a            \"color\": \"#ffffff\",\x0a            \"enabled\": true,\x0a            \"width\": 6\x0a        },\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"crop\": \"original\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"offset\": {\x0a            \"x\": 0.035,\x0a            \"y\": 0.035\x0a        },\x0a        \"position\": \"bottom-right\",\x0a        \"radius\": 16,\x0a        \"rotation\": 0,\x0a        \"scaleDuringZoom\": 0.7,\x0a        \"shadow\": {\x0a            \"angle\": 45,\x0a            \"blur\": 23,\x0a            \"distance\": 20,\x0a            \"enabled\": true,\x0a            \"intensity\": 0.28\x0a        },\x0a        \"shape\": \"round\",\x0a        \"size\": 0.25\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== special-legacy-unreadable
+path	"$HOME/oracle-scratch/recordingpreferences/special-legacy-unreadable/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"border":{"alpha":0.7,"color":"#ffffff","enabled":true,"width":6},"crop":"original","enabled":false,"flipHorizontal":false,"offset":{"x":0.035,"y":0.035},"position":"bottom-right","radius":16,"rotation":0,"scaleDuringZoom":0.7,"shadow":{"angle":45,"blur":23,"distance":20,"enabled":true,"intensity":0.28},"shape":"round","size":0.25}
+after-load	current	missing
+after-load	legacy	file	0000
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"alpha\": 0.7,\x0a            \"color\": \"#ffffff\",\x0a            \"enabled\": true,\x0a            \"width\": 6\x0a        },\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"crop\": \"original\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"offset\": {\x0a            \"x\": 0.035,\x0a            \"y\": 0.035\x0a        },\x0a        \"position\": \"bottom-right\",\x0a        \"radius\": 16,\x0a        \"rotation\": 0,\x0a        \"scaleDuringZoom\": 0.7,\x0a        \"shadow\": {\x0a            \"angle\": 45,\x0a            \"blur\": 23,\x0a            \"distance\": 20,\x0a            \"enabled\": true,\x0a            \"intensity\": 0.28\x0a        },\x0a        \"shape\": \"round\",\x0a        \"size\": 0.25\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== special-current-is-directory
+path	"$HOME/oracle-scratch/recordingpreferences/special-current-is-directory/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"border":{"alpha":0.7,"color":"#ffffff","enabled":true,"width":6},"crop":"original","enabled":false,"flipHorizontal":false,"offset":{"x":0.035,"y":0.035},"position":"bottom-right","radius":16,"rotation":0,"scaleDuringZoom":0.7,"shadow":{"angle":45,"blur":23,"distance":20,"enabled":true,"intensity":0.28},"shape":"round","size":0.25}
+after-load	current	directory	0755
+after-load	legacy	missing
+save	false	"Filename refers to a directory"
+after-save	current	directory	0755
+reload	same
+== special-current-unreadable
+path	"$HOME/oracle-scratch/recordingpreferences/special-current-unreadable/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"border":{"alpha":0.7,"color":"#ffffff","enabled":true,"width":6},"crop":"original","enabled":false,"flipHorizontal":false,"offset":{"x":0.035,"y":0.035},"position":"bottom-right","radius":16,"rotation":0,"scaleDuringZoom":0.7,"shadow":{"angle":45,"blur":23,"distance":20,"enabled":true,"intensity":0.28},"shape":"round","size":0.25}
+after-load	current	file	0000
+after-load	legacy	missing
+save	false	"Existing file $HOME/oracle-scratch/recordingpreferences/special-current-unreadable/config/omareel/settings.json is not writable"
+after-save	current	file	0000
+reload	same
+== special-current-read-only
+path	"$HOME/oracle-scratch/recordingpreferences/special-current-read-only/config/omareel/settings.json"
+systemAudio	false
+microphone	false
+microphoneDevice	"alsa_input.usb-Blue_Yeti"
+webcamEnabled	true
+webcamDevice	"/dev/video0"
+webcamChosenDevice	"/dev/video4"
+webcamHeight	720
+webcamRotation	270
+webcamFlipHorizontal	true
+selfViewEnabled	false
+selfViewSize	"L"
+selfViewX	0.25
+selfViewY	0.75
+captureBackend	"portal"
+countdownBeforeRecording	true
+webcam	{"border":{"alpha":1,"color":"#000000","enabled":false,"width":2},"captureHeight":720,"chosenDevice":"/dev/video4","crop":"square","device":"/dev/video0","enabled":true,"flipHorizontal":true,"offset":{"x":0.05,"y":0.02},"position":"top-left","radius":8,"rotation":270,"scaleDuringZoom":1,"shadow":{"angle":90,"blur":10,"distance":5,"enabled":false,"intensity":0.5},"shape":"square","size":0.3}
+after-load	current	file	0444	"{\x0a    \"captureBackend\": \"portal\",\x0a    \"countdownBeforeRecording\": true,\x0a    \"microphone\": false,\x0a    \"microphoneDevice\": \"alsa_input.usb-Blue_Yeti\",\x0a    \"selfViewEnabled\": false,\x0a    \"selfViewPosition\": {\x0a        \"x\": 0.25,\x0a        \"y\": 0.75\x0a    },\x0a    \"selfViewSize\": \"L\",\x0a    \"systemAudio\": false,\x0a    \"webcam\": {\x0a        \"enabled\": true,\x0a        \"device\": \"/dev/video0\",\x0a        \"chosenDevice\": \"/dev/video4\",\x0a        \"captureHeight\": 720,\x0a        \"rotation\": 270,\x0a        \"flipHorizontal\": true,\x0a        \"position\": \"top-left\",\x0a        \"size\": 0.3,\x0a        \"shape\": \"square\",\x0a        \"radius\": 8,\x0a        \"crop\": \"square\",\x0a        \"shadow\": {\x0a            \"enabled\": false,\x0a            \"intensity\": 0.5,\x0a            \"blur\": 10,\x0a            \"distance\": 5,\x0a            \"angle\": 90\x0a        },\x0a        \"border\": {\x0a            \"enabled\": false,\x0a            \"width\": 2,\x0a            \"color\": \"#000000\",\x0a            \"alpha\": 1\x0a        },\x0a        \"scaleDuringZoom\": 1,\x0a        \"offset\": {\x0a            \"x\": 0.05,\x0a            \"y\": 0.02\x0a        }\x0a    }\x0a}\x0a"
+after-load	legacy	missing
+save	false	"Existing file $HOME/oracle-scratch/recordingpreferences/special-current-read-only/config/omareel/settings.json is not writable"
+after-save	current	file	0444	"{\x0a    \"captureBackend\": \"portal\",\x0a    \"countdownBeforeRecording\": true,\x0a    \"microphone\": false,\x0a    \"microphoneDevice\": \"alsa_input.usb-Blue_Yeti\",\x0a    \"selfViewEnabled\": false,\x0a    \"selfViewPosition\": {\x0a        \"x\": 0.25,\x0a        \"y\": 0.75\x0a    },\x0a    \"selfViewSize\": \"L\",\x0a    \"systemAudio\": false,\x0a    \"webcam\": {\x0a        \"enabled\": true,\x0a        \"device\": \"/dev/video0\",\x0a        \"chosenDevice\": \"/dev/video4\",\x0a        \"captureHeight\": 720,\x0a        \"rotation\": 270,\x0a        \"flipHorizontal\": true,\x0a        \"position\": \"top-left\",\x0a        \"size\": 0.3,\x0a        \"shape\": \"square\",\x0a        \"radius\": 8,\x0a        \"crop\": \"square\",\x0a        \"shadow\": {\x0a            \"enabled\": false,\x0a            \"intensity\": 0.5,\x0a            \"blur\": 10,\x0a            \"distance\": 5,\x0a            \"angle\": 90\x0a        },\x0a        \"border\": {\x0a            \"enabled\": false,\x0a            \"width\": 2,\x0a            \"color\": \"#000000\",\x0a            \"alpha\": 1\x0a        },\x0a        \"scaleDuringZoom\": 1,\x0a        \"offset\": {\x0a            \"x\": 0.05,\x0a            \"y\": 0.02\x0a        }\x0a    }\x0a}\x0a"
+reload	same
+== special-current-dangling-symlink
+path	"$HOME/oracle-scratch/recordingpreferences/special-current-dangling-symlink/config/omareel/settings.json"
+systemAudio	false
+microphone	false
+microphoneDevice	"alsa_input.usb-Blue_Yeti"
+webcamEnabled	true
+webcamDevice	"/dev/video0"
+webcamChosenDevice	"/dev/video4"
+webcamHeight	720
+webcamRotation	270
+webcamFlipHorizontal	true
+selfViewEnabled	false
+selfViewSize	"L"
+selfViewX	0.25
+selfViewY	0.75
+captureBackend	"portal"
+countdownBeforeRecording	true
+webcam	{"border":{"alpha":1,"color":"#000000","enabled":false,"width":2},"captureHeight":720,"chosenDevice":"/dev/video4","crop":"square","device":"/dev/video0","enabled":true,"flipHorizontal":true,"offset":{"x":0.05,"y":0.02},"position":"top-left","radius":8,"rotation":270,"scaleDuringZoom":1,"shadow":{"angle":90,"blur":10,"distance":5,"enabled":false,"intensity":0.5},"shape":"square","size":0.3}
+after-load	current	symlink	"missing-target.json"	file	0644	"{\x0a    \"captureBackend\": \"portal\",\x0a    \"countdownBeforeRecording\": true,\x0a    \"microphone\": false,\x0a    \"microphoneDevice\": \"alsa_input.usb-Blue_Yeti\",\x0a    \"selfViewEnabled\": false,\x0a    \"selfViewPosition\": {\x0a        \"x\": 0.25,\x0a        \"y\": 0.75\x0a    },\x0a    \"selfViewSize\": \"L\",\x0a    \"systemAudio\": false,\x0a    \"webcam\": {\x0a        \"enabled\": true,\x0a        \"device\": \"/dev/video0\",\x0a        \"chosenDevice\": \"/dev/video4\",\x0a        \"captureHeight\": 720,\x0a        \"rotation\": 270,\x0a        \"flipHorizontal\": true,\x0a        \"position\": \"top-left\",\x0a        \"size\": 0.3,\x0a        \"shape\": \"square\",\x0a        \"radius\": 8,\x0a        \"crop\": \"square\",\x0a        \"shadow\": {\x0a            \"enabled\": false,\x0a            \"intensity\": 0.5,\x0a            \"blur\": 10,\x0a            \"distance\": 5,\x0a            \"angle\": 90\x0a        },\x0a        \"border\": {\x0a            \"enabled\": false,\x0a            \"width\": 2,\x0a            \"color\": \"#000000\",\x0a            \"alpha\": 1\x0a        },\x0a        \"scaleDuringZoom\": 1,\x0a        \"offset\": {\x0a            \"x\": 0.05,\x0a            \"y\": 0.02\x0a        }\x0a    }\x0a}\x0a"
+after-load	legacy	file	0644	"{\x0a    \"captureBackend\": \"portal\",\x0a    \"countdownBeforeRecording\": true,\x0a    \"microphone\": false,\x0a    \"microphoneDevice\": \"alsa_input.usb-Blue_Yeti\",\x0a    \"selfViewEnabled\": false,\x0a    \"selfViewPosition\": {\x0a        \"x\": 0.25,\x0a        \"y\": 0.75\x0a    },\x0a    \"selfViewSize\": \"L\",\x0a    \"systemAudio\": false,\x0a    \"webcam\": {\x0a        \"enabled\": true,\x0a        \"device\": \"/dev/video0\",\x0a        \"chosenDevice\": \"/dev/video4\",\x0a        \"captureHeight\": 720,\x0a        \"rotation\": 270,\x0a        \"flipHorizontal\": true,\x0a        \"position\": \"top-left\",\x0a        \"size\": 0.3,\x0a        \"shape\": \"square\",\x0a        \"radius\": 8,\x0a        \"crop\": \"square\",\x0a        \"shadow\": {\x0a            \"enabled\": false,\x0a            \"intensity\": 0.5,\x0a            \"blur\": 10,\x0a            \"distance\": 5,\x0a            \"angle\": 90\x0a        },\x0a        \"border\": {\x0a            \"enabled\": false,\x0a            \"width\": 2,\x0a            \"color\": \"#000000\",\x0a            \"alpha\": 1\x0a        },\x0a        \"scaleDuringZoom\": 1,\x0a        \"offset\": {\x0a            \"x\": 0.05,\x0a            \"y\": 0.02\x0a        }\x0a    }\x0a}\x0a"
+save	true	""
+after-save	current	symlink	"missing-target.json"	file	0644	"{\x0a    \"captureBackend\": \"portal\",\x0a    \"countdownBeforeRecording\": true,\x0a    \"microphone\": false,\x0a    \"microphoneDevice\": \"alsa_input.usb-Blue_Yeti\",\x0a    \"selfViewEnabled\": false,\x0a    \"selfViewPosition\": {\x0a        \"x\": 0.25,\x0a        \"y\": 0.75\x0a    },\x0a    \"selfViewSize\": \"L\",\x0a    \"systemAudio\": false,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"alpha\": 1,\x0a            \"color\": \"#000000\",\x0a            \"enabled\": false,\x0a            \"width\": 2\x0a        },\x0a        \"captureHeight\": 720,\x0a        \"chosenDevice\": \"/dev/video4\",\x0a        \"crop\": \"square\",\x0a        \"device\": \"/dev/video0\",\x0a        \"enabled\": true,\x0a        \"flipHorizontal\": true,\x0a        \"offset\": {\x0a            \"x\": 0.05,\x0a            \"y\": 0.02\x0a        },\x0a        \"position\": \"top-left\",\x0a        \"radius\": 8,\x0a        \"rotation\": 270,\x0a        \"scaleDuringZoom\": 1,\x0a        \"shadow\": {\x0a            \"angle\": 90,\x0a            \"blur\": 10,\x0a            \"distance\": 5,\x0a            \"enabled\": false,\x0a            \"intensity\": 0.5\x0a        },\x0a        \"shape\": \"square\",\x0a        \"size\": 0.3\x0a    }\x0a}\x0a"
+reload	same
+== special-current-symlink
+path	"$HOME/oracle-scratch/recordingpreferences/special-current-symlink/config/omareel/settings.json"
+systemAudio	false
+microphone	false
+microphoneDevice	"alsa_input.usb-Blue_Yeti"
+webcamEnabled	true
+webcamDevice	"/dev/video0"
+webcamChosenDevice	"/dev/video4"
+webcamHeight	720
+webcamRotation	270
+webcamFlipHorizontal	true
+selfViewEnabled	false
+selfViewSize	"L"
+selfViewX	0.25
+selfViewY	0.75
+captureBackend	"portal"
+countdownBeforeRecording	true
+webcam	{"border":{"alpha":1,"color":"#000000","enabled":false,"width":2},"captureHeight":720,"chosenDevice":"/dev/video4","crop":"square","device":"/dev/video0","enabled":true,"flipHorizontal":true,"offset":{"x":0.05,"y":0.02},"position":"top-left","radius":8,"rotation":270,"scaleDuringZoom":1,"shadow":{"angle":90,"blur":10,"distance":5,"enabled":false,"intensity":0.5},"shape":"square","size":0.3}
+after-load	current	symlink	"real.json"	file	0644	"{\x0a    \"captureBackend\": \"portal\",\x0a    \"countdownBeforeRecording\": true,\x0a    \"microphone\": false,\x0a    \"microphoneDevice\": \"alsa_input.usb-Blue_Yeti\",\x0a    \"selfViewEnabled\": false,\x0a    \"selfViewPosition\": {\x0a        \"x\": 0.25,\x0a        \"y\": 0.75\x0a    },\x0a    \"selfViewSize\": \"L\",\x0a    \"systemAudio\": false,\x0a    \"webcam\": {\x0a        \"enabled\": true,\x0a        \"device\": \"/dev/video0\",\x0a        \"chosenDevice\": \"/dev/video4\",\x0a        \"captureHeight\": 720,\x0a        \"rotation\": 270,\x0a        \"flipHorizontal\": true,\x0a        \"position\": \"top-left\",\x0a        \"size\": 0.3,\x0a        \"shape\": \"square\",\x0a        \"radius\": 8,\x0a        \"crop\": \"square\",\x0a        \"shadow\": {\x0a            \"enabled\": false,\x0a            \"intensity\": 0.5,\x0a            \"blur\": 10,\x0a            \"distance\": 5,\x0a            \"angle\": 90\x0a        },\x0a        \"border\": {\x0a            \"enabled\": false,\x0a            \"width\": 2,\x0a            \"color\": \"#000000\",\x0a            \"alpha\": 1\x0a        },\x0a        \"scaleDuringZoom\": 1,\x0a        \"offset\": {\x0a            \"x\": 0.05,\x0a            \"y\": 0.02\x0a        }\x0a    }\x0a}\x0a"
+after-load	legacy	missing
+save	true	""
+after-save	current	symlink	"real.json"	file	0644	"{\x0a    \"captureBackend\": \"portal\",\x0a    \"countdownBeforeRecording\": true,\x0a    \"microphone\": false,\x0a    \"microphoneDevice\": \"alsa_input.usb-Blue_Yeti\",\x0a    \"selfViewEnabled\": false,\x0a    \"selfViewPosition\": {\x0a        \"x\": 0.25,\x0a        \"y\": 0.75\x0a    },\x0a    \"selfViewSize\": \"L\",\x0a    \"systemAudio\": false,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"alpha\": 1,\x0a            \"color\": \"#000000\",\x0a            \"enabled\": false,\x0a            \"width\": 2\x0a        },\x0a        \"captureHeight\": 720,\x0a        \"chosenDevice\": \"/dev/video4\",\x0a        \"crop\": \"square\",\x0a        \"device\": \"/dev/video0\",\x0a        \"enabled\": true,\x0a        \"flipHorizontal\": true,\x0a        \"offset\": {\x0a            \"x\": 0.05,\x0a            \"y\": 0.02\x0a        },\x0a        \"position\": \"top-left\",\x0a        \"radius\": 8,\x0a        \"rotation\": 270,\x0a        \"scaleDuringZoom\": 1,\x0a        \"shadow\": {\x0a            \"angle\": 90,\x0a            \"blur\": 10,\x0a            \"distance\": 5,\x0a            \"enabled\": false,\x0a            \"intensity\": 0.5\x0a        },\x0a        \"shape\": \"square\",\x0a        \"size\": 0.3\x0a    }\x0a}\x0a"
+reload	same
+== special-config-home-read-only
+path	"$HOME/oracle-scratch/recordingpreferences/special-config-home-read-only/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"border":{"alpha":0.7,"color":"#ffffff","enabled":true,"width":6},"crop":"original","enabled":false,"flipHorizontal":false,"offset":{"x":0.035,"y":0.035},"position":"bottom-right","radius":16,"rotation":0,"scaleDuringZoom":0.7,"shadow":{"angle":45,"blur":23,"distance":20,"enabled":true,"intensity":0.28},"shape":"round","size":0.25}
+after-load	current	missing
+after-load	legacy	missing
+save	false	"Could not create the settings directory"
+after-save	current	missing
+reload	same
+== special-xdg-config-home-unset
+path	"$HOME/oracle-scratch/recordingpreferences/special-xdg-config-home-unset/home/.config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"S"
+selfViewX	0
+selfViewY	0
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"border":{"alpha":0.7,"color":"#ffffff","enabled":true,"width":6},"crop":"original","enabled":false,"flipHorizontal":false,"offset":{"x":0.035,"y":0.035},"position":"bottom-right","radius":16,"rotation":0,"scaleDuringZoom":0.7,"shadow":{"angle":45,"blur":23,"distance":20,"enabled":true,"intensity":0.28},"shape":"round","size":0.25}
+after-load	current	file	0644	"{\"selfViewSize\": \"s\", \"selfViewPosition\": {\"x\": 0, \"y\": 0}}"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 0,\x0a        \"y\": 0\x0a    },\x0a    \"selfViewSize\": \"S\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"alpha\": 0.7,\x0a            \"color\": \"#ffffff\",\x0a            \"enabled\": true,\x0a            \"width\": 6\x0a        },\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"crop\": \"original\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"offset\": {\x0a            \"x\": 0.035,\x0a            \"y\": 0.035\x0a        },\x0a        \"position\": \"bottom-right\",\x0a        \"radius\": 16,\x0a        \"rotation\": 0,\x0a        \"scaleDuringZoom\": 0.7,\x0a        \"shadow\": {\x0a            \"angle\": 45,\x0a            \"blur\": 23,\x0a            \"distance\": 20,\x0a            \"enabled\": true,\x0a            \"intensity\": 0.28\x0a        },\x0a        \"shape\": \"round\",\x0a        \"size\": 0.25\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== special-xdg-config-home-relative
+path	"$HOME/oracle-scratch/recordingpreferences/special-xdg-config-home-relative/home/.config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"S"
+selfViewX	0
+selfViewY	0
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"border":{"alpha":0.7,"color":"#ffffff","enabled":true,"width":6},"crop":"original","enabled":false,"flipHorizontal":false,"offset":{"x":0.035,"y":0.035},"position":"bottom-right","radius":16,"rotation":0,"scaleDuringZoom":0.7,"shadow":{"angle":45,"blur":23,"distance":20,"enabled":true,"intensity":0.28},"shape":"round","size":0.25}
+after-load	current	file	0644	"{\"selfViewSize\": \"s\", \"selfViewPosition\": {\"x\": 0, \"y\": 0}}"
+after-load	legacy	missing
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 0,\x0a        \"y\": 0\x0a    },\x0a    \"selfViewSize\": \"S\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"alpha\": 0.7,\x0a            \"color\": \"#ffffff\",\x0a            \"enabled\": true,\x0a            \"width\": 6\x0a        },\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"crop\": \"original\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"offset\": {\x0a            \"x\": 0.035,\x0a            \"y\": 0.035\x0a        },\x0a        \"position\": \"bottom-right\",\x0a        \"radius\": 16,\x0a        \"rotation\": 0,\x0a        \"scaleDuringZoom\": 0.7,\x0a        \"shadow\": {\x0a            \"angle\": 45,\x0a            \"blur\": 23,\x0a            \"distance\": 20,\x0a            \"enabled\": true,\x0a            \"intensity\": 0.28\x0a        },\x0a        \"shape\": \"round\",\x0a        \"size\": 0.25\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== constructed-defaults
+path	"$HOME/oracle-scratch/recordingpreferences/constructed-defaults/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	1080
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	1
+selfViewY	1
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{"border":{"alpha":0.7,"color":"#ffffff","enabled":true,"width":6},"crop":"original","enabled":false,"flipHorizontal":false,"offset":{"x":0.035,"y":0.035},"position":"bottom-right","radius":16,"rotation":0,"scaleDuringZoom":0.7,"shadow":{"angle":45,"blur":23,"distance":20,"enabled":true,"intensity":0.28},"shape":"round","size":0.25}
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 1,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"border\": {\x0a            \"alpha\": 0.7,\x0a            \"color\": \"#ffffff\",\x0a            \"enabled\": true,\x0a            \"width\": 6\x0a        },\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"crop\": \"original\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"offset\": {\x0a            \"x\": 0.035,\x0a            \"y\": 0.035\x0a        },\x0a        \"position\": \"bottom-right\",\x0a        \"radius\": 16,\x0a        \"rotation\": 0,\x0a        \"scaleDuringZoom\": 0.7,\x0a        \"shadow\": {\x0a            \"angle\": 45,\x0a            \"blur\": 23,\x0a            \"distance\": 20,\x0a            \"enabled\": true,\x0a            \"intensity\": 0.28\x0a        },\x0a        \"shape\": \"round\",\x0a        \"size\": 0.25\x0a    }\x0a}\x0a"
+reload	differs	webcam
+== constructed-edge-values
+path	"$HOME/oracle-scratch/recordingpreferences/constructed-edge-values/config/omareel/settings.json"
+systemAudio	false
+microphone	false
+microphoneDevice	"Mic “ü” 🎤"
+webcamEnabled	true
+webcamDevice	""
+webcamChosenDevice	"/dev/video9"
+webcamHeight	480
+webcamRotation	45
+webcamFlipHorizontal	true
+selfViewEnabled	false
+selfViewSize	"xl"
+selfViewX	-1
+selfViewY	2.5
+captureBackend	""
+countdownBeforeRecording	true
+webcam	{"captureHeight":"x","extra":{"list":[1,null,"s"]},"inset":{"width":3},"mirror":true}
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"\",\x0a    \"countdownBeforeRecording\": true,\x0a    \"microphone\": false,\x0a    \"microphoneDevice\": \"Mic \xe2\x80\x9c\xc3\xbc\xe2\x80\x9d \xf0\x9f\x8e\xa4\",\x0a    \"selfViewEnabled\": false,\x0a    \"selfViewPosition\": {\x0a        \"x\": 0,\x0a        \"y\": 1\x0a    },\x0a    \"selfViewSize\": \"xl\",\x0a    \"systemAudio\": false,\x0a    \"webcam\": {\x0a        \"captureHeight\": 1080,\x0a        \"chosenDevice\": \"/dev/video9\",\x0a        \"device\": \"\",\x0a        \"enabled\": true,\x0a        \"extra\": {\x0a            \"list\": [\x0a                1,\x0a                null,\x0a                \"s\"\x0a            ]\x0a        },\x0a        \"flipHorizontal\": true,\x0a        \"inset\": {\x0a            \"width\": 3\x0a        },\x0a        \"mirror\": true,\x0a        \"rotation\": 45\x0a    }\x0a}\x0a"
+reload	differs	webcamHeight	webcamRotation	selfViewSize	selfViewX	selfViewY	webcam
+== constructed-non-finite
+path	"$HOME/oracle-scratch/recordingpreferences/constructed-non-finite/config/omareel/settings.json"
+systemAudio	true
+microphone	true
+microphoneDevice	"default_input"
+webcamEnabled	false
+webcamDevice	"/dev/video2"
+webcamChosenDevice	"/dev/video2"
+webcamHeight	720
+webcamRotation	0
+webcamFlipHorizontal	false
+selfViewEnabled	true
+selfViewSize	"M"
+selfViewX	nan
+selfViewY	-inf
+captureBackend	"auto"
+countdownBeforeRecording	false
+webcam	{}
+save	true	""
+after-save	current	file	0644	"{\x0a    \"captureBackend\": \"auto\",\x0a    \"countdownBeforeRecording\": false,\x0a    \"microphone\": true,\x0a    \"microphoneDevice\": \"default_input\",\x0a    \"selfViewEnabled\": true,\x0a    \"selfViewPosition\": {\x0a        \"x\": 0,\x0a        \"y\": 0\x0a    },\x0a    \"selfViewSize\": \"M\",\x0a    \"systemAudio\": true,\x0a    \"webcam\": {\x0a        \"captureHeight\": 720,\x0a        \"chosenDevice\": \"/dev/video2\",\x0a        \"device\": \"/dev/video2\",\x0a        \"enabled\": false,\x0a        \"flipHorizontal\": false,\x0a        \"rotation\": 0\x0a    }\x0a}\x0a"
+reload	differs	selfViewX	selfViewY	webcam

@@ -86,5 +86,13 @@ void runZoomTimeline(const Context &context);
 void runProject(const Context &context);
 void runOmarchyPaths(const Context &context);
 void runTheme(const Context &context);
+void runClipTimeline(const Context &context);
+void runCameraTimeline(const Context &context);
+void runLayoutTimeline(const Context &context);
+void runKeystrokeTrack(const Context &context);
+void runMotionTrack(const Context &context);
+void runRecordingPreferences(const Context &context);
+void runMediaProbe(const Context &context);
+void runComposition(const Context &context);
 
 } // namespace Oracle

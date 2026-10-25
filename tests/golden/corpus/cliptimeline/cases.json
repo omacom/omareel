@@ -1,0 +1,388 @@
+{
+ "timelines": {
+  "empty": [],
+  "single": [
+   {
+    "id": "c1",
+    "in": 0.0,
+    "out": 8.0,
+    "speed": 1.0
+   }
+  ],
+  "single-zero-length": [
+   {
+    "id": "c1",
+    "in": 2.0,
+    "out": 2.0,
+    "speed": 1.0
+   }
+  ],
+  "speeds-slow": [
+   {
+    "id": "s1",
+    "in": 0.0,
+    "out": 1.0,
+    "speed": 0.5
+   },
+   {
+    "id": "s2",
+    "in": 1.0,
+    "out": 2.0,
+    "speed": 0.75
+   },
+   {
+    "id": "s3",
+    "in": 2.0,
+    "out": 3.0,
+    "speed": 1.0
+   },
+   {
+    "id": "s4",
+    "in": 3.0,
+    "out": 4.0,
+    "speed": 1.2
+   },
+   {
+    "id": "s5",
+    "in": 4.0,
+    "out": 5.0,
+    "speed": 1.4
+   }
+  ],
+  "speeds-fast": [
+   {
+    "id": "f1",
+    "in": 0.0,
+    "out": 1.5,
+    "speed": 1.6
+   },
+   {
+    "id": "f2",
+    "in": 1.5,
+    "out": 3.0,
+    "speed": 1.8
+   },
+   {
+    "id": "f3",
+    "in": 3.0,
+    "out": 4.5,
+    "speed": 2.0
+   },
+   {
+    "id": "f4",
+    "in": 4.5,
+    "out": 6.0,
+    "speed": 3.0
+   },
+   {
+    "id": "f5",
+    "in": 6.0,
+    "out": 7.5,
+    "speed": 4.0
+   }
+  ],
+  "speeds-fastest": [
+   {
+    "id": "x1",
+    "in": 0.0,
+    "out": 4.0,
+    "speed": 8.0
+   },
+   {
+    "id": "x2",
+    "in": 4.0,
+    "out": 8.0,
+    "speed": 16.0
+   },
+   {
+    "id": "x3",
+    "in": 8.0,
+    "out": 12.0,
+    "speed": 24.0
+   }
+  ],
+  "cuts": [
+   {
+    "id": "c1",
+    "in": 0.0,
+    "out": 2.0,
+    "speed": 1.0
+   },
+   {
+    "id": "c2",
+    "in": 3.0,
+    "out": 5.0,
+    "speed": 1.0
+   },
+   {
+    "id": "c3",
+    "in": 6.5,
+    "out": 8.0,
+    "speed": 1.0
+   }
+  ],
+  "unsorted": [
+   {
+    "id": "c1",
+    "in": 5.0,
+    "out": 7.0,
+    "speed": 1.0
+   },
+   {
+    "id": "c2",
+    "in": 1.0,
+    "out": 3.0,
+    "speed": 1.0
+   },
+   {
+    "id": "c3",
+    "in": 3.0,
+    "out": 4.5,
+    "speed": 2.0
+   }
+  ],
+  "overlapping": [
+   {
+    "id": "c1",
+    "in": 0.0,
+    "out": 4.0,
+    "speed": 1.0
+   },
+   {
+    "id": "c2",
+    "in": 2.0,
+    "out": 6.0,
+    "speed": 2.0
+   },
+   {
+    "id": "c3",
+    "in": 3.5,
+    "out": 5.0,
+    "speed": 0.5
+   }
+  ],
+  "zero-length-clips": [
+   {
+    "id": "c1",
+    "in": 0.0,
+    "out": 2.0,
+    "speed": 1.0
+   },
+   {
+    "id": "c2",
+    "in": 2.0,
+    "out": 2.0,
+    "speed": 1.0
+   },
+   {
+    "id": "c3",
+    "in": 2.0,
+    "out": 4.0,
+    "speed": 1.2
+   },
+   {
+    "id": "c4",
+    "in": 4.0,
+    "out": 4.0,
+    "speed": 3.0
+   }
+  ],
+  "inserted-media": [
+   {
+    "id": "c1",
+    "in": 0.0,
+    "out": 3.0,
+    "speed": 1.0
+   },
+   {
+    "id": "m1",
+    "in": 0.0,
+    "out": 2.0,
+    "speed": 1.0,
+    "media": "media/a.mp4",
+    "fit": "fill"
+   },
+   {
+    "id": "c2",
+    "in": 3.0,
+    "out": 6.0,
+    "speed": 1.5
+   },
+   {
+    "id": "m2",
+    "in": 1.0,
+    "out": 4.0,
+    "speed": 2.0,
+    "media": "media/b.mp4",
+    "fit": "framed"
+   },
+   {
+    "id": "c3",
+    "in": 6.0,
+    "out": 8.0,
+    "speed": 1.0,
+    "layout": "camera"
+   }
+  ],
+  "media-first": [
+   {
+    "id": "m1",
+    "in": 0.0,
+    "out": 1.5,
+    "speed": 1.0,
+    "media": "media/a.mp4"
+   },
+   {
+    "id": "c1",
+    "in": 1.0,
+    "out": 5.0,
+    "speed": 1.0
+   }
+  ],
+  "media-last": [
+   {
+    "id": "c1",
+    "in": 0.0,
+    "out": 4.0,
+    "speed": 1.0
+   },
+   {
+    "id": "m1",
+    "in": 0.5,
+    "out": 3.0,
+    "speed": 1.0,
+    "media": "media/a.mp4"
+   }
+  ],
+  "media-only": [
+   {
+    "id": "m1",
+    "in": 0.0,
+    "out": 2.0,
+    "speed": 1.0,
+    "media": "media/a.mp4"
+   },
+   {
+    "id": "m2",
+    "in": 0.5,
+    "out": 1.5,
+    "speed": 0.5,
+    "media": "media/b.mp4"
+   }
+  ],
+  "media-adjacent": [
+   {
+    "id": "c1",
+    "in": 0.0,
+    "out": 2.0,
+    "speed": 1.0
+   },
+   {
+    "id": "m1",
+    "in": 0.0,
+    "out": 1.0,
+    "speed": 1.0,
+    "media": "media/a.mp4"
+   },
+   {
+    "id": "m2",
+    "in": 0.0,
+    "out": 1.0,
+    "speed": 1.0,
+    "media": "media/b.mp4"
+   },
+   {
+    "id": "c2",
+    "in": 2.0,
+    "out": 4.0,
+    "speed": 1.0
+   }
+  ],
+  "inverted": [
+   {
+    "id": "c1",
+    "in": 0.0,
+    "out": 2.0,
+    "speed": 1.0
+   },
+   {
+    "id": "c2",
+    "in": 4.0,
+    "out": 3.0,
+    "speed": 1.0
+   },
+   {
+    "id": "c3",
+    "in": 5.0,
+    "out": 6.0,
+    "speed": 1.0
+   }
+  ],
+  "degenerate-speeds": [
+   {
+    "id": "c1",
+    "in": 0.0,
+    "out": 1.0,
+    "speed": 0.0
+   },
+   {
+    "id": "c2",
+    "in": 1.0,
+    "out": 2.0,
+    "speed": -1.0
+   },
+   {
+    "id": "c3",
+    "in": 2.0,
+    "out": 3.0,
+    "speed": 1.0
+   }
+  ],
+  "tiny": [
+   {
+    "id": "c1",
+    "in": 0.0,
+    "out": 1e-10,
+    "speed": 1.0
+   },
+   {
+    "id": "c2",
+    "in": 1.0,
+    "out": 1.05,
+    "speed": 1.0
+   },
+   {
+    "id": "c3",
+    "in": 2.0,
+    "out": 2.3,
+    "speed": 3.0
+   }
+  ]
+ },
+ "splitSequences": {
+  "single": [
+   2.0,
+   4.0,
+   1.0,
+   1.0,
+   6.5,
+   0.0,
+   8.0,
+   3.999999999,
+   3.9999999995
+  ],
+  "inserted-media": [
+   1.0,
+   4.0,
+   4.5,
+   6.0,
+   1.0
+  ],
+  "speeds-fast": [
+   0.5,
+   0.5,
+   2.0,
+   3.25
+  ]
+ }
+}

@@ -1,0 +1,216 @@
+{
+ "synthetic-defaults": {
+  "input": "inputlog/bundles/synthetic",
+  "duration": 8.0,
+  "width": 640,
+  "height": 360,
+  "captureFps": 60.0,
+  "zooms": "generate"
+ },
+ "synthetic-no-zooms": {
+  "input": "inputlog/bundles/synthetic",
+  "duration": 8.0,
+  "width": 640,
+  "height": 360,
+  "captureFps": 60.0,
+  "zooms": []
+ },
+ "synthetic-no-smoothing": {
+  "input": "inputlog/bundles/synthetic",
+  "duration": 8.0,
+  "width": 640,
+  "height": 360,
+  "captureFps": 60.0,
+  "zooms": "generate",
+  "set": {
+   "cursor.smoothing": false
+  }
+ },
+ "synthetic-instant-zoom": {
+  "input": "inputlog/bundles/synthetic",
+  "duration": 8.0,
+  "width": 640,
+  "height": 360,
+  "captureFps": 60.0,
+  "zooms": "generate",
+  "set": {
+   "zoomStyle.instantAnimation": true,
+   "zoomStyle.motionBlur": 0.5
+  }
+ },
+ "synthetic-bouncy-springs": {
+  "input": "inputlog/bundles/synthetic",
+  "duration": 8.0,
+  "width": 640,
+  "height": 360,
+  "captureFps": 60.0,
+  "zooms": "generate",
+  "set": {
+   "cursor.spring": [
+    0.5,
+    600.0,
+    4.0
+   ],
+   "zoomStyle.spring": [
+    1.0,
+    300.0,
+    3.0
+   ]
+  }
+ },
+ "synthetic-snapping-springs": {
+  "input": "inputlog/bundles/synthetic",
+  "duration": 8.0,
+  "width": 640,
+  "height": 360,
+  "captureFps": 60.0,
+  "zooms": "generate",
+  "set": {
+   "cursor.spring": [
+    0.0,
+    470.0,
+    70.0
+   ],
+   "zoomStyle.spring": [
+    2.25,
+    0.0,
+    40.0
+   ]
+  }
+ },
+ "synthetic-hide-idle-300": {
+  "input": "inputlog/bundles/synthetic",
+  "duration": 8.0,
+  "width": 640,
+  "height": 360,
+  "captureFps": 60.0,
+  "zooms": "generate",
+  "set": {
+   "cursor.hideWhenIdleMs": 300,
+   "cursor.clickShrink": 0.5,
+   "cursor.rotateOnXMovementRatio": 2.0
+  }
+ },
+ "synthetic-hide-idle-0": {
+  "input": "inputlog/bundles/synthetic",
+  "duration": 8.0,
+  "width": 640,
+  "height": 360,
+  "captureFps": 60.0,
+  "zooms": "generate",
+  "set": {
+   "cursor.hideWhenIdleMs": 0,
+   "cursor.rotateOnXMovementRatio": -1.0
+  }
+ },
+ "synthetic-cursor-hidden": {
+  "input": "inputlog/bundles/synthetic",
+  "duration": 8.0,
+  "width": 640,
+  "height": 360,
+  "captureFps": 60.0,
+  "zooms": "generate",
+  "set": {
+   "cursor.visible": false,
+   "cursor.clickEffect": "none",
+   "cursor.rotateOnXMovementRatio": 0.0
+  }
+ },
+ "synthetic-short-30fps": {
+  "input": "inputlog/bundles/synthetic",
+  "duration": 3.0,
+  "width": 640,
+  "height": 360,
+  "captureFps": 30.0,
+  "zooms": "generate",
+  "set": {
+   "zoomStyle.snapToEdgesRatio": 0.0
+  }
+ },
+ "synthetic-duration-0": {
+  "input": "inputlog/bundles/synthetic",
+  "duration": 0.0,
+  "width": 640,
+  "height": 360,
+  "captureFps": 60.0,
+  "zooms": "generate"
+ },
+ "synthetic-duration-negative": {
+  "input": "inputlog/bundles/synthetic",
+  "duration": -1.0,
+  "width": 640,
+  "height": 360,
+  "captureFps": 60.0,
+  "zooms": "generate"
+ },
+ "clicks-1080p": {
+  "input": "motiontrack/clicks-1080p.jsonl",
+  "duration": 4.0,
+  "width": 1920,
+  "height": 1080,
+  "captureFps": 60.0,
+  "zooms": [
+   {
+    "id": "z1",
+    "start": 0.5,
+    "end": 2.0,
+    "level": 2.0,
+    "auto": true,
+    "x": 0.5,
+    "y": 0.5
+   },
+   {
+    "id": "z2",
+    "start": 2.5,
+    "end": 3.5,
+    "level": 3.0,
+    "auto": false,
+    "x": 0.9,
+    "y": 0.1
+   }
+  ],
+  "set": {
+   "zoomStyle.instantAnimation": true,
+   "cursor.clickShrink": 1.2
+  }
+ },
+ "clicks-zero-size": {
+  "input": "motiontrack/clicks-1080p.jsonl",
+  "duration": 1.0,
+  "width": 0,
+  "height": 0,
+  "captureFps": 0.0,
+  "zooms": []
+ },
+ "no-moves": {
+  "input": "motiontrack/no-moves.jsonl",
+  "duration": 2.0,
+  "width": 640,
+  "height": 360,
+  "captureFps": 60.0,
+  "zooms": "generate"
+ },
+ "single-move": {
+  "input": "motiontrack/single-move.jsonl",
+  "duration": 2.0,
+  "width": 640,
+  "height": 360,
+  "captureFps": 60.0,
+  "zooms": [],
+  "set": {
+   "cursor.hideWhenIdleMs": 100
+  }
+ },
+ "idle-gaps": {
+  "input": "motiontrack/idle-gaps.jsonl",
+  "duration": 6.0,
+  "width": 640,
+  "height": 360,
+  "captureFps": 60.0,
+  "zooms": "generate",
+  "set": {
+   "cursor.hideWhenIdleMs": 500,
+   "cursor.smoothing": false
+  }
+ }
+}
