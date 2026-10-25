@@ -1,0 +1,47 @@
+{
+ "frames": {
+  "window_s": 9.47,
+  "commits": 567,
+  "fps": 59.76,
+  "frame_ms_median": 16.72,
+  "frame_ms_p95": 16.9,
+  "frame_ms_max": 30.9,
+  "missed_vsyncs": 1
+ },
+ "sample": {
+  "wall_s": 9.54,
+  "cpu_percent": 15.2,
+  "children_cpu_percent": 0.0,
+  "children": 0,
+  "rss_peak_mb": 436.3,
+  "tree_rss_peak_mb": 436.3,
+  "gpu_busy_percent": {
+   "drm-engine-render": 12.4,
+   "drm-engine-copy": 0.0,
+   "drm-engine-video": 29.4,
+   "drm-engine-video-enhance": 0.0
+  },
+  "gpu_resident_peak_mb": 405.7,
+  "loadavg": [
+   "2.45",
+   "7.76",
+   "10.88"
+  ]
+ },
+ "app": {
+  "seconds": 10,
+  "fps_per_second": [
+   59.0,
+   60.0,
+   60.0,
+   60.6,
+   61.1,
+   60.1,
+   51.1,
+   70.0,
+   60.1,
+   60.1
+  ],
+  "dropped": 10
+ }
+}

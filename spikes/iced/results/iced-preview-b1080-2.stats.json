@@ -1,0 +1,1 @@
+{"seconds": 10, "frames": 596, "fps": 59.60, "frame_ms_median": 16.797, "frame_ms_p95": 17.080, "frame_ms_max": 17.239, "missed_vsyncs": 0, "screen_frames_expected": 600, "screen_frames_shown": 595, "screen_frames_dropped": 5, "decoder_late": 0, "prepare_ms_median": 0.042, "prepare_ms_p95": 0.059}

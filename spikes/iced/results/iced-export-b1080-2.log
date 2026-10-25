@@ -1,0 +1,12 @@
+export: 1920x1080 at 600 frames on Intel(R) Iris(R) Xe Graphics (RPL-P) (Vulkan)
+frame 60/600frame 120/600frame 180/600frame 240/600frame 300/600frame 360/600frame 420/600frame 480/600frame 540/600frame 600/600
+
+Timing (600 frames):
+  decode wait:  1.104 ms/frame
+  upload:       1.884 ms/frame
+  render:       0.456 ms/frame
+  readback:     1.844 ms/frame
+  encode write: 6.275 ms/frame
+  total:        5.010 s (119.8 frames/s)
+  scene prepare: 0.060 ms/frame
+exported 600 frames in 5.01 s (119.8 frames/s) to /home/ryan/.cache/omareel-spikes/scratch-iced/results/iced-b1080.mp4
