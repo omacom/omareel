@@ -25,13 +25,14 @@ omareel_qt (Rust staticlib)    calls plumbing through cxx
 omareel_plumbing (C++)         never calls Rust; only emits Qt signals and implements virtuals
 ```
 
-The editor object needed C++ on both sides of Rust: players and timers below it, and the
-exporter, which drives the Rust export job, above it. The exporter is therefore compiled into
-`omareel_qt`'s own archive (`CxxQtBuilder::cpp_files`, which also runs moc on the headers), with
-`EditorBase`, which starts it. Within one archive the linker resolves references in any
+The editor object needed C++ on both sides of Rust: its players (`PlaybackDriver`) below it,
+and the exporter, which drives the Rust export job, above it. The exporter is therefore compiled
+into `omareel_qt`'s own archive (`CxxQtBuilder::cpp_files`, which also runs moc on the headers),
+with `EditorBase`, which starts it. Within one archive the linker resolves references in any
 direction, so nothing depends on link order; CMake only adds `crates/omareel_qt/cpp` to the
 include path of what links `omareel_qt`, and the Qt modules that C++ needs to `QT_MODULES` (they
-must match the build script's `qt_module` calls). A CMake cycle between two static libraries, or
+must match the build script's `qt_module` calls). That C++ is built by the `cc` crate with the
+crate's flags rather than CMake's, so it should not lean on `Q_ASSERT` or `NDEBUG`. A CMake cycle between two static libraries, or
 the Rust editor running the export loop itself, were the other options: the first depends on
 CMake repeating archives on the link line, the second would have changed when the event loop
 runs during an export.
