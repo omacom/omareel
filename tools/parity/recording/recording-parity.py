@@ -245,6 +245,9 @@ def record_case(name, side, start_args, stop_side=None, env_extra=None, stop='--
     names = Names(side, directory / 'rec')
     stop_names = Names(stop_side, directory / 'rec')
     result = {}
+    # Both sides start with the pointer in the same place, wherever the last run left it.
+    ctl('dispatch', 'movecursor', '800', '450')
+    time.sleep(0.1)
     t0 = time.time()
     t0_us = time.monotonic_ns() // 1000
     command = [apps[side], 'record', *start_args, '--dir', str(directory / 'rec')]
@@ -301,7 +304,10 @@ def record_case(name, side, start_args, stop_side=None, env_extra=None, stop='--
                                 'csv=p=0', str(bundle / 'thumb.jpg')], capture_output=True, text=True).stdout.strip()
         result['thumb'] = thumb
         ts = bundle / 'screen.mp4.ts'
-        result['ts_header'] = ts.read_text().splitlines()[0] if ts.exists() else None
+        # The native capture's file starts with a header; gpu-screen-recorder's (and fake-gsr.py's)
+        # is the first frame's time alone, which differs between any two runs.
+        ts_first = ts.read_text().splitlines()[0] if ts.exists() else None
+        result['ts_header'] = '<time>' if ts_first and ts_first.isdigit() else ts_first
         result['raw_counts'] = {'frames': ((capture or {}).get('capture') or {}).get('frames'),
                                 'packets': len((probe_video(str(bundle / 'screen.mp4')) or {}).get('packet_times', [])),
                                 'first_frame_ms': ((capture or {}).get('first_frame_us', 0) - ((state or {}).get('daemon_started_us') or 0)) / 1000,
@@ -463,8 +469,17 @@ try:
                  WAYLAND_DISPLAY=os.environ['OMAREEL_OUTER_DISPLAY'],
                  HYPRLAND_INSTANCE_SIGNATURE=os.environ['OMAREEL_OUTER_SIGNATURE'])
     instance = json.loads((root / 'instance.json').read_text())
-    clients = json.loads(subprocess.run(['hyprctl', '-j', 'clients'], env=outer, capture_output=True, text=True).stdout)
-    selector = 'address:' + next(c for c in clients if c['pid'] == instance['pid'])['address']
+    # The nested window can take a while to map in the outer compositor when the machine is busy.
+    deadline = time.monotonic() + 15
+    while True:
+        clients = json.loads(subprocess.run(['hyprctl', '-j', 'clients'], env=outer, capture_output=True,
+                                            text=True).stdout)
+        found = next((c for c in clients if c['pid'] == instance['pid']), None)
+        if found or time.monotonic() > deadline:
+            break
+        time.sleep(0.2)
+    assert found, 'the nested compositor has no window in the outer one'
+    selector = 'address:' + found['address']
     monitor = json.loads(subprocess.run(['hyprctl', '-j', 'monitors'], env=outer, capture_output=True, text=True).stdout)[0]
     for expression in (f"hl.dispatch(hl.dsp.window.float({{action='enable',window='{selector}'}}))",
                        f"hl.dispatch(hl.dsp.window.resize({{x=1600,y=900,window='{selector}'}}))",
