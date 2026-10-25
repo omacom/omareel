@@ -7,7 +7,7 @@ license.workspace = true
 publish.workspace = true
 
 # The Qt side: CXX-Qt objects and C++-callable functions, linked into the omareel binary.
-# Logic lives in omareel_core; this crate only converts between it and Qt.
+# Logic lives in omareel_core and omareel_record; this crate only converts between them and Qt.
 [lib]
 crate-type = ["staticlib"]
 
@@ -15,7 +15,9 @@ crate-type = ["staticlib"]
 cxx = "1"
 cxx-qt = "0.10"
 cxx-qt-lib = { version = "0.10", features = ["qt_gui"] }
+libc = "0.2"
 omareel_core = { path = "../omareel_core" }
+omareel_record = { path = "../omareel_record" }
 
 [build-dependencies]
 cxx-qt-build = "0.10"

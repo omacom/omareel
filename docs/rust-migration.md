@@ -10,8 +10,9 @@ same after each one: same commands, same files written byte for byte, same pixel
 |---|---|
 | `crates/omareel_core` | Plain Rust logic with no Qt. Any front end can use it. |
 | `crates/omareel_record` | The recording side's logic with no Qt (recorder state files, region picker, capture exclusion, camera and screen capture decisions, launcher and recording bar helpers), on top of `omareel_core`. |
-| `crates/omareel_qt` | The one Rust static library linked into the C++ binary: CXX-Qt objects and C++-callable functions that expose `omareel_core` to QML and C++. |
-| `src/plumbing` | C++ that Rust drives: Qt-only pieces (players, GL export rendering, camera, file watchers, timers). |
+| `crates/omareel_qt` | The one Rust static library linked into the C++ binary: CXX-Qt objects and C++-callable functions that expose `omareel_core` and `omareel_record` to QML and C++. |
+| `crates/omareel_qt/cpp` | C++ that calls into Rust and is compiled into the same archive by the crate's build script: `LauncherBase` and `RecordingBarBase`, the C++ bases of the launcher and recording bar objects. |
+| `src/plumbing` | C++ that Rust drives: Qt-only pieces (players, GL export rendering, the camera, file watchers, timers). |
 | `src/` (rest) | C++ that has not moved yet, plus `main.cpp`'s window setup. |
 
 The layering only goes one way, which keeps static-library linking free of cycles:
@@ -20,10 +21,27 @@ The layering only goes one way, which keeps static-library linking free of cycle
 omareel (exe), C++ tests       may call Rust and plumbing
   omareel_render               QML modules, FrameSource
 omareel_qt (Rust staticlib)    calls plumbing through cxx
+  crates/omareel_qt/cpp        C++ in the same archive: calls Rust and plumbing
   omareel_record               pure Rust, the recording side
   omareel_core                 pure Rust
 omareel_plumbing (C++)         never calls Rust; only emits Qt signals and implements virtuals
 ```
+
+The launcher and the recording bar are Rust objects over C++ bases that own their Qt pieces:
+`LauncherBase` holds QMediaDevices, the cameras Qt lists (the `webcamCameraDevice` property hands
+one to QML in a QVariant), the microphone meter's QAudioSource and the launcher's timers, and starts
+the detached processes; `RecordingBarBase` holds the camera (`CameraCapture`, plumbing), the watcher
+on the recorder's state directory, the bar's timers and the standby host's QLockFile, which it
+releases only after the camera is gone, as `RecordingBar`'s members did. Both bases call Rust (the
+camera's encoder asks the Rust encoder probe through a callback the base installs), so they are
+compiled into `omareel_qt`'s own archive (`CxxQtBuilder::cpp_files`, which also runs moc on the
+headers). Within one archive the linker resolves references in any direction, so nothing depends on
+link order; CMake only adds `crates/omareel_qt/cpp` to the include path of what links `omareel_qt`,
+and the Qt modules that C++ needs to `QT_MODULES` (they must match the build script's `qt_module`
+calls). That C++ is built by the `cc` crate with the crate's flags (`-Wall -Wextra`) rather than
+CMake's, so it should not lean on `Q_ASSERT` or `NDEBUG`, and its headers include `<QString>` before
+any other Qt header (see the CXX-Qt notes). Plumbing itself still never calls Rust: what it needs
+from Rust comes in as a `std::function`, like `CameraCapture::setPreferredEncoderQuery`.
 
 ## Rules for ported code
 
@@ -60,6 +78,23 @@ started (CXX-Qt 0.10, Qt 6.11):
   `QColor` values stay colours.
 - Values coming in from QML go through `QJsonValue::fromVariant`, the same conversion the C++
   editor uses.
+- A C++ base class can own Qt objects the Rust object drives (`LauncherBase`, `RecordingBarBase`):
+  Rust calls its protected methods with `#[inherit]` and it reports through pure virtuals the Rust
+  object overrides. Override signatures must match exactly; a Rust `i64` is `std::int64_t`, which
+  is not `qint64`. The generated class derives from the base, then `CxxQtType` (which owns the
+  Rust object), then `CxxQtThreading`, so the Rust object drops before the base's members: the base
+  disconnects what reports to it in its destructor, and anything that must outlive the Rust state
+  (the camera before the host lock) is ordered among the base's members.
+- A base method that emits synchronously (a camera that fails as it starts) calls the Rust override
+  while a Rust method that called the base is still on the stack. The C++ handled those signals
+  inside the call, and the state files they write must come out in the same order, so the calls
+  stay direct; the Rust methods hold no borrow of their fields across such a call.
+- cxx explicitly instantiates `rust::Vec<T>` for every shared struct `T` a signature mentions, and
+  GCC 16 reports `-Wmaybe-uninitialized` in its constructor; lists go across as an opaque Rust
+  collector C++ appends to (`CameraList`) instead.
+- A C++ header compiled by the build script that includes another Qt header before `<QString>`
+  makes GCC 16 warn that `QChar` was completed after a SFINAE check; `QtShims.h` (or `<QString>`)
+  goes first.
 
 - CXX-Qt generates an `Omareel::rust` namespace for the objects declared in `Omareel`, so C++
   in that namespace spells cxx's types `::rust::Box` and `::rust::Slice`.

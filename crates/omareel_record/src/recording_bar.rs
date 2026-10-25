@@ -284,3 +284,125 @@ pub fn standby_placement(preferences: &RecordingPreferences) -> StandbyPlacement
     let output = monitors.wait_for_finished(1000).then(|| monitors.read_all_standard_output());
     standby_placement_from(output.as_deref(), preferences)
 }
+
+/// `CursorSampler::cursorPosition` (`src/record/CursorSampler.cpp`), which `globalCursorPos`
+/// asks: the pointer in global logical coordinates from Hyprland's `j/cursorpos` on
+/// `$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket.sock`; `None` when the socket does
+/// not answer with an object holding `x` and `y`.
+pub fn global_cursor_position() -> Option<PointF> {
+    let variable = |name: &str| std::env::var_os(name).unwrap_or_default();
+    let mut path = variable("XDG_RUNTIME_DIR");
+    path.push("/hypr/");
+    path.push(variable("HYPRLAND_INSTANCE_SIGNATURE"));
+    path.push("/.socket.sock");
+    query_cursor(std::os::unix::ffi::OsStrExt::as_bytes(path.as_os_str()))
+}
+
+/// `queryCursor(path, &point)`: one request with 20 ms send and receive timeouts, and at most 16
+/// reads of 256 bytes for the reply.
+pub fn query_cursor(path: &[u8]) -> Option<PointF> {
+    // SAFETY: socket returns a new descriptor or -1.
+    let fd = unsafe { libc::socket(libc::AF_UNIX, libc::SOCK_STREAM | libc::SOCK_CLOEXEC, 0) };
+    if fd < 0 {
+        return None;
+    }
+    // SAFETY: a new descriptor nothing else owns; it is closed when this returns.
+    let socket = unsafe { <std::os::fd::OwnedFd as std::os::fd::FromRawFd>::from_raw_fd(fd) };
+    let timeout = libc::timeval { tv_sec: 0, tv_usec: 20_000 };
+    let timeout_size = std::mem::size_of::<libc::timeval>() as libc::socklen_t;
+    // SAFETY: the option value is a timeval of the size given.
+    unsafe {
+        libc::setsockopt(fd, libc::SOL_SOCKET, libc::SO_RCVTIMEO, (&raw const timeout).cast(), timeout_size);
+        libc::setsockopt(fd, libc::SOL_SOCKET, libc::SO_SNDTIMEO, (&raw const timeout).cast(), timeout_size);
+    }
+    // SAFETY: sockaddr_un is plain data, valid zeroed.
+    let mut address: libc::sockaddr_un = unsafe { std::mem::zeroed() };
+    address.sun_family = libc::AF_UNIX as libc::sa_family_t;
+    if path.len() >= address.sun_path.len() {
+        return None;
+    }
+    for (slot, &byte) in address.sun_path.iter_mut().zip(path) {
+        *slot = byte as libc::c_char;
+    }
+    let address_size = std::mem::size_of::<libc::sockaddr_un>() as libc::socklen_t;
+    // SAFETY: the address is a sockaddr_un of the size given.
+    if unsafe { libc::connect(fd, (&raw const address).cast(), address_size) } != 0 {
+        return None;
+    }
+    let request = b"j/cursorpos";
+    // SAFETY: the buffer and its length are passed together.
+    if unsafe { libc::write(fd, request.as_ptr().cast(), request.len()) } != request.len() as isize {
+        return None;
+    }
+    let mut reply = Vec::new();
+    let mut buffer = [0u8; 256];
+    for _ in 0..16 {
+        // SAFETY: the buffer and its length are passed together.
+        let count = unsafe { libc::read(fd, buffer.as_mut_ptr().cast(), buffer.len()) };
+        if count <= 0 {
+            break;
+        }
+        reply.extend_from_slice(&buffer[..count as usize]);
+    }
+    drop(socket);
+    let object = match qjson::from_json(&reply) {
+        Ok(Value::Object(object)) => object,
+        _ => Object::new(),
+    };
+    if !object.contains("x") || !object.contains("y") {
+        return None;
+    }
+    Some(PointF::new(object.value("x").to_double(0.0), object.value("y").to_double(0.0)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // test_recorder.cpp's selfViewHostLifetime.
+    #[test]
+    fn self_view_host_lifetime() {
+        for active in [false, true] {
+            for quit in [false, true] {
+                for owner in [-1, 0, 42] {
+                    for alive in [false, true] {
+                        let expected = if active { false } else { quit || owner <= 0 || !alive };
+                        assert_eq!(self_view_host_should_exit(active, quit, owner, alive), expected);
+                    }
+                }
+            }
+        }
+        // Completing an adoption changes only active: a dead owner must exit,
+        // a live owner returns to standby, and quit waits for recording to finish.
+        assert!(!self_view_host_should_exit(true, false, 42, false));
+        assert!(self_view_host_should_exit(false, false, 42, false));
+        assert!(!self_view_host_should_exit(false, false, 42, true));
+        assert!(!self_view_host_should_exit(true, true, 42, true));
+        assert!(self_view_host_should_exit(false, true, 42, true));
+    }
+
+    // test_recorder.cpp's selfViewDragUsesStableGlobalCoordinates.
+    #[test]
+    fn self_view_drag_uses_stable_global_coordinates() {
+        let screen = Size::new(2400, 1350);
+        let press = PointF::new(100.0, 100.0);
+        assert_eq!(
+            clamped_self_view_drag_position(press, Point::new(400, 300), PointF::new(160.0, 140.0), screen, 160),
+            Point::new(460, 340)
+        );
+        assert_eq!(
+            clamped_self_view_drag_position(press, Point::new(2200, 1200), PointF::new(500.0, 500.0), screen, 160),
+            Point::new(2240, 1190)
+        );
+        assert_eq!(
+            clamped_self_view_drag_position(press, Point::new(20, 20), PointF::new(-100.0, -100.0), screen, 160),
+            Point::new(0, 0)
+        );
+    }
+
+    #[test]
+    fn cursor_query_without_a_socket() {
+        assert_eq!(query_cursor(b"/nonexistent/omareel/.socket.sock"), None);
+        assert_eq!(query_cursor(&[b'x'; 200]), None);
+    }
+}

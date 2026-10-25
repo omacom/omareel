@@ -1,10 +1,8 @@
 #include "record/CaptureExclusion.h"
 #include "record/Recorder.h"
-#include "record/CameraCapture.h"
+#include "CameraCapture.h"
 #include "record/ScreenCapture.h"
 #include "core/RecordingPreferences.h"
-#include "ui/MicrophoneMeter.h"
-#include "ui/RecordingBar.h"
 
 #include <QtTest>
 #include <QTemporaryDir>
@@ -13,7 +11,6 @@
 #include <QVideoFrame>
 #include <QAbstractVideoBuffer>
 #include <QBuffer>
-#include <QAudioFormat>
 #include <cmath>
 #include <cstring>
 
@@ -181,27 +178,6 @@ private slots:
         QCOMPARE(file.readAll(), QByteArray("monotonic_microsec\trealtime_microsec\n"
                                             "1234567\t9876543\n"));
         QCOMPARE(timestamp.firstFrameUs(), qint64(1234567));
-    }
-
-    void selfViewHostLifetime()
-    {
-        for (bool active : {false, true}) {
-            for (bool quit : {false, true}) {
-                for (qint64 owner : {qint64(-1), qint64(0), qint64(42)}) {
-                    for (bool alive : {false, true}) {
-                        const bool expected = active ? false : quit || owner <= 0 || !alive;
-                        QCOMPARE(selfViewHostShouldExit(active, quit, owner, alive), expected);
-                    }
-                }
-            }
-        }
-        // Completing an adoption changes only active: a dead owner must exit,
-        // a live owner returns to standby, and quit waits for recording to finish.
-        QVERIFY(!selfViewHostShouldExit(true, false, 42, false));
-        QVERIFY(selfViewHostShouldExit(false, false, 42, false));
-        QVERIFY(!selfViewHostShouldExit(false, false, 42, true));
-        QVERIFY(!selfViewHostShouldExit(true, true, 42, true));
-        QVERIFY(selfViewHostShouldExit(false, true, 42, true));
     }
 
     void cameraPacingDoesNotAccumulateMillisecondRounding()
@@ -582,90 +558,6 @@ private slots:
             "keyword cursor:no_hardware_cursors 1"}));
     }
 
-    void selfViewDragUsesStableGlobalCoordinates()
-    {
-        const QSize screenSize(2400, 1350);
-        QCOMPARE(clampedSelfViewDragPosition(QPointF(100, 100), QPoint(400, 300),
-                                             QPointF(160, 140), screenSize, 160),
-                 QPoint(460, 340));
-        QCOMPARE(clampedSelfViewDragPosition(QPointF(100, 100), QPoint(2200, 1200),
-                                             QPointF(500, 500), screenSize, 160),
-                 QPoint(2240, 1190));
-        QCOMPARE(clampedSelfViewDragPosition(QPointF(100, 100), QPoint(20, 20),
-                                             QPointF(-100, -100), screenSize, 160),
-                 QPoint(0, 0));
-    }
-
-    void cameraPathsSurviveRenumbering()
-    {
-        // A laptop webcam whose IR sensor shares its USB serial, so both index-0 nodes claim one
-        // by-id name and udev left it on the IR node, and an Insta360 on a dock.
-        QTemporaryDir root;
-        QVERIFY(root.isValid());
-        const QString dev = root.path() + QStringLiteral("/dev");
-        const QString sys = root.path() + QStringLiteral("/sys");
-        const auto write = [](const QString &path, const QByteArray &contents) {
-            QDir().mkpath(QFileInfo(path).absolutePath());
-            QFile file(path);
-            QVERIFY(file.open(QIODevice::WriteOnly));
-            file.write(contents);
-        };
-        const auto link = [](const QString &target, const QString &path) {
-            QDir().mkpath(QFileInfo(path).absolutePath());
-            QFile::remove(path);
-            QVERIFY(QFile::link(target, path));
-        };
-        const auto node = [&](const QString &name, const QString &interface, int index) {
-            write(dev + QLatin1Char('/') + name, {});
-            QDir().mkpath(sys + QStringLiteral("/devices/") + interface);
-            const QString classDirectory = sys + QStringLiteral("/class/video4linux/") + name;
-            write(classDirectory + QStringLiteral("/index"), QByteArray::number(index) + '\n');
-            link(sys + QStringLiteral("/devices/") + interface, classDirectory + QStringLiteral("/device"));
-        };
-        write(sys + QStringLiteral("/devices/usb7/7-1/idVendor"), "636e\n");
-        write(sys + QStringLiteral("/devices/usb7/7-1/idProduct"), "0bdb\n");
-        write(sys + QStringLiteral("/devices/usb7/7-1/serial"), "200901010001\n");
-        write(sys + QStringLiteral("/devices/usb1/1-1.1/idVendor"), "2e1a\n");
-        write(sys + QStringLiteral("/devices/usb1/1-1.1/idProduct"), "4c04\n");
-        node(QStringLiteral("video0"), QStringLiteral("usb7/7-1/7-1:1.0"), 0);
-        node(QStringLiteral("video1"), QStringLiteral("usb7/7-1/7-1:1.0"), 1);
-        node(QStringLiteral("video2"), QStringLiteral("usb7/7-1/7-1:1.2"), 0);
-        node(QStringLiteral("video4"), QStringLiteral("usb1/1-1.1/1-1.1:1.0"), 0);
-        const QString byId = dev + QStringLiteral("/v4l/by-id/");
-        const QString byPath = dev + QStringLiteral("/v4l/by-path/");
-        link(dev + QStringLiteral("/video2"), byId + QStringLiteral("usb-ASUS_FHD_webcam_200901010001-video-index0"));
-        link(dev + QStringLiteral("/video1"), byId + QStringLiteral("usb-ASUS_FHD_webcam_200901010001-video-index1"));
-        link(dev + QStringLiteral("/video4"), byId + QStringLiteral("usb-Insta360_Insta360_Link_2-video-index0"));
-        link(dev + QStringLiteral("/video0"), byPath + QStringLiteral("platform-x-usbv2-0:1:1.0-video-index0"));
-        link(dev + QStringLiteral("/video0"), byPath + QStringLiteral("platform-x-usb-0:1:1.0-video-index0"));
-        link(dev + QStringLiteral("/video2"), byPath + QStringLiteral("platform-x-usb-0:1:1.2-video-index0"));
-        link(dev + QStringLiteral("/video4"), byPath + QStringLiteral("platform-y-usb-0:1.1:1.0-video-index0"));
-
-        const QString insta360 = stableCameraPath(dev + QStringLiteral("/video4"), dev, sys);
-        QCOMPARE(insta360, byId + QStringLiteral("usb-Insta360_Insta360_Link_2-video-index0"));
-        QCOMPARE(stableCameraPath(dev + QStringLiteral("/video0"), dev, sys),
-                 byPath + QStringLiteral("platform-x-usb-0:1:1.0-video-index0"));
-        QCOMPARE(stableCameraPath(dev + QStringLiteral("/video2"), dev, sys),
-                 byPath + QStringLiteral("platform-x-usb-0:1:1.2-video-index0"));
-        QCOMPARE(stableCameraPath(insta360, dev, sys), insta360);
-        QCOMPARE(cameraNodePath(insta360), QFileInfo(dev + QStringLiteral("/video4")).canonicalFilePath());
-
-        // The dock comes back with a capture card ahead of the camera.
-        QFile::remove(dev + QStringLiteral("/video4"));
-        node(QStringLiteral("video6"), QStringLiteral("usb1/1-1.1/1-1.1:1.0"), 0);
-        link(dev + QStringLiteral("/video6"), byId + QStringLiteral("usb-Insta360_Insta360_Link_2-video-index0"));
-        QCOMPARE(cameraNodePath(insta360), QFileInfo(dev + QStringLiteral("/video6")).canonicalFilePath());
-
-        // Unplugged: the saved path stays, and there is no node.
-        QFile::remove(dev + QStringLiteral("/video6"));
-        QCOMPARE(cameraNodePath(insta360), QString());
-        QCOMPARE(stableCameraPath(insta360, dev, sys), insta360);
-
-        QCOMPARE(cameraIdNode("/dev/video6"), QStringLiteral("/dev/video6"));
-        QCOMPARE(cameraIdNode("v4l2 /dev/video6 usb"), QStringLiteral("/dev/video6"));
-        QCOMPARE(cameraIdNode("obs-virtual"), QString());
-    }
-
     void missingMicrophoneFallsBackToDefault()
     {
         const QStringList sources{QStringLiteral("alsa_input.platform-mtk_sdw_mc.HiFi__Mic__source"),
@@ -696,28 +588,6 @@ private slots:
         QVERIFY(std::isnan(Recorder::microphonePeakDb(QStringLiteral("size=N/A time=00:00:10.00\n"))));
     }
 
-    void microphoneMeterReadsPeakLevel()
-    {
-        QAudioFormat format;
-        format.setSampleRate(48000);
-        format.setChannelCount(1);
-        format.setSampleFormat(QAudioFormat::Int16);
-        const auto samples = [](std::initializer_list<qint16> values) {
-            QByteArray bytes;
-            for (const qint16 value : values) bytes.append(reinterpret_cast<const char *>(&value), sizeof value);
-            return bytes;
-        };
-        QCOMPARE(MicrophoneMeter::peakLevel(format, samples({0, 0, 0})), 0.0);
-        QVERIFY(MicrophoneMeter::peakLevel(format, samples({0, 32767, 0})) > 0.99);
-        // -20 dBFS is two thirds of the way up the meter's 60 dB.
-        QVERIFY(std::abs(MicrophoneMeter::peakLevel(format, samples({100, -3277, 50})) - 2.0 / 3.0) < 0.01);
-        QCOMPARE(MicrophoneMeter::peakLevel(format, samples({16})), 0.0);
-        QCOMPARE(MicrophoneMeter::peakLevel(format, QByteArray()), 0.0);
-        format.setSampleFormat(QAudioFormat::Float);
-        const float half = 0.5f;
-        const double level = MicrophoneMeter::peakLevel(format, QByteArray(reinterpret_cast<const char *>(&half), sizeof half));
-        QVERIFY(std::abs(level - (20.0 * std::log10(0.5) + 60.0) / 60.0) < 0.001);
-    }
 };
 
 QTEST_APPLESS_MAIN(RecorderTest)

@@ -128,4 +128,18 @@ mod tests {
         assert_eq!(meter.level(), 0.75);
         assert!(meter.reset() && !meter.reset());
     }
+
+    // test_recorder.cpp's microphoneMeterReadsPeakLevel.
+    #[test]
+    fn microphone_meter_reads_peak_level() {
+        let samples = |values: &[i16]| values.iter().flat_map(|value| value.to_ne_bytes()).collect::<Vec<u8>>();
+        assert_eq!(peak_level(SampleFormat::Int16, &samples(&[0, 0, 0])), 0.0);
+        assert!(peak_level(SampleFormat::Int16, &samples(&[0, 32767, 0])) > 0.99);
+        // -20 dBFS is two thirds of the way up the meter's 60 dB.
+        assert!((peak_level(SampleFormat::Int16, &samples(&[100, -3277, 50])) - 2.0 / 3.0).abs() < 0.01);
+        assert_eq!(peak_level(SampleFormat::Int16, &samples(&[16])), 0.0);
+        assert_eq!(peak_level(SampleFormat::Int16, &[]), 0.0);
+        let level = peak_level(SampleFormat::Float, &0.5f32.to_ne_bytes());
+        assert!((level - (20.0 * 0.5f64.log10() + 60.0) / 60.0).abs() < 0.001);
+    }
 }

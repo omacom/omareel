@@ -1,16 +1,16 @@
 #include "ui/CaptureTestClient.h"
 #include <qpa/qplatformnativeinterface.h>
 #include <wayland-client.h>
-#include "record/CameraCapture.h"
+#include "CameraCapture.h"
 #include "record/Recorder.h"
 #include "render/Exporter.h"
 #include "render/VideoDecoding.h"
 #include "core/OmarchyPaths.h"
 #include "core/RecordingPreferences.h"
 #include "ui/Editor.h"
-#include "ui/Launcher.h"
-#include "ui/RecordingBar.h"
 #include "omareel_qt/src/cli.cxxqt.h"
+#include "omareel_qt/src/launcher.cxxqt.h"
+#include "omareel_qt/src/recording_bar.cxxqt.h"
 #include "omareel_qt/src/theme.cxxqt.h"
 
 #include <LayerShellQt/shell.h>
@@ -55,22 +55,6 @@
 #endif
 
 using namespace Omareel;
-
-static void debugUiStage(const QString &stage)
-{
-    if (qEnvironmentVariable("OMAREEL_DEBUG") != QLatin1String("1")) return;
-    QFile file(QStringLiteral("/tmp/omareel.log"));
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) return;
-    const auto now = std::chrono::steady_clock::now().time_since_epoch();
-    const qint64 monotonicUs = std::chrono::duration_cast<std::chrono::microseconds>(now).count();
-    const qint64 daemonStartUs = Recorder::recordingState()
-                                     .value(QStringLiteral("daemon_started_us"))
-                                     .toVariant().toLongLong();
-    file.write(QStringLiteral("OMAREEL_START stage=%1 monotonic_us=%2 elapsed_ms=%3\n")
-                   .arg(stage).arg(monotonicUs)
-                   .arg(daemonStartUs > 0 ? (monotonicUs - daemonStartUs) / 1000.0 : 0.0,
-                        0, 'f', 3).toUtf8());
-}
 
 struct ResolvedFonts {
     QString ui;
@@ -565,9 +549,7 @@ int main(int argc, char **argv)
         const int ownerIndex = args.indexOf(QStringLiteral("--owner"));
         RecordingBar recordingBar(hiddenRecordBar, args.contains(QStringLiteral("--standby")),
                                   ownerIndex >= 0 ? args.value(ownerIndex + 1).toLongLong() : 0);
-        if (args.contains(QStringLiteral("--standby"))
-            && Recorder::readStateFile(Recorder::selfViewHostPath()).value("pid").toVariant().toLongLong()
-                   != QCoreApplication::applicationPid()) return 0;
+        if (args.contains(QStringLiteral("--standby")) && !recordingBar.ownsStandbyHost()) return 0;
         QQmlApplicationEngine engine;
         reportQmlWarnings(engine);
         engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
@@ -589,9 +571,8 @@ int main(int argc, char **argv)
         layerWindow->setScope(QStringLiteral("omareel-record-bar"));
         layerWindow->setActivateOnShow(false);
         if (screen) layerWindow->setScreen(screen);
-        if (!args.contains(QStringLiteral("--standby"))) Recorder::updateRecordingState(QJsonObject{
-            {QStringLiteral("bar_width"), window->width()},
-            {QStringLiteral("bar_height"), window->height()}});
+        if (!args.contains(QStringLiteral("--standby")))
+            recordingBar.publishBarGeometry(window->width(), window->height());
         const auto updateBarVisibility = [&recordingBar, window, layerWindow] {
             QScreen *target = recordBarScreen(recordingBar.recordedMonitor());
             if (target && layerWindow->screen() != target) { window->hide(); window->destroy(); window->setScreen(target); layerWindow->setScreen(target); }
@@ -602,12 +583,12 @@ int main(int argc, char **argv)
                          window, updateBarVisibility);
         auto barMappedLogged = std::make_shared<bool>(false);
         QObject::connect(window, &QWindow::visibleChanged, window,
-                         [window, barMappedLogged](bool visible) {
+                         [&recordingBar, window, barMappedLogged](bool visible) {
             if (!visible || *barMappedLogged) return;
-            QTimer::singleShot(0, window, [window, barMappedLogged] {
+            QTimer::singleShot(0, window, [&recordingBar, window, barMappedLogged] {
                 if (!window->isVisible() || *barMappedLogged) return;
                 *barMappedLogged = true;
-                debugUiStage(QStringLiteral("bar_mapped"));
+                recordingBar.logUiStage(QStringLiteral("bar_mapped"));
             });
         });
         QObject::connect(&app, &QGuiApplication::screenRemoved, window, updateBarVisibility);
@@ -634,10 +615,8 @@ int main(int argc, char **argv)
             countdownLayer->setScope(QStringLiteral("omareel-record-bar"));
             countdownLayer->setActivateOnShow(false);
             if (screen) countdownLayer->setScreen(screen);
-            if (!args.contains(QStringLiteral("--standby"))) Recorder::updateRecordingState(QJsonObject{
-                {QStringLiteral("countdown_width"), countdownWindow->width()},
-                {QStringLiteral("countdown_height"), countdownWindow->height()},
-                {QStringLiteral("countdown_ready"), true}});
+            if (!args.contains(QStringLiteral("--standby")))
+                recordingBar.publishCountdownGeometry(countdownWindow->width(), countdownWindow->height());
             const auto updateCountdownVisibility = [&recordingBar, countdownWindow, countdownLayer] {
                 QScreen *target = recordBarScreen(recordingBar.recordedMonitor());
                 if (target && target != countdownLayer->screen()) {

@@ -1,5 +1,4 @@
 #include "CameraCapture.h"
-#include "ScreenCapture.h"
 
 #include <QCamera>
 #include <QCameraDevice>
@@ -61,59 +60,6 @@ QCameraFormat selectedFormat(const QCameraDevice &device, int requestedHeight)
 }
 
 } // namespace
-
-bool Omareel::cameraCanRecord(const QCameraDevice &device)
-{
-    return !selectedFormat(device, 1080).isNull();
-}
-
-QString Omareel::stableCameraPath(const QString &devicePath, const QString &devRoot,
-                                  const QString &sysRoot)
-{
-    const QString node = QFileInfo(devicePath).canonicalFilePath();
-    if (node.isEmpty()) return devicePath;
-    const auto linkTo = [&node](const QString &directory) {
-        QString found;
-        const QFileInfoList links = QDir(directory).entryInfoList(
-            QDir::Files | QDir::System | QDir::NoDotAndDotDot, QDir::Name);
-        for (const QFileInfo &link : links) {
-            if (link.canonicalFilePath() != node) continue;
-            // by-path also names each node after the USB revision it enumerated at, which
-            // changes with the cable or port speed.
-            if (!link.fileName().contains(QLatin1String("-usbv"))) return link.absoluteFilePath();
-            if (found.isEmpty()) found = link.absoluteFilePath();
-        }
-        return found;
-    };
-    // udev names a by-id link after the USB device's serial and the node's index, so the IR sensor
-    // beside a laptop webcam, or two identical cameras without serial numbers, share one name
-    // and it points at whichever node udev handled last.
-    const QString classDirectory = sysRoot + QStringLiteral("/class/video4linux");
-    const auto identity = [&classDirectory](const QString &name) {
-        const QString directory = classDirectory + QLatin1Char('/') + name;
-        const QString interface = QFileInfo(directory + QStringLiteral("/device")).canonicalFilePath();
-        if (interface.isEmpty()) return QString();
-        const QString usbDevice = QFileInfo(interface).absolutePath();
-        const auto read = [](const QString &path) {
-            QFile file(path);
-            return file.open(QIODevice::ReadOnly) ? QString::fromUtf8(file.readAll()).trimmed() : QString();
-        };
-        return QStringList{read(usbDevice + QStringLiteral("/idVendor")),
-                           read(usbDevice + QStringLiteral("/idProduct")),
-                           read(usbDevice + QStringLiteral("/serial")),
-                           read(directory + QStringLiteral("/index"))}.join(QLatin1Char(':'));
-    };
-    const QString name = QFileInfo(node).fileName();
-    const QString own = identity(name);
-    bool shared = false;
-    const QStringList others = QDir(classDirectory).entryList(QDir::AllEntries | QDir::NoDotAndDotDot);
-    for (const QString &other : others)
-        shared = shared || (other != name && !own.isEmpty() && identity(other) == own);
-    if (!shared)
-        if (const QString link = linkTo(devRoot + QStringLiteral("/v4l/by-id")); !link.isEmpty()) return link;
-    if (const QString link = linkTo(devRoot + QStringLiteral("/v4l/by-path")); !link.isEmpty()) return link;
-    return node;
-}
 
 QString Omareel::cameraNodePath(const QString &path)
 {
@@ -258,7 +204,8 @@ CameraRawFrame Omareel::packCameraFrame(QVideoFrame frame)
 class Omareel::CameraEncoder : public QThread
 {
 public:
-    explicit CameraEncoder(QString path): m_path(std::move(path)) {}
+    CameraEncoder(QString path, std::function<bool()> preferredEncoderQuery)
+        : m_path(std::move(path)), m_preferredEncoderQuery(std::move(preferredEncoderQuery)) {}
     QString error;
     void submit(const QVideoFrame &frame, qint64 arrival)
     {
@@ -330,7 +277,7 @@ protected:
                 return;
             }
             if (!launched) {
-                const bool nvenc = cachedPreferredEncoderAvailable();
+                const bool nvenc = m_preferredEncoderQuery && m_preferredEncoderQuery();
                 QStringList args{"-hide_banner", "-loglevel", "error", "-y", "-f", "rawvideo",
                     "-pixel_format", latest.pixelFormat, "-video_size",
                     QStringLiteral("%1x%2").arg(latest.size.width()).arg(latest.size.height()),
@@ -384,6 +331,7 @@ protected:
     }
 private:
     QString m_path;
+    std::function<bool()> m_preferredEncoderQuery;
     QMutex m_mutex;
     QVideoFrame m_pending;
     qint64 m_firstUs = 0;
@@ -513,7 +461,7 @@ void CameraCapture::handleFrame(const QVideoFrame &frame)
         fail(QStringLiteral("Could not write camera timestamp")); return;
     }
     if (!m_encoder) {
-        m_encoder = std::make_unique<CameraEncoder>(m_videoPath);
+        m_encoder = std::make_unique<CameraEncoder>(m_videoPath, m_preferredEncoderQuery);
         connect(m_encoder.get(), &QThread::finished, this, &CameraCapture::finishStop);
         m_encoder->submit(frame, timestamp);
         m_encoder->start();
