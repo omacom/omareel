@@ -391,15 +391,18 @@ impl Process {
             libc::pollfd { fd: fd(&self.pidfd), events: libc::POLLIN, revents: 0 },
         ];
         let child_known = self.child.is_some() && self.reaped.is_none();
+        // Without a pidfd, a child `try_wait` reaped in an earlier poll stays ready, as a
+        // pidfd would, until a wait gets to it.
+        let already_reaped = self.pidfd.is_none() && self.reaped.is_some();
         loop {
-            let mut remaining = deadline.remaining();
+            let mut remaining = if already_reaped { Some(Duration::ZERO) } else { deadline.remaining() };
             // Without a pidfd the child is checked between short polls.
             if self.pidfd.is_none() && child_known {
                 remaining = Some(remaining.map_or(Duration::from_millis(10), |r| r.min(Duration::from_millis(10))));
             }
             let timeout = remaining.map(|r| libc::timespec {
                 tv_sec: r.as_secs() as libc::time_t,
-                tv_nsec: libc::c_long::from(r.subsec_nanos() as i32),
+                tv_nsec: r.subsec_nanos() as libc::c_long,
             });
             let timeout_ptr = timeout.as_ref().map_or(std::ptr::null(), |t| t as *const libc::timespec);
             // SAFETY: `fds` holds four pollfds; the timeout is null or points at a timespec.
@@ -410,7 +413,7 @@ impl Process {
                 }
                 return Err(());
             }
-            let mut child = false;
+            let mut child = already_reaped;
             if self.pidfd.is_none() && child_known {
                 if let Some(Ok(Some(status))) = self.child.as_mut().map(Child::try_wait) {
                     self.reaped = Some(status);
@@ -668,6 +671,51 @@ impl Drop for Process {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn process_reads_writes_and_reports_exits() {
+        // Echoes its input, then says goodbye on stderr and exits 3.
+        let mut p = Process::new();
+        p.start("sh", &["-c", "cat; echo bye >&2; exit 3"]);
+        assert!(p.wait_for_started(1000));
+        assert_eq!(p.write(b"hello\n"), 6);
+        assert_eq!(p.bytes_to_write(), 6);
+        while p.bytes_to_write() > 0 {
+            assert!(p.wait_for_bytes_written(1000));
+        }
+        while p.bytes_available() < 6 {
+            assert!(p.wait_for_ready_read(1000));
+        }
+        let mut line = [0u8; 6];
+        assert_eq!(p.read(&mut line), 6);
+        assert_eq!(&line, b"hello\n");
+        p.close_write_channel();
+        assert_eq!(p.write(b"late"), 0);
+        assert!(p.wait_for_finished(2000));
+        assert_eq!((p.state(), p.exit_status(), p.exit_code()), (ProcessState::NotRunning, ExitStatus::NormalExit, 3));
+        assert_eq!(p.read_all_standard_error(), b"bye\n");
+        assert!(!p.wait_for_finished(100));
+
+        // Killed: a crash with the signal as its exit code.
+        let mut p = Process::new();
+        p.start("sleep", &["10"]);
+        p.kill();
+        assert!(p.wait_for_finished(2000));
+        assert_eq!((p.exit_status(), p.exit_code(), p.error()), (ExitStatus::CrashExit, 9, ProcessError::Crashed));
+
+        // Not found on PATH: execve's error, as Qt words it.
+        let mut p = Process::new();
+        p.start("omareel-no-such-program", &[] as &[&str]);
+        assert!(!p.wait_for_started(1000));
+        assert_eq!(p.error(), ProcessError::FailedToStart);
+        assert_eq!(p.error_string(), "Child process set up failed: execve: No such file or directory");
+
+        // A wait times out while the child runs.
+        let mut p = Process::new();
+        p.start("sleep", &["10"]);
+        assert!(!p.wait_for_ready_read(50));
+        assert_eq!(p.error(), ProcessError::Timedout);
+    }
 
     #[test]
     fn captures_output_and_exit_codes() {
