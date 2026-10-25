@@ -21,7 +21,12 @@
 using namespace Omareel;
 
 ExportRenderer::ExportRenderer() = default;
-ExportRenderer::~ExportRenderer() = default;
+ExportRenderer::~ExportRenderer()
+{
+    // An export that failed before the frame loop still holds its readback buffers.
+    if (!m_softwareRendering && m_glExtra && m_context && m_context->makeCurrent(m_surface.get()))
+        releaseReadbacks();
+}
 
 bool ExportRenderer::init(int width, int height, bool softwareRendering, QString *error)
 {
@@ -81,6 +86,11 @@ bool ExportRenderer::init(int width, int height, bool softwareRendering, QString
     if (!m_cameraFrameSource) { if (error) *error = QStringLiteral("Composition has no camera FrameSource"); return false; }
     m_mediaFrameSource = rootItem->findChild<QQuickItem *>(QStringLiteral("mediaFrameSource"));
     if (!m_mediaFrameSource) { if (error) *error = QStringLiteral("Composition has no inserted-clip FrameSource"); return false; }
+    // Pictures reach the sources through FrameSource::setImage by name, so make sure it is there.
+    if (m_frameSource->metaObject()->indexOfMethod("setImage(QImage)") < 0) {
+        if (error) *error = QStringLiteral("Composition has no FrameSource");
+        return false;
+    }
 
     m_frameBytes = qsizetype(width) * height * 4;
     if (!softwareRendering) {
@@ -203,8 +213,10 @@ void ExportRenderer::releaseReadbacks()
 {
     if (m_softwareRendering) return;
     m_glExtra->glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-    for (auto &slot : m_readbacks)
+    for (auto &slot : m_readbacks) {
         if (slot.buffer) m_glExtra->glDeleteBuffers(1, &slot.buffer);
+        slot.buffer = 0;
+    }
 }
 
 void ExportRenderer::invalidate()

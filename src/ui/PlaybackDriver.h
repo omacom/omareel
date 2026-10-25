@@ -89,6 +89,9 @@ private:
     const QMediaPlayer &player(Player player) const;
     bool playingNow(Player player) const { return m_playingQuery && m_playingQuery(player); }
 
+    // Declared before the players so they outlive any frame a player delivers as it is torn down.
+    std::function<bool(Player)> m_playingQuery;
+    std::function<qint64()> m_screenRestQuery;
     QMediaPlayer m_player;
     QMediaPlayer m_cameraPlayer;
     // Holds one inserted video at a time.
@@ -98,8 +101,6 @@ private:
     QPointer<QVideoSink> m_videoSink;
     QPointer<QVideoSink> m_cameraVideoSink;
     QPointer<QVideoSink> m_mediaVideoSink;
-    std::function<bool(Player)> m_playingQuery;
-    std::function<qint64()> m_screenRestQuery;
     qint64 m_pendingMediaSeekMs = -1;
     bool m_pendingMediaWillPlay = false;
     qint64 m_mediaWarmTargetMs = 0;

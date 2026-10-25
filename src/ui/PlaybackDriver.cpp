@@ -138,6 +138,9 @@ bool PlaybackDriver::attachVideoOutput(Player which, QObject *output)
 
 void PlaybackDriver::warmUp(Player which)
 {
+    // Only the screen and camera players are warmed this way; seek() warms an inserted video.
+    Q_ASSERT(which != Media);
+    if (which == Media) return;
     if (player(which).mediaStatus() == QMediaPlayer::InvalidMedia) return;
     if (which == Camera) m_warmingCameraPreview = true;
     else m_warmingPreview = true;
@@ -159,6 +162,9 @@ bool PlaybackDriver::warming(Player which) const
 
 void PlaybackDriver::seek(Player which, qint64 milliseconds, bool willPlay)
 {
+    // The camera follows the screen through syncCamera() instead.
+    Q_ASSERT(which != Camera);
+    if (which == Camera) return;
     QMediaPlayer &player = this->player(which);
     const bool insert = which == Media;
     // An inserted clip's file may still be opening; the seek waits for it.
