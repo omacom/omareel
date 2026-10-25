@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/omareel_core", "crates/omareel_qt"]
+members = ["crates/omareel_core", "crates/omareel_qt", "crates/omareel_record"]
 
 [workspace.package]
 edition = "2024"

@@ -150,12 +150,21 @@ pub(crate) fn rename_raw(from: &[u8], to: &[u8]) -> Result<(), i32> {
 /// `QTemporaryFileEngine::open` for `template` with the given creation mode: the descriptor,
 /// and the path when the file could not be unnamed.
 pub(crate) fn create(template: &str, mode: u32) -> Result<(libc::c_int, Option<Vec<u8>>), String> {
+    create_with_errno(template, mode).map_err(|(_, text)| text)
+}
+
+/// What [`create_with_errno`] gives: the descriptor and the path of a named file, or the
+/// `errno` and message of the failure.
+pub(crate) type Created = Result<(libc::c_int, Option<Vec<u8>>), (i32, String)>;
+
+/// [`create`], with the `errno` of the failure (0 when every name was taken).
+pub(crate) fn create_with_errno(template: &str, mode: u32) -> Created {
     let mut name = TemplateName::new(template);
     if have_procfs() {
         match open_raw(&name.dir(), libc::O_TMPFILE | libc::O_RDWR, mode) {
             Ok(fd) => return Ok((fd, None)),
             Err(e) if e == libc::EOPNOTSUPP || e == libc::EISDIR => {}
-            Err(e) => return Err(qdir::error_string(e)),
+            Err(e) => return Err((e, qdir::error_string(e))),
         }
     }
     for _ in 0..16 {
@@ -163,10 +172,10 @@ pub(crate) fn create(template: &str, mode: u32) -> Result<(libc::c_int, Option<V
         match open_raw(&path, libc::O_CREAT | libc::O_EXCL | libc::O_RDWR, mode) {
             Ok(fd) => return Ok((fd, Some(path))),
             Err(libc::EEXIST) => continue,
-            Err(e) => return Err(qdir::error_string(e)),
+            Err(e) => return Err((e, qdir::error_string(e))),
         }
     }
-    Err("No error".into())
+    Err((0, "No error".into()))
 }
 
 /// `QTemporaryFile` with a template, as the exporter uses it: `open`, `fileName`, `write`,

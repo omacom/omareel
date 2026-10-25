@@ -115,6 +115,16 @@ pub enum ExitStatus {
     CrashExit,
 }
 
+/// `QProcess::ProcessChannelMode`, as far as omareel uses it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ChannelMode {
+    /// Standard output and error each in a channel of their own.
+    #[default]
+    Separate,
+    /// The child's standard error goes wherever its standard output goes.
+    Merged,
+}
+
 /// `qt_ignore_sigpipe`: SIGPIPE ignored process-wide, once, before the first write to a child.
 pub fn ignore_sigpipe() {
     static ONCE: std::sync::Once = std::sync::Once::new();
@@ -173,6 +183,9 @@ pub struct Process {
     exit_status: ExitStatus,
     error: ProcessError,
     error_string: String,
+    channel_mode: ChannelMode,
+    /// `setStandardOutputFile`: the file the child's standard output is written to (truncated).
+    standard_output_file: Option<String>,
 }
 
 impl Default for Process {
@@ -194,6 +207,26 @@ fn pidfd_open(pid: u32) -> Option<OwnedFd> {
     let fd = unsafe { libc::syscall(libc::SYS_pidfd_open, pid as libc::pid_t, 0) };
     // SAFETY: a non-negative result is a descriptor nothing else owns.
     (fd >= 0).then(|| unsafe { OwnedFd::from_raw_fd(fd as RawFd) })
+}
+
+/// A close-on-exec pipe: (read end, write end).
+fn pipe() -> Option<(OwnedFd, OwnedFd)> {
+    let mut fds = [-1; 2];
+    // SAFETY: pipe2 writes two descriptors into `fds`.
+    if unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC) } != 0 {
+        return None;
+    }
+    // SAFETY: both are new descriptors nothing else owns.
+    Some(unsafe { (OwnedFd::from_raw_fd(fds[0]), OwnedFd::from_raw_fd(fds[1])) })
+}
+
+/// `qt_safe_open(file, O_WRONLY | O_CREAT | O_TRUNC, 0666)` for an output redirection.
+fn open_output_file(path: &str) -> Option<OwnedFd> {
+    let c = std::ffi::CString::new(path).ok()?;
+    // SAFETY: a valid NUL-terminated path.
+    let fd = unsafe { libc::open(c.as_ptr(), libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC | libc::O_CLOEXEC, 0o666) };
+    // SAFETY: a non-negative result is a descriptor nothing else owns.
+    (fd >= 0).then(|| unsafe { OwnedFd::from_raw_fd(fd) })
 }
 
 fn last_errno() -> i32 {
@@ -221,7 +254,20 @@ impl Process {
             exit_status: ExitStatus::NormalExit,
             error: ProcessError::UnknownError,
             error_string: String::new(),
+            channel_mode: ChannelMode::Separate,
+            standard_output_file: None,
         }
+    }
+
+    /// `QProcess::setProcessChannelMode`, for the next `start`.
+    pub fn set_process_channel_mode(&mut self, mode: ChannelMode) {
+        self.channel_mode = mode;
+    }
+
+    /// `QProcess::setStandardOutputFile(path)` (truncating), for the next `start`. With merged
+    /// channels the standard error goes to the file too.
+    pub fn set_standard_output_file(&mut self, path: &str) {
+        self.standard_output_file = Some(path.to_string());
     }
 
     /// `QProcess::start(program, arguments)`. A failure to start leaves the state NotRunning with
@@ -244,6 +290,21 @@ impl Process {
         self.error = ProcessError::UnknownError;
         self.error_string.clear();
         self.reaped = None;
+        // QProcessPrivate::openChannels, before the program is looked up: a redirection file is
+        // created (truncated, 0666 less the umask) even when the program then fails to start.
+        let mut output_file = None;
+        if let Some(path) = &self.standard_output_file {
+            match open_output_file(path) {
+                Some(fd) => output_file = Some(fd),
+                None => {
+                    // Qt's message for an output file that can't be opened says "input" too.
+                    self.state = ProcessState::NotRunning;
+                    self.error = ProcessError::FailedToStart;
+                    self.error_string = "Could not open input redirection for reading".into();
+                    return;
+                }
+            }
+        }
         // QChildProcess::resolveExecutable: a name without "/" goes through findExecutable, and
         // one it does not find is exec'd as "", which fails with ENOENT.
         let resolved =
@@ -252,12 +313,41 @@ impl Process {
             self.fail_to_start(libc::ENOENT);
             return;
         }
-        let spawned = Command::new(&resolved)
-            .args(arguments.iter().map(AsRef::as_ref))
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn();
+        let mut command = Command::new(&resolved);
+        command.args(arguments.iter().map(AsRef::as_ref)).stdin(Stdio::piped());
+        // commitChannels: standard output to the file or a pipe, and with merged channels the
+        // standard error dup'ed from it.
+        let mut merged_reader = None;
+        match (output_file, self.channel_mode) {
+            (Some(fd), ChannelMode::Merged) => {
+                let Ok(copy) = fd.try_clone() else {
+                    self.fail_to_start(last_errno());
+                    return;
+                };
+                command.stdout(Stdio::from(fd)).stderr(Stdio::from(copy));
+            }
+            (Some(fd), ChannelMode::Separate) => {
+                command.stdout(Stdio::from(fd)).stderr(Stdio::piped());
+            }
+            (None, ChannelMode::Merged) => {
+                let Some((reader, writer)) = pipe() else {
+                    self.fail_to_start(last_errno());
+                    return;
+                };
+                let Ok(copy) = writer.try_clone() else {
+                    self.fail_to_start(last_errno());
+                    return;
+                };
+                command.stdout(Stdio::from(writer)).stderr(Stdio::from(copy));
+                merged_reader = Some(reader);
+            }
+            (None, ChannelMode::Separate) => {
+                command.stdout(Stdio::piped()).stderr(Stdio::piped());
+            }
+        }
+        let spawned = command.spawn();
+        // The parent's copies of the child's ends close here (the Command owns them).
+        drop(command);
         let mut child = match spawned {
             Ok(child) => child,
             Err(error) => {
@@ -272,7 +362,7 @@ impl Process {
             fd
         };
         self.stdin = take(child.stdin.take().map(OwnedFd::from));
-        self.stdout = take(child.stdout.take().map(OwnedFd::from));
+        self.stdout = take(child.stdout.take().map(OwnedFd::from).or(merged_reader));
         self.stderr = take(child.stderr.take().map(OwnedFd::from));
         self.pidfd = pidfd_open(child.id());
         self.child = Some(child);
@@ -320,6 +410,30 @@ impl Process {
                 unsafe { libc::kill(child.id() as libc::pid_t, libc::SIGKILL) };
             }
         }
+    }
+
+    /// `QProcess::terminate`: SIGTERM to a child not yet reaped.
+    pub fn terminate(&mut self) {
+        if self.state == ProcessState::Running {
+            if let Some(child) = &self.child {
+                // SAFETY: the child has not been reaped, so its pid is still ours.
+                unsafe { libc::kill(child.id() as libc::pid_t, libc::SIGTERM) };
+            }
+        }
+    }
+
+    /// `QProcess::processId`: the child's pid while it runs, else 0.
+    pub fn process_id(&self) -> i64 {
+        match (&self.child, self.state) {
+            (Some(child), ProcessState::Running) => i64::from(child.id()),
+            _ => 0,
+        }
+    }
+
+    /// `QIODevice::readAll` on a process: the current read channel, the standard output (which
+    /// holds the standard error too with merged channels).
+    pub fn read_all(&mut self) -> Vec<u8> {
+        self.read_all_standard_output()
     }
 
     /// `QProcess::bytesAvailable` on the standard output: what has been read into the buffer.
@@ -715,6 +829,52 @@ mod tests {
         p.start("sleep", &["10"]);
         assert!(!p.wait_for_ready_read(50));
         assert_eq!(p.error(), ProcessError::Timedout);
+    }
+
+    #[test]
+    fn merges_channels_and_redirects_to_a_file() {
+        // Merged: standard error lands in the standard output buffer, in the order written.
+        let mut p = Process::new();
+        p.set_process_channel_mode(ChannelMode::Merged);
+        p.start("sh", &["-c", "echo out; echo err >&2; echo more"]);
+        assert!(p.process_id() > 0);
+        assert!(p.wait_for_finished(5000));
+        assert_eq!(p.process_id(), 0);
+        assert_eq!(p.read_all(), b"out\nerr\nmore\n");
+        assert_eq!(p.read_all_standard_error(), b"");
+
+        // A redirection file is truncated and gets both channels when they are merged; it is
+        // created even when the program then fails to start.
+        let dir = std::env::temp_dir().join(format!("omareel-qprocess-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let log = dir.join("log");
+        let log = log.to_str().unwrap();
+        std::fs::write(log, "old contents that are longer").unwrap();
+        let mut p = Process::new();
+        p.set_process_channel_mode(ChannelMode::Merged);
+        p.set_standard_output_file(log);
+        p.start("sh", &["-c", "echo out; echo err >&2"]);
+        assert!(p.wait_for_finished(5000));
+        assert_eq!(p.read_all(), b"");
+        assert_eq!(std::fs::read(log).unwrap(), b"out\nerr\n");
+        let mut p = Process::new();
+        p.set_standard_output_file(log);
+        p.start("omareel-no-such-program", &[] as &[&str]);
+        assert_eq!(p.error(), ProcessError::FailedToStart);
+        assert_eq!(std::fs::read(log).unwrap(), b"");
+        let mut p = Process::new();
+        p.set_standard_output_file(&format!("{log}/missing/log"));
+        p.start("sh", &["-c", "true"]);
+        assert!(!p.wait_for_started(1000));
+        assert_eq!(p.error_string(), "Could not open input redirection for reading");
+
+        // terminate: SIGTERM, a crash exit with the signal as the code.
+        let mut p = Process::new();
+        p.start("sleep", &["10"]);
+        p.terminate();
+        assert!(p.wait_for_finished(2000));
+        assert_eq!((p.exit_status(), p.exit_code()), (ExitStatus::CrashExit, libc::SIGTERM));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

@@ -352,6 +352,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "omareel_record"
+version = "0.0.0"
+dependencies = [
+ "libc",
+ "omareel_core",
+]
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.107"
 source = "registry+https://github.com/rust-lang/crates.io-index"

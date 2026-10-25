@@ -37,6 +37,20 @@ pub fn to_lower(s: &str) -> String {
     result
 }
 
+/// `QString::toUpper()` for the uses omareel has: every character of the Basic Multilingual
+/// Plane mapped as `QChar::toUpper` maps it (Qt's table, so `ſ` becomes `S`). Qt also expands
+/// its special cases (`ß` to `SS`, `ﬁ` to `FI`) and maps characters past U+FFFF, which this leaves
+/// alone; omareel only compares the result with single ASCII letters (`S`, `M`, `L`), which
+/// neither can ever equal, so the decisions are Qt's.
+pub fn to_upper(s: &str) -> String {
+    s.chars()
+        .map(|c| match u16::try_from(u32::from(c)) {
+            Ok(unit) => char::from_u32(u32::from(super::qchar::to_upper(unit))).unwrap_or(c),
+            Err(_) => c,
+        })
+        .collect()
+}
+
 /// `QString::arg(const QString &a)`: replaces every occurrence of the lowest-numbered `%N`
 /// placeholder with `a`. Placeholders are `%` and one or two ASCII digits (`%0` to `%99`, so
 /// `%02` is 2), optionally with an `L` after the `%`, which only matters for numbers. The

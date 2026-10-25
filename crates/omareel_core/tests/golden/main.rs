@@ -54,6 +54,8 @@ mod keystroketrack;
 mod layouttimeline;
 mod mediaprobe;
 #[cfg(target_arch = "x86_64")]
+mod microphone;
+#[cfg(target_arch = "x86_64")]
 mod motiontrack;
 mod omarchypaths;
 mod project;
@@ -61,5 +63,6 @@ mod qcolor;
 mod qjson;
 mod qnumber;
 mod qround;
+mod recordingpreferences;
 mod theme;
 mod zoomtimeline;
