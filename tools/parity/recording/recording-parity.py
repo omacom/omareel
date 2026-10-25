@@ -291,6 +291,9 @@ def record_case(name, side, start_args, stop_side=None, env_extra=None, stop='--
             entry = json.loads(line)
             kinds.setdefault(entry['k'], set()).add(tuple(sorted((k, type(v).__name__) for k, v in entry.items())))
         result['input_schema'] = {kind: sorted(map(list, shapes)) for kind, shapes in kinds.items()}
+        # Where the pointer was, in the capture's pixels: the moves are the same, their count is not.
+        result['input_positions'] = sorted({(round(e['x'], 6), round(e['y'], 6))
+                                            for e in map(json.loads, lines) if e['k'] == 'm'})
         result['input_count'] = len(lines)
         fps = (capture or {}).get('fps', 60)
         result['video'] = video_summary(probe_video(str(bundle / 'screen.mp4')), fps)
