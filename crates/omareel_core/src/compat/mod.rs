@@ -2,6 +2,9 @@
 //! names the Qt API it stands in for; tests compare against goldens recorded from Qt itself.
 
 pub mod qcolor;
+pub mod qdir;
 pub mod qjson;
 pub mod qnumber;
 pub mod qround;
+pub mod qsavefile;
+pub mod qstandardpaths;
