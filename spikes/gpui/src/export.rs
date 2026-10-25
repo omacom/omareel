@@ -8,7 +8,7 @@
 //! (`gpui_wgpu::WgpuHeadlessRenderer`), and `Window::render_to_image` draws the last frame's
 //! scene into a texture and reads it back.
 
-use crate::media::{camera_backdrop, render_image, rgba_to_bgra};
+use crate::media::{bgra_copy, camera_backdrop, render_image};
 use crate::preview::{style_for, wallpaper_path};
 use crate::scene::{self, Frame, Style};
 use gpui::{AppContext, Context, HeadlessAppContext, IntoElement, Render, RenderImage, Window, div, prelude::*, px, size};
@@ -37,9 +37,7 @@ impl Render for ExportView {
 }
 
 fn to_render_image(image: &Image) -> Arc<RenderImage> {
-    let mut pixels = image.pixels.as_ref().clone();
-    rgba_to_bgra(&mut pixels);
-    render_image(image.width as u32, image.height as u32, pixels)
+    render_image(image.width as u32, image.height as u32, bgra_copy(&image.pixels))
 }
 
 pub fn run(bundle: &str, output: &str, quality: &str) -> Result<(), String> {
@@ -68,13 +66,16 @@ pub fn run(bundle: &str, output: &str, quality: &str) -> Result<(), String> {
     let (mut screen, mut camera, mut backdrop): (Option<Arc<RenderImage>>, Option<Arc<RenderImage>>, Option<Arc<RenderImage>>) =
         (None, None, None);
     let mut retired: Vec<Arc<RenderImage>> = Vec::new();
+    // Experiments: leave pictures out to see what they cost.
+    let no_screen = std::env::var_os("SPIKE_NO_SCREEN").is_some();
+    let wallpaper = if std::env::var_os("SPIKE_NO_WALLPAPER").is_some() { None } else { wallpaper };
     let (mut upload_ns, mut render_ns, mut readback_ns) = (0i64, 0i64, 0i64);
     let square = project.camera.shape != "rectangle";
     let result = (|| -> Result<(), String> {
         for index in 0..job.total_frames() {
             let images = job.next_frame(index)?;
             let upload = Instant::now();
-            if let Some(image) = &images.screen {
+            if let Some(image) = images.screen.as_ref().filter(|_| !no_screen) {
                 retired.extend(screen.replace(to_render_image(image)));
             }
             if let Some(image) = &images.camera {

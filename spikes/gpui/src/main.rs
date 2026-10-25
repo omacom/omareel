@@ -37,6 +37,7 @@ fn main() {
             bench: flag("--bench").and_then(|s| s.parse().ok()),
             max_height: if args.iter().any(|a| a == "--fill") { 0.0 } else { 620.0 },
             launched,
+            decode_height: flag("--decode-height").and_then(|s| s.parse().ok()).unwrap_or(0),
         }),
         Some("export") => {
             let bundle = args.get(1).unwrap_or_else(|| usage());

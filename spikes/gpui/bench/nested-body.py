@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Runs one windowed measurement inside tests/tools/nested-hyprland.sh (never directly).
+"""Runs one windowed client inside tests/tools/nested-hyprland.sh (never directly).
 
 The nested compositor's own output follows the outer display (a 30 Hz TV here), so a 60 Hz
-headless output is added and the client opens there. While it plays, this samples the
-process tree's CPU time and RSS and its DRM clients' GPU engine time (i915 fdinfo), saves a
-screenshot, and writes everything to result.json in the artifacts directory.
+headless output is added and the client opens there. From launch until the client exits (or
+the timeout), this samples the process tree's CPU time and RSS and its DRM clients' GPU engine
+time (i915 fdinfo) four times a second into NAME.samples.json; summary.py picks the measured
+window afterwards. A screenshot is saved SHOT seconds after the client prints the start marker.
 
-  nested-body.py --name NAME --start 1.5 --seconds 10 --shot 4 -- command...
+  nested-body.py --name NAME [--shot 3] [--timeout 25] [--env K=V]... -- command...
 """
 import argparse
 import json
@@ -17,11 +18,10 @@ import time
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--name', required=True)
-parser.add_argument('--start', type=float, default=1.5, help='seconds until playback starts')
-parser.add_argument('--seconds', type=float, default=10)
-parser.add_argument('--shot', type=float, default=4.0, help='screenshot this long after the start')
+parser.add_argument('--shot', type=float, default=3.0, help='screenshot this long after the start marker')
+parser.add_argument('--timeout', type=float, default=25, help='stop the client this long after launch')
+parser.add_argument('--start-marker', default='preview state=1')
 parser.add_argument('--env', action='append', default=[])
-parser.add_argument('--wait', type=float, default=0, help='let the client quit by itself this long after the end')
 parser.add_argument('command', nargs=argparse.REMAINDER)
 args = parser.parse_args()
 assert os.environ.get('OMAREEL_NESTED_TEST'), 'use the nested harness'
@@ -50,16 +50,17 @@ def tree(pid):
     for p in pids:
         try:
             for task in Path(f'/proc/{p}/task').iterdir():
-                children = (task / 'children').read_text().split()
-                pids.extend(int(c) for c in children)
+                pids.extend(int(c) for c in (task / 'children').read_text().split())
         except OSError:
             pass
     return pids
 
-def cpu_seconds(pid):
+def cpu_seconds(pid, children=False):
+    """utime + stime, and with `children` the reaped children's too (cutime + cstime), so a
+    decoder that exits between samples keeps counting."""
     try:
         fields = Path(f'/proc/{pid}/stat').read_text().rsplit(')', 1)[1].split()
-        return (int(fields[11]) + int(fields[12])) / ticks
+        return sum(int(f) for f in fields[11:15 if children else 13]) / ticks
     except (OSError, IndexError):
         return 0.0
 
@@ -70,13 +71,12 @@ def rss_mb(pid):
         return 0.0
 
 def gpu_ns(pid):
-    """Sum of drm-engine-* over the process's DRM clients, each client once."""
-    engines = {}
+    """drm-engine-* summed over the process's DRM clients, each client once."""
+    engines, seen = {}, set()
     try:
         fds = list(Path(f'/proc/{pid}/fdinfo').iterdir())
     except OSError:
         return engines
-    seen = set()
     for fd in fds:
         try:
             text = fd.read_text()
@@ -94,57 +94,33 @@ def gpu_ns(pid):
                 engines[key[11:]] = engines.get(key[11:], 0) + int(value.split()[0])
     return engines
 
+stderr_path = root / f'{args.name}.stderr'
 stdout = open(root / f'{args.name}.stdout', 'w')
-stderr = open(root / f'{args.name}.stderr', 'w')
+stderr = open(stderr_path, 'w')
 launched = time.monotonic()
-epoch_start = time.time() + args.start
 process = subprocess.Popen(command, env=env, stdout=stdout, stderr=stderr)
-start = launched + args.start
-end = start + args.seconds
-samples = []
-first = None
-shot_taken = False
-while process.poll() is None and time.monotonic() < end + 0.5:
-    now = time.monotonic()
-    if now >= start:
-        pids = tree(process.pid)
-        sample = {
-            't': now,
-            'cpu_main': cpu_seconds(process.pid),
-            'cpu_tree': sum(cpu_seconds(p) for p in pids),
-            'rss_main': rss_mb(process.pid),
-            'rss_tree': sum(rss_mb(p) for p in pids),
-            'gpu': gpu_ns(process.pid),
-        }
-        samples.append(sample)
-    if not shot_taken and now >= start + args.shot:
+samples, marker, shot = [], None, False
+while process.poll() is None and time.monotonic() < launched + args.timeout:
+    pids = tree(process.pid)
+    samples.append({
+        'epoch': time.time(),
+        'cpu_main': cpu_seconds(process.pid),
+        'cpu_tree': sum(cpu_seconds(p, children=True) for p in pids),
+        'rss_main': rss_mb(process.pid),
+        'rss_tree': sum(rss_mb(p) for p in pids),
+        'gpu': gpu_ns(process.pid),
+    })
+    if marker is None and args.start_marker in stderr_path.read_text(errors='replace'):
+        marker = time.time()
+    if marker is not None and not shot and time.time() >= marker + args.shot:
         subprocess.run(['grim', '-o', 'SPIKE', str(root / f'{args.name}.png')], timeout=10)
-        shot_taken = True
+        shot = True
     time.sleep(0.25)
-clients = ctl('-j', 'clients')
-(root / f'{args.name}-clients.json').write_text(clients)
-try:
-    process.wait(timeout=args.wait)
-except subprocess.TimeoutExpired:
-    pass
+(root / f'{args.name}-clients.json').write_text(ctl('-j', 'clients'))
 if process.poll() is None:
     process.terminate()
     try:
         process.wait(timeout=5)
     except subprocess.TimeoutExpired:
         process.kill()
-measured = [s for s in samples if s['t'] <= end + 0.01]
-result = {'name': args.name, 'command': command, 'epoch_start': epoch_start, 'epoch_end': epoch_start + args.seconds}
-if len(measured) >= 2:
-    a, b = measured[0], measured[-1]
-    span = b['t'] - a['t']
-    result.update(
-        span=span,
-        cpu_main_pct=100 * (b['cpu_main'] - a['cpu_main']) / span,
-        cpu_tree_pct=100 * (b['cpu_tree'] - a['cpu_tree']) / span,
-        rss_main_mb_max=max(s['rss_main'] for s in measured),
-        rss_tree_mb_max=max(s['rss_tree'] for s in measured),
-        gpu_pct={k: 100 * (b['gpu'].get(k, 0) - a['gpu'].get(k, 0)) / (span * 1e9) for k in b['gpu']},
-    )
-(root / f'{args.name}.json').write_text(json.dumps(result, indent=2))
-print(json.dumps(result))
+(root / f'{args.name}.samples.json').write_text(json.dumps({'marker': marker, 'samples': samples}))

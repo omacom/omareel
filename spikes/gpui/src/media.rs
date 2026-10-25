@@ -22,6 +22,24 @@ pub fn rgba_to_bgra(pixels: &mut [u8]) {
     }
 }
 
+/// A BGRA copy of RGBA pixels, made on several threads (8 MB a frame at 1080p, 33 MB at 4K).
+pub fn bgra_copy(rgba: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(rgba.len());
+    // SAFETY: every byte is written below before anything reads it.
+    unsafe { out.set_len(rgba.len()) };
+    let threads = std::thread::available_parallelism().map_or(4, |n| n.get()).min(8);
+    let chunk = (rgba.len() / 4).div_ceil(threads).max(1) * 4;
+    std::thread::scope(|scope| {
+        for (to, from) in out.chunks_mut(chunk).zip(rgba.chunks(chunk)) {
+            scope.spawn(move || {
+                to.copy_from_slice(from);
+                rgba_to_bgra(to);
+            });
+        }
+    });
+    out
+}
+
 /// A BGRA picture as the `RenderImage` `img()` paints.
 pub fn render_image(width: u32, height: u32, bgra: Vec<u8>) -> Arc<RenderImage> {
     let buffer = image::RgbaImage::from_raw(width, height, bgra).expect("frame size matches its pixels");
@@ -150,6 +168,8 @@ pub struct StreamSpec {
     pub width: i32,
     pub height: i32,
     pub flip: bool,
+    /// Have ffmpeg scale to `width` x `height`.
+    pub scale: bool,
     /// Make the 24x24 backdrop for each frame (the camera).
     pub backdrop: Option<bool>,
     pub ahead: usize,
@@ -159,10 +179,11 @@ impl Stream {
     pub fn start(spec: &StreamSpec, start: f64, length: f64) -> Stream {
         let (sender, receiver) = sync_channel(spec.ahead);
         let path = spec.path.clone();
-        let (fps, width, height, flip, backdrop) = (spec.fps, spec.width, spec.height, spec.flip, spec.backdrop);
+        let (fps, width, height, flip, scale, backdrop) =
+            (spec.fps, spec.width, spec.height, spec.flip, spec.scale, spec.backdrop);
         std::thread::Builder::new()
             .name("decode".into())
-            .spawn(move || decode(&path, start, length, fps, width, height, flip, backdrop, &sender))
+            .spawn(move || decode(&path, start, length, fps, width, height, flip, scale, backdrop, &sender))
             .expect("decode thread");
         Stream { receiver, queued: VecDeque::new(), current: None, skipped: 0, finished: false }
     }
@@ -193,6 +214,16 @@ impl Stream {
         changed
     }
 
+    /// Whether the first frame has arrived.
+    pub fn primed(&mut self) -> bool {
+        if self.queued.is_empty()
+            && let Ok(frame) = self.receiver.try_recv()
+        {
+            self.queued.push_back(frame);
+        }
+        self.current.is_some() || !self.queued.is_empty()
+    }
+
     /// Whether a frame is still to come at all.
     pub fn exhausted(&self) -> bool {
         self.finished && self.queued.is_empty()
@@ -208,12 +239,13 @@ fn decode(
     width: i32,
     height: i32,
     flip: bool,
+    scale: bool,
     backdrop: Option<bool>,
     sender: &SyncSender<VideoFrame>,
 ) {
     let mut decoder = FfmpegDecoder::new();
     let mut error = String::new();
-    if !decoder.start(path, start, length, fps, width, height, false, &mut error) {
+    if !decoder.start(path, start, length, fps, width, height, scale, &mut error) {
         eprintln!("decoder: {error}");
         return;
     }

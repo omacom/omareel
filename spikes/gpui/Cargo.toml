@@ -22,6 +22,9 @@ gpui_wgpu = { git = "https://github.com/zed-industries/zed", rev = "a5c4ca8bf6c4
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 anyhow = "1"
 smallvec = "1"
+# For bin/spike-pointer, the tests' click and drag helper.
+wayland-client = "0.31"
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 lyon = "1"
 
 # Zed's workspace patches these crates; a git dependency does not inherit [patch], so

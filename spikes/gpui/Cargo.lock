@@ -3450,6 +3450,8 @@ dependencies = [
  "lyon",
  "omareel_core",
  "smallvec",
+ "wayland-client",
+ "wayland-protocols-wlr",
 ]
 
 [[package]]

@@ -24,13 +24,18 @@ pub struct Options {
     pub max_height: f64,
     /// When the process started; the benchmark starts playing 1.5 s after it.
     pub launched: Instant,
+    /// Have ffmpeg scale the screen to this height (0: decode at the recording's size).
+    pub decode_height: i32,
 }
 
 struct Bench {
     seconds: f64,
+    requested: bool,
     started: Option<Instant>,
     intervals: Vec<f64>,
     render_costs: Vec<f64>,
+    /// From render() to the end of paint: GPUI's CPU work for a frame before it submits it.
+    paint_costs: Rc<std::cell::RefCell<Vec<f64>>>,
     last_frame: Option<Instant>,
     screen_frames: u64,
     skipped_at_start: u64,
@@ -97,11 +102,17 @@ impl Preview {
         }
         document.take_effects();
         let project = document.project().clone();
+        let (mut width, mut height) = (document.source_width(), document.source_height());
+        if options.decode_height > 0 && options.decode_height < height {
+            width = (width as i64 * options.decode_height as i64 / height as i64 / 2 * 2) as i32;
+            height = options.decode_height;
+        }
         let screen_spec = StreamSpec {
             path: document.video_path().to_owned(),
             fps: document.fps(),
-            width: document.source_width(),
-            height: document.source_height(),
+            scale: (width, height) != (document.source_width(), document.source_height()),
+            width,
+            height,
             flip: false,
             backdrop: None,
             ahead: 4,
@@ -112,6 +123,7 @@ impl Preview {
             width: document.camera_source_width(),
             height: document.camera_source_height(),
             flip: project.camera.flip_horizontal,
+            scale: false,
             backdrop: Some(project.camera.shape != "rectangle"),
             ahead: 3,
         });
@@ -137,9 +149,11 @@ impl Preview {
             max_height: options.max_height,
             bench: options.bench.map(|seconds| Bench {
                 seconds,
+                requested: false,
                 started: None,
                 intervals: Vec::new(),
                 render_costs: Vec::new(),
+                paint_costs: Rc::default(),
                 last_frame: None,
                 screen_frames: 0,
                 skipped_at_start: 0,
@@ -180,6 +194,8 @@ impl Preview {
         self.last_seek = Some(Instant::now());
     }
 
+    /// Playing starts the decoders at the playhead; the clock starts once the first frame is
+    /// there (the pre-roll a player does), so a slow decoder start drops nothing.
     fn set_playing(&mut self, playing: bool) {
         if playing == self.playing {
             return;
@@ -188,15 +204,13 @@ impl Preview {
             self.position = 0.0;
         }
         self.playing = playing;
-        self.clock = playing.then(|| (Instant::now(), self.position));
+        self.clock = None;
         self.restart_streams(playing);
     }
 
     fn seek(&mut self, position: f64) {
         self.position = position.clamp(0.0, self.duration());
-        if self.playing {
-            self.clock = Some((Instant::now(), self.position));
-        }
+        self.clock = None;
         self.seek_pending = true;
     }
 
@@ -210,16 +224,21 @@ impl Preview {
 
     /// Advances the playhead and the decoders; drops replaced pictures from GPUI's atlas.
     fn advance(&mut self, window: &mut Window) -> Frame {
-        if let Some(bench) = &mut self.bench
-            && bench.started.is_none()
-            && self.opened.elapsed() > Duration::from_millis(1500)
-        {
-            bench.started = Some(Instant::now());
+        if self.bench.as_ref().is_some_and(|b| !b.requested) && self.opened.elapsed() > Duration::from_millis(1500) {
+            self.bench.as_mut().map(|b| b.requested = true);
             self.position = 0.0;
-            self.playing = false;
             self.set_playing(true);
-            if let Some(screen) = &self.screen {
-                self.bench.as_mut().map(|b| b.skipped_at_start = screen.skipped);
+        }
+        if self.playing && self.clock.is_none() && !self.seek_pending && self.screen.as_mut().is_some_and(Stream::primed) {
+            self.clock = Some((Instant::now(), self.position));
+            if let Some(bench) = &mut self.bench
+                && bench.started.is_none()
+            {
+                bench.started = Some(Instant::now());
+                bench.skipped_at_start = self.screen.as_ref().map_or(0, |s| s.skipped);
+                // What the Qt editor prints with OMAREEL_PREVIEW_STATS=1 as it starts playing;
+                // the benchmark harness measures from it.
+                eprintln!("preview state=1");
             }
         }
         if let Some((started, from)) = self.clock {
@@ -309,9 +328,11 @@ impl Preview {
             intervals.sort_by(f64::total_cmp);
             let mut costs = bench.render_costs.clone();
             costs.sort_by(f64::total_cmp);
+            let mut paints = bench.paint_costs.borrow().clone();
+            paints.sort_by(f64::total_cmp);
             let pick = |v: &[f64], q: f64| v.get(((v.len() as f64 - 1.0) * q).round() as usize).copied().unwrap_or(0.0);
             println!(
-                "{{\"frames\":{},\"interval_ms\":{{\"median\":{:.2},\"p95\":{:.2},\"max\":{:.2}}},\"render_ms\":{{\"median\":{:.3},\"p95\":{:.3},\"max\":{:.3}}},\"screen_frames_shown\":{},\"screen_frames_expected\":{},\"dropped\":{},\"skipped_by_decoder_queue\":{}}}",
+                "{{\"frames\":{},\"interval_ms\":{{\"median\":{:.2},\"p95\":{:.2},\"max\":{:.2}}},\"render_ms\":{{\"median\":{:.3},\"p95\":{:.3},\"max\":{:.3}}},\"render_to_paint_end_ms\":{{\"median\":{:.3},\"p95\":{:.3},\"max\":{:.3}}},\"screen_frames_shown\":{},\"screen_frames_expected\":{},\"dropped\":{},\"skipped_by_decoder_queue\":{}}}",
                 intervals.len() + 1,
                 pick(&intervals, 0.5),
                 pick(&intervals, 0.95),
@@ -319,6 +340,9 @@ impl Preview {
                 pick(&costs, 0.5),
                 pick(&costs, 0.95),
                 costs.last().copied().unwrap_or(0.0),
+                pick(&paints, 0.5),
+                pick(&paints, 0.95),
+                paints.last().copied().unwrap_or(0.0),
                 bench.screen_frames,
                 expected,
                 (expected - bench.screen_frames as i64).max(0),
@@ -339,7 +363,7 @@ impl Render for Preview {
         let cost = Instant::now();
         let frame = self.advance(window);
         let waiting = self.screen.as_ref().is_some_and(|s| s.current.is_none() && !s.exhausted());
-        if self.playing || self.seek_pending || waiting || self.bench.as_ref().is_some_and(|b| b.started.is_none()) {
+        if self.playing || self.seek_pending || waiting || self.bench.as_ref().is_some_and(|b| !b.requested) {
             window.request_animation_frame();
         }
 
@@ -359,6 +383,15 @@ impl Render for Preview {
         let text = rgb(0xc0caf5);
         let bounds_cell = self.scrub_bounds.clone();
         let mono = self.style.mono_family.clone();
+        // Painted last, so its paint closure runs once the rest of the frame is painted.
+        let paint_probe = self.bench.as_ref().filter(|b| b.started.is_some()).map(|b| b.paint_costs.clone());
+        let probe = canvas(|_, _, _| {}, move |_, _, _, _| {
+            if let Some(costs) = &paint_probe {
+                costs.borrow_mut().push(cost.elapsed().as_secs_f64() * 1000.0);
+            }
+        })
+        .absolute()
+        .size_0();
         let label: SharedString = format!("{} / {}", format_time(self.position), format_time(self.duration())).into();
         let element = div()
             .id("preview")
@@ -447,7 +480,8 @@ impl Render for Preview {
                             })),
                     )
                     .child(div().flex_none().whitespace_nowrap().font_family(mono).child(label)),
-            );
+            )
+            .child(probe);
         self.record_bench(cost.elapsed(), cx);
         element
     }
