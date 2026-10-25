@@ -149,7 +149,6 @@ fn errno() -> i32 {
 
 /// `qt_error_string(errno)` (`QSystemError::stdString`): Qt's own wording for four common
 /// errors, the C library's `strerror` for the rest.
-#[cfg_attr(not(test), allow(dead_code))] // for qsavefile
 pub(crate) fn error_string(code: i32) -> String {
     match code {
         0 => String::new(),
