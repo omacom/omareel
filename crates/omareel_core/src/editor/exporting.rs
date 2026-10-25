@@ -143,6 +143,12 @@ impl Document {
             return None;
         }
         self.save_now();
+        self.begin_saved_export(path, settings)
+    }
+
+    /// The part of [`Document::begin_export`] after its save, for a Qt side that performs the
+    /// save's effects first, where the C++ emitted them.
+    pub fn begin_saved_export(&mut self, path: &str, settings: &ExportDialogSettings) -> Option<ExportRequest> {
         if path.is_empty() {
             return None;
         }

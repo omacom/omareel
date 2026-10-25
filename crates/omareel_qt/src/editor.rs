@@ -1505,6 +1505,10 @@ impl qobject::Editor {
 
     /// `exportTo(path, settings)`: saves, then starts an exporter with the dialog's settings.
     fn export_to_with_settings(mut self: Pin<&mut Self>, path: &QString, settings: &QMap<QMapPair_QString_QVariant>) {
+        if self.document.as_ref().is_none_or(|document| document.export_state().exporting) {
+            return;
+        }
+        self.as_mut().save_now();
         let path = qobject::text_url_path(path).to_string();
         let (mut fps, mut height, mut quality) = (0, 0, QString::default());
         qobject::export_settings(settings, &mut fps, &mut height, &mut quality);
@@ -1512,7 +1516,7 @@ impl qobject::Editor {
         let request = {
             let mut rust = self.as_mut().rust_mut();
             let Some(document) = rust.document.as_mut() else { return };
-            document.begin_export(&path, &settings)
+            document.begin_saved_export(&path, &settings)
         };
         if request.is_some() {
             self.as_mut().rust_mut().export_timer = Some(Instant::now());

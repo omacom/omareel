@@ -342,8 +342,12 @@ impl Document {
         index >= 0 && other >= 0 && (other as usize) < self.project.clips.len() && self.project.clips[index as usize].is_media()
     }
 
-    /// The edit of `reorderClip` after its pause, once [`Document::can_reorder_clip`] said yes.
+    /// The edit of `reorderClip` after its pause, once [`Document::can_reorder_clip`] said yes
+    /// (and nothing if the clips changed meanwhile so that it no longer would).
     pub fn apply_reorder_clip(&mut self, id: &str, direction: i32) {
+        if !self.can_reorder_clip(id, direction) {
+            return;
+        }
         let index = self.clip_index(id);
         let other = index + if direction < 0 { -1 } else { 1 };
         self.snapshot("");
