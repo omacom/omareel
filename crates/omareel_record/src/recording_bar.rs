@@ -285,76 +285,6 @@ pub fn standby_placement(preferences: &RecordingPreferences) -> StandbyPlacement
     standby_placement_from(output.as_deref(), preferences)
 }
 
-/// `CursorSampler::cursorPosition` (`src/record/CursorSampler.cpp`), which `globalCursorPos`
-/// asks: the pointer in global logical coordinates from Hyprland's `j/cursorpos` on
-/// `$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket.sock`; `None` when the socket does
-/// not answer with an object holding `x` and `y`.
-pub fn global_cursor_position() -> Option<PointF> {
-    let variable = |name: &str| std::env::var_os(name).unwrap_or_default();
-    let mut path = variable("XDG_RUNTIME_DIR");
-    path.push("/hypr/");
-    path.push(variable("HYPRLAND_INSTANCE_SIGNATURE"));
-    path.push("/.socket.sock");
-    query_cursor(std::os::unix::ffi::OsStrExt::as_bytes(path.as_os_str()))
-}
-
-/// `queryCursor(path, &point)`: one request with 20 ms send and receive timeouts, and at most 16
-/// reads of 256 bytes for the reply.
-pub fn query_cursor(path: &[u8]) -> Option<PointF> {
-    // SAFETY: socket returns a new descriptor or -1.
-    let fd = unsafe { libc::socket(libc::AF_UNIX, libc::SOCK_STREAM | libc::SOCK_CLOEXEC, 0) };
-    if fd < 0 {
-        return None;
-    }
-    // SAFETY: a new descriptor nothing else owns; it is closed when this returns.
-    let socket = unsafe { <std::os::fd::OwnedFd as std::os::fd::FromRawFd>::from_raw_fd(fd) };
-    let timeout = libc::timeval { tv_sec: 0, tv_usec: 20_000 };
-    let timeout_size = std::mem::size_of::<libc::timeval>() as libc::socklen_t;
-    // SAFETY: the option value is a timeval of the size given.
-    unsafe {
-        libc::setsockopt(fd, libc::SOL_SOCKET, libc::SO_RCVTIMEO, (&raw const timeout).cast(), timeout_size);
-        libc::setsockopt(fd, libc::SOL_SOCKET, libc::SO_SNDTIMEO, (&raw const timeout).cast(), timeout_size);
-    }
-    // SAFETY: sockaddr_un is plain data, valid zeroed.
-    let mut address: libc::sockaddr_un = unsafe { std::mem::zeroed() };
-    address.sun_family = libc::AF_UNIX as libc::sa_family_t;
-    if path.len() >= address.sun_path.len() {
-        return None;
-    }
-    for (slot, &byte) in address.sun_path.iter_mut().zip(path) {
-        *slot = byte as libc::c_char;
-    }
-    let address_size = std::mem::size_of::<libc::sockaddr_un>() as libc::socklen_t;
-    // SAFETY: the address is a sockaddr_un of the size given.
-    if unsafe { libc::connect(fd, (&raw const address).cast(), address_size) } != 0 {
-        return None;
-    }
-    let request = b"j/cursorpos";
-    // SAFETY: the buffer and its length are passed together.
-    if unsafe { libc::write(fd, request.as_ptr().cast(), request.len()) } != request.len() as isize {
-        return None;
-    }
-    let mut reply = Vec::new();
-    let mut buffer = [0u8; 256];
-    for _ in 0..16 {
-        // SAFETY: the buffer and its length are passed together.
-        let count = unsafe { libc::read(fd, buffer.as_mut_ptr().cast(), buffer.len()) };
-        if count <= 0 {
-            break;
-        }
-        reply.extend_from_slice(&buffer[..count as usize]);
-    }
-    drop(socket);
-    let object = match qjson::from_json(&reply) {
-        Ok(Value::Object(object)) => object,
-        _ => Object::new(),
-    };
-    if !object.contains("x") || !object.contains("y") {
-        return None;
-    }
-    Some(PointF::new(object.value("x").to_double(0.0), object.value("y").to_double(0.0)))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -398,45 +328,5 @@ mod tests {
             clamped_self_view_drag_position(press, Point::new(20, 20), PointF::new(-100.0, -100.0), screen, 160),
             Point::new(0, 0)
         );
-    }
-
-    #[test]
-    fn cursor_query_without_a_socket() {
-        assert_eq!(query_cursor(b"/nonexistent/omareel/.socket.sock"), None);
-        assert_eq!(query_cursor(&[b'x'; 200]), None);
-    }
-
-    /// Answers one `j/cursorpos` request on a socket at `path` with `reply`.
-    fn serve_once(path: &std::path::Path, reply: &'static [u8]) -> std::thread::JoinHandle<Vec<u8>> {
-        use std::io::{Read, Write};
-        let listener = std::os::unix::net::UnixListener::bind(path).unwrap();
-        std::thread::spawn(move || {
-            let (mut stream, _) = listener.accept().unwrap();
-            let mut request = [0u8; 64];
-            let count = stream.read(&mut request).unwrap();
-            stream.write_all(reply).unwrap();
-            request[..count].to_vec()
-        })
-    }
-
-    #[test]
-    fn cursor_query_reads_hyprlands_reply() {
-        let directory = std::env::temp_dir().join(format!("omareel-cursor-{}", std::process::id()));
-        std::fs::create_dir_all(&directory).unwrap();
-        let socket = directory.join(".socket.sock");
-        let path = std::os::unix::ffi::OsStrExt::as_bytes(socket.as_os_str()).to_vec();
-        let server = serve_once(&socket, br#"{"x": 1234.5, "y": -16}"#);
-        assert_eq!(query_cursor(&path), Some(PointF::new(1234.5, -16.0)));
-        assert_eq!(server.join().unwrap(), b"j/cursorpos");
-        std::fs::remove_file(&socket).unwrap();
-        // An answer without both coordinates is no position.
-        let server = serve_once(&socket, br#"{"x": 10}"#);
-        assert_eq!(query_cursor(&path), None);
-        server.join().unwrap();
-        std::fs::remove_file(&socket).unwrap();
-        let server = serve_once(&socket, b"not json");
-        assert_eq!(query_cursor(&path), None);
-        server.join().unwrap();
-        std::fs::remove_dir_all(&directory).unwrap();
     }
 }

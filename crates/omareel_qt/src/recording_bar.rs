@@ -20,6 +20,7 @@ use omareel_core::compat::qdir::{self, FileInfo};
 use omareel_core::compat::qfile;
 use omareel_core::compat::qjson::Object;
 use omareel_core::recording_preferences::RecordingPreferences;
+use omareel_record::cursor_sampler;
 use omareel_record::recorder::{self, state};
 use omareel_record::recording_bar::{
     self, CameraShape, Point, SelfViewGeometry, Size, clamped_self_view_drag_position, self_view_host_should_exit,
@@ -849,7 +850,7 @@ impl qobject::RecordingBar {
     }
 
     fn global_cursor_pos(&self) -> QPointF {
-        let point = recording_bar::global_cursor_position().unwrap_or(self.drag_press_pointer);
+        let point = cursor_sampler::cursor_position().unwrap_or(self.drag_press_pointer);
         QPointF::new(point.x, point.y)
     }
 

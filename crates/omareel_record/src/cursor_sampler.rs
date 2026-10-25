@@ -114,7 +114,8 @@ pub fn query_cursor(path: &[u8]) -> Option<PointF> {
     Some(PointF::new(object.value("x").to_double(0.0), object.value("y").to_double(0.0)))
 }
 
-/// `CursorSampler::cursorPosition`: where the pointer is now, asked once.
+/// `CursorSampler::cursorPosition`: where the pointer is now, asked once. The recording bar's
+/// self-view drag asks it too (`globalCursorPos`).
 pub fn cursor_position() -> Option<PointF> {
     query_cursor(socket_path().as_bytes())
 }
@@ -217,7 +218,7 @@ mod tests {
         let server = std::thread::spawn(move || {
             use std::io::{Read, Write};
             let mut requests = Vec::new();
-            for reply in [&b"{\"x\": 12.5, \"y\": 7}"[..], b"{\"x\": 3}", b"[1, 2]"] {
+            for reply in [&b"{\"x\": 12.5, \"y\": 7}"[..], b"{\"x\": 3}", b"[1, 2]", b"not json"] {
                 let (mut stream, _) = listener.accept().unwrap();
                 let mut request = [0u8; 11];
                 stream.read_exact(&mut request).unwrap();
@@ -228,6 +229,7 @@ mod tests {
         });
         let path = socket.as_os_str().as_bytes();
         assert_eq!(query_cursor(path), Some(PointF::new(12.5, 7.0)));
+        assert_eq!(query_cursor(path), None);
         assert_eq!(query_cursor(path), None);
         assert_eq!(query_cursor(path), None);
         assert!(server.join().unwrap().iter().all(|request| request == b"j/cursorpos"));
