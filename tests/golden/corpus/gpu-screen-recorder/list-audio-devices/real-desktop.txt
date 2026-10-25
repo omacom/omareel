@@ -1,0 +1,4 @@
+default_output|Default output
+default_input|Default input
+alsa_output.pci-0000_00_1f.3.hdmi-stereo.monitor|Monitor of Built-in Audio Digital Stereo (HDMI) [Lontium semi]
+alsa_input.pci-0000_00_1f.3.analog-stereo|Built-in Audio Analog Stereo

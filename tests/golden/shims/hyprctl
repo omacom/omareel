@@ -1,7 +1,13 @@
 #!/bin/sh
 # Stand-in for hyprctl while the oracle runs: Theme reads decoration:rounding from it. The default
 # answer is what Hyprland prints for a rounding of 10. OMAREEL_ORACLE_HYPRCTL_OUTPUT replaces the
-# output; OMAREEL_ORACLE_HYPRCTL_EXIT makes it exit with that status after printing.
+# output; OMAREEL_ORACLE_HYPRCTL_EXIT makes it exit with that status after printing. With
+# OMAREEL_ORACLE_REPLAY_DIR set it answers every call from there instead (see replay.sh), for the
+# recording side's monitors, clients, layers, plugin and cursor calls.
+if [ -n "${OMAREEL_ORACLE_REPLAY_DIR+set}" ]; then
+    . "$(dirname "$(readlink -f "$0")")/replay.sh"
+    replay hyprctl "$@"
+fi
 if [ "$*" != "getoption decoration:rounding -j" ]; then
     echo "hyprctl shim: unexpected arguments: $*" >&2
     exit 64

@@ -1,0 +1,167 @@
+[
+    {
+        "id": 0,
+        "name": "R-SHORT",
+        "description": "Oracle R-SHORT",
+        "make": "Oracle",
+        "model": "R-SHORT",
+        "serial": "",
+        "width": 1920,
+        "height": 1080,
+        "refreshRate": 60.0,
+        "x": 0,
+        "y": 0,
+        "activeWorkspace": {
+            "id": 1,
+            "name": "1"
+        },
+        "specialWorkspace": {
+            "id": 0,
+            "name": ""
+        },
+        "reserved": [
+            10
+        ],
+        "scale": 1,
+        "transform": 0,
+        "focused": false,
+        "dpmsStatus": true,
+        "vrr": false,
+        "disabled": false,
+        "currentFormat": "XRGB8888",
+        "mirrorOf": "none"
+    },
+    {
+        "id": 0,
+        "name": "R-EMPTY",
+        "description": "Oracle R-EMPTY",
+        "make": "Oracle",
+        "model": "R-EMPTY",
+        "serial": "",
+        "width": 1920,
+        "height": 1080,
+        "refreshRate": 60.0,
+        "x": 0,
+        "y": 0,
+        "activeWorkspace": {
+            "id": 1,
+            "name": "1"
+        },
+        "specialWorkspace": {
+            "id": 0,
+            "name": ""
+        },
+        "reserved": [],
+        "scale": 1,
+        "transform": 0,
+        "focused": false,
+        "dpmsStatus": true,
+        "vrr": false,
+        "disabled": false,
+        "currentFormat": "XRGB8888",
+        "mirrorOf": "none"
+    },
+    {
+        "id": 0,
+        "name": "R-LONG",
+        "description": "Oracle R-LONG",
+        "make": "Oracle",
+        "model": "R-LONG",
+        "serial": "",
+        "width": 1920,
+        "height": 1080,
+        "refreshRate": 60.0,
+        "x": 0,
+        "y": 0,
+        "activeWorkspace": {
+            "id": 1,
+            "name": "1"
+        },
+        "specialWorkspace": {
+            "id": 0,
+            "name": ""
+        },
+        "reserved": [
+            1,
+            2,
+            3,
+            4,
+            5
+        ],
+        "scale": 1,
+        "transform": 0,
+        "focused": false,
+        "dpmsStatus": true,
+        "vrr": false,
+        "disabled": false,
+        "currentFormat": "XRGB8888",
+        "mirrorOf": "none"
+    },
+    {
+        "id": 0,
+        "name": "R-STRINGS",
+        "description": "Oracle R-STRINGS",
+        "make": "Oracle",
+        "model": "R-STRINGS",
+        "serial": "",
+        "width": 1920,
+        "height": 1080,
+        "refreshRate": 60.0,
+        "x": 0,
+        "y": 0,
+        "activeWorkspace": {
+            "id": 1,
+            "name": "1"
+        },
+        "specialWorkspace": {
+            "id": 0,
+            "name": ""
+        },
+        "reserved": [
+            "5",
+            6,
+            null,
+            7.5
+        ],
+        "scale": 1,
+        "transform": 0,
+        "focused": false,
+        "dpmsStatus": true,
+        "vrr": false,
+        "disabled": false,
+        "currentFormat": "XRGB8888",
+        "mirrorOf": "none"
+    },
+    {
+        "id": 0,
+        "name": "R-OBJECT",
+        "description": "Oracle R-OBJECT",
+        "make": "Oracle",
+        "model": "R-OBJECT",
+        "serial": "",
+        "width": 1920,
+        "height": 1080,
+        "refreshRate": 60.0,
+        "x": 0,
+        "y": 0,
+        "activeWorkspace": {
+            "id": 1,
+            "name": "1"
+        },
+        "specialWorkspace": {
+            "id": 0,
+            "name": ""
+        },
+        "reserved": [
+            "top"
+        ],
+        "scale": 1,
+        "transform": 0,
+        "focused": false,
+        "dpmsStatus": true,
+        "vrr": false,
+        "disabled": false,
+        "currentFormat": "XRGB8888",
+        "mirrorOf": "none"
+    }
+]

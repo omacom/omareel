@@ -1,0 +1,212 @@
+[
+    {
+        "id": 0,
+        "name": "S0",
+        "description": "Oracle S0",
+        "make": "Oracle",
+        "model": "S0",
+        "serial": "",
+        "width": 1920,
+        "height": 1080,
+        "refreshRate": 60.0,
+        "x": 0,
+        "y": 0,
+        "activeWorkspace": {
+            "id": 1,
+            "name": "1"
+        },
+        "specialWorkspace": {
+            "id": 0,
+            "name": ""
+        },
+        "reserved": [
+            0,
+            0,
+            0,
+            0
+        ],
+        "scale": 0,
+        "transform": 0,
+        "focused": false,
+        "dpmsStatus": true,
+        "vrr": false,
+        "disabled": false,
+        "currentFormat": "XRGB8888",
+        "mirrorOf": "none"
+    },
+    {
+        "id": 0,
+        "name": "S-NEG",
+        "description": "Oracle S-NEG",
+        "make": "Oracle",
+        "model": "S-NEG",
+        "serial": "",
+        "width": 1920,
+        "height": 1080,
+        "refreshRate": 60.0,
+        "x": 0,
+        "y": 0,
+        "activeWorkspace": {
+            "id": 1,
+            "name": "1"
+        },
+        "specialWorkspace": {
+            "id": 0,
+            "name": ""
+        },
+        "reserved": [
+            0,
+            0,
+            0,
+            0
+        ],
+        "scale": -2,
+        "transform": 0,
+        "focused": false,
+        "dpmsStatus": true,
+        "vrr": false,
+        "disabled": false,
+        "currentFormat": "XRGB8888",
+        "mirrorOf": "none"
+    },
+    {
+        "id": 0,
+        "name": "S-THIRD",
+        "description": "Oracle S-THIRD",
+        "make": "Oracle",
+        "model": "S-THIRD",
+        "serial": "",
+        "width": 2560,
+        "height": 1440,
+        "refreshRate": 60.0,
+        "x": 0,
+        "y": 0,
+        "activeWorkspace": {
+            "id": 1,
+            "name": "1"
+        },
+        "specialWorkspace": {
+            "id": 0,
+            "name": ""
+        },
+        "reserved": [
+            0,
+            0,
+            0,
+            0
+        ],
+        "scale": 1.3333333333333333,
+        "transform": 0,
+        "focused": false,
+        "dpmsStatus": true,
+        "vrr": false,
+        "disabled": false,
+        "currentFormat": "XRGB8888",
+        "mirrorOf": "none"
+    },
+    {
+        "id": 0,
+        "name": "S-STRING",
+        "description": "Oracle S-STRING",
+        "make": "Oracle",
+        "model": "S-STRING",
+        "serial": "",
+        "width": 1920,
+        "height": 1080,
+        "refreshRate": 60.0,
+        "x": 0,
+        "y": 0,
+        "activeWorkspace": {
+            "id": 1,
+            "name": "1"
+        },
+        "specialWorkspace": {
+            "id": 0,
+            "name": ""
+        },
+        "reserved": [
+            0,
+            0,
+            0,
+            0
+        ],
+        "scale": "2",
+        "transform": 0,
+        "focused": false,
+        "dpmsStatus": true,
+        "vrr": false,
+        "disabled": false,
+        "currentFormat": "XRGB8888",
+        "mirrorOf": "none"
+    },
+    {
+        "id": 0,
+        "name": "S-HALF",
+        "description": "Oracle S-HALF",
+        "make": "Oracle",
+        "model": "S-HALF",
+        "serial": "",
+        "width": 1920,
+        "height": 1080,
+        "refreshRate": 60.0,
+        "x": 0,
+        "y": 0,
+        "activeWorkspace": {
+            "id": 1,
+            "name": "1"
+        },
+        "specialWorkspace": {
+            "id": 0,
+            "name": ""
+        },
+        "reserved": [
+            0,
+            0,
+            0,
+            0
+        ],
+        "scale": 0.5,
+        "transform": 0,
+        "focused": false,
+        "dpmsStatus": true,
+        "vrr": false,
+        "disabled": false,
+        "currentFormat": "XRGB8888",
+        "mirrorOf": "none"
+    },
+    {
+        "id": 0,
+        "name": "S-TINY",
+        "description": "Oracle S-TINY",
+        "make": "Oracle",
+        "model": "S-TINY",
+        "serial": "",
+        "width": 1920,
+        "height": 1080,
+        "refreshRate": 60.0,
+        "x": 0,
+        "y": 0,
+        "activeWorkspace": {
+            "id": 1,
+            "name": "1"
+        },
+        "specialWorkspace": {
+            "id": 0,
+            "name": ""
+        },
+        "reserved": [
+            0,
+            0,
+            0,
+            0
+        ],
+        "scale": 0.001,
+        "transform": 0,
+        "focused": false,
+        "dpmsStatus": true,
+        "vrr": false,
+        "disabled": false,
+        "currentFormat": "XRGB8888",
+        "mirrorOf": "none"
+    }
+]

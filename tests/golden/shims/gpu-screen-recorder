@@ -1,0 +1,10 @@
+#!/bin/sh
+# Stand-in for gpu-screen-recorder while the oracle runs (tests/golden/README.md, "Replayed programs"): with
+# OMAREEL_ORACLE_REPLAY_DIR set it answers from there (see replay.sh); otherwise it refuses, so
+# nothing reaches the real program.
+if [ -z "${OMAREEL_ORACLE_REPLAY_DIR+set}" ]; then
+    echo "gpu-screen-recorder shim: unexpected call: $*" >&2
+    exit 64
+fi
+. "$(dirname "$(readlink -f "$0")")/replay.sh"
+replay gpu-screen-recorder "$@"

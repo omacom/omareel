@@ -1,0 +1,6 @@
+[Parsed_volumedetect_0 @ 0x1] n_samples: 48000
+[Parsed_volumedetect_0 @ 0x1] mean_volume: -30.0 dB
+[Parsed_volumedetect_0 @ 0x1] max_volume: -10.0 dB
+[Parsed_volumedetect_1 @ 0x2] n_samples: 48000
+[Parsed_volumedetect_1 @ 0x2] mean_volume: -50.0 dB
+[Parsed_volumedetect_1 @ 0x2] max_volume: -40.0 dB

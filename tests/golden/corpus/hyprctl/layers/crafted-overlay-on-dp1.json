@@ -1,0 +1,57 @@
+{
+    "DP-1": {
+        "levels": {
+            "0": [
+                {
+                    "address": "0x1",
+                    "x": 0,
+                    "y": 0,
+                    "w": 100,
+                    "h": 40,
+                    "namespace": "omarchy-background",
+                    "pid": 1
+                }
+            ],
+            "2": [
+                {
+                    "address": "0x1",
+                    "x": 0,
+                    "y": 0,
+                    "w": 100,
+                    "h": 40,
+                    "namespace": "omareel-bar",
+                    "pid": 1
+                }
+            ],
+            "3": []
+        }
+    },
+    "HDMI-A-1": {
+        "levels": {
+            "0": [
+                {
+                    "address": "0x1",
+                    "x": 0,
+                    "y": 0,
+                    "w": 100,
+                    "h": 40,
+                    "namespace": "omarchy-background",
+                    "pid": 1
+                }
+            ],
+            "1": [],
+            "2": [
+                {
+                    "address": "0x1",
+                    "x": 0,
+                    "y": 0,
+                    "w": 100,
+                    "h": 40,
+                    "namespace": "waybar",
+                    "pid": 1
+                }
+            ],
+            "3": []
+        }
+    }
+}

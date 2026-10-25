@@ -78,6 +78,14 @@ int main(int argc, char **argv)
         {QStringLiteral("recordingpreferences"), runRecordingPreferences},
         {QStringLiteral("mediaprobe"), runMediaProbe},
         {QStringLiteral("composition"), runComposition},
+        {QStringLiteral("recorder"), runRecorder},
+        {QStringLiteral("regionpicker"), runRegionPicker},
+        {QStringLiteral("captureexclusion"), runCaptureExclusion},
+        {QStringLiteral("camera"), runCamera},
+        {QStringLiteral("recordingbar"), runRecordingBar},
+        {QStringLiteral("microphone"), runMicrophone},
+        {QStringLiteral("screencapture"), runScreenCapture},
+        {QStringLiteral("launcher"), runLauncher},
     };
     // For development only: OMAREEL_ORACLE_ONLY=qjson,theme runs a subset.
     const QStringList only = qEnvironmentVariable("OMAREEL_ORACLE_ONLY")
