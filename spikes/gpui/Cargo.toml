@@ -1,0 +1,45 @@
+[workspace]
+
+[package]
+name = "omareel-gpui-spike"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "GPL-3.0-or-later"
+
+[[bin]]
+name = "omareel-gpui"
+path = "src/main.rs"
+
+[features]
+# GPUI's frame profiler (draw and dirty-to-present histograms), for one measuring build:
+# cargo build --release --features gpui-profiler (in its own CARGO_TARGET_DIR).
+gpui-profiler = ["gpui/profiler", "dep:hdrhistogram"]
+
+[dependencies]
+hdrhistogram = { version = "7", optional = true, default-features = false }
+omareel_core = { path = "../../crates/omareel_core" }
+# Upstream GPUI from the Zed repository, pinned. Its Linux renderer is wgpu (gpui_wgpu).
+# `test-support` is only for the offscreen export: it is what enables GPUI's headless
+# renderer (gpui_wgpu::WgpuHeadlessRenderer), HeadlessAppContext and Window::render_to_image.
+gpui = { git = "https://github.com/zed-industries/zed", rev = "a5c4ca8bf6c4717a328a4a61b42d6d1d38949bcc", default-features = false, features = ["font-kit", "wayland", "test-support"] }
+gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "a5c4ca8bf6c4717a328a4a61b42d6d1d38949bcc", default-features = false, features = ["font-kit", "wayland", "test-support"] }
+gpui_wgpu = { git = "https://github.com/zed-industries/zed", rev = "a5c4ca8bf6c4717a328a4a61b42d6d1d38949bcc", features = ["font-kit", "test-support"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+smallvec = "1"
+# For bin/spike-pointer, the tests' click and drag helper.
+wayland-client = "0.31"
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+lyon = "1"
+
+# Zed's workspace patches these crates; a git dependency does not inherit [patch], so
+# they are repeated here (the same revisions as Zed's Cargo.toml at the pinned rev). The
+# spike also builds and runs without them (crates.io async-task, calloop 0.14.5,
+# khronos-egl); they are kept so GPUI runs on what Zed runs on.
+[patch.crates-io]
+async-task = { git = "https://github.com/zed-industries/async-task.git", rev = "015845a19fc31752c02367567d3b8900a406f9da" }
+calloop = { git = "https://github.com/zed-industries/calloop", rev = "3759371fee14c40066d64777e2a36b6ffcc22590" }
+khronos-egl = { git = "https://github.com/zed-industries/khronos-egl", rev = "42214b36347b108fd9630ca6254b96dde59e04fe" }
+
+[profile.release]
+debug = "line-tables-only"
