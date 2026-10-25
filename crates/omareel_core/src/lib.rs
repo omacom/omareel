@@ -3,3 +3,4 @@
 //! because the files omareel writes must stay byte-identical.
 
 pub mod cli;
+pub mod compat;
