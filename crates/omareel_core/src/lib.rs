@@ -8,4 +8,5 @@ pub mod cursor_path;
 pub mod easing;
 pub mod input_log;
 pub mod project;
+pub mod theme;
 pub mod zoom_timeline;
