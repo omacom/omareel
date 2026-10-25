@@ -20,6 +20,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
 
+# MultimediaPrivate for QCameraDevicePrivate, which the camera and launcher families build cameras
+# with; the oracle is tied to the Qt it is built against anyway (expected/qt-version.txt).
+set(QT_NO_PRIVATE_MODULE_WARNING ON)
 find_package(Qt6 6.8 REQUIRED COMPONENTS Core Gui Multimedia MultimediaPrivate)
 # The recording side (src/record) links what the app links: libevdev, libwayland-client and
 # libturbojpeg, and the capture protocols generated as the app's CMakeLists.txt does (the

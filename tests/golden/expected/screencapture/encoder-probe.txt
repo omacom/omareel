@@ -1,0 +1,85 @@
+encoderProbeCachePath	"$HOME/oracle-scratch/screencapture/cache/omareel/encoder-probe.json"
+encoderProbeKey	{"binary":"$HOME/oracle-scratch/screencapture/bin-ffmpeg/ffmpeg","driver":"{driver}","mtime_ms":1700000000000,"size":418}
+== no cache, both probes pass
+key	{"binary":"$HOME/oracle-scratch/screencapture/bin-ffmpeg/ffmpeg","driver":"{driver}","mtime_ms":1700000000000,"size":418}
+encoderProbeResults	true	true	false
+  call	["ffmpeg","-hide_banner","-loglevel","error","-f","lavfi","-i","color=size=256x256:rate=1","-frames:v","1","-c:v","h264_nvenc","-f","null","-"]
+  call	["ffmpeg","-hide_banner","-loglevel","error","-f","rawvideo","-pix_fmt","bgra","-s","256x256","-r","1","-i","pipe:0","-frames:v","1","-vf","hwupload_cuda,scale_cuda=format=nv12","-c:v","h264_nvenc","-f","null","-"]
+  stdin bytes	262144
+  cache	"{\x0a    \"gpuConversion\": true,\x0a    \"key\": {\x0a        \"binary\": \"$HOME/oracle-scratch/screencapture/bin-ffmpeg/ffmpeg\",\x0a        \"driver\": \"{driver}\",\x0a        \"mtime_ms\": 1700000000000,\x0a        \"size\": 418\x0a    },\x0a    \"preferred\": true\x0a}\x0a"	0644
+cachedPreferredEncoderAvailable	true
+== no cache, NVENC missing
+key	{"binary":"$HOME/oracle-scratch/screencapture/bin-ffmpeg/ffmpeg","driver":"{driver}","mtime_ms":1700000000000,"size":418}
+encoderProbeResults	false	false	false
+  call	["ffmpeg","-hide_banner","-loglevel","error","-f","lavfi","-i","color=size=256x256:rate=1","-frames:v","1","-c:v","h264_nvenc","-f","null","-"]
+  call	["ffmpeg","-hide_banner","-loglevel","error","-f","rawvideo","-pix_fmt","bgra","-s","256x256","-r","1","-i","pipe:0","-frames:v","1","-vf","hwupload_cuda,scale_cuda=format=nv12","-c:v","h264_nvenc","-f","null","-"]
+  stdin bytes	262144
+  cache	"{\x0a    \"gpuConversion\": false,\x0a    \"key\": {\x0a        \"binary\": \"$HOME/oracle-scratch/screencapture/bin-ffmpeg/ffmpeg\",\x0a        \"driver\": \"{driver}\",\x0a        \"mtime_ms\": 1700000000000,\x0a        \"size\": 418\x0a    },\x0a    \"preferred\": false\x0a}\x0a"	0644
+cachedPreferredEncoderAvailable	false
+== no cache, no GPU conversion
+key	{"binary":"$HOME/oracle-scratch/screencapture/bin-ffmpeg/ffmpeg","driver":"{driver}","mtime_ms":1700000000000,"size":418}
+encoderProbeResults	true	false	false
+  call	["ffmpeg","-hide_banner","-loglevel","error","-f","lavfi","-i","color=size=256x256:rate=1","-frames:v","1","-c:v","h264_nvenc","-f","null","-"]
+  call	["ffmpeg","-hide_banner","-loglevel","error","-f","rawvideo","-pix_fmt","bgra","-s","256x256","-r","1","-i","pipe:0","-frames:v","1","-vf","hwupload_cuda,scale_cuda=format=nv12","-c:v","h264_nvenc","-f","null","-"]
+  stdin bytes	262144
+  cache	"{\x0a    \"gpuConversion\": false,\x0a    \"key\": {\x0a        \"binary\": \"$HOME/oracle-scratch/screencapture/bin-ffmpeg/ffmpeg\",\x0a        \"driver\": \"{driver}\",\x0a        \"mtime_ms\": 1700000000000,\x0a        \"size\": 418\x0a    },\x0a    \"preferred\": true\x0a}\x0a"	0644
+cachedPreferredEncoderAvailable	true
+== no cache, only the conversion probe passes
+key	{"binary":"$HOME/oracle-scratch/screencapture/bin-ffmpeg/ffmpeg","driver":"{driver}","mtime_ms":1700000000000,"size":418}
+encoderProbeResults	false	true	false
+  call	["ffmpeg","-hide_banner","-loglevel","error","-f","lavfi","-i","color=size=256x256:rate=1","-frames:v","1","-c:v","h264_nvenc","-f","null","-"]
+  call	["ffmpeg","-hide_banner","-loglevel","error","-f","rawvideo","-pix_fmt","bgra","-s","256x256","-r","1","-i","pipe:0","-frames:v","1","-vf","hwupload_cuda,scale_cuda=format=nv12","-c:v","h264_nvenc","-f","null","-"]
+  stdin bytes	262144
+  cache	"{\x0a    \"gpuConversion\": true,\x0a    \"key\": {\x0a        \"binary\": \"$HOME/oracle-scratch/screencapture/bin-ffmpeg/ffmpeg\",\x0a        \"driver\": \"{driver}\",\x0a        \"mtime_ms\": 1700000000000,\x0a        \"size\": 418\x0a    },\x0a    \"preferred\": false\x0a}\x0a"	0644
+cachedPreferredEncoderAvailable	false
+== cache matches
+key	{"binary":"$HOME/oracle-scratch/screencapture/bin-ffmpeg/ffmpeg","driver":"{driver}","mtime_ms":1700000000000,"size":418}
+encoderProbeResults	true	false	true
+  stdin bytes	0
+  cache	"{\x0a    \"gpuConversion\": false,\x0a    \"key\": {\x0a        \"binary\": \"$HOME/oracle-scratch/screencapture/bin-ffmpeg/ffmpeg\",\x0a        \"driver\": \"{driver}\",\x0a        \"mtime_ms\": 1700000000000,\x0a        \"size\": 418\x0a    },\x0a    \"preferred\": true\x0a}\x0a"	0644
+cachedPreferredEncoderAvailable	true
+== cache with wrong types
+key	{"binary":"$HOME/oracle-scratch/screencapture/bin-ffmpeg/ffmpeg","driver":"{driver}","mtime_ms":1700000000000,"size":418}
+encoderProbeResults	false	false	true
+  stdin bytes	0
+  cache	"{\x0a    \"gpuConversion\": 1,\x0a    \"key\": {\x0a        \"binary\": \"$HOME/oracle-scratch/screencapture/bin-ffmpeg/ffmpeg\",\x0a        \"driver\": \"{driver}\",\x0a        \"mtime_ms\": 1700000000000,\x0a        \"size\": 418\x0a    },\x0a    \"preferred\": \"true\"\x0a}\x0a"	0644
+cachedPreferredEncoderAvailable	false
+== cache key differs (ffmpeg updated)
+key	{"binary":"$HOME/oracle-scratch/screencapture/bin-ffmpeg/ffmpeg","driver":"{driver}","mtime_ms":1700000001000,"size":418}
+encoderProbeResults	false	true	false
+  call	["ffmpeg","-hide_banner","-loglevel","error","-f","lavfi","-i","color=size=256x256:rate=1","-frames:v","1","-c:v","h264_nvenc","-f","null","-"]
+  call	["ffmpeg","-hide_banner","-loglevel","error","-f","rawvideo","-pix_fmt","bgra","-s","256x256","-r","1","-i","pipe:0","-frames:v","1","-vf","hwupload_cuda,scale_cuda=format=nv12","-c:v","h264_nvenc","-f","null","-"]
+  stdin bytes	262144
+  cache	"{\x0a    \"gpuConversion\": true,\x0a    \"key\": {\x0a        \"binary\": \"$HOME/oracle-scratch/screencapture/bin-ffmpeg/ffmpeg\",\x0a        \"driver\": \"{driver}\",\x0a        \"mtime_ms\": 1700000001000,\x0a        \"size\": 418\x0a    },\x0a    \"preferred\": false\x0a}\x0a"	0644
+cachedPreferredEncoderAvailable	false
+== cache is not JSON
+key	{"binary":"$HOME/oracle-scratch/screencapture/bin-ffmpeg/ffmpeg","driver":"{driver}","mtime_ms":1700000000000,"size":418}
+encoderProbeResults	true	true	false
+  call	["ffmpeg","-hide_banner","-loglevel","error","-f","lavfi","-i","color=size=256x256:rate=1","-frames:v","1","-c:v","h264_nvenc","-f","null","-"]
+  call	["ffmpeg","-hide_banner","-loglevel","error","-f","rawvideo","-pix_fmt","bgra","-s","256x256","-r","1","-i","pipe:0","-frames:v","1","-vf","hwupload_cuda,scale_cuda=format=nv12","-c:v","h264_nvenc","-f","null","-"]
+  stdin bytes	262144
+  cache	"{\x0a    \"gpuConversion\": true,\x0a    \"key\": {\x0a        \"binary\": \"$HOME/oracle-scratch/screencapture/bin-ffmpeg/ffmpeg\",\x0a        \"driver\": \"{driver}\",\x0a        \"mtime_ms\": 1700000000000,\x0a        \"size\": 418\x0a    },\x0a    \"preferred\": true\x0a}\x0a"	0644
+cachedPreferredEncoderAvailable	true
+== cache is an array
+key	{"binary":"$HOME/oracle-scratch/screencapture/bin-ffmpeg/ffmpeg","driver":"{driver}","mtime_ms":1700000000000,"size":418}
+encoderProbeResults	true	false	false
+  call	["ffmpeg","-hide_banner","-loglevel","error","-f","lavfi","-i","color=size=256x256:rate=1","-frames:v","1","-c:v","h264_nvenc","-f","null","-"]
+  call	["ffmpeg","-hide_banner","-loglevel","error","-f","rawvideo","-pix_fmt","bgra","-s","256x256","-r","1","-i","pipe:0","-frames:v","1","-vf","hwupload_cuda,scale_cuda=format=nv12","-c:v","h264_nvenc","-f","null","-"]
+  stdin bytes	262144
+  cache	"{\x0a    \"gpuConversion\": false,\x0a    \"key\": {\x0a        \"binary\": \"$HOME/oracle-scratch/screencapture/bin-ffmpeg/ffmpeg\",\x0a        \"driver\": \"{driver}\",\x0a        \"mtime_ms\": 1700000000000,\x0a        \"size\": 418\x0a    },\x0a    \"preferred\": true\x0a}\x0a"	0644
+cachedPreferredEncoderAvailable	true
+== cache directory not writable
+key	{"binary":"$HOME/oracle-scratch/screencapture/bin-ffmpeg/ffmpeg","driver":"{driver}","mtime_ms":1700000000000,"size":418}
+encoderProbeResults	true	true	false
+  call	["ffmpeg","-hide_banner","-loglevel","error","-f","lavfi","-i","color=size=256x256:rate=1","-frames:v","1","-c:v","h264_nvenc","-f","null","-"]
+  call	["ffmpeg","-hide_banner","-loglevel","error","-f","rawvideo","-pix_fmt","bgra","-s","256x256","-r","1","-i","pipe:0","-frames:v","1","-vf","hwupload_cuda,scale_cuda=format=nv12","-c:v","h264_nvenc","-f","null","-"]
+  stdin bytes	262144
+  cache	-	-
+cachedPreferredEncoderAvailable	false
+== ffmpeg not on PATH
+key	{"binary":"","driver":"{driver}","mtime_ms":0,"size":0}
+encoderProbeResults	false	false	false
+  stdin bytes	0
+  cache	"{\x0a    \"gpuConversion\": false,\x0a    \"key\": {\x0a        \"binary\": \"\",\x0a        \"driver\": \"{driver}\",\x0a        \"mtime_ms\": 0,\x0a        \"size\": 0\x0a    },\x0a    \"preferred\": false\x0a}\x0a"	0644
+cachedPreferredEncoderAvailable	false
+cachedPreferredEncoderAvailable	<no cache>	false

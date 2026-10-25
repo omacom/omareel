@@ -78,8 +78,8 @@ struct Launcher {
 
     QString stableCameraPath(const QString &node) const { return stablePaths.value(node, node); }
 
-    // src/ui/Launcher.cpp:224-249 (refreshAudioDevices) without emit audioDevicesChanged() and
-    // updateMicrophoneMeter(); returns whether recordingPreferencesChanged would be emitted.
+    // src/ui/Launcher.cpp:224-249 (refreshAudioDevices) without emit audioDevicesChanged();
+    // returns whether recordingPreferencesChanged would be emitted (lines 251-252).
     bool refreshAudioDevices()
     {
         QProcess process;
@@ -110,10 +110,11 @@ struct Launcher {
         return changed;
     }
 
-    // src/ui/Launcher.cpp:265-302 (refreshWebcamDevices) with the cameras given instead of
+    // src/ui/Launcher.cpp:265-303 (refreshWebcamDevices) with the cameras given instead of
     // QMediaDevices::videoInputs(), stableCameraPath and QFileInfo::exists answered by the
-    // members above, and what follows the early return (saving the preferences, telling the
-    // self-view host) left out; returns whether it got there.
+    // members above, and emit webcamDevicesChanged() and what follows line 303 (saving the
+    // preferences, telling the self-view host) left out; returns whether it got past the early
+    // return.
     bool refreshWebcamDevices(const QList<QCameraDevice> &videoInputs)
     {
         QVariantList devices;

@@ -1,0 +1,82 @@
+cameraName	"Cam Link 4K: Cam Link 4K"	"Cam Link 4K"
+cameraName	"Integrated Webcam: Integrated W"	"Integrated Webcam"
+cameraName	"Integrated Webcam: Integrated Webcam"	"Integrated Webcam"
+cameraName	"Insta360 Link 2: Insta360 Link 2"	"Insta360 Link 2"
+cameraName	"Insta360 Link 2: Insta360 Link 2 Control"	"Insta360 Link 2: Insta360 Link 2 Control"
+cameraName	"HD Pro Webcam C920"	"HD Pro Webcam C920"
+cameraName	"USB Camera: USB Camera: Video"	"USB Camera: USB Camera: Video"
+cameraName	": stream"	": stream"
+cameraName	"device: "	"device"
+cameraName	"device:  "	"device"
+cameraName	"a: b"	"a: b"
+cameraName	"Camera :Camera"	"Camera :Camera"
+cameraName	"  Spaced  :  Spaced  "	"Spaced"
+cameraName	"Laptop Camera: Laptop"	"Laptop Camera"
+cameraName	"Laptop: Laptop Camera"	"Laptop: Laptop Camera"
+cameraName	""	""
+cameraName	":"	":"
+cameraName	": "	": "
+cameraName	"x: x: x"	"x: x: x"
+cameraName	"Cámara: Cám"	"Cámara"
+cameraName	"Cam: cam"	"Cam: cam"
+cameraName	"Cam:Cam"	"Cam:Cam"
+formatDuration	0	"00:00"
+formatDuration	-0	"00:00"
+formatDuration	-1	"00:00"
+formatDuration	0.40000000000000002	"00:00"
+formatDuration	0.5	"00:01"
+formatDuration	0.49999999999999994	"00:01"
+formatDuration	1.5	"00:02"
+formatDuration	2.5	"00:03"
+formatDuration	59.399999999999999	"00:59"
+formatDuration	59.5	"01:00"
+formatDuration	60	"01:00"
+formatDuration	61	"01:01"
+formatDuration	599.5	"10:00"
+formatDuration	3599.4000000000001	"59:59"
+formatDuration	3600	"60:00"
+formatDuration	5999	"99:59"
+formatDuration	6000	"100:00"
+formatDuration	86399.5	"1440:00"
+formatDuration	359999	"5999:59"
+formatDuration	2147483646	"35791394:06"
+formatDuration	-2147483647	-
+formatDuration	nan	-
+formatDuration	inf	-
+formatDuration	-inf	-
+setWebcamHeight	720	720
+setWebcamHeight	1080	1080
+setWebcamHeight	0	1080
+setWebcamHeight	480	1080
+setWebcamHeight	721	1080
+setWebcamHeight	-720	1080
+setWebcamHeight	2160	1080
+setWebcamRotation	0	0
+setWebcamRotation	90	90
+setWebcamRotation	180	180
+setWebcamRotation	270	270
+setWebcamRotation	360	0
+setWebcamRotation	450	90
+setWebcamRotation	-90	270
+setWebcamRotation	-180	180
+setWebcamRotation	-270	90
+setWebcamRotation	-360	0
+setWebcamRotation	45	0
+setWebcamRotation	89	0
+setWebcamRotation	1	0
+setWebcamRotation	-1	0
+setWebcamRotation	720	0
+setWebcamRotation	2147483647	0
+setWebcamRotation	-2147483648	0
+setSelfViewSize	"S"	"S"
+setSelfViewSize	"m"	"M"
+setSelfViewSize	"l"	"L"
+setSelfViewSize	"XL"	"<ignored>"
+setSelfViewSize	""	"<ignored>"
+setSelfViewSize	" M"	"<ignored>"
+setSelfViewSize	"ß"	"<ignored>"
+setSelfViewSize	"ſ"	"S"
+captureExclusionNote	0	"Self-view hides while recording"
+captureExclusionNote	1	"Self-view hides while recording"
+captureExclusionNote	2	"Overlays move off the recorded screen while recording"
+captureExclusionNote	3	"Overlays move off the recorded screen while recording"

@@ -1,0 +1,40 @@
+== already hardware
+hold	["hyprctl","-j","getoption","cursor:no_hardware_cursors"]
+== automatic
+hold	["hyprctl","-j","getoption","cursor:no_hardware_cursors"]
+hold	["hyprctl","eval","hl.config({ cursor = { no_hardware_cursors = 0 } })"]
+release	["hyprctl","eval","hl.config({ cursor = { no_hardware_cursors = 2 } })"]
+== custom type
+hold	["hyprctl","-j","getoption","cursor:no_hardware_cursors"]
+== eval works only first
+hold	["hyprctl","-j","getoption","cursor:no_hardware_cursors"]
+hold	["hyprctl","eval","hl.config({ cursor = { no_hardware_cursors = 0 } })"]
+release	["hyprctl","eval","hl.config({ cursor = { no_hardware_cursors = 2 } })"]
+release	["hyprctl","keyword","cursor:no_hardware_cursors","2"]
+== getoption fails
+hold	["hyprctl","-j","getoption","cursor:no_hardware_cursors"]
+== hyprlang config
+hold	["hyprctl","-j","getoption","cursor:no_hardware_cursors"]
+hold	["hyprctl","eval","hl.config({ cursor = { no_hardware_cursors = 0 } })"]
+hold	["hyprctl","keyword","cursor:no_hardware_cursors","0"]
+release	["hyprctl","eval","hl.config({ cursor = { no_hardware_cursors = 1 } })"]
+release	["hyprctl","keyword","cursor:no_hardware_cursors","1"]
+== negative
+hold	["hyprctl","-j","getoption","cursor:no_hardware_cursors"]
+hold	["hyprctl","eval","hl.config({ cursor = { no_hardware_cursors = 0 } })"]
+== no such option
+hold	["hyprctl","-j","getoption","cursor:no_hardware_cursors"]
+== nothing works
+hold	["hyprctl","-j","getoption","cursor:no_hardware_cursors"]
+hold	["hyprctl","eval","hl.config({ cursor = { no_hardware_cursors = 0 } })"]
+hold	["hyprctl","keyword","cursor:no_hardware_cursors","0"]
+== real desktop
+hold	["hyprctl","-j","getoption","cursor:no_hardware_cursors"]
+hold	["hyprctl","eval","hl.config({ cursor = { no_hardware_cursors = 0 } })"]
+release	["hyprctl","eval","hl.config({ cursor = { no_hardware_cursors = 2 } })"]
+== software
+hold	["hyprctl","-j","getoption","cursor:no_hardware_cursors"]
+hold	["hyprctl","eval","hl.config({ cursor = { no_hardware_cursors = 0 } })"]
+release	["hyprctl","eval","hl.config({ cursor = { no_hardware_cursors = 1 } })"]
+== string value
+hold	["hyprctl","-j","getoption","cursor:no_hardware_cursors"]

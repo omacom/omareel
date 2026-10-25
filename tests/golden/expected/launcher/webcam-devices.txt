@@ -1,0 +1,39 @@
+== duplicate node
+devices	[{node="/dev/video0",text="First",value="/dev/v4l/by-id/usb-Laptop-video-index0"}]
+selected	"/dev/v4l/by-id/usb-Laptop-video-index0"	true
+== ids without nodes
+devices	[]
+selected	"/dev/video2"	false
+== laptop, chosen plugged in
+devices	[{node="/dev/video0",text="Integrated Webcam",value="/dev/v4l/by-id/usb-Laptop-video-index0"},{node="/dev/video4",text="Insta360 Link 2",value="/dev/v4l/by-id/usb-Insta360_Link_2-video-index0"}]
+selected	"/dev/v4l/by-id/usb-Insta360_Link_2-video-index0"	true
+== laptop, chosen unplugged
+devices	[{node="/dev/video0",text="Integrated Webcam",value="/dev/v4l/by-id/usb-Laptop-video-index0"}]
+selected	"/dev/v4l/by-id/usb-Laptop-video-index0"	true
+== laptop, current listed
+devices	[{node="/dev/video0",text="Integrated Webcam",value="/dev/v4l/by-id/usb-Laptop-video-index0"},{node="/dev/video4",text="Insta360 Link 2",value="/dev/v4l/by-id/usb-Insta360_Link_2-video-index0"}]
+selected	"/dev/v4l/by-id/usb-Laptop-video-index0"	false
+== laptop, nothing listed
+devices	[{node="/dev/video0",text="Integrated Webcam",value="/dev/v4l/by-id/usb-Laptop-video-index0"},{node="/dev/video4",text="Insta360 Link 2",value="/dev/v4l/by-id/usb-Insta360_Link_2-video-index0"}]
+selected	"/dev/v4l/by-id/usb-Laptop-video-index0"	true
+== no cameras, chosen elsewhere
+devices	[{text="/dev/video2",value="/dev/video2"}]
+selected	"/dev/video2"	false
+== no cameras, saved path exists
+devices	[{text="/dev/video2",value="/dev/video2"}]
+selected	"/dev/video2"	false
+== no cameras, saved path missing
+devices	[]
+selected	"/dev/video2"	false
+== only an ir sensor
+devices	[]
+selected	"/dev/video2"	false
+== stable path maps two nodes together
+devices	[{node="/dev/video4",text="A",value="/dev/v4l/by-id/usb-Insta360_Link_2-video-index0"},{node="/dev/video6",text="B",value="/dev/v4l/by-id/usb-Insta360_Link_2-video-index0"}]
+selected	"/dev/v4l/by-id/usb-Insta360_Link_2-video-index0"	true
+== three of a name
+devices	[{node="/dev/video0",text="Cam (/dev/video0)",value="/dev/v4l/by-id/usb-Laptop-video-index0"},{node="/dev/video2",text="Cam (/dev/video2)",value="/dev/v4l/by-path/usb-0:1:1.2"},{node="/dev/video8",text="Cam",value="/dev/video8"},{node="/dev/video4",text="Other",value="/dev/v4l/by-id/usb-Insta360_Link_2-video-index0"}]
+selected	"/dev/video8"	false
+== twins share a name
+devices	[{node="/dev/video4",text="USB Camera (/dev/video4)",value="/dev/v4l/by-id/usb-Insta360_Link_2-video-index0"},{node="/dev/video6",text="USB Camera",value="/dev/v4l/by-id/usb-Insta360_Link_2-video-index0"}]
+selected	"/dev/v4l/by-id/usb-Insta360_Link_2-video-index0"	false
