@@ -646,8 +646,8 @@ fn num_prints_like_glibc() {
     }
 }
 
-/// The variant cells of `composition/editor.txt` (whose rows come from Editor code with no Rust
-/// counterpart yet), rebuilt by hand with map keys out of order.
+/// The variant cells of `composition/editor.txt` (which `composition_editor.rs` regenerates
+/// whole on x86_64), rebuilt by hand with map keys out of order on every architecture.
 #[test]
 fn variant_prints_like_the_oracle() {
     use Variant::*;

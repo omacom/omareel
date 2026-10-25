@@ -43,11 +43,14 @@ mod history;
 mod ids;
 pub mod playback;
 mod presets;
+#[cfg(test)]
+mod tests;
 mod project_map;
 mod thumbnails;
 mod zooms;
 
 pub use bundle::*;
+pub use clips::ImportJob;
 pub use composition::*;
 pub use document::*;
 pub use exporting::*;

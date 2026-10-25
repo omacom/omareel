@@ -81,6 +81,16 @@ impl MotionJob {
     }
 }
 
+/// `QStandardPaths` locations the document uses; `None` reads them from the environment on
+/// each use, as Qt does.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Locations {
+    /// `ConfigLocation`, where presets live (`omareel/presets`).
+    pub config: Option<String>,
+    /// `CacheLocation`, where filmstrips live.
+    pub cache: Option<String>,
+}
+
 /// An open recording being edited (the state of `Editor` that is not Qt plumbing).
 pub struct Document {
     pub(crate) recording: Recording,
@@ -126,8 +136,15 @@ impl Document {
     /// [`Document::camera_thumbnail_job`] and `probeFrameTimes` (into
     /// [`Document::set_screen_frame_times`]), and the 1.5 s loading timer.
     pub fn open(bundle_path: &str, probes: &Probes) -> Result<Document, String> {
+        Document::open_with(bundle_path, probes, Locations::default())
+    }
+
+    /// [`Document::open`] with the standard locations given (for tests).
+    pub fn open_with(bundle_path: &str, probes: &Probes, locations: Locations) -> Result<Document, String> {
         let Bundle { recording, project, input, inserts, new_project } = load_bundle(bundle_path, probes)?;
         let mut document = Document::new(recording, project, input, inserts, probes.video.clone());
+        document.config_location = locations.config;
+        document.cache_location = locations.cache;
         if new_project {
             document.dirty = true;
             document.emit(Effect::StartAutosaveTimer);
@@ -211,6 +228,7 @@ impl Document {
     }
 
     /// `QStandardPaths::CacheLocation` (read on each use when `None`), where filmstrips live.
+    /// Thumbnail sources already made keep their directories.
     pub fn set_cache_location(&mut self, location: Option<String>) {
         self.cache_location = location;
     }
@@ -788,6 +806,16 @@ impl Document {
         self.emit(Effect::ProjectChanged);
     }
 }
+
+// The Qt side keeps the document in its QObject and hands the jobs to worker threads.
+const _: () = {
+    const fn assert_send<T: Send>() {}
+    assert_send::<Document>();
+    assert_send::<MotionJob>();
+    assert_send::<super::ImportJob>();
+    assert_send::<super::ThumbnailJob>();
+    assert_send::<super::CameraThumbnailJob>();
+};
 
 /// `nextScreenFrameTime` over a sorted list of frame times.
 pub fn next_screen_frame_time(frame_times: &[f64], source_time: f64, source_duration: f64) -> f64 {

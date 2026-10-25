@@ -16,7 +16,8 @@
 //!   chosen by a luminance computed with `pow`;
 //! - `layouttimeline/sample.txt`, whose transitions ease through glibc `pow`;
 //! - `motiontrack/sample.txt`: 240 Hz spring integration over thousands of steps, glibc's
-//!   `hypot`, and zoom targets eased with `pow` (the README defines it on x86_64 only).
+//!   `hypot`, and zoom targets eased with `pow` (the README defines it on x86_64 only);
+//! - `composition/editor.txt`, whose rows sample that motion track and ease layouts with `pow`.
 //!
 //! The Rust code follows each architecture's C++, so on aarch64 those files need not match.
 //! Everything else is byte formatting, parsing, or IEEE arithmetic that Rust evaluates the same
@@ -38,6 +39,8 @@ mod support;
 
 mod cameratimeline;
 mod cliptimeline;
+#[cfg(target_arch = "x86_64")]
+mod composition_editor;
 mod cursorpath;
 mod easing;
 mod inputlog;

@@ -57,7 +57,7 @@ impl Document {
 
     /// `clipBounds(index)`: how far a clip's in and out may move, between its recording
     /// neighbours, or within the inserted video (its out when the video did not probe).
-    pub fn clip_bounds(&mut self, index: i32) -> (f64, f64) {
+    pub(crate) fn clip_bounds(&mut self, index: i32) -> (f64, f64) {
         let clip = self.project.clips[index as usize].clone();
         if !clip.is_media() {
             return self.timeline().recording_bounds(index, self.recording.source_duration);
