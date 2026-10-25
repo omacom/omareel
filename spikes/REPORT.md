@@ -78,7 +78,7 @@ All three compiled with very few errors: one to three each, and rustc pointed at
 ## Verdict
 
 **Keep Qt Quick for now.**
-- It previews and exports at the same frame rates for a half to a quarter of the GPU time.
+- It previews at the same frame rates for a half to a quarter of the GPU time; its export is 20–30% slower than iced's or Slint's at 1080p; that speed comes from a wgpu renderer omareel can adopt without changing its UI (see below).
 - It decodes video in hardware.
 - It is already written.
 
