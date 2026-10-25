@@ -45,9 +45,15 @@ impl Finished {
 }
 
 /// Runs `program` and waits up to `timeout_ms` (negative: forever). `None` when it could not
-/// start or did not finish in time.
+/// start or did not finish in time. As in [`Process::start`], a program without a "/" is looked
+/// up with `QStandardPaths::findExecutable` and started with the path found as `argv[0]`; one
+/// not found does not start.
 pub fn run(program: &str, args: &[&str], timeout_ms: i64) -> Option<Finished> {
-    let mut child = Command::new(program)
+    let resolved = if program.contains('/') { program.to_string() } else { qstandardpaths::find_executable(program) };
+    if resolved.is_empty() {
+        return None;
+    }
+    let mut child = Command::new(&resolved)
         .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -1104,6 +1110,12 @@ mod tests {
         assert!(!done.succeeded());
         assert!(run("sh", &["-c", "true"], 5000).unwrap().succeeded());
         assert_eq!(run("/nonexistent/program", &[], 5000), None);
+        assert_eq!(run("omareel-no-such-program", &[], 5000), None);
+        // argv[0] is the path findExecutable found, as QProcess passes it, not the name asked for.
+        let cat = qstandardpaths::find_executable("cat");
+        assert!(cat.starts_with('/'), "{cat}");
+        let done = run("cat", &["/proc/self/cmdline"], 5000).unwrap();
+        assert_eq!(done.stdout, format!("{cat}\0/proc/self/cmdline\0").into_bytes());
         let started = Instant::now();
         assert_eq!(run("sleep", &["5"], 100), None);
         assert!(started.elapsed() < Duration::from_secs(2));
