@@ -29,6 +29,27 @@ class EditorTest : public QObject
 {
     Q_OBJECT
 private slots:
+    // An unparsable theme colour stays invalid, and its alpha variants keep their alpha, which
+    // Qt Quick draws as translucent black rather than opaque black.
+    void themeKeepsTheAlphaOfInvalidColours()
+    {
+        QTemporaryDir state;
+        QVERIFY(state.isValid());
+        QVERIFY(QDir().mkpath(state.filePath(QStringLiteral("theme"))));
+        QFile colors(state.filePath(QStringLiteral("theme/colors.toml")));
+        QVERIFY(colors.open(QIODevice::WriteOnly));
+        colors.write("background = \"#faf4ed\"\nforeground = \"#a9b1d\"\n");
+        colors.close();
+        const QByteArray previous = qgetenv("OMAREEL_OMARCHY_STATE_DIR");
+        qputenv("OMAREEL_OMARCHY_STATE_DIR", state.path().toUtf8());
+        Theme theme;
+        const QColor hairline = theme.property("hairline").value<QColor>();
+        QVERIFY(!hairline.isValid());
+        QCOMPARE(hairline.rgba64().alpha(), quint16(qRound(.10f * 65535)));
+        QVERIFY(!theme.property("foreground").value<QColor>().isValid());
+        qputenv("OMAREEL_OMARCHY_STATE_DIR", previous);
+    }
+
     void initTestCase()
     {
         configureVideoDecoding();

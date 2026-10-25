@@ -65,3 +65,10 @@ void ThemeFonts::setApplicationFont(const QString &family, int pixelSize)
     font.setPixelSize(pixelSize);
     QGuiApplication::setFont(font);
 }
+
+QString ThemeFonts::interfaceFamily()
+{
+    if (!resolvedFamily.isEmpty()) return resolvedFamily;
+    const QString bundled = bundledUiFamily();
+    return bundled.isEmpty() ? QStringLiteral("sans-serif") : bundled;
+}

@@ -23,4 +23,11 @@ QColor fromRgba64(quint16 red, quint16 green, quint16 blue, quint16 alpha)
     return QColor(QRgba64::fromRgba64(red, green, blue, alpha));
 }
 
+QColor invalidWithAlpha(quint16 alpha)
+{
+    QColor color;
+    color.setAlphaF(alpha / 65535.0f);
+    return color;
+}
+
 } // namespace Omareel::Shims

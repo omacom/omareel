@@ -94,6 +94,9 @@ static double outputAspect(const QString &aspect, int sourceWidth, int sourceHei
 static QVariantMap projectMap(const Project &project)
 {
     QVariantMap map = project.toJson().toVariantMap();
+    // A Theme built here used to set the application font as it loaded; the composition's
+    // text without a theme of its own falls back to that font.
+    ThemeFonts::setApplicationFont(ThemeFonts::interfaceFamily(), omareel::theme::bodyTextSize());
     map[QStringLiteral("renderTheme")] = QVariantMap{
         {QStringLiteral("background"), omareel::theme::renderBackground()},
         {QStringLiteral("foreground"), omareel::theme::renderForeground()}};

@@ -64,7 +64,7 @@ impl InputLog {
                 Err(error) => return Err(format!("Invalid JSON on line {}: {}", index + 1, error.error_string())),
             };
             let monotonic_us = object.value("t").to_variant_long_long();
-            let time = (monotonic_us - first_frame_us) as f64 / 1_000_000.0;
+            let time = monotonic_us.wrapping_sub(first_frame_us) as f64 / 1_000_000.0;
             if time < 0.0 || (duration >= 0.0 && time > duration) {
                 continue;
             }
@@ -94,7 +94,7 @@ impl InputLog {
         if duration < 0.0 {
             let stopped = object.value("stopped_us").to_variant_long_long();
             if stopped > first {
-                duration = (stopped - first) as f64 / 1_000_000.0;
+                duration = stopped.wrapping_sub(first) as f64 / 1_000_000.0;
             }
         }
         InputLog::load(format!("{bundle_path}/input.jsonl"), first, duration)

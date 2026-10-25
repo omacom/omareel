@@ -41,6 +41,8 @@ QString configuredFamily();
 QString bundledUiFamily();
 // Sets the application font, when there is a QGuiApplication.
 void setApplicationFont(const QString &family, int pixelSize);
+// The face Theme uses: the one main() resolved, else the bundled Inter, else "sans-serif".
+QString interfaceFamily();
 } // namespace ThemeFonts
 
 } // namespace Omareel
