@@ -89,6 +89,10 @@ started (CXX-Qt 0.10, Qt 6.11):
 - `src/record/Recorder.cpp` and `CursorSampler.cpp` are thin C++ wrappers over the Rust state
   layer and cursor query for the launcher, the recording bar and its windows, until those move;
   state file objects cross the bridge as JSON text.
+- `tools/parity/recording/recording-parity.py` records the same sessions with two binaries in
+  the nested compositor (`tests/tools/nested-hyprland.sh`) and compares what each did: CLI
+  output, state files, bundles, the argv of every program it ran, notifications and journal
+  entries, and with `--latency` the time to the first frame.
 
 ## Build notes
 
