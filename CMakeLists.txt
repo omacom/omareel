@@ -164,6 +164,7 @@ qt_add_qml_module(omareel_render
         src/render/FfmpegDecoder.h src/render/FfmpegDecoder.cpp
         src/render/MediaProbe.h src/render/MediaProbe.cpp
         src/render/Exporter.h src/render/Exporter.cpp
+        src/render/ExportRenderer.h src/render/ExportRenderer.cpp
         src/render/EncoderPipe.h src/render/EncoderPipe.cpp
         src/render/PreviewSink.h src/render/PreviewSink.cpp
         src/render/VideoDecoding.h src/render/VideoDecoding.cpp
