@@ -1,0 +1,100 @@
+crafted-aspect-16-9.json	unchanged	""	0644
+crafted-aspect-auto-string.json	unchanged	""	0644
+crafted-aspect-invalid.json	unchanged	""	0644
+crafted-aspect-missing.json	unchanged	""	0644
+crafted-aspect-null.json	unchanged	""	0644
+crafted-aspect-number.json	unchanged	""	0644
+crafted-big-integers.json	unchanged	"illegal number"	0644
+crafted-bom.json	unchanged	""	0644
+crafted-camera-inset-legacy.json	unchanged	""	0644
+crafted-camera-mirror-and-flip.json	unchanged	""	0644
+crafted-camera-mirror-legacy.json	unchanged	""	0644
+crafted-camera-rotation-270.json	unchanged	""	0644
+crafted-camera-rotation-double.json	unchanged	""	0644
+crafted-camera-rotations.json	unchanged	""	0644
+crafted-clamps-high.json	unchanged	""	0644
+crafted-clamps.json	unchanged	""	0644
+crafted-colours-alpha-and-12-bit.json	unchanged	""	0644
+crafted-compact-current.json	unchanged	""	0644
+crafted-current-reordered.json	unchanged	""	0644
+crafted-cursor-macos-style.json	unchanged	""	0644
+crafted-cursor-styles.json	unchanged	""	0644
+crafted-defaults-version-double.json	rewritten	""	0644
+crafted-defaults-version-negative.json	rewritten	""	0644
+crafted-defaults-version-string.json	rewritten	""	0644
+crafted-duplicate-keys.json	rewritten	""	0644
+crafted-edited.json	unchanged	""	0644
+crafted-empty-file.json	unchanged	"illegal value"	0644
+crafted-empty-object.json	rewritten	""	0644
+crafted-gradient-empty-stops.json	unchanged	""	0644
+crafted-gradient-no-stops-key.json	unchanged	""	0644
+crafted-invalid-json.json	unchanged	"unterminated object"	0644
+crafted-missing-sections.json	unchanged	""	0644
+crafted-name-null.json	unchanged	""	0644
+crafted-numbers-precision.json	unchanged	""	0644
+crafted-only-name.json	rewritten	""	0644
+crafted-phase1-old-defaults.json	rewritten	""	0644
+crafted-phase1-opacity-and-intensity.json	rewritten	""	0644
+crafted-phase1-opacity-offsety.json	rewritten	""	0644
+crafted-top-level-array.json	unchanged	"no error occurred"	0644
+crafted-top-level-string.json	unchanged	"illegal value"	0644
+crafted-trailing-garbage.json	unchanged	"garbage at the end of the document"	0644
+crafted-unknown-keys.json	unchanged	""	0644
+crafted-v0-camera-crop.json	rewritten	""	0644
+crafted-v1-customised-shadow.json	rewritten	""	0644
+crafted-v1-empty-inset.json	rewritten	""	0644
+crafted-v1-empty-shadow.json	rewritten	""	0644
+crafted-v1-frame-not-object.json	rewritten	""	0644
+crafted-v1-inset-alpha.json	rewritten	""	0644
+crafted-v1-inset-and-border.json	rewritten	""	0644
+crafted-v1-inset-colour-invalid.json	rewritten	""	0644
+crafted-v1-inset-colour.json	rewritten	""	0644
+crafted-v1-inset-enabled.json	rewritten	""	0644
+crafted-v1-inset-width.json	rewritten	""	0644
+crafted-v1-no-frame.json	rewritten	""	0644
+crafted-v1-shadow-angle-45.json	rewritten	""	0644
+crafted-v1-shadow-disabled.json	rewritten	""	0644
+crafted-v1-shadow-nearly-equal.json	rewritten	""	0644
+crafted-v1-shadow-no-angle.json	rewritten	""	0644
+crafted-v1-unicode-name.json	rewritten	""	0644
+crafted-v1-untouched-defaults.json	rewritten	""	0644
+crafted-v2-camera-not-object.json	rewritten	""	0644
+crafted-v2-camera-round.json	rewritten	""	0644
+crafted-v2-camera-rounded-original.json	rewritten	""	0644
+crafted-v2-camera-rounded-square.json	rewritten	""	0644
+crafted-v2-camera-shape-number.json	rewritten	""	0644
+crafted-v2-camera-square-no-crop.json	rewritten	""	0644
+crafted-v2-camera-square-original.json	rewritten	""	0644
+crafted-v2-camera-square-square.json	rewritten	""	0644
+crafted-v2-camera-unknown-shape.json	rewritten	""	0644
+crafted-v2-no-camera.json	rewritten	""	0644
+crafted-v3-camera-shape-square.json	rewritten	""	0644
+crafted-v3-customised-border.json	rewritten	""	0644
+crafted-v3-customised-offset.json	rewritten	""	0644
+crafted-v3-customised-shadow.json	rewritten	""	0644
+crafted-v3-no-camera-shadow.json	rewritten	""	0644
+crafted-v3-shadow-bool.json	rewritten	""	0644
+crafted-v3-untouched-camera.json	rewritten	""	0644
+crafted-v4-keeps-width-2.json	unchanged	""	0644
+crafted-v5-future.json	unchanged	""	0644
+crafted-whitespace-only.json	unchanged	"illegal value"	0644
+crafted-wrong-types.json	unchanged	""	0644
+history-01-2026-09-02-9491d89.json	rewritten	""	0644
+history-02-2026-09-02-96d74f9.json	rewritten	""	0644
+history-03-2026-09-02-8fe3b79.json	rewritten	""	0644
+history-04-2026-09-02-a78cada.json	rewritten	""	0644
+history-05-2026-09-02-b6086f0.json	rewritten	""	0644
+history-06-2026-09-02-09237b4.json	rewritten	""	0644
+history-07-2026-09-04-72e8c75.json	rewritten	""	0644
+history-08-2026-09-04-deb7f8f.json	rewritten	""	0644
+history-09-2026-09-04-190548e.json	rewritten	""	0644
+history-10-2026-10-13-63b2faa.json	rewritten	""	0644
+history-11-2026-10-13-ff60bf3.json	rewritten	""	0644
+history-12-2026-10-14-7d8a48b.json	rewritten	""	0644
+history-13-2026-10-24-c929172.json	unchanged	""	0644
+special-missing-file.json	unchanged	"No such file or directory"
+special-directory.json	unchanged	"file to open is a directory"	0755
+special-unreadable.json	unchanged	"Permission denied"	0000
+special-legacy-in-read-only-directory.json	unchanged	"Permission denied"	0644
+special-legacy-read-only-file.json	unchanged	"Existing file $HOME/oracle-scratch/project/special/read-only-file.json is not writable"	0440
+special-legacy-mode-0750.json	rewritten	""	0750

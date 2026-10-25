@@ -1,0 +1,26 @@
+{
+    "bool": true,
+    "double": 2.5,
+    "float": 0.10000000149011612,
+    "int": 1,
+    "integralDouble": 3,
+    "invalid": null,
+    "list": [
+        1,
+        "two",
+        3
+    ],
+    "longlong": 36028797018963968,
+    "map": {
+        "k": 1
+    },
+    "nan": null,
+    "null": null,
+    "string": "s",
+    "stringList": [
+        "a",
+        "b"
+    ],
+    "uint": 4294967295,
+    "ulonglong": 18446744073709552000
+}

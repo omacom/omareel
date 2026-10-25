@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DOMAREEL_BUILD_HYPRLAND_PLUGIN=ON
-ninja -C build
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "omareel: building needs Rust; install it with: sudo pacman -S rust corrosion" >&2
+  exit 1
+fi
+build_dir="${BUILD_DIR:-build}"
+cmake -B "$build_dir" -G Ninja -DCMAKE_BUILD_TYPE=Release -DOMAREEL_BUILD_HYPRLAND_PLUGIN=ON "$@"
+ninja -C "$build_dir"

@@ -1,0 +1,65 @@
+{
+    "version": "1",
+    "defaultsVersion": 4,
+    "name": 42,
+    "aspect": [
+        "16:9"
+    ],
+    "crop": [
+        0,
+        0,
+        1,
+        1
+    ],
+    "clips": {
+        "id": "c1"
+    },
+    "zooms": "none",
+    "zoomStyle": [],
+    "background": "black",
+    "frame": {
+        "padding": "0.2",
+        "radius": null,
+        "shadow": [],
+        "border": "on"
+    },
+    "cursor": {
+        "visible": "yes",
+        "size": "big",
+        "smoothing": "true",
+        "spring": 5,
+        "hideWhenIdleMs": "500",
+        "style": 1,
+        "ringColor": 255,
+        "clickSound": true
+    },
+    "keystrokes": {
+        "enabled": 1,
+        "size": "2",
+        "holdMs": 2.7
+    },
+    "audio": {
+        "desktop": 0,
+        "mic": "false",
+        "volume": "loud"
+    },
+    "camera": {
+        "enabled": "true",
+        "rotation": "90",
+        "radius": "8",
+        "mirror": 1,
+        "offset": [
+            0.1,
+            0.1
+        ],
+        "fullFrame": 1
+    },
+    "export": {
+        "fps": 29.97,
+        "height": "720",
+        "gif": {
+            "fps": 12.5,
+            "loop": "no"
+        }
+    }
+}

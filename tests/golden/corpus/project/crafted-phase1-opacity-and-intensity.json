@@ -1,0 +1,90 @@
+{
+    "aspect": "auto",
+    "audio": {
+        "desktop": true,
+        "mic": true,
+        "volume": 1
+    },
+    "background": {
+        "blur": 0,
+        "color": "#1a1b26",
+        "gradient": {
+            "angle": 135,
+            "stops": [
+                [
+                    "#ff8a00",
+                    0
+                ],
+                [
+                    "#e52e71",
+                    1
+                ]
+            ]
+        },
+        "image": null,
+        "type": "wallpaper",
+        "wallpaper": "omarchy:current"
+    },
+    "clips": [
+        {
+            "id": "c1",
+            "in": 0,
+            "out": 8.25,
+            "speed": 1
+        }
+    ],
+    "crop": {
+        "h": 1,
+        "w": 1,
+        "x": 0,
+        "y": 0
+    },
+    "cursor": {
+        "clickEffect": "ripple",
+        "clickShrink": 0.85,
+        "hideWhenIdleMs": null,
+        "size": 1.5,
+        "smoothing": 0.8,
+        "style": "macos",
+        "visible": true
+    },
+    "export": {
+        "format": "mp4",
+        "fps": 60,
+        "gif": {
+            "fps": 20,
+            "width": 960
+        },
+        "quality": "high",
+        "width": 1920
+    },
+    "frame": {
+        "inset": {
+            "alpha": 0.5,
+            "color": "#000000",
+            "enabled": false,
+            "width": 0
+        },
+        "padding": 0.08,
+        "radius": 12,
+        "shadow": {
+            "enabled": true,
+            "opacity": 0.75,
+            "intensity": 0.5,
+            "blur": 20,
+            "offsetY": 25,
+            "distance": 30
+        }
+    },
+    "name": "Recording 01",
+    "version": 1,
+    "zoomStyle": {
+        "easing": "easeInOutCubic",
+        "followDeadZone": 0.12,
+        "followSmoothing": 0.85,
+        "lookahead": 0,
+        "transitionIn": 0.7,
+        "transitionOut": 0.7
+    },
+    "zooms": []
+}

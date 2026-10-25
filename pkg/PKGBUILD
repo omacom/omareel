@@ -8,7 +8,8 @@ arch=('x86_64' 'aarch64')
 url='https://github.com/omacom/omareel'
 license=('MIT')
 install='omareel.install'
-options=('!debug')
+# LTO would put GCC bytecode inside the Rust static library, which then fails to link.
+options=('!debug' '!lto')
 depends=(
   'ffmpeg'
   'gpu-screen-recorder'
@@ -25,7 +26,9 @@ depends=(
   'xdg-desktop-portal'
 )
 makedepends=(
+  'cargo'
   'cmake'
+  'corrosion'
   'ninja'
   'pkgconf'
   'qt6-shadertools'
@@ -36,22 +39,30 @@ conflicts=('omarecord')
 source=()
 sha256sums=()
 
+prepare() {
+  cd "$startdir/.."
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+# A build directory of its own, so the package is built with makepkg's flags.
 build() {
   cd "$startdir/.."
-  ./bin/build
+  BUILD_DIR=build-pkg ./bin/build
 }
 
 package() {
   cd "$startdir/.."
-  install -Dm755 build/omareel "$pkgdir/usr/bin/omareel"
+  install -Dm755 build-pkg/omareel "$pkgdir/usr/bin/omareel"
   ln -s omareel "$pkgdir/usr/bin/omarecord"
-  if [[ -f build/plugin/omareel-capture-exclude.so ]]; then
-    install -Dm755 build/plugin/omareel-capture-exclude.so "$pkgdir/usr/lib/omareel/omareel-capture-exclude.so"
-    install -Dm644 build/plugin/omareel-capture-exclude.so.hash "$pkgdir/usr/lib/omareel/omareel-capture-exclude.so.hash"
+  if [[ -f build-pkg/plugin/omareel-capture-exclude.so ]]; then
+    install -Dm755 build-pkg/plugin/omareel-capture-exclude.so "$pkgdir/usr/lib/omareel/omareel-capture-exclude.so"
+    install -Dm644 build-pkg/plugin/omareel-capture-exclude.so.hash "$pkgdir/usr/lib/omareel/omareel-capture-exclude.so.hash"
   fi
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
   install -Dm644 LICENSES/lucide.txt "$pkgdir/usr/share/licenses/$pkgname/lucide.txt"
   install -Dm644 LICENSES/inter.txt "$pkgdir/usr/share/licenses/$pkgname/inter.txt"
+  install -Dm644 LICENSES/cxx-qt-cmake-MIT.txt "$pkgdir/usr/share/licenses/$pkgname/cxx-qt-cmake-MIT.txt"
+  install -Dm644 LICENSES/rust-crates.txt "$pkgdir/usr/share/licenses/$pkgname/rust-crates.txt"
   install -Dm644 "$startdir/omareel.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/omareel.svg"
   local size
   for size in 16 32 48 64 128 256 512; do

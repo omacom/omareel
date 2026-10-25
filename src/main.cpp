@@ -1,18 +1,17 @@
 #include "ui/CaptureTestClient.h"
 #include <qpa/qplatformnativeinterface.h>
 #include <wayland-client.h>
-#include "core/InputLog.h"
-#include "core/ZoomTimeline.h"
 #include "record/CameraCapture.h"
 #include "record/Recorder.h"
 #include "render/Exporter.h"
 #include "render/VideoDecoding.h"
-#include "core/Theme.h"
 #include "core/OmarchyPaths.h"
 #include "core/RecordingPreferences.h"
 #include "ui/Editor.h"
 #include "ui/Launcher.h"
 #include "ui/RecordingBar.h"
+#include "omareel_qt/src/cli.cxxqt.h"
+#include "omareel_qt/src/theme.cxxqt.h"
 
 #include <LayerShellQt/shell.h>
 #include <LayerShellQt/window.h>
@@ -97,54 +96,14 @@ static ResolvedFonts resolveFonts()
         family = QString::fromUtf8(match.readAllStandardOutput()).trimmed();
     if (family.isEmpty()) family = QFontDatabase::systemFont(QFontDatabase::FixedFont).family();
     qInfo().noquote() << "omareel: fontconfig monospace ->" << family;
-    QString ui = Theme::bundledUiFamily();
+    QString ui = ThemeFonts::bundledUiFamily();
     if (ui.isEmpty()) ui = QFontDatabase::systemFont(QFontDatabase::GeneralFont).family();
     return {ui, family};
 }
 
-static int shellFontBaseSize()
-{
-    QFile file(QDir(OmarchyPaths::stateRoot()).filePath(QStringLiteral("theme/shell.toml")));
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return 12;
-    bool inFont = false;
-    const QRegularExpression section(QStringLiteral(R"(^\s*\[([^]]+)\])"));
-    const QRegularExpression base(QStringLiteral(R"(^\s*base-size\s*=\s*(\d+))"));
-    while (!file.atEnd()) {
-        const QString line = QString::fromUtf8(file.readLine());
-        const auto sectionMatch = section.match(line);
-        if (sectionMatch.hasMatch()) { inFont = sectionMatch.captured(1) == QLatin1String("font"); continue; }
-        const auto baseMatch = base.match(line);
-        if (inFont && baseMatch.hasMatch()) return qMax(1, baseMatch.captured(1).toInt());
-    }
-    return 12;
-}
-
 static int usage(const QString &error = {})
 {
-    QTextStream stream(error.isEmpty() ? stdout : stderr);
-    if (!error.isEmpty()) stream << "omareel: " << error << '\n';
-    stream << "usage: omareel [command]\n\n"
-              "commands:\n"
-              "  record [--region|--fullscreen|--window] [options]\n"
-              "      Toggle recording (smart gesture is the default: drag an area, click a\n"
-              "      window, or click the desktop for the whole screen). Options: --fps N,\n"
-              "      --dir PATH,\n"
-              "      --with-desktop-audio, --with-microphone-audio, --no-audio,\n"
-              "      --with-webcam, --webcam-device PATH, --webcam-height 720|1080,\n"
-              "      --no-webcam, --no-selfview, --no-open, --no-bar,\n"
-              "      --stop, --cancel.\n"
-              "  edit <bundle.omareel>\n"
-              "      Open a recording bundle in the editor.\n"
-              "  export <bundle> -o <file.mp4|file.gif> [options]\n"
-              "      Export with --fps N, --width W, --quality LEVEL, --gif-fps N,\n"
-              "      --gif-width W, or --timing.\n"
-              "  probe <bundle>\n"
-              "      Print a JSON summary of a recording bundle.\n"
-              "  help\n"
-              "      Show this help.\n\n"
-              "Running omareel without a command opens the launcher.\n"
-              "The legacy omarecord command remains available as a compatibility alias.\n";
-    return error.isEmpty() ? 0 : 2;
+    return omareel::cli::usage(error.toStdString());
 }
 
 static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplication &app)
@@ -468,59 +427,6 @@ static void configureOverlayRule(const QString &scope)
         qWarning().noquote() << "omareel: could not apply the overlay animation rule";
 }
 
-static QJsonObject videoInfo(const QString &path)
-{
-    QProcess process;
-    process.start(QStringLiteral("ffprobe"), {QStringLiteral("-v"), QStringLiteral("error"),
-        QStringLiteral("-select_streams"), QStringLiteral("v:0"),
-        QStringLiteral("-show_entries"), QStringLiteral("stream=width,height,r_frame_rate:format=duration"),
-        QStringLiteral("-of"), QStringLiteral("json"), path});
-    if (!process.waitForFinished(10000) || process.exitCode() != 0) return {};
-    return QJsonDocument::fromJson(process.readAllStandardOutput()).object();
-}
-
-static double fraction(const QString &text)
-{
-    const auto parts = text.split('/');
-    if (parts.size() == 2 && parts[1].toDouble() != 0.0) return parts[0].toDouble() / parts[1].toDouble();
-    return text.toDouble();
-}
-
-static int probeCommand(const QString &bundle)
-{
-    const QFileInfo bundleInfo(bundle);
-    if (!bundleInfo.isDir()) return usage(QStringLiteral("bundle does not exist: %1").arg(bundle));
-    const auto info = videoInfo(QDir(bundle).filePath(QStringLiteral("screen.mp4")));
-    const auto streams = info.value("streams").toArray();
-    if (streams.isEmpty()) return usage(QStringLiteral("screen.mp4 could not be probed"));
-    const auto stream = streams.first().toObject();
-    const double duration = info.value("format").toObject().value("duration").toString().toDouble();
-    QString error;
-    const auto input = InputLog::loadBundle(bundle, duration, &error);
-    if (!error.isEmpty()) return usage(error);
-    QVector<double> clickTimes;
-    for (const auto &click : input.clickDowns(true)) clickTimes << click.time;
-    const auto zooms = ZoomTimeline::generate(clickTimes, duration);
-    QJsonArray zoomJson;
-    for (const auto &zoom : zooms) {
-        zoomJson << QJsonObject{{"id", zoom.id}, {"start", zoom.start}, {"end", zoom.end},
-                                {"level", zoom.level}, {"target", ZoomTimeline::targetToJson(zoom)}};
-    }
-    const auto metadata = Recorder::readStateFile(bundle + "/capture.json");
-    QJsonObject output{{"overlay_exclusion", metadata.value("overlay_exclusion").toString("fallback")},
-                       {"duration", duration},
-                       {"fps", fraction(stream.value("r_frame_rate").toString())},
-                       {"size", QJsonObject{{"width", stream.value("width").toInt()},
-                                             {"height", stream.value("height").toInt()}}},
-                       {"sample_count", input.moves().size()},
-                       {"click_count", input.clickDowns().size()},
-                       {"key_count", input.keyCount()},
-                       {"generated_zoom_count", zooms.size()}, {"zooms", zoomJson}};
-    if (QFileInfo::exists(bundle + "/camera.mp4")) output.insert("camera", videoInfo(bundle + "/camera.mp4"));
-    QTextStream(stdout) << QJsonDocument(output).toJson(QJsonDocument::Indented);
-    return 0;
-}
-
 int main(int argc, char **argv)
 {
     // QProcess resolves executables to absolute paths, but Omarchy's REC indicator intentionally
@@ -575,9 +481,9 @@ int main(int argc, char **argv)
     app.setApplicationVersion(QStringLiteral(OMAREEL_VERSION));
     const ResolvedFonts resolvedFonts = resolveFonts();
     QFont applicationFont(resolvedFonts.ui);
-    applicationFont.setPixelSize(qRound(shellFontBaseSize() * 1.083));
+    applicationFont.setPixelSize(qRound(omareel::theme::shellFontBaseSize() * 1.083));
     QGuiApplication::setFont(applicationFont);
-    Theme::setFontFamilies(resolvedFonts.ui, resolvedFonts.mono);
+    ThemeFonts::setConfiguredFamily(resolvedFonts.ui);
     if (graphical)
         QTextStream(stderr) << "omareel: application font " << resolvedFonts.ui
                             << " at " << applicationFont.pixelSize() << " px\n";
@@ -839,7 +745,7 @@ int main(int argc, char **argv)
     if (command == QLatin1String("record")) return recordCommand(args.mid(2));
     if (command == QLatin1String("probe")) {
         if (args.size() != 3) return usage(QStringLiteral("probe requires a bundle"));
-        return probeCommand(QDir(args[2]).absolutePath());
+        return omareel::cli::probe(QDir(args[2]).absolutePath().toStdString());
     }
     if (command == QLatin1String("export")) return exportCommand(args.mid(2));
     if (command == QLatin1String("edit")) {

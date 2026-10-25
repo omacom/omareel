@@ -5,3 +5,5 @@ compile_commands.json
 pkg/pkg/
 pkg/src/
 pkg/*.pkg.tar.*
+/target/
+build-pkg/

@@ -1,0 +1,144 @@
+== scalars
+""	Object	-7	-7	-7	false	"<def>"	QVariantMap	""	0
+"/double1e20"	Double	-7	-7	1e+20	false	"<def>"	double	"1e+20"	9223372036854775807
+"/double1e300"	Double	-7	-7	1.0000000000000001e+300	false	"<def>"	double	"1e+300"	9223372036854775807
+"/doubleHalf"	Double	-7	-7	0.5	false	"<def>"	double	"0.5"	1
+"/doubleThird"	Double	-7	-7	0.33333333333333331	false	"<def>"	double	"0.3333333333333333"	0
+"/doubleTiny"	Double	-7	-7	4.9406564584124654e-324	false	"<def>"	double	"5e-324"	0
+"/doubleTwoPow53"	Double	-7	9007199254740992	9007199254740992	false	"<def>"	qlonglong	"9007199254740992"	9007199254740992
+"/doubleTwoPow63"	Double	-7	-7	9.2233720368547758e+18	false	"<def>"	double	"9223372036854776000"	9223372036854775807
+"/emptyString"	String	-7	-7	-7	false	""	QString	""	0
+"/false"	Bool	-7	-7	-7	false	"<def>"	bool	"false"	0
+"/float"	Double	-7	-7	0.10000000149011612	false	"<def>"	double	"0.10000000149011612"	0
+"/inf"	Double	-7	-7	inf	false	"<def>"	double	"inf"	9223372036854775807
+"/int"	Double	7	7	7	false	"<def>"	qlonglong	"7"	7
+"/int64Big"	Double	-7	1152921504606846976	1.152921504606847e+18	false	"<def>"	qlonglong	"1152921504606846976"	1152921504606846976
+"/int64Max"	Double	-7	9223372036854775807	9.2233720368547758e+18	false	"<def>"	qlonglong	"9223372036854775807"	9223372036854775807
+"/int64Min"	Double	-7	-9223372036854775808	-9.2233720368547758e+18	false	"<def>"	qlonglong	"-9223372036854775808"	-9223372036854775808
+"/int64TwoPow53Plus1"	Double	-7	9007199254740993	9007199254740992	false	"<def>"	qlonglong	"9007199254740993"	9007199254740993
+"/nan"	Double	-7	-7	nan	false	"<def>"	double	"nan"	0
+"/negativeInf"	Double	-7	-7	-inf	false	"<def>"	double	"-inf"	-9223372036854775808
+"/negativeZero"	Double	0	0	0	false	"<def>"	qlonglong	"0"	0
+"/null"	Null	-7	-7	-7	false	"<def>"	std::nullptr_t	""	0
+"/string"	String	-7	-7	-7	false	"x"	QString	"x"	0
+"/true"	Bool	-7	-7	-7	true	"<def>"	bool	"true"	1
+"/two"	Double	2	2	2	false	"<def>"	qlonglong	"2"	2
+== undefined-in-object
+""	Object	-7	-7	-7	false	"<def>"	QVariantMap	""	0
+"/after"	Double	2	2	2	false	"<def>"	qlonglong	"2"	2
+== undefined-in-array
+""	Array	-7	-7	-7	false	"<def>"	QVariantList	""	0
+"/0"	Null	-7	-7	-7	false	"<def>"	std::nullptr_t	""	0
+"/1"	Double	1	1	1	false	"<def>"	qlonglong	"1"	1
+"/2"	Null	-7	-7	-7	false	"<def>"	std::nullptr_t	""	0
+== undefined-initializer-list
+""	Object	-7	-7	-7	false	"<def>"	QVariantMap	""	0
+"/a"	Array	-7	-7	-7	false	"<def>"	QVariantList	""	0
+"/a/0"	Null	-7	-7	-7	false	"<def>"	std::nullptr_t	""	0
+"/o"	Object	-7	-7	-7	false	"<def>"	QVariantMap	""	0
+== nested
+""	Object	-7	-7	-7	false	"<def>"	QVariantMap	""	0
+"/a"	Double	2	2	2	false	"<def>"	qlonglong	"2"	2
+"/array"	Array	-7	-7	-7	false	"<def>"	QVariantList	""	0
+"/array/0"	Object	-7	-7	-7	false	"<def>"	QVariantMap	""	0
+"/array/0/first"	Bool	-7	-7	-7	true	"<def>"	bool	"true"	1
+"/array/1"	Null	-7	-7	-7	false	"<def>"	std::nullptr_t	""	0
+"/array/2"	String	-7	-7	-7	false	"one-and-a-half"	QString	"one-and-a-half"	0
+"/array/3"	Double	3	3	3	false	"<def>"	qlonglong	"3"	3
+"/x"	Object	-7	-7	-7	false	"<def>"	QVariantMap	""	0
+"/x/deep"	Object	-7	-7	-7	false	"<def>"	QVariantMap	""	0
+"/x/deep/deeper"	Object	-7	-7	-7	false	"<def>"	QVariantMap	""	0
+"/x/deep/deeper/deepest"	Array	-7	-7	-7	false	"<def>"	QVariantList	""	0
+"/x/deep/deeper/deepest/0"	Double	1	1	1	false	"<def>"	qlonglong	"1"	1
+"/x/deep/deeper/deepest/1"	Double	-7	-7	2.5	false	"<def>"	double	"2.5"	3
+"/x/deep/deeper/deepest/2"	String	-7	-7	-7	false	"s"	QString	"s"	0
+"/y"	Array	-7	-7	-7	false	"<def>"	QVariantList	""	0
+"/y/0"	Object	-7	-7	-7	false	"<def>"	QVariantMap	""	0
+"/y/1"	Array	-7	-7	-7	false	"<def>"	QVariantList	""	0
+"/y/2"	Array	-7	-7	-7	false	"<def>"	QVariantList	""	0
+"/y/2/0"	Array	-7	-7	-7	false	"<def>"	QVariantList	""	0
+"/z"	Object	-7	-7	-7	false	"<def>"	QVariantMap	""	0
+"/z/a"	Array	-7	-7	-7	false	"<def>"	QVariantList	""	0
+"/z/b"	Double	1	1	1	false	"<def>"	qlonglong	"1"	1
+== strings
+""	Object	-7	-7	-7	false	"<def>"	QVariantMap	""	0
+"/\u{0}"	Double	5	5	5	false	"<def>"	qlonglong	"5"	5
+"/a\u{d800}b\u{dc00}\u{dbff}"	String	-7	-7	-7	false	"key with lone surrogates"	QString	"key with lone surrogates"	0
+"/c1"	String	-7	-7	-7	false	"\u{80}\u{9f} "	QString	"\u{80}\u{9f} "	0
+"/control"	String	-7	-7	-7	false	"\u{1}\u{2}\u{9}\u{a}\u{d}\u{8}\u{c}\u{1f}\u{7f}"	QString	"\u{1}\u{2}\u{9}\u{a}\u{d}\u{8}\u{c}\u{1f}\u{7f}"	0
+"/e"	Double	2	2	2	false	"<def>"	qlonglong	"2"	2
+"/lone"	String	-7	-7	-7	false	"a\u{d800}b\u{dc00}\u{dbff}"	QString	"a\u{d800}b\u{dc00}\u{dbff}"	0
+"/nul"	String	-7	-7	-7	false	"\u{0}x"	QString	"\u{0}x"	0
+"/quotes"	String	-7	-7	-7	false	"\"'\\/"	QString	"\"'\\/"	0
+"/unicode"	String	-7	-7	-7	false	"é€😀\u{2028}\u{2029}\u{feff}\u{ffff}"	QString	"é€😀\u{2028}\u{2029}\u{feff}\u{ffff}"	0
+"/é"	Double	1	1	1	false	"<def>"	qlonglong	"1"	1
+"/😀"	Double	3	3	3	false	"<def>"	qlonglong	"3"	3
+"/！"	Double	4	4	4	false	"<def>"	qlonglong	"4"	4
+== latin1-keys
+""	Object	-7	-7	-7	false	"<def>"	QVariantMap	""	0
+"/A"	Double	7	7	7	false	"<def>"	qlonglong	"7"	7
+"/a"	Double	2	2	2	false	"<def>"	qlonglong	"2"	2
+"/b"	Double	1	1	1	false	"<def>"	qlonglong	"1"	1
+"/è"	Double	4	4	4	false	"<def>"	qlonglong	"4"	4
+"/é"	Double	3	3	3	false	"<def>"	qlonglong	"3"	3
+"/ÿ"	Double	5	5	5	false	"<def>"	qlonglong	"5"	5
+"/Ā"	Double	6	6	6	false	"<def>"	qlonglong	"6"	6
+== numbers
+""	Array	-7	-7	-7	false	"<def>"	QVariantList	""	0
+"/0"	Double	0	0	0	false	"<def>"	qlonglong	"0"	0
+"/1"	Double	0	0	0	false	"<def>"	qlonglong	"0"	0
+"/2"	Double	1	1	1	false	"<def>"	qlonglong	"1"	1
+"/3"	Double	-7	-7	1.5	false	"<def>"	double	"1.5"	2
+"/4"	Double	-7	-7	0.10000000000000001	false	"<def>"	double	"0.1"	0
+"/5"	Double	-7	1000000000000000	1000000000000000	false	"<def>"	qlonglong	"1000000000000000"	1000000000000000
+"/6"	Double	-7	10000000000000000	10000000000000000	false	"<def>"	double	"1e+16"	10000000000000000
+"/7"	Double	-7	100000000000000000	1e+17	false	"<def>"	double	"1e+17"	100000000000000000
+"/8"	Double	-7	-7	1e+21	false	"<def>"	double	"1e+21"	9223372036854775807
+"/9"	Double	-7	-7	1e+22	false	"<def>"	double	"1e+22"	9223372036854775807
+"/10"	Double	-7	-7	9.9999999999999995e-08	false	"<def>"	double	"1e-07"	0
+"/11"	Double	-7	123456789012345680	1.2345678901234568e+17	false	"<def>"	double	"123456789012345680"	123456789012345680
+"/12"	Double	-7	9007199254740992	9007199254740992	false	"<def>"	qlonglong	"9007199254740992"	9007199254740992
+"/13"	Double	-7	-7	-1.0000000000000001e+300	false	"<def>"	double	"-1e+300"	-9223372036854775808
+"/14"	Double	-7	-7	4.9406564584124654e-324	false	"<def>"	double	"5e-324"	0
+"/15"	Double	0	0	0	false	"<def>"	qlonglong	"0"	0
+"/16"	Double	-1	-1	-1	false	"<def>"	qlonglong	"-1"	-1
+"/17"	Double	-7	9007199254740992	9007199254740992	false	"<def>"	qlonglong	"9007199254740992"	9007199254740992
+"/18"	Double	-7	9007199254740993	9007199254740992	false	"<def>"	qlonglong	"9007199254740993"	9007199254740993
+"/19"	Double	-7	9223372036854775807	9.2233720368547758e+18	false	"<def>"	qlonglong	"9223372036854775807"	9223372036854775807
+"/20"	Double	-2147483648	-2147483648	-2147483648	false	"<def>"	qlonglong	"-2147483648"	-2147483648
+"/21"	Double	42	42	42	false	"<def>"	qlonglong	"42"	42
+== from-variant-map
+""	Object	-7	-7	-7	false	"<def>"	QVariantMap	""	0
+"/bool"	Bool	-7	-7	-7	true	"<def>"	bool	"true"	1
+"/double"	Double	-7	-7	2.5	false	"<def>"	double	"2.5"	3
+"/float"	Double	-7	-7	0.10000000149011612	false	"<def>"	double	"0.10000000149011612"	0
+"/int"	Double	1	1	1	false	"<def>"	qlonglong	"1"	1
+"/integralDouble"	Double	3	3	3	false	"<def>"	qlonglong	"3"	3
+"/invalid"	Null	-7	-7	-7	false	"<def>"	std::nullptr_t	""	0
+"/list"	Array	-7	-7	-7	false	"<def>"	QVariantList	""	0
+"/list/0"	Double	1	1	1	false	"<def>"	qlonglong	"1"	1
+"/list/1"	String	-7	-7	-7	false	"two"	QString	"two"	0
+"/list/2"	Double	3	3	3	false	"<def>"	qlonglong	"3"	3
+"/longlong"	Double	-7	36028797018963968	36028797018963968	false	"<def>"	qlonglong	"36028797018963968"	36028797018963968
+"/map"	Object	-7	-7	-7	false	"<def>"	QVariantMap	""	0
+"/map/k"	Double	1	1	1	false	"<def>"	qlonglong	"1"	1
+"/nan"	Null	-7	-7	-7	false	"<def>"	std::nullptr_t	""	0
+"/null"	Null	-7	-7	-7	false	"<def>"	std::nullptr_t	""	0
+"/string"	String	-7	-7	-7	false	"s"	QString	"s"	0
+"/stringList"	Array	-7	-7	-7	false	"<def>"	QVariantList	""	0
+"/stringList/0"	String	-7	-7	-7	false	"a"	QString	"a"	0
+"/stringList/1"	String	-7	-7	-7	false	"b"	QString	"b"	0
+"/uint"	Double	-7	4294967295	4294967295	false	"<def>"	qlonglong	"4294967295"	4294967295
+"/ulonglong"	Double	-7	-7	1.8446744073709552e+19	false	"<def>"	double	"18446744073709552000"	9223372036854775807
+== null-document
+""	Undefined	-7	-7	-7	false	"<def>"	<invalid>	""	0
+== empty-object
+""	Object	-7	-7	-7	false	"<def>"	QVariantMap	""	0
+== empty-array
+""	Array	-7	-7	-7	false	"<def>"	QVariantList	""	0
+== empty-nested
+""	Array	-7	-7	-7	false	"<def>"	QVariantList	""	0
+"/0"	Array	-7	-7	-7	false	"<def>"	QVariantList	""	0
+"/1"	Object	-7	-7	-7	false	"<def>"	QVariantMap	""	0
+"/2"	Array	-7	-7	-7	false	"<def>"	QVariantList	""	0
+"/2/0"	Object	-7	-7	-7	false	"<def>"	QVariantMap	""	0

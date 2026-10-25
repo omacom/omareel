@@ -1,0 +1,27 @@
+{
+    "alpha": 0.7,
+    "angle": 45,
+    "blur": 23,
+    "damping": 40,
+    "distance": 20,
+    "dx": -1.5,
+    "dy": 0,
+    "first_frame_us": 1000000,
+    "in": 0,
+    "intensity": 0.28,
+    "mass": 2.25,
+    "offset": {
+        "x": 0.035,
+        "y": 0.035
+    },
+    "out": 8.25,
+    "padding": 0.1,
+    "radius": 12,
+    "size": 0.25,
+    "speed": 1.2,
+    "stiffness": 200,
+    "stopped_us": 9000000,
+    "t": 1234567890123,
+    "x": 320.123,
+    "y": 179.5
+}

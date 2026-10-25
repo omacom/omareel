@@ -1,0 +1,76 @@
+1	"\"\""	ok	1	[""]	String	-7	-7	-7	false	""	QString	""	0
+2	"\"a\""	ok	1	["a"]	String	-7	-7	-7	false	"a"	QString	"a"	0
+3	"\"abc\""	ok	1	["abc"]	String	-7	-7	-7	false	"abc"	QString	"abc"	0
+4	"\"\\\"\""	ok	1	["\""]	String	-7	-7	-7	false	"\""	QString	"\""	0
+5	"\"\\\\\""	ok	1	["\\"]	String	-7	-7	-7	false	"\\"	QString	"\\"	0
+6	"\"\\/\""	ok	1	["/"]	String	-7	-7	-7	false	"/"	QString	"/"	0
+7	"\"\\b\\f\\n\\r\\t\""	ok	1	["\b\f\n\r\t"]	String	-7	-7	-7	false	"\u{8}\u{c}\u{a}\u{d}\u{9}"	QString	"\u{8}\u{c}\u{a}\u{d}\u{9}"	0
+8	"\"\\u0000\""	ok	1	["\u0000"]	String	-7	-7	-7	false	"\u{0}"	QString	"\u{0}"	0
+9	"\"\\u0001\""	ok	1	["\u0001"]	String	-7	-7	-7	false	"\u{1}"	QString	"\u{1}"	0
+10	"\"\\u001f\""	ok	1	["\u001f"]	String	-7	-7	-7	false	"\u{1f}"	QString	"\u{1f}"	0
+11	"\"\\u0020\""	ok	1	[" "]	String	-7	-7	-7	false	" "	QString	" "	0
+12	"\"\\u007f\""	ok	1	[""]	String	-7	-7	-7	false	"\u{7f}"	QString	"\u{7f}"	0
+13	"\"\\u0080\""	ok	1	[""]	String	-7	-7	-7	false	"\u{80}"	QString	"\u{80}"	0
+14	"\"\\u009f\""	ok	1	[""]	String	-7	-7	-7	false	"\u{9f}"	QString	"\u{9f}"	0
+15	"\"\\u00a0\""	ok	1	[" "]	String	-7	-7	-7	false	" "	QString	" "	0
+16	"\"\\u00e9\""	ok	1	["é"]	String	-7	-7	-7	false	"é"	QString	"é"	0
+17	"\"\\u00E9\""	ok	1	["é"]	String	-7	-7	-7	false	"é"	QString	"é"	0
+18	"\"\\u0100\""	ok	1	["Ā"]	String	-7	-7	-7	false	"Ā"	QString	"Ā"	0
+19	"\"\\u07ff\""	ok	1	["߿"]	String	-7	-7	-7	false	"߿"	QString	"߿"	0
+20	"\"\\u0800\""	ok	1	["ࠀ"]	String	-7	-7	-7	false	"ࠀ"	QString	"ࠀ"	0
+21	"\"\\u20ac\""	ok	1	["€"]	String	-7	-7	-7	false	"€"	QString	"€"	0
+22	"\"\\ud7ff\""	ok	1	["퟿"]	String	-7	-7	-7	false	"퟿"	QString	"퟿"	0
+23	"\"\\ue000\""	ok	1	[""]	String	-7	-7	-7	false	""	QString	""	0
+24	"\"\\ufeff\""	ok	1	["﻿"]	String	-7	-7	-7	false	"\u{feff}"	QString	"\u{feff}"	0
+25	"\"\\ufffd\""	ok	1	["�"]	String	-7	-7	-7	false	"�"	QString	"�"	0
+26	"\"\\ufffe\""	ok	1	["￾"]	String	-7	-7	-7	false	"\u{fffe}"	QString	"\u{fffe}"	0
+27	"\"\\uffff\""	ok	1	["￿"]	String	-7	-7	-7	false	"\u{ffff}"	QString	"\u{ffff}"	0
+28	"\"\\ud83d\\ude00\""	ok	1	["😀"]	String	-7	-7	-7	false	"😀"	QString	"😀"	0
+29	"\"\\uD83D\\uDE00\""	ok	1	["😀"]	String	-7	-7	-7	false	"😀"	QString	"😀"	0
+30	"\"\\ud800\\udc00\""	ok	1	["𐀀"]	String	-7	-7	-7	false	"𐀀"	QString	"𐀀"	0
+31	"\"\\udbff\\udfff\""	ok	1	["􏿿"]	String	-7	-7	-7	false	"􏿿"	QString	"􏿿"	0
+32	"\"\\ud800\""	ok	1	["\ud800"]	String	-7	-7	-7	false	"\u{d800}"	QString	"\u{d800}"	0
+33	"\"\\udbff\""	ok	1	["\udbff"]	String	-7	-7	-7	false	"\u{dbff}"	QString	"\u{dbff}"	0
+34	"\"\\udc00\""	ok	1	["\udc00"]	String	-7	-7	-7	false	"\u{dc00}"	QString	"\u{dc00}"	0
+35	"\"\\udfff\""	ok	1	["\udfff"]	String	-7	-7	-7	false	"\u{dfff}"	QString	"\u{dfff}"	0
+36	"\"\\udc00\\ud800\""	ok	1	["\udc00\ud800"]	String	-7	-7	-7	false	"\u{dc00}\u{d800}"	QString	"\u{dc00}\u{d800}"	0
+37	"\"\\ud800\\ud800\""	ok	1	["\ud800\ud800"]	String	-7	-7	-7	false	"\u{d800}\u{d800}"	QString	"\u{d800}\u{d800}"	0
+38	"\"\\ud800a\""	ok	1	["\ud800a"]	String	-7	-7	-7	false	"\u{d800}a"	QString	"\u{d800}a"	0
+39	"\"a\\ud800\""	ok	1	["a\ud800"]	String	-7	-7	-7	false	"a\u{d800}"	QString	"a\u{d800}"	0
+40	"\"\\ud800\\u0041\""	ok	1	["\ud800A"]	String	-7	-7	-7	false	"\u{d800}A"	QString	"\u{d800}A"	0
+41	"\"\\ud83d\""	ok	1	["\ud83d"]	String	-7	-7	-7	false	"\u{d83d}"	QString	"\u{d83d}"	0
+42	"\"\\ude00\""	ok	1	["\ude00"]	String	-7	-7	-7	false	"\u{de00}"	QString	"\u{de00}"	0
+43	"\"\xc3\xa9\""	ok	1	["é"]	String	-7	-7	-7	false	"é"	QString	"é"	0
+44	"\"\xe2\x82\xac\""	ok	1	["€"]	String	-7	-7	-7	false	"€"	QString	"€"	0
+45	"\"\xf0\x9f\x98\x80\""	ok	1	["😀"]	String	-7	-7	-7	false	"😀"	QString	"😀"	0
+46	"\"\x7f\""	ok	1	[""]	String	-7	-7	-7	false	"\u{7f}"	QString	"\u{7f}"	0
+47	"\"\x01\""	ok	1	["\u0001"]	String	-7	-7	-7	false	"\u{1}"	QString	"\u{1}"	0
+48	"\"\x1f\""	ok	1	["\u001f"]	String	-7	-7	-7	false	"\u{1f}"	QString	"\u{1f}"	0
+49	"\"a\x09b\""	ok	1	["a\tb"]	String	-7	-7	-7	false	"a\u{9}b"	QString	"a\u{9}b"	0
+50	"\"\\x41\""	ok	1	["x41"]	String	-7	-7	-7	false	"x41"	QString	"x41"	0
+51	"\"\\u12\""	error	8	6	"invalid escape sequence"
+52	"\"\\u12G4\""	error	8	6	"invalid escape sequence"
+53	"\"\\q\""	ok	1	["q"]	String	-7	-7	-7	false	"q"	QString	"q"	0
+54	"\"\\U00e9\""	ok	1	["U00e9"]	String	-7	-7	-7	false	"U00e9"	QString	"U00e9"	0
+55	"\"\\\""	error	10	6	"unterminated string"
+56	"\"abc"	error	10	7	"unterminated string"
+57	"abc\""	error	7	1	"illegal number"
+58	"'abc'"	error	7	1	"illegal number"
+59	"\"\\u0041\\u0042\""	ok	1	["AB"]	String	-7	-7	-7	false	"AB"	QString	"AB"	0
+60	"\"\\\\u0041\""	ok	1	["\\u0041"]	String	-7	-7	-7	false	"\\u0041"	QString	"\\u0041"	0
+61	"\"\\uDEAD\""	ok	1	["\udead"]	String	-7	-7	-7	false	"\u{dead}"	QString	"\u{dead}"	0
+62	"\"\\u2028\""	ok	1	[" "]	String	-7	-7	-7	false	"\u{2028}"	QString	"\u{2028}"	0
+63	"\"\\u2029\""	ok	1	[" "]	String	-7	-7	-7	false	"\u{2029}"	QString	"\u{2029}"	0
+64	"\"\\u0000\\u0000\""	ok	1	["\u0000\u0000"]	String	-7	-7	-7	false	"\u{0}\u{0}"	QString	"\u{0}\u{0}"	0
+65	"\"   \""	ok	1	["   "]	String	-7	-7	-7	false	"   "	QString	"   "	0
+66	"\"\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\""	ok	1	["éééééééééééééééééééé"]	String	-7	-7	-7	false	"éééééééééééééééééééé"	QString	"éééééééééééééééééééé"	0
+67	"\"\xff\""	error	9	2	"invalid UTF8 string"
+68	"\"\xc3\""	error	9	2	"invalid UTF8 string"
+69	"\"\xc0\xaf\""	error	9	2	"invalid UTF8 string"
+70	"\"\xed\xa0\x80\""	error	9	2	"invalid UTF8 string"
+71	"\"\xed\xb0\x80\""	error	9	2	"invalid UTF8 string"
+72	"\"\xf0\x9f\x98\""	error	9	2	"invalid UTF8 string"
+73	"\"\xf4\x8f\xbf\xbf\""	ok	1	["􏿿"]	String	-7	-7	-7	false	"􏿿"	QString	"􏿿"	0
+74	"\"\xf4\x90\x80\x80\""	error	9	2	"invalid UTF8 string"
+75	"\"\xe9t\xe9\""	error	9	2	"invalid UTF8 string"
+76	"\"\x80\""	error	9	2	"invalid UTF8 string"

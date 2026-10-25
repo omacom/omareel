@@ -1,0 +1,22 @@
+{
+    "microphone": false,
+    "microphoneDevice": "default_input",
+    "selfViewPosition": {
+        "x": 1,
+        "y": 0.5
+    },
+    "systemAudio": true,
+    "webcam": {
+        "enabled": false,
+        "offset": {
+            "x": 0.035,
+            "y": 0.035
+        },
+        "radius": 16,
+        "shadow": {
+            "blur": 23,
+            "enabled": true,
+            "intensity": 0.28
+        }
+    }
+}

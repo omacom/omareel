@@ -1,6 +1,6 @@
 #include "ui/Editor.h"
 #include "core/Project.h"
-#include "core/Theme.h"
+#include "omareel_qt/src/theme.cxxqt.h"
 #include "render/VideoDecoding.h"
 
 #include <QDir>
@@ -29,6 +29,27 @@ class EditorTest : public QObject
 {
     Q_OBJECT
 private slots:
+    // An unparsable theme colour stays invalid, and its alpha variants keep their alpha, which
+    // Qt Quick draws as translucent black rather than opaque black.
+    void themeKeepsTheAlphaOfInvalidColours()
+    {
+        QTemporaryDir state;
+        QVERIFY(state.isValid());
+        QVERIFY(QDir().mkpath(state.filePath(QStringLiteral("theme"))));
+        QFile colors(state.filePath(QStringLiteral("theme/colors.toml")));
+        QVERIFY(colors.open(QIODevice::WriteOnly));
+        colors.write("background = \"#faf4ed\"\nforeground = \"#a9b1d\"\n");
+        colors.close();
+        const QByteArray previous = qgetenv("OMAREEL_OMARCHY_STATE_DIR");
+        qputenv("OMAREEL_OMARCHY_STATE_DIR", state.path().toUtf8());
+        Theme theme;
+        const QColor hairline = theme.property("hairline").value<QColor>();
+        QVERIFY(!hairline.isValid());
+        QCOMPARE(hairline.rgba64().alpha(), quint16(qRound(.10f * 65535)));
+        QVERIFY(!theme.property("foreground").value<QColor>().isValid());
+        qputenv("OMAREEL_OMARCHY_STATE_DIR", previous);
+    }
+
     void initTestCase()
     {
         configureVideoDecoding();
@@ -359,7 +380,7 @@ private slots:
         const QRect sample = QRect(handle->mapToScene(QPointF()).toPoint(),
                                    QSize(qRound(handle->width()), qRound(handle->height())))
                                  .adjusted(-1, -1, 1, 1);
-        const QColor accent = theme.accent();
+        const QColor accent = theme.getAccent();
         const auto accentBounds = [sample, accent](const QImage &image) {
             QRect bounds;
             const int accentHue = accent.hsvHue();
