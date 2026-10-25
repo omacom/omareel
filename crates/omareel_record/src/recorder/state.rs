@@ -14,9 +14,9 @@ use omareel_core::compat::qdir::{self, FileInfo};
 use omareel_core::compat::qjson::{self, Format, Object, Value};
 use omareel_core::compat::qlockfile::{LockError, LockFile};
 use omareel_core::compat::qsavefile::SaveFile;
+use omareel_core::compat::qprocess::{self, DetachedChannels};
 use omareel_core::compat::{qfile, qstandardpaths, qstring};
 use std::os::unix::ffi::OsStrExt;
-use std::os::unix::process::CommandExt;
 
 /// `qEnvironmentVariable(name)`: the variable as UTF-8 text, empty when unset.
 fn environment_variable(name: &str) -> String {
@@ -226,28 +226,14 @@ pub fn is_recording() -> bool {
     false
 }
 
-/// `runOptionalDetached(program, arguments)`: starts the program, when it is installed, as
-/// `QProcess::startDetached` does: in a session of its own, with this process's standard
-/// channels, never waited for by the caller. (Qt forks twice so that no zombie stays behind; here
-/// a thread reaps it.)
-pub fn run_optional_detached(program: &str, arguments: &[&str]) {
+/// `runOptionalDetached(program, arguments)`: when the program is installed, starts it as
+/// `QProcess::startDetached` does (a grandchild in a session of its own, with this process's
+/// standard channels, never waited for).
+pub fn run_optional_detached<S: AsRef<str>>(program: &str, arguments: &[S]) {
     if qstandardpaths::find_executable(program).is_empty() {
         return;
     }
-    let mut command = std::process::Command::new(program);
-    command.args(arguments);
-    // SAFETY: setsid is async-signal-safe and touches nothing of the parent.
-    unsafe {
-        command.pre_exec(|| {
-            libc::setsid();
-            Ok(())
-        });
-    }
-    if let Ok(mut child) = command.spawn() {
-        std::thread::spawn(move || {
-            let _ = child.wait();
-        });
-    }
+    qprocess::start_detached(program, arguments, DetachedChannels::default());
 }
 
 /// `notifyStopFailure(detail)`: a critical desktop notification that lasts five seconds.

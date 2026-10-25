@@ -16,5 +16,8 @@ QColor fromRgba64(quint16 red, quint16 green, quint16 blue, quint16 alpha);
 // An invalid colour that still carries an alpha, as QColor::setAlphaF leaves one; Qt Quick
 // draws it as black at that alpha.
 QColor invalidWithAlpha(quint16 alpha);
+// qWarning().noquote() << message: Qt's message handler, so the journal gets it when there is no
+// terminal, as it got the recorder daemon's warnings before they moved to Rust.
+void warning(const QString &message);
 
 } // namespace Omareel::Shims

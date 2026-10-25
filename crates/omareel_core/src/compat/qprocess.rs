@@ -782,6 +782,192 @@ impl Drop for Process {
     }
 }
 
+/// Where `start_detached` sends the child's standard output and error: `None` inherits this
+/// process's channel, as `QProcess::startDetached` does without a redirection.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DetachedChannels<'a> {
+    /// `setStandardOutputFile(path)` (truncating).
+    pub standard_output_file: Option<&'a str>,
+    /// `setStandardErrorFile(path)` (truncating).
+    pub standard_error_file: Option<&'a str>,
+}
+
+/// What the two children of [`start_detached`] read: everything is made before they run, in
+/// memory they share with the parent while it waits.
+#[repr(C)]
+struct DetachedSpawn {
+    path: *const libc::c_char,
+    argv: *const *const libc::c_char,
+    stdout_fd: RawFd,
+    stderr_fd: RawFd,
+    started_read_fd: RawFd,
+    started_write_fd: RawFd,
+    pid_read_fd: RawFd,
+    pid_write_fd: RawFd,
+    old_mask: libc::sigset_t,
+    grandchild_stack: *mut libc::c_void,
+}
+
+/// Reports an errno on the started pipe and exits (`failChildProcess`).
+///
+/// # Safety
+/// Only for the children of [`start_detached`].
+unsafe fn fail_child(spawn: &DetachedSpawn) -> ! {
+    // SAFETY: async-signal-safe calls on the prepared descriptors.
+    unsafe {
+        let code: libc::c_int = *libc::__errno_location();
+        libc::write(spawn.started_write_fd, (&code as *const libc::c_int).cast(), size_of::<libc::c_int>());
+        libc::_exit(-1)
+    }
+}
+
+/// The grandchild (`QChildProcess::startProcess`): the redirections, SIGPIPE back to its
+/// default, the parent's signal mask, then the program.
+extern "C" fn detached_grandchild(argument: *mut libc::c_void) -> libc::c_int {
+    // SAFETY: the parent is suspended (CLONE_VFORK) and keeps `DetachedSpawn` alive; only
+    // async-signal-safe calls follow.
+    unsafe {
+        let spawn = &*(argument as *const DetachedSpawn);
+        if spawn.stdout_fd >= 0 {
+            libc::dup2(spawn.stdout_fd, libc::STDOUT_FILENO);
+        }
+        if spawn.stderr_fd >= 0 {
+            libc::dup2(spawn.stderr_fd, libc::STDERR_FILENO);
+        }
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+        libc::sigprocmask(libc::SIG_SETMASK, &spawn.old_mask, std::ptr::null_mut());
+        libc::execv(spawn.path, spawn.argv);
+        fail_child(spawn)
+    }
+}
+
+/// The intermediate child: a session of its own, the grandchild, its pid on the pid pipe.
+extern "C" fn detached_intermediate(argument: *mut libc::c_void) -> libc::c_int {
+    // SAFETY: as for the grandchild; this child is suspended in turn until the grandchild has
+    // exec'd or exited.
+    unsafe {
+        let spawn = &*(argument as *const DetachedSpawn);
+        libc::setsid();
+        libc::close(spawn.started_read_fd);
+        libc::close(spawn.pid_read_fd);
+        let grandchild = libc::clone(
+            detached_grandchild,
+            spawn.grandchild_stack,
+            libc::CLONE_VM | libc::CLONE_VFORK | libc::SIGCHLD,
+            argument,
+        );
+        if grandchild < 0 {
+            fail_child(spawn);
+        }
+        libc::write(spawn.pid_write_fd, (&grandchild as *const libc::pid_t).cast(), size_of::<libc::pid_t>());
+        libc::_exit(0)
+    }
+}
+
+/// `QProcess::startDetached(&pid)` as Qt 6.11 runs it on Linux: the program (looked up with
+/// `findExecutable` unless it contains a "/") is started by a grandchild, so it is neither
+/// this process's child nor waited for. The intermediate child calls `setsid` before starting
+/// it, so the program runs in a session of its own without a controlling terminal, and the
+/// intermediate is reaped before this returns. The program inherits this process's standard
+/// channels and environment unless redirected, starts with SIGPIPE at its default and this
+/// thread's signal mask, and gets none of this process's close-on-exec descriptors. As Qt's
+/// children are made with vfork, these share this process's memory (on stacks of their own,
+/// with every signal blocked) until each has exec'd, so starting one costs no copy of the
+/// address space. Returns the program's pid once it has exec'd, or `None` when it could not be
+/// started (not found, a redirection that can't be opened, a failed clone or exec).
+pub fn start_detached<S: AsRef<str>>(program: &str, arguments: &[S], channels: DetachedChannels) -> Option<i64> {
+    use std::ffi::CString;
+    // Everything the children need is made here: they may only make async-signal-safe calls.
+    let resolved = if program.contains('/') { program.to_string() } else { qstandardpaths::find_executable(program) };
+    let path = CString::new(resolved.as_bytes()).ok()?;
+    let mut argv_strings = Vec::with_capacity(arguments.len() + 1);
+    argv_strings.push(path.clone());
+    for argument in arguments {
+        argv_strings.push(CString::new(argument.as_ref().as_bytes()).ok()?);
+    }
+    let mut argv: Vec<*const libc::c_char> = argv_strings.iter().map(|s| s.as_ptr()).collect();
+    argv.push(std::ptr::null());
+    // QProcessPrivate::openChannelsForDetached: the redirection files are opened here.
+    let open_file = |path: Option<&str>| -> Result<Option<OwnedFd>, ()> {
+        match path {
+            None => Ok(None),
+            Some(path) => open_output_file(path).map(Some).ok_or(()),
+        }
+    };
+    let stdout_file = open_file(channels.standard_output_file).ok()?;
+    let stderr_file = open_file(channels.standard_error_file).ok()?;
+    let (started_read, started_write) = pipe()?;
+    let (pid_read, pid_write) = pipe()?;
+    const STACK: usize = 64 * 1024;
+    // u128 keeps the stacks 16-byte aligned; they grow down from their ends.
+    let mut stacks = vec![0u128; 2 * STACK / size_of::<u128>()];
+    let (intermediate_stack, grandchild_stack) = stacks.split_at_mut(STACK / size_of::<u128>());
+    let top = |stack: &mut [u128]| stack.as_mut_ptr_range().end.cast::<libc::c_void>();
+    let mut spawn = DetachedSpawn {
+        path: path.as_ptr(),
+        argv: argv.as_ptr(),
+        stdout_fd: stdout_file.as_ref().map_or(-1, AsRawFd::as_raw_fd),
+        stderr_fd: stderr_file.as_ref().map_or(-1, AsRawFd::as_raw_fd),
+        started_read_fd: started_read.as_raw_fd(),
+        started_write_fd: started_write.as_raw_fd(),
+        pid_read_fd: pid_read.as_raw_fd(),
+        pid_write_fd: pid_write.as_raw_fd(),
+        // SAFETY: an all-zero sigset_t is a valid value to be overwritten.
+        old_mask: unsafe { std::mem::zeroed() },
+        grandchild_stack: top(grandchild_stack),
+    };
+    // SAFETY: every signal is blocked on this thread while the children share its memory (Qt's
+    // maybeBlockSignals); the grandchild restores the old mask before its exec.
+    let intermediate = unsafe {
+        let mut all: libc::sigset_t = std::mem::zeroed();
+        libc::sigfillset(&mut all);
+        libc::pthread_sigmask(libc::SIG_SETMASK, &all, &mut spawn.old_mask);
+        let pid = libc::clone(
+            detached_intermediate,
+            top(intermediate_stack),
+            libc::CLONE_VM | libc::CLONE_VFORK | libc::SIGCHLD,
+            (&mut spawn as *mut DetachedSpawn).cast(),
+        );
+        libc::pthread_sigmask(libc::SIG_SETMASK, &spawn.old_mask, std::ptr::null_mut());
+        pid
+    };
+    drop(stdout_file);
+    drop(stderr_file);
+    drop(started_write);
+    drop(pid_write);
+    if intermediate < 0 {
+        return None;
+    }
+    // The children have finished with the pipe: the intermediate by exiting, the grandchild by
+    // exec'ing. Anything read is an error report.
+    let mut report = [0u8; size_of::<libc::c_int>()];
+    let started = loop {
+        // SAFETY: reads into a local buffer of its size.
+        let r = unsafe { libc::read(started_read.as_raw_fd(), report.as_mut_ptr().cast(), report.len()) };
+        if r < 0 && last_errno() == libc::EINTR {
+            continue;
+        }
+        break r == 0;
+    };
+    let mut status = 0;
+    loop {
+        // SAFETY: reaps the intermediate child, which is ours.
+        let r = unsafe { libc::waitpid(intermediate, &mut status, 0) };
+        if r < 0 && last_errno() == libc::EINTR {
+            continue;
+        }
+        break;
+    }
+    if !started {
+        return None;
+    }
+    let mut pid: libc::pid_t = 0;
+    // SAFETY: reads one pid_t into a local.
+    let r = unsafe { libc::read(pid_read.as_raw_fd(), (&mut pid as *mut libc::pid_t).cast(), size_of::<libc::pid_t>()) };
+    // Qt reports 0 when the pid could not be read ("this shouldn't happen").
+    Some(if r == size_of::<libc::pid_t>() as isize { i64::from(pid) } else { 0 })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -874,6 +1060,40 @@ mod tests {
         p.terminate();
         assert!(p.wait_for_finished(2000));
         assert_eq!((p.exit_status(), p.exit_code()), (ExitStatus::CrashExit, libc::SIGTERM));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn starts_detached_in_its_own_session() {
+        let dir = std::env::temp_dir().join(format!("omareel-detached-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (out, err) = (dir.join("out"), dir.join("err"));
+        let (out, err) = (out.to_str().unwrap(), err.to_str().unwrap());
+        // The grandchild says its pid and its session, then writes to its standard error.
+        let pid = start_detached(
+            "sh",
+            &["-c", "echo $$ $(cut -d' ' -f6 /proc/$$/stat); echo err >&2"],
+            DetachedChannels { standard_output_file: Some(out), standard_error_file: Some(err) },
+        )
+        .expect("started");
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while std::fs::read_to_string(err).unwrap_or_default() != "err\n" && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(10));
+        }
+        let text = std::fs::read_to_string(out).unwrap();
+        let fields: Vec<&str> = text.split_whitespace().collect();
+        assert_eq!(fields.first().copied(), Some(pid.to_string().as_str()), "{text:?}");
+        // A session of its own, led by the intermediate child rather than the program.
+        // SAFETY: getsid on this process.
+        let own_session = unsafe { libc::getsid(0) }.to_string();
+        assert!(fields.get(1).is_some_and(|session| *session != pid.to_string() && *session != own_session));
+        // Not this process's child.
+        // SAFETY: waitpid with WNOHANG on a pid that is not a child.
+        assert_eq!(unsafe { libc::waitpid(pid as libc::pid_t, std::ptr::null_mut(), libc::WNOHANG) }, -1);
+        assert_eq!(start_detached("omareel-no-such-program", &[] as &[&str], DetachedChannels::default()), None);
+        let missing = format!("{out}/missing/log");
+        let channels = DetachedChannels { standard_output_file: Some(&missing), standard_error_file: None };
+        assert_eq!(start_detached("true", &[] as &[&str], channels), None);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

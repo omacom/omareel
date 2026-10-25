@@ -9,7 +9,7 @@ same after each one: same commands, same files written byte for byte, same pixel
 | Path | What |
 |---|---|
 | `crates/omareel_core` | Plain Rust logic with no Qt. Any front end can use it. |
-| `crates/omareel_record` | The recording side's logic with no Qt (recorder state files, region picker, capture exclusion, camera and screen capture decisions, launcher and recording bar helpers), on top of `omareel_core`. |
+| `crates/omareel_record` | The recording side with no Qt, on top of `omareel_core`: the recorder daemon and `omareel record`, the in-process Wayland screen capture, input and cursor sampling, the state files, region picker and capture exclusion, and the camera, launcher and recording bar helpers. |
 | `crates/omareel_qt` | The one Rust static library linked into the C++ binary: CXX-Qt objects and C++-callable functions that expose `omareel_core` to QML and C++. |
 | `src/plumbing` | C++ that Rust drives: Qt-only pieces (players, GL export rendering, camera, file watchers, timers). |
 | `src/` (rest) | C++ that has not moved yet, plus `main.cpp`'s window setup. |
@@ -67,6 +67,28 @@ started (CXX-Qt 0.10, Qt 6.11):
   value; the export job moves each rendered frame to its encode thread that way, in a `Send`
   wrapper, without copying. Decoded frames go the other way as `QImage`s over Rust's pixels,
   whose cleanup function drops the Rust box.
+
+## Recording runtime notes
+
+- `main.cpp` still dispatches the recording commands where it did, after the `QGuiApplication`
+  exists (so the daemon's environment and Qt's own start-up stay as they were), and hands them to
+  `omareel_qt::record`. `__record-gsr` stays first in `main()`: it only `execvp`s
+  gpu-screen-recorder with that argv[0], which Omarchy's REC indicator matches.
+- The screen capture has its own Wayland connection, as the C++ had: `wayland-client` with its
+  pure-Rust backend, connected the way `wl_display_connect(NULL)` connects, and the
+  `ext-image-copy-capture-v1` protocols from `wayland-protocols` (the same XML as
+  `/usr/share/wayland-protocols`). The encoder is spawned with `posix_spawnp` as before.
+- Input devices are read through libevdev itself (a few `extern "C"` declarations), so key names
+  are libevdev's. CMake links libevdev to `omareel_qt` for it.
+- `compat::qprocess::start_detached` is `QProcess::startDetached`: a grandchild in a session of
+  its own, made with `CLONE_VFORK` children as Qt's vfork does; with plain `fork` every
+  detached start of the daemon or a notification copied the process's page tables and
+  `omareel record` took a few milliseconds longer to its first frame.
+- The daemon's warnings go through `Omareel::Shims::warning` (`qWarning`), so they reach the
+  journal as they did when there is no terminal.
+- `src/record/Recorder.cpp` and `CursorSampler.cpp` are thin C++ wrappers over the Rust state
+  layer and cursor query for the launcher, the recording bar and its windows, until those move;
+  state file objects cross the bridge as JSON text.
 
 ## Build notes
 

@@ -1,5 +1,5 @@
 #include "CameraCapture.h"
-#include "ScreenCapture.h"
+#include "omareel_qt/src/record.cxxqt.h"
 
 #include <QCamera>
 #include <QCameraDevice>
@@ -330,7 +330,7 @@ protected:
                 return;
             }
             if (!launched) {
-                const bool nvenc = cachedPreferredEncoderAvailable();
+                const bool nvenc = omareel::record::cachedPreferredEncoderAvailable();
                 QStringList args{"-hide_banner", "-loglevel", "error", "-y", "-f", "rawvideo",
                     "-pixel_format", latest.pixelFormat, "-video_size",
                     QStringLiteral("%1x%2").arg(latest.size.width()).arg(latest.size.height()),

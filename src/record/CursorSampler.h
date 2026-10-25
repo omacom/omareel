@@ -1,36 +1,16 @@
 #pragma once
 
 #include <QPointF>
-#include <QVector>
-#include <atomic>
-#include <mutex>
-#include <thread>
 
 namespace Omareel {
 
-struct RawCursorSample {
-    qint64 monotonicUs = 0;
-    QPointF logicalPosition;
-};
-
+// Where the pointer is now, asked of Hyprland, for the recording bar's self-view drag. The
+// recorder's cursor sampling is Rust (omareel_record::cursor_sampler); this calls it.
 class CursorSampler
 {
 public:
-    CursorSampler() = default;
-    ~CursorSampler();
-    bool start(QString *error = nullptr);
-    void stop();
-    QVector<RawCursorSample> samples() const;
-    static qint64 monotonicUs();
+    // Leaves point alone when Hyprland did not answer.
     static bool cursorPosition(QPointF *point);
-
-private:
-    void run();
-    QString m_socketPath;
-    std::atomic_bool m_running{false};
-    mutable std::mutex m_mutex;
-    QVector<RawCursorSample> m_samples;
-    std::thread m_thread;
 };
 
 } // namespace Omareel
