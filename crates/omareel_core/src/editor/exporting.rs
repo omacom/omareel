@@ -103,6 +103,14 @@ pub fn preview_stats_line(frames: i32, cost_ns: i64, elapsed_ms: i64, recording_
     ))
 }
 
+/// The folder `openContainingFolder(path)` hands `xdg-open`: the path itself when it is a
+/// directory, else the directory it is in; `None` for an empty path.
+pub fn containing_folder(path: &str) -> Option<String> {
+    let file = FileInfo::new(path);
+    let directory = if file.is_dir() { file.absolute_file_path() } else { file.absolute_path() };
+    (!directory.is_empty()).then_some(directory)
+}
+
 impl Document {
     /// `defaultExportPath(format)`: the project's name in the recordings directory, `.gif` for
     /// "gif" and `.mp4` otherwise.
@@ -214,6 +222,14 @@ mod tests {
         assert_eq!(export_progress(0, 0, 0), (0.0, 0.0, 0));
         assert_eq!(export_progress(30, 120, 2000), (0.25, 15.0, 6));
         assert_eq!(export_progress(130, 120, 1000), (130.0 / 120.0, 130.0, 0));
+    }
+
+    #[test]
+    fn containing_folders() {
+        let dir = crate::compat::qdir::tests::TempDir::new("editor-folder");
+        assert_eq!(containing_folder(&dir.0), Some(dir.0.clone()));
+        assert_eq!(containing_folder(&dir.join("out.mp4")), Some(dir.0.clone()));
+        assert_eq!(containing_folder(""), None);
     }
 
     #[test]
