@@ -1049,11 +1049,16 @@ impl qobject::Editor {
     fn wallpaper_groups(&self) -> QList<QVariant> {
         let Some(document) = self.document.as_ref() else { return QList::default() };
         let groups = document.wallpaper_groups();
+        let mut others = Vec::new();
         for effect in document.take_effects() {
             if let Effect::GenerateWallpaperThumbnail { path, thumbnail } = effect {
                 self.generate_wallpaper_thumbnail(path, thumbnail);
+            } else {
+                others.push(effect);
             }
         }
+        // A getter can't perform the rest; they stay queued for the next call that drains.
+        document.requeue_effects(others);
         groups
             .iter()
             .map(|group| {

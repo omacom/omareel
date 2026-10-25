@@ -151,6 +151,8 @@ pub fn probe_frame_times(path: &str) -> Vec<f64> {
     // std::sort compares with <, so equal times (0 and -0) and NaN, which compares equal to
     // everything, are not moved past each other; libstdc++ sorts lists this short by insertion,
     // which keeps them in order, as a stable sort does.
-    times.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    // A NaN would make that comparison inconsistent, which Rust's sort may panic on. ffprobe
+    // never prints one; should it, it sorts last instead of aborting.
+    times.sort_by(|a, b| a.partial_cmp(b).unwrap_or_else(|| a.is_nan().cmp(&b.is_nan())));
     times
 }

@@ -117,7 +117,32 @@ pub fn rename(old_name: &str, new_name: &str) -> bool {
     if std::fs::metadata(new_name).is_ok() {
         return false;
     }
-    rename_file(old_name, new_name)
+    if rename_file(old_name, new_name) {
+        return true;
+    }
+    // Qt falls back to copying when the rename itself fails, as it does onto a dangling symlink
+    // (the existence check above follows it); the copy writes through the link.
+    copy_then_remove(old_name, new_name)
+}
+
+fn copy_then_remove(old_name: &str, new_name: &str) -> bool {
+    use std::io::Write;
+    let copied = (|| -> io::Result<()> {
+        let mut source = File::open(old_name)?;
+        let mut target = std::fs::OpenOptions::new().write(true).create(true).truncate(true).open(new_name)?;
+        io::copy(&mut source, &mut target)?;
+        target.flush()
+    })();
+    match copied {
+        Ok(()) => {
+            let _ = std::fs::remove_file(old_name);
+            true
+        }
+        Err(_) => {
+            let _ = std::fs::remove_file(new_name);
+            false
+        }
+    }
 }
 
 #[cfg(test)]
@@ -144,6 +169,12 @@ mod tests {
         assert!(rename(a, b) && !rename(a, b));
         assert_eq!(std::fs::read(b).unwrap(), b"a");
         assert!(set_permissions(b, 0o644));
+        // Onto a dangling symlink, the content goes through the link, as Qt's copy fallback does.
+        let (link, target) = (dir.join("link"), dir.join("target"));
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        assert!(rename(b, link.to_str().unwrap()));
+        assert_eq!(std::fs::read(&target).unwrap(), b"a");
+        assert!(std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

@@ -1,5 +1,7 @@
 #include "EditorBase.h"
 
+#include <utility>
+
 #include "Exporter.h"
 
 #include <QClipboard>
@@ -120,15 +122,15 @@ void EditorBase::startExport(const omareel::exporter::ExportOptions &request)
     options.timing = request.timing;
     m_exporter = new Exporter(this);
     connect(m_exporter, &Exporter::progress, this, [this](int frame, int total) { exportProgressed(frame, total); });
+    // The finished exporter is released before the editor hears about it, so a handler that
+    // starts another export keeps its new exporter.
     connect(m_exporter, &Exporter::finished, this, [this](const QString &result) {
+        std::exchange(m_exporter, nullptr)->deleteLater();
         exportSucceeded(result);
-        m_exporter->deleteLater();
-        m_exporter = nullptr;
     });
     connect(m_exporter, &Exporter::failed, this, [this](const QString &error) {
+        std::exchange(m_exporter, nullptr)->deleteLater();
         exportFailedWith(error);
-        m_exporter->deleteLater();
-        m_exporter = nullptr;
     });
     QTimer::singleShot(0, m_exporter, [exporter = m_exporter, options] { exporter->exportBundle(options); });
 }

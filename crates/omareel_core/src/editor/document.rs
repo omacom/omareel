@@ -203,6 +203,18 @@ impl Document {
         }
     }
 
+    /// Puts effects back at the front of the queue, for a caller that took them but performs
+    /// only some.
+    pub fn requeue_effects(&self, effects: Vec<Effect>) {
+        if effects.is_empty() {
+            return;
+        }
+        let mut queue = self.effects.borrow_mut();
+        let rest = std::mem::take(&mut *queue);
+        *queue = effects;
+        queue.extend(rest);
+    }
+
     /// The Qt work queued since the last call, in order.
     pub fn take_effects(&self) -> Vec<Effect> {
         self.effects.take()

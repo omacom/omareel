@@ -314,7 +314,7 @@ impl Process {
 
     /// `QProcess::kill`: SIGKILL to a child not yet reaped.
     pub fn kill(&mut self) {
-        if self.state == ProcessState::Running {
+        if self.state == ProcessState::Running && self.reaped.is_none() {
             if let Some(child) = &self.child {
                 // SAFETY: the child has not been reaped, so its pid is still ours.
                 unsafe { libc::kill(child.id() as libc::pid_t, libc::SIGKILL) };

@@ -785,6 +785,9 @@ impl ExportJob {
     /// Stops the decode thread (after the last frame, or on an error) and waits for it.
     pub fn finish_decoder(&mut self) {
         self.decode.stop.store(true, Ordering::SeqCst);
+        // Taking the lock orders the store before a decode thread's check-then-wait, so the
+        // wakeup below can't fall between the two.
+        drop(lock(&self.decode.queue));
         self.decode.ready.notify_all();
         self.decode.space.notify_all();
         if let Some(thread) = self.decode_thread.take() {
