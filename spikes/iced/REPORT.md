@@ -70,8 +70,9 @@ and Vulkan (wgpu) (`scripts/frames.py`; Qt's `QSG_RENDER_TIMING` printed nothing
 GPU come from `/proc` and DRM fdinfo over the 10 s of playback (`scripts/sample.py`). Each cell is
 the median of 3 runs with the range in brackets; every run waited for the machine to be idle
 (`scripts/quiet.py`) because other agents were building and benchmarking on it, and the 1-minute
-load average at the end of each run is in the tables. The tables are the last set of runs, taken
-between 10:50 and 11:20 with the machine otherwise idle (load 0.2–5); an earlier set taken while
+load average at the end of each run is in the tables. The tables are the last set of runs (Qt
+06:31–06:43, the spike 11:07–11:12, the spike's scene shader unchanged since), each with the
+machine otherwise idle (load 0.2–5); an earlier set taken while
 other agents were building (load up to 23) showed the same picture with more Qt hitches, and every
 Qt run in the tables played 8–10 s without its editor being killed. Raw per-run JSON and export logs are in
 `results/`; `scripts/measure.sh` reproduces all of it.
