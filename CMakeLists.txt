@@ -11,7 +11,8 @@ find_package(LayerShellQt REQUIRED)
 
 # The program logic is Rust (crates/). omareel_qt is the one static library linked into C++:
 # it carries omareel_core, omareel_record, the CXX-Qt objects that expose them to QML, and the
-# C++ in crates/omareel_qt/cpp that calls into them (the editor's base class and the exporter).
+# C++ in crates/omareel_qt/cpp that calls into them (the editor's base class and the exporter, and
+# the launcher's and recording bar's base classes).
 find_package(Corrosion REQUIRED)
 include(cmake/CxxQt.cmake)
 cxx_qt_import_crate(MANIFEST_PATH ${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml CRATES omareel_qt LOCKED
@@ -34,31 +35,33 @@ qt_standard_project_setup()
 qt_policy(SET QTP0004 NEW)
 
 # C++ the Rust code drives: Qt-only pieces such as the editor's players, the export renderer,
-# file watchers and font calls. It never calls into Rust, so the static libraries link in one
-# direction.
+# the camera, file watchers and font calls. It never calls into Rust, so the static libraries link
+# in one direction.
 add_library(omareel_plumbing STATIC
     src/plumbing/QtShims.cpp
     src/plumbing/ThemeBase.cpp
     src/plumbing/PlaybackDriver.cpp
     src/plumbing/ExportRenderer.cpp
+    src/plumbing/CameraCapture.cpp
 )
 target_include_directories(omareel_plumbing PUBLIC src/plumbing)
-target_link_libraries(omareel_plumbing PUBLIC Qt6::Core Qt6::Gui Qt6::Multimedia Qt6::Qml Qt6::Quick Qt6::OpenGL)
+target_link_libraries(omareel_plumbing
+    PUBLIC Qt6::Core Qt6::Gui Qt6::Multimedia Qt6::Qml Qt6::Quick Qt6::OpenGL
+    PRIVATE PkgConfig::TURBOJPEG)
 target_link_libraries(omareel_qt INTERFACE omareel_plumbing PkgConfig::LIBEVDEV)
 
 add_library(omareel_core STATIC
     src/core/OmarchyPaths.cpp
     src/core/RecordingPreferences.cpp
     src/record/CursorSampler.cpp
-    src/record/CameraCapture.cpp
     src/record/Recorder.cpp
     src/record/CaptureExclusion.cpp
 )
 target_include_directories(omareel_core PUBLIC src)
-# Recorder.cpp, CursorSampler.cpp and CameraCapture.cpp call the recording side in Rust.
+# Recorder.cpp and CursorSampler.cpp call the recording side in Rust.
 target_link_libraries(omareel_core
     PUBLIC Qt6::Core Qt6::Gui Qt6::Quick Qt6::Multimedia Qt6::Svg
-    PRIVATE omareel_qt PkgConfig::TURBOJPEG
+    PRIVATE omareel_qt
 )
 
 add_library(omareel_render STATIC)
@@ -151,9 +154,6 @@ qt_add_qml_module(omareel_render
     SOURCES
         src/render/FrameSource.h src/render/FrameSource.cpp
         src/render/VideoDecoding.h src/render/VideoDecoding.cpp
-        src/ui/Launcher.h src/ui/Launcher.cpp
-        src/ui/MicrophoneMeter.h src/ui/MicrophoneMeter.cpp
-        src/ui/RecordingBar.h src/ui/RecordingBar.cpp
     QML_FILES
         src/ui/qml/Composition.qml
         src/ui/qml/Background.qml
@@ -240,6 +240,9 @@ if(BUILD_TESTING)
         target_link_libraries(test_${test_name} PRIVATE omareel_core Qt6::Test)
         add_test(NAME ${test_name} COMMAND test_${test_name})
     endforeach()
+    # The camera's frame packing, timestamp file and pacing are plumbing, which omareel_qt carries
+    # (and orders after itself on the link line).
+    target_link_libraries(test_recorder PRIVATE omareel_qt)
     qt_add_executable(test_exporter_smoke tests/test_exporter_smoke.cpp)
     target_link_libraries(test_exporter_smoke PRIVATE omareel_render Qt6::Test)
     add_test(NAME exporter_smoke COMMAND test_exporter_smoke)

@@ -1,7 +1,6 @@
 //! The recording side for C++ (`omareel_record`): the recording commands `main.cpp` dispatches
 //! (`omareel record`, the recorder daemon, `__selfview-ipc` and `__record-bar-ipc`), and the
-//! recorder's state files, the cursor query and the encoder probe cache for the C++ that still
-//! reads them (the launcher, the recording bar and its windows, the camera).
+//! recorder's state files and the cursor query for the C++ that still reads them.
 //!
 //! The state files' objects cross as JSON text: `QJsonDocument` parses what Rust wrote as it
 //! would have parsed the file, and Rust parses what `QJsonDocument` wrote as Qt would have kept
@@ -10,7 +9,7 @@
 use cxx_qt_lib::{QByteArray, QList, QString, QStringList};
 use omareel_core::compat::qjson::{self, Format, Value};
 use omareel_record::recorder::{daemon, state};
-use omareel_record::{cli, cursor_sampler, screen_capture};
+use omareel_record::{cli, cursor_sampler};
 
 #[cxx_qt::bridge]
 pub mod ffi {
@@ -80,9 +79,6 @@ pub mod ffi {
         /// answered.
         #[cxx_name = "cursorPosition"]
         fn cursor_position(x: &mut f64, y: &mut f64) -> bool;
-        /// `cachedPreferredEncoderAvailable()`: whether the encoder probe cache says NVENC works.
-        #[cxx_name = "cachedPreferredEncoderAvailable"]
-        fn cached_preferred_encoder_available() -> bool;
     }
 }
 
@@ -180,8 +176,4 @@ fn cursor_position(x: &mut f64, y: &mut f64) -> bool {
         }
         None => false,
     }
-}
-
-fn cached_preferred_encoder_available() -> bool {
-    screen_capture::cached_preferred_encoder_available()
 }

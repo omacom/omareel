@@ -5,6 +5,7 @@
 #include <QPointer>
 #include <QSize>
 #include <QString>
+#include <functional>
 #include <memory>
 
 #include <QList>
@@ -40,14 +41,6 @@ struct CameraRawFrame {
 };
 CameraRawFrame packCameraFrame(QVideoFrame frame);
 qint64 cameraFrameDeadlineUs(qint64 firstFrameUs, qint64 frameNumber);
-// Whether the camera has a format CameraCapture records from (30 fps or more). IR sensors that
-// sit beside a laptop's webcam don't.
-bool cameraCanRecord(const QCameraDevice &device);
-// The path settings keep for a camera. /dev/videoN numbers follow the order cameras are plugged
-// in, so a dock reconnecting can swap them; this returns the camera's /dev/v4l/by-id link, or its
-// by-path link (USB port) when another node shares the by-id name, or the node when neither exists.
-QString stableCameraPath(const QString &devicePath, const QString &devRoot = QStringLiteral("/dev"),
-                         const QString &sysRoot = QStringLiteral("/sys"));
 // The /dev/videoN node a saved camera path refers to now, or empty when it isn't plugged in.
 QString cameraNodePath(const QString &path);
 // The /dev/videoN node named in a Qt camera id, or empty.
@@ -55,6 +48,12 @@ QString cameraIdNode(const QByteArray &id);
 QCameraDevice cameraDeviceForPath(const QList<QCameraDevice> &devices, const QString &path);
 class CameraEncoder;
 
+// The camera the recording bar shows and records: a QCamera into a video sink, the preview
+// sink it is given, and an encoder thread that packs frames and pipes them to ffmpeg. Its
+// owner (RecordingBarBase, crates/omareel_qt/cpp) tells it whether to encode with NVENC through
+// setPreferredEncoderQuery, which the encoder thread asks when it starts ffmpeg; the answer is
+// the screen recorder's cached encoder probe, which is Rust (omareel_record), and plumbing does
+// not call Rust itself.
 class CameraCapture : public QObject
 {
     Q_OBJECT
@@ -75,6 +74,9 @@ public:
     QSize captureSize() const { return m_captureSize; }
     qreal frameRate() const { return m_frameRate; }
 
+    // Whether the cached encoder probe found NVENC; asked on the encoder thread, so it must be
+    // safe to call from any thread. Without one, libx264 is used.
+    void setPreferredEncoderQuery(std::function<bool()> query) { m_preferredEncoderQuery = std::move(query); }
     Q_INVOKABLE void attachVideoOutput(QObject *output);
     Q_INVOKABLE void start();
     void setRecordingOutput(const QString &videoPath, const QString &timestampPath);
@@ -94,6 +96,7 @@ private:
     void fail(const QString &message);
 
     QString m_devicePath;
+    std::function<bool()> m_preferredEncoderQuery;
     int m_requestedHeight = 1080;
     QString m_videoPath;
     FirstFrameTimestamp m_timestamp;

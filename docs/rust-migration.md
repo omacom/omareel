@@ -10,10 +10,10 @@ same after each one: same commands, same files written byte for byte, same pixel
 |---|---|
 | `crates/omareel_core` | Plain Rust logic with no Qt. Any front end can use it. |
 | `crates/omareel_record` | The recording side with no Qt, on top of `omareel_core`: the recorder daemon and `omareel record`, the in-process Wayland screen capture, input and cursor sampling, the state files, region picker and capture exclusion, and the camera, launcher and recording bar helpers. |
-| `crates/omareel_qt` | The one Rust static library linked into the C++ binary: CXX-Qt objects and C++-callable functions that expose `omareel_core` to QML and C++. |
-| `crates/omareel_qt/cpp` | C++ that calls into Rust and is compiled into the same archive by the crate's build script: `EditorBase` (the editor object's C++ base) and `Exporter` (the export render loop over the Rust export job). |
-| `src/plumbing` | C++ that Rust drives: Qt-only pieces (the editor's players, GL export rendering, camera, file watchers). |
-| `src/` (rest) | C++ that has not moved yet: the recording side (`src/record`; the launcher, recording bar, microphone meter and capture test client in `src/ui`; and `OmarchyPaths` and `RecordingPreferences` in `src/core`, which it uses), `FrameSource` and the video decoding setup in `src/render`, and `main.cpp`'s window setup. The editor's logic is all Rust: its C++ (`Project`, the timelines and tracks) is deleted, and its unit tests' cases are `#[test]`s in `omareel_core`. |
+| `crates/omareel_qt` | The one Rust static library linked into the C++ binary: CXX-Qt objects and C++-callable functions that expose `omareel_core` and `omareel_record` to QML and C++. |
+| `crates/omareel_qt/cpp` | C++ that calls into Rust and is compiled into the same archive by the crate's build script: `EditorBase` (the editor object's C++ base), `Exporter` (the export render loop over the Rust export job), and `LauncherBase` and `RecordingBarBase`, the C++ bases of the launcher and recording bar objects. |
+| `src/plumbing` | C++ that Rust drives: Qt-only pieces (the editor's players, GL export rendering, the camera, file watchers). |
+| `src/` (rest) | C++ that has not moved yet: what is left of the recording side (`src/record`, and `OmarchyPaths` and `RecordingPreferences` in `src/core`), the capture test client in `src/ui`, `FrameSource` and the video decoding setup in `src/render`, and `main.cpp`'s window setup. The editor's logic is all Rust: its C++ (`Project`, the timelines and tracks) is deleted, and its unit tests' cases are `#[test]`s in `omareel_core`. |
 
 The layering only goes one way, which keeps static-library linking free of cycles:
 
@@ -28,16 +28,26 @@ omareel_plumbing (C++)         never calls Rust; only emits Qt signals and imple
 ```
 
 The editor object needed C++ on both sides of Rust: its players (`PlaybackDriver`) below it,
-and the exporter, which drives the Rust export job, above it. The exporter is therefore compiled
-into `omareel_qt`'s own archive (`CxxQtBuilder::cpp_files`, which also runs moc on the headers),
-with `EditorBase`, which starts it. Within one archive the linker resolves references in any
-direction, so nothing depends on link order; CMake only adds `crates/omareel_qt/cpp` to the
-include path of what links `omareel_qt`, and the Qt modules that C++ needs to `QT_MODULES` (they
-must match the build script's `qt_module` calls). That C++ is built by the `cc` crate with the
-crate's flags rather than CMake's, so it should not lean on `Q_ASSERT` or `NDEBUG`. A CMake cycle between two static libraries, or
-the Rust editor running the export loop itself, were the other options: the first depends on
-CMake repeating archives on the link line, the second would have changed when the event loop
-runs during an export.
+and the exporter, which drives the Rust export job, above it. The launcher and the recording bar
+are Rust objects over C++ bases that own their Qt pieces: `LauncherBase` holds QMediaDevices, the
+cameras Qt lists (the `webcamCameraDevice` property hands one to QML in a QVariant), the
+microphone meter's QAudioSource and the launcher's timers, and starts the detached processes;
+`RecordingBarBase` holds the camera (`CameraCapture`, plumbing), the watcher on the recorder's
+state directory, the bar's timers and the standby host's QLockFile, which it releases only after
+the camera is gone, as `RecordingBar`'s members did. The exporter and these bases all call Rust,
+so they are compiled into `omareel_qt`'s own archive (`CxxQtBuilder::cpp_files`, which also runs
+moc on the headers), with `EditorBase`, which starts the exporter. Within one archive the linker
+resolves references in any direction, so nothing depends on link order; CMake only adds
+`crates/omareel_qt/cpp` to the include path of what links `omareel_qt`, and the Qt modules that
+C++ needs to `QT_MODULES` (they must match the build script's `qt_module` calls). That C++ is
+built by the `cc` crate with the crate's flags (`-Wall -Wextra`) rather than CMake's, so it should
+not lean on `Q_ASSERT` or `NDEBUG`, and its headers include `<QString>` before any other Qt header
+(see the CXX-Qt notes). A CMake cycle between two static libraries, or the Rust editor running the
+export loop itself, were the other options: the first depends on CMake repeating archives on the
+link line, the second would have changed when the event loop runs during an export. Plumbing
+itself still never calls Rust: what it needs from Rust comes in as a `std::function`, like
+`CameraCapture::setPreferredEncoderQuery`, which `RecordingBarBase` points at the Rust encoder
+probe's cache.
 
 ## Rules for ported code
 
@@ -78,14 +88,27 @@ started (CXX-Qt 0.10, Qt 6.11):
 - CXX-Qt generates an `Omareel::rust` namespace for the objects declared in `Omareel`, so C++
   in that namespace spells cxx's types `::rust::Box` and `::rust::Slice`.
 - A C++ base class can own Qt objects the Rust object drives (`EditorBase` owns the players and
-  timers): Rust calls its protected methods with `#[inherit]` and it reports through pure
-  virtuals the Rust object overrides. Override signatures must match exactly; a Rust `i64` is
-  `std::int64_t`, which is not `qint64`. The base disconnects its players in its destructor, since
-  the Rust object (and its overrides) is gone by then.
+  timers, `LauncherBase` and `RecordingBarBase` the devices, camera, watcher and timers): Rust
+  calls its protected methods with `#[inherit]` and it reports through pure virtuals the Rust
+  object overrides. Override signatures must match exactly; a Rust `i64` is `std::int64_t`, which
+  is not `qint64`.
 - The generated class derives from the base, then `CxxQtType` (which owns the Rust object), then
-  `CxxQtThreading`, so the threading guard is cleared before the Rust object drops: a worker that
+  `CxxQtThreading`, so the threading guard is cleared before the Rust object drops (a worker that
   queues a result while `Drop` waits for it gets an error instead of a deadlock, and nothing runs
-  for a destroyed object.
+  for a destroyed object), and the Rust object drops before the base's members: the base
+  disconnects what reports to it in its destructor, since the overrides are gone by then, and
+  anything that must outlive the Rust state (the camera before the host lock) is ordered among the
+  base's members.
+- A base method that emits synchronously (a camera that fails as it starts) calls the Rust override
+  while a Rust method that called the base is still on the stack. The C++ handled those signals
+  inside the call, and the state files they write must come out in the same order, so the calls
+  stay direct; the Rust methods hold no borrow of their fields across such a call.
+- cxx explicitly instantiates `rust::Vec<T>` for every shared struct `T` a signature mentions, and
+  GCC 16 reports `-Wmaybe-uninitialized` in its constructor; lists go across as an opaque Rust
+  collector C++ appends to (`CameraList`) instead.
+- A C++ header compiled by the build script that includes another Qt header before `<QString>`
+  makes GCC 16 warn that `QChar` was completed after a SFINAE check; `QtShims.h` (or `<QString>`)
+  goes first.
 - A C++ function can be declared in one bridge only (cxx emits a shim symbol per declaration);
   other modules call it through a Rust wrapper. A shared struct of one bridge can be used in
   another as `type ExportOptions = crate::export::ffi::ExportOptions;`.

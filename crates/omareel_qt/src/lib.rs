@@ -4,7 +4,10 @@
 pub mod cli;
 pub mod editor;
 pub mod export;
+pub mod launcher;
 pub mod record;
+pub mod recording_bar;
+mod support;
 pub mod theme;
 
 // cxx-qt-build registers cxx-qt-lib's initializers with the binary, so the crate must be

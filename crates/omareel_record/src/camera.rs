@@ -226,3 +226,99 @@ impl FirstFrameTimestamp {
         self.first_frame_us
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    /// A directory under the system's temporary directory, removed when dropped.
+    struct ScratchDirectory(std::path::PathBuf);
+
+    impl Drop for ScratchDirectory {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn write(path: &str, contents: &[u8]) {
+        std::fs::create_dir_all(Path::new(path).parent().unwrap()).unwrap();
+        std::fs::write(path, contents).unwrap();
+    }
+
+    fn link(target: &str, path: &str) {
+        std::fs::create_dir_all(Path::new(path).parent().unwrap()).unwrap();
+        let _ = std::fs::remove_file(path);
+        std::os::unix::fs::symlink(target, path).unwrap();
+    }
+
+    fn canonical(path: &str) -> String {
+        FileInfo::new(path).canonical_file_path()
+    }
+
+    // test_recorder.cpp's cameraPathsSurviveRenumbering.
+    #[test]
+    fn camera_paths_survive_renumbering() {
+        // A laptop webcam whose IR sensor shares its USB serial, so both index-0 nodes claim one
+        // by-id name and udev left it on the IR node, and an Insta360 on a dock.
+        let root = ScratchDirectory(
+            std::env::temp_dir().join(format!("omareel-camera-paths-{}-{:?}", std::process::id(), std::thread::current().id())),
+        );
+        let root_path = root.0.to_string_lossy().into_owned();
+        let dev = format!("{root_path}/dev");
+        let sys = format!("{root_path}/sys");
+        let node = |name: &str, interface: &str, index: i32| {
+            write(&format!("{dev}/{name}"), b"");
+            std::fs::create_dir_all(format!("{sys}/devices/{interface}")).unwrap();
+            let class_directory = format!("{sys}/class/video4linux/{name}");
+            write(&format!("{class_directory}/index"), format!("{index}\n").as_bytes());
+            link(&format!("{sys}/devices/{interface}"), &format!("{class_directory}/device"));
+        };
+        write(&format!("{sys}/devices/usb7/7-1/idVendor"), b"636e\n");
+        write(&format!("{sys}/devices/usb7/7-1/idProduct"), b"0bdb\n");
+        write(&format!("{sys}/devices/usb7/7-1/serial"), b"200901010001\n");
+        write(&format!("{sys}/devices/usb1/1-1.1/idVendor"), b"2e1a\n");
+        write(&format!("{sys}/devices/usb1/1-1.1/idProduct"), b"4c04\n");
+        node("video0", "usb7/7-1/7-1:1.0", 0);
+        node("video1", "usb7/7-1/7-1:1.0", 1);
+        node("video2", "usb7/7-1/7-1:1.2", 0);
+        node("video4", "usb1/1-1.1/1-1.1:1.0", 0);
+        let by_id = format!("{dev}/v4l/by-id/");
+        let by_path = format!("{dev}/v4l/by-path/");
+        link(&format!("{dev}/video2"), &format!("{by_id}usb-ASUS_FHD_webcam_200901010001-video-index0"));
+        link(&format!("{dev}/video1"), &format!("{by_id}usb-ASUS_FHD_webcam_200901010001-video-index1"));
+        link(&format!("{dev}/video4"), &format!("{by_id}usb-Insta360_Insta360_Link_2-video-index0"));
+        link(&format!("{dev}/video0"), &format!("{by_path}platform-x-usbv2-0:1:1.0-video-index0"));
+        link(&format!("{dev}/video0"), &format!("{by_path}platform-x-usb-0:1:1.0-video-index0"));
+        link(&format!("{dev}/video2"), &format!("{by_path}platform-x-usb-0:1:1.2-video-index0"));
+        link(&format!("{dev}/video4"), &format!("{by_path}platform-y-usb-0:1.1:1.0-video-index0"));
+
+        let insta360 = stable_camera_path_in(&format!("{dev}/video4"), &dev, &sys);
+        assert_eq!(insta360, format!("{by_id}usb-Insta360_Insta360_Link_2-video-index0"));
+        assert_eq!(
+            stable_camera_path_in(&format!("{dev}/video0"), &dev, &sys),
+            format!("{by_path}platform-x-usb-0:1:1.0-video-index0")
+        );
+        assert_eq!(
+            stable_camera_path_in(&format!("{dev}/video2"), &dev, &sys),
+            format!("{by_path}platform-x-usb-0:1:1.2-video-index0")
+        );
+        assert_eq!(stable_camera_path_in(&insta360, &dev, &sys), insta360);
+        assert_eq!(camera_node_path(&insta360), canonical(&format!("{dev}/video4")));
+
+        // The dock comes back with a capture card ahead of the camera.
+        std::fs::remove_file(format!("{dev}/video4")).unwrap();
+        node("video6", "usb1/1-1.1/1-1.1:1.0", 0);
+        link(&format!("{dev}/video6"), &format!("{by_id}usb-Insta360_Insta360_Link_2-video-index0"));
+        assert_eq!(camera_node_path(&insta360), canonical(&format!("{dev}/video6")));
+
+        // Unplugged: the saved path stays, and there is no node.
+        std::fs::remove_file(format!("{dev}/video6")).unwrap();
+        assert_eq!(camera_node_path(&insta360), "");
+        assert_eq!(stable_camera_path_in(&insta360, &dev, &sys), insta360);
+
+        assert_eq!(camera_id_node(b"/dev/video6"), "/dev/video6");
+        assert_eq!(camera_id_node(b"v4l2 /dev/video6 usb"), "/dev/video6");
+        assert_eq!(camera_id_node(b"obs-virtual"), "");
+    }
+}
