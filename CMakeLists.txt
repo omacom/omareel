@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.21)
+cmake_minimum_required(VERSION 3.22)
 project(omareel VERSION 0.3.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -8,6 +8,13 @@ set(CMAKE_AUTOMOC ON)
 
 find_package(Qt6 6.8 REQUIRED COMPONENTS Core Concurrent Gui GuiPrivate Quick QuickControls2 Multimedia OpenGL Svg Test)
 find_package(LayerShellQt REQUIRED)
+
+# The program logic is Rust (crates/). omareel_qt is the one static library linked into C++:
+# it carries omareel_core and the CXX-Qt objects that expose it to QML.
+find_package(Corrosion REQUIRED)
+include(cmake/CxxQt.cmake)
+cxx_qt_import_crate(MANIFEST_PATH ${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml CRATES omareel_qt LOCKED
+    QT_MODULES Qt6::Core Qt6::Gui)
 find_package(PkgConfig REQUIRED)
 option(OMAREEL_BUILD_HYPRLAND_PLUGIN "Build the matching Hyprland capture exclusion plugin" ON)
 if(OMAREEL_BUILD_HYPRLAND_PLUGIN)
@@ -244,7 +251,7 @@ target_include_directories(omareel_render PUBLIC src src/render)
 target_link_libraries(omareel_render PUBLIC omareel_core omareel_ui Qt6::Concurrent Qt6::Quick Qt6::QuickControls2 Qt6::Multimedia Qt6::OpenGL)
 
 qt_add_executable(omareel src/main.cpp src/ui/CaptureTestClient.cpp)
-target_link_libraries(omareel PRIVATE omareel_render Qt6::Quick Qt6::Multimedia Qt6::GuiPrivate LayerShellQt::Interface PkgConfig::WAYLAND_CLIENT)
+target_link_libraries(omareel PRIVATE omareel_render omareel_qt Qt6::Quick Qt6::Multimedia Qt6::GuiPrivate LayerShellQt::Interface PkgConfig::WAYLAND_CLIENT)
 target_compile_definitions(omareel PRIVATE OMAREEL_VERSION="${PROJECT_VERSION}")
 add_custom_command(TARGET omareel POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E rm -f $<TARGET_FILE_DIR:omareel>/omarecord
@@ -268,6 +275,12 @@ if(BUILD_TESTING)
     qt_add_executable(test_editor tests/test_editor.cpp)
     target_link_libraries(test_editor PRIVATE omareel_render Qt6::Test)
     add_test(NAME editor COMMAND test_editor)
+    # The Rust crates' own tests. omareel_qt is left out: it only links inside a Qt binary.
+    set(OMAREEL_CARGO_TEST ${CMAKE_COMMAND} -E env CARGO_TARGET_DIR=${CMAKE_BINARY_DIR}/cargo/test
+        ${Rust_CARGO} test --locked --workspace --exclude omareel_qt --quiet)
+    add_custom_target(omareel_rust_tests ALL COMMAND ${OMAREEL_CARGO_TEST} --no-run
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} USES_TERMINAL VERBATIM)
+    add_test(NAME rust COMMAND ${OMAREEL_CARGO_TEST} WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
     # The capture exclusion plugin's own function hook, which only aarch64 uses.
     if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
         add_executable(test_arm64hook plugin/test_arm64hook.cpp)

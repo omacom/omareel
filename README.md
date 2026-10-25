@@ -147,12 +147,18 @@ and UI debug screenshot flags, see [docs/USAGE.md](docs/USAGE.md).
 
 ## Development
 
+Building needs Rust (`rust` and `corrosion` on Arch) along with Qt 6 and CMake.
+
 ```sh
 ./bin/build
 ./bin/test
 ```
 
-Tagged releases (`v*`) build and test on `x86_64` and `aarch64` and attach Arch packages and
+The program logic lives in Rust under [`crates/`](crates): `omareel_core` is plain Rust, and
+`omareel_qt` exposes it to the Qt Quick interface through CXX-Qt. See
+[docs/rust-migration.md](docs/rust-migration.md) for how the code is being moved there.
+
+Every pull request builds, tests, and packages `x86_64` and `aarch64`; tagged releases (`v*`) also attach the Arch packages and
 plain tarballs to the GitHub release through `.github/workflows/release.yml`.
 
 The frozen engineering contract is in [docs/SPEC.md](docs/SPEC.md).

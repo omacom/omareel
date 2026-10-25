@@ -13,6 +13,7 @@
 #include "ui/Editor.h"
 #include "ui/Launcher.h"
 #include "ui/RecordingBar.h"
+#include "omareel_qt/src/cli.cxxqt.h"
 
 #include <LayerShellQt/shell.h>
 #include <LayerShellQt/window.h>
@@ -121,30 +122,7 @@ static int shellFontBaseSize()
 
 static int usage(const QString &error = {})
 {
-    QTextStream stream(error.isEmpty() ? stdout : stderr);
-    if (!error.isEmpty()) stream << "omareel: " << error << '\n';
-    stream << "usage: omareel [command]\n\n"
-              "commands:\n"
-              "  record [--region|--fullscreen|--window] [options]\n"
-              "      Toggle recording (smart gesture is the default: drag an area, click a\n"
-              "      window, or click the desktop for the whole screen). Options: --fps N,\n"
-              "      --dir PATH,\n"
-              "      --with-desktop-audio, --with-microphone-audio, --no-audio,\n"
-              "      --with-webcam, --webcam-device PATH, --webcam-height 720|1080,\n"
-              "      --no-webcam, --no-selfview, --no-open, --no-bar,\n"
-              "      --stop, --cancel.\n"
-              "  edit <bundle.omareel>\n"
-              "      Open a recording bundle in the editor.\n"
-              "  export <bundle> -o <file.mp4|file.gif> [options]\n"
-              "      Export with --fps N, --width W, --quality LEVEL, --gif-fps N,\n"
-              "      --gif-width W, or --timing.\n"
-              "  probe <bundle>\n"
-              "      Print a JSON summary of a recording bundle.\n"
-              "  help\n"
-              "      Show this help.\n\n"
-              "Running omareel without a command opens the launcher.\n"
-              "The legacy omarecord command remains available as a compatibility alias.\n";
-    return error.isEmpty() ? 0 : 2;
+    return omareel::cli::usage(error.toStdString());
 }
 
 static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplication &app)

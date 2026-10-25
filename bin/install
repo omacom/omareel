@@ -9,7 +9,5 @@ if ! command -v makepkg >/dev/null 2>&1; then
   exit 1
 fi
 
-"$ROOT/bin/build"
-
 cd "$PKGBUILD_DIR"
 exec makepkg -fsi "$@"

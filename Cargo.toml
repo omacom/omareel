@@ -1,0 +1,14 @@
+[workspace]
+resolver = "3"
+members = ["crates/omareel_core", "crates/omareel_qt"]
+
+[workspace.package]
+edition = "2024"
+# Arch Linux ARM's rust can trail Arch's; cxx-qt 0.10 needs 1.85.
+rust-version = "1.85"
+license = "MIT"
+publish = false
+
+[profile.release]
+# The staticlib is linked into a C++ binary; unwinding into Qt frames aborts anyway.
+panic = "abort"

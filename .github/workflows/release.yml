@@ -1,9 +1,17 @@
-name: Release
+name: Build and release
 
+# Every pull request and master push builds, tests, and packages both architectures; the
+# packages are attached to the workflow run. Tags (v*) also attach them to the release.
 on:
   push:
+    branches: [master]
     tags: ["v*"]
+  pull_request:
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: write
@@ -38,7 +46,7 @@ jobs:
       - name: Install build and runtime dependencies
         run: >-
           pacman -S --noconfirm --needed
-          git cmake ninja pkgconf wayland wayland-protocols
+          git cmake ninja pkgconf wayland wayland-protocols rust corrosion
           qt6-base qt6-declarative qt6-multimedia qt6-svg qt6-shadertools
           layer-shell-qt libevdev libjpeg-turbo ffmpeg slurp xdg-desktop-portal
           gpu-screen-recorder hicolor-icon-theme
@@ -69,13 +77,6 @@ jobs:
           echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
           chown -R builder "$GITHUB_WORKSPACE"
 
-      - name: Build and test
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: |
-          su builder -c './bin/build'
-          su builder -c 'QT_QPA_PLATFORM=offscreen ./bin/test'
-
       - name: Build the Arch package
         run: |
           # Arch Linux ARM still defaults PKGEXT to .pkg.tar.xz; publish zst everywhere.
@@ -83,8 +84,15 @@ jobs:
           cd pkg
           # Dependencies were installed above; makepkg's own check would refuse
           # a runtime dependency (hyprland) that this mirror cannot provide.
+          # --noextract also skips prepare(), so cargo fetches crates during the build.
           su builder -c 'makepkg -f --noconfirm --noextract --nodeps'
           ls -la *.pkg.tar.zst
+
+      # The tests run against the build that was packaged, not a second build.
+      - name: Test the packaged build
+        run: |
+          rustc -V; cargo -V
+          su builder -c 'QT_QPA_PLATFORM=offscreen BUILD_DIR=build-pkg ./bin/test'
 
       - name: Stage a plain tarball
         run: |
