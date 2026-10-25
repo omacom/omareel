@@ -1,0 +1,4 @@
+# The corpus and the goldens are compared byte for byte (BOMs, CRLF and NUL bytes included):
+# git must never convert their line endings.
+* -text
+expected/** linguist-generated=true

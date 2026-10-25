@@ -1,0 +1,13 @@
+landscape.png	true	true	400x240	jpeg
+small.png	true	true	400x240	jpeg
+tall.png	true	true	400x240	jpeg
+exact.png	true	true	400x240	jpeg
+odd.png	true	true	400x240	jpeg
+pixel.png	true	true	400x240	jpeg
+jpeg-named.webp	true	true	400x240	jpeg
+not-an-image.png	false	false	-	-
+missing.png	false	false	-	-
+landscape.png again (thumbnail exists)	true	true	400x240	jpeg
+missing source, thumbnail file exists	true	true	-	-
+thumbnail directory cannot be created	false	false	-	-
+into the cache via wallpaperThumbnailPath	true	true	400x240	jpeg

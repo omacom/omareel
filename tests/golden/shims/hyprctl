@@ -1,0 +1,14 @@
+#!/bin/sh
+# Stand-in for hyprctl while the oracle runs: Theme reads decoration:rounding from it. The default
+# answer is what Hyprland prints for a rounding of 10. OMAREEL_ORACLE_HYPRCTL_OUTPUT replaces the
+# output; OMAREEL_ORACLE_HYPRCTL_EXIT makes it exit with that status after printing.
+if [ "$*" != "getoption decoration:rounding -j" ]; then
+    echo "hyprctl shim: unexpected arguments: $*" >&2
+    exit 64
+fi
+if [ -n "${OMAREEL_ORACLE_HYPRCTL_OUTPUT+set}" ]; then
+    printf '%s' "$OMAREEL_ORACLE_HYPRCTL_OUTPUT"
+else
+    printf '%s\n' '{"option": "decoration:rounding", "int": 10, "set": true }'
+fi
+exit "${OMAREEL_ORACLE_HYPRCTL_EXIT:-0}"

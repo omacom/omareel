@@ -1,0 +1,22 @@
+[controls]
+normal-color = accent
+normal-fill-alpha = 0.5
+normal-border = urgent
+normal-border-width = 2.5
+normal-border-alpha = 2
+hover-cursor-color = Foreground
+hover-cursor-fill-alpha = -1
+hover-cursor-border = background
+hover-cursor-border-width = -3
+hover-cursor-border-alpha = nan
+selected-color = TEXT
+selected-fill-alpha = 0.333
+selected-border = #00ff00
+selected-border-width = 3.5
+selected-border-alpha = "0.5"
+pressed-color = "hyprland.active-border"
+pressed-fill-alpha = inf
+selection-color = "hyprland.active-border-foreground"
+selection-fill-alpha = 1e-3
+[bar]
+active = accent

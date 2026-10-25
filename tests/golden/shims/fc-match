@@ -1,0 +1,12 @@
+#!/bin/sh
+# Stand-in for fc-match while the oracle runs: Theme asks for the family of "monospace", and the
+# installed fonts must not change the goldens. OMAREEL_ORACLE_FC_MATCH overrides the answer;
+# OMAREEL_ORACLE_FC_MATCH_EXIT makes it fail.
+if [ "$*" != "-f %{family[0]} monospace" ]; then
+    echo "fc-match shim: unexpected arguments: $*" >&2
+    exit 64
+fi
+if [ -n "${OMAREEL_ORACLE_FC_MATCH_EXIT:-}" ]; then
+    exit "$OMAREEL_ORACLE_FC_MATCH_EXIT"
+fi
+printf '%s' "${OMAREEL_ORACLE_FC_MATCH-Oracle Mono}"

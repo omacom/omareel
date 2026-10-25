@@ -1,0 +1,14 @@
+{
+    "\u0000": 5,
+    "a\ud800b\udc00\udbff": "key with lone surrogates",
+    "c1": " ",
+    "control": "\u0001\u0002\t\n\r\b\f\u001f",
+    "e": 2,
+    "lone": "a\ud800b\udc00\udbff",
+    "nul": "\u0000x",
+    "quotes": "\"'\\/",
+    "unicode": "é€😀  ﻿￿",
+    "é": 1,
+    "😀": 3,
+    "！": 4
+}

@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "fps": 60,
+  "width": 640,
+  "height": 360,
+  "region": {"x": 0, "y": 0, "w": 640, "h": 360},
+  "scale": 1.0,
+  "monitor": "synthetic",
+  "first_frame_us": 1000000,
+  "started_us": 1000000,
+  "stopped_us": 9000000,
+  "audio": {"desktop": false, "mic": false}
+}
