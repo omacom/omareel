@@ -1,5 +1,5 @@
 #include "omareel_qt/src/editor.cxxqt.h"
-#include "core/Project.h"
+#include "ProjectJson.h"
 #include "omareel_qt/src/theme.cxxqt.h"
 #include "render/VideoDecoding.h"
 
@@ -1562,12 +1562,13 @@ private slots:
     void missingInsertedVideoStillOpens()
     {
         const QString bundle = plainBundle(QStringLiteral("missing-insert.omareel"));
-        Project project = Project::defaults(QStringLiteral("Missing"), 2.0);
-        Clip gone{QStringLiteral("m"), 0.0, 1.0, 1.0};
-        gone.media = QStringLiteral("media/gone.mp4");
-        project.clips << gone;
+        QJsonObject project = ProjectJson::defaults(QStringLiteral("Missing"), 2.0);
+        QJsonArray clips = project.value(QStringLiteral("clips")).toArray();
+        clips << ProjectJson::insertedClip(QStringLiteral("m"), 0.0, 1.0, QStringLiteral("media/gone.mp4"));
+        project.insert(QStringLiteral("clips"), clips);
         QString error;
-        QVERIFY2(project.save(QDir(bundle).filePath(QStringLiteral("project.json")), &error), qPrintable(error));
+        QVERIFY2(ProjectJson::save(project, QDir(bundle).filePath(QStringLiteral("project.json")), &error),
+                 qPrintable(error));
         Editor editor(bundle);
         QVERIFY2(editor.isValid(), qPrintable(editor.errorString()));
         QCOMPARE(editor.clips().size(), 2);
@@ -1583,13 +1584,14 @@ private slots:
         QVERIFY(QDir(bundle).mkpath(QStringLiteral("media")));
         QVERIFY(makeVideo(QDir(bundle).filePath(QStringLiteral("media/demo.mp4")),
                           QStringLiteral("testsrc2=size=320x240:rate=30"), 1.0));
-        Project project = Project::defaults(QStringLiteral("Playback"), 2.0);
-        Clip insert{QStringLiteral("m"), 0.2, 0.8, 1.0};
-        insert.media = QStringLiteral("media/demo.mp4");
-        project.clips = {Clip{QStringLiteral("a"), 0.0, 0.6, 1.0}, insert,
-                         Clip{QStringLiteral("b"), 0.6, 1.4, 1.0}};
+        QJsonObject project = ProjectJson::defaults(QStringLiteral("Playback"), 2.0);
+        project.insert(QStringLiteral("clips"), QJsonArray{
+            ProjectJson::clip(QStringLiteral("a"), 0.0, 0.6),
+            ProjectJson::insertedClip(QStringLiteral("m"), 0.2, 0.8, QStringLiteral("media/demo.mp4")),
+            ProjectJson::clip(QStringLiteral("b"), 0.6, 1.4)});
         QString error;
-        QVERIFY2(project.save(QDir(bundle).filePath(QStringLiteral("project.json")), &error), qPrintable(error));
+        QVERIFY2(ProjectJson::save(project, QDir(bundle).filePath(QStringLiteral("project.json")), &error),
+                 qPrintable(error));
 
         Editor editor(bundle);
         QVERIFY2(editor.isValid(), qPrintable(editor.errorString()));

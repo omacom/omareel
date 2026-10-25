@@ -1,5 +1,5 @@
 #include "Exporter.h"
-#include "core/Project.h"
+#include "ProjectJson.h"
 
 #include <QDir>
 #include <QFile>
@@ -148,12 +148,13 @@ private slots:
             QDir(bundle).filePath(QStringLiteral("screen.mp4"))});
         QVERIFY(source.waitForFinished(15000));
         QCOMPARE(source.exitCode(), 0);
-        Project project = Project::defaults(QStringLiteral("Backpressure"), 1.0);
-        project.background.type = QStringLiteral("color");
-        project.cursor.visible = false;
-        project.camera.enabled = false;
+        QJsonObject project = ProjectJson::defaults(QStringLiteral("Backpressure"), 1.0);
+        ProjectJson::set(project, {"background", "type"}, QStringLiteral("color"));
+        ProjectJson::set(project, {"cursor", "visible"}, false);
+        ProjectJson::set(project, {"camera", "enabled"}, false);
         QString error;
-        QVERIFY2(project.save(QDir(bundle).filePath(QStringLiteral("project.json")), &error), qPrintable(error));
+        QVERIFY2(ProjectJson::save(project, QDir(bundle).filePath(QStringLiteral("project.json")), &error),
+                 qPrintable(error));
 
         const QString shim = QFINDTESTDATA("tools/export-encoder.py");
         QVERIFY(!shim.isEmpty());
@@ -261,14 +262,14 @@ private slots:
 
         // The first clip, trimmed into the still part, has no frame of its own; the second starts
         // half a second before the screen changes.
-        Project project = Project::defaults(QStringLiteral("Still"), 3.0);
-        project.clips = {Clip{QStringLiteral("a"), 1.0, 2.0, 1.0},
-                         Clip{QStringLiteral("b"), 2.0, 3.0, 1.0}};
-        project.background.type = QStringLiteral("color");
-        project.background.color = QColor(QStringLiteral("#00c000"));
-        project.cursor.visible = false;
+        QJsonObject project = ProjectJson::defaults(QStringLiteral("Still"), 3.0);
+        project.insert(QStringLiteral("clips"), QJsonArray{ProjectJson::clip(QStringLiteral("a"), 1.0, 2.0),
+                                                           ProjectJson::clip(QStringLiteral("b"), 2.0, 3.0)});
+        ProjectJson::set(project, {"background", "type"}, QStringLiteral("color"));
+        ProjectJson::set(project, {"background", "color"}, QStringLiteral("#00c000"));
+        ProjectJson::set(project, {"cursor", "visible"}, false);
         QString error;
-        QVERIFY2(project.save(QDir(bundle).filePath(QStringLiteral("project.json")), &error),
+        QVERIFY2(ProjectJson::save(project, QDir(bundle).filePath(QStringLiteral("project.json")), &error),
                  qPrintable(error));
 
         const QString output = temporary.filePath(QStringLiteral("still.mp4"));
@@ -300,17 +301,18 @@ private slots:
         QVERIFY(input.open(QIODevice::WriteOnly));
         input.close();
 
-        Project project = Project::defaults(QStringLiteral("Layouts"), 2.0);
-        project.clips = {Clip{QStringLiteral("intro"), 0.0, 1.0, 1.0, QStringLiteral("camera")},
-                         Clip{QStringLiteral("main"), 1.0, 2.0, 1.0}};
-        project.background.type = QStringLiteral("color");
-        project.background.color = QColor(QStringLiteral("#00c000"));
-        project.cursor.visible = false;
-        project.camera.enabled = true;
-        project.camera.shadow.enabled = false;
+        QJsonObject project = ProjectJson::defaults(QStringLiteral("Layouts"), 2.0);
+        project.insert(QStringLiteral("clips"), QJsonArray{
+            ProjectJson::clip(QStringLiteral("intro"), 0.0, 1.0, 1.0, QStringLiteral("camera")),
+            ProjectJson::clip(QStringLiteral("main"), 1.0, 2.0)});
+        ProjectJson::set(project, {"background", "type"}, QStringLiteral("color"));
+        ProjectJson::set(project, {"background", "color"}, QStringLiteral("#00c000"));
+        ProjectJson::set(project, {"cursor", "visible"}, false);
+        ProjectJson::set(project, {"camera", "enabled"}, true);
+        ProjectJson::set(project, {"camera", "shadow", "enabled"}, false);
         const QString projectPath = QDir(bundle).filePath(QStringLiteral("project.json"));
         QString error;
-        QVERIFY2(project.save(projectPath, &error), qPrintable(error));
+        QVERIFY2(ProjectJson::save(project, projectPath, &error), qPrintable(error));
 
         const QString output = temporary.filePath(QStringLiteral("fill.mp4"));
         QVERIFY2(exportBundle(bundle, output, &error), qPrintable(error));
@@ -326,8 +328,8 @@ private slots:
         QVERIFY(isBlue(pixelAt(output, 1.9, 320, 180)));
         QVERIFY(isRed(pixelAt(output, 1.9, 582, 308)));
 
-        project.camera.fullFrame = QStringLiteral("square");
-        QVERIFY2(project.save(projectPath, &error), qPrintable(error));
+        ProjectJson::set(project, {"camera", "fullFrame"}, QStringLiteral("square"));
+        QVERIFY2(ProjectJson::save(project, projectPath, &error), qPrintable(error));
         const QString square = temporary.filePath(QStringLiteral("square.mp4"));
         QVERIFY2(exportBundle(bundle, square, &error), qPrintable(error));
         QVERIFY(isRed(pixelAt(square, 0.5, 320, 180)));
@@ -337,9 +339,9 @@ private slots:
         QVERIFY2(!isBlue(side) && !isGreen(side), qPrintable(side.name()));
 
         // Switching the bubble off leaves camera clips full frame.
-        project.camera.fullFrame = QStringLiteral("fill");
-        project.camera.enabled = false;
-        QVERIFY2(project.save(projectPath, &error), qPrintable(error));
+        ProjectJson::set(project, {"camera", "fullFrame"}, QStringLiteral("fill"));
+        ProjectJson::set(project, {"camera", "enabled"}, false);
+        QVERIFY2(ProjectJson::save(project, projectPath, &error), qPrintable(error));
         const QString noBubble = temporary.filePath(QStringLiteral("no-bubble.mp4"));
         QVERIFY2(exportBundle(bundle, noBubble, &error), qPrintable(error));
         QVERIFY(isRed(pixelAt(noBubble, 0.5, 320, 180)));
@@ -372,25 +374,24 @@ private slots:
         input.close();
 
         const auto insert = [](const char *id, const char *file, double in, double out, const char *fit) {
-            Clip clip{QString::fromLatin1(id), in, out, 1.0};
-            clip.media = QStringLiteral("media/") + QString::fromLatin1(file);
-            clip.fit = QString::fromLatin1(fit);
-            return clip;
+            return ProjectJson::insertedClip(QString::fromLatin1(id), in, out,
+                QStringLiteral("media/") + QString::fromLatin1(file), QString::fromLatin1(fit));
         };
-        Project project = Project::defaults(QStringLiteral("Inserts"), 2.0);
-        project.clips = {Clip{QStringLiteral("a"), 0.0, 1.0, 1.0},                 // 0.0-1.0
-                         insert("fit", "lime.mp4", 0.2, 1.2, "fit"),                // 1.0-2.0
-                         insert("fill", "lime.mp4", 0.2, 0.7, "fill"),              // 2.0-2.5
-                         insert("framed", "lime.mp4", 0.7, 1.2, "framed"),          // 2.5-3.0
-                         insert("quiet", "silent.mp4", 0.0, 0.5, "fill"),           // 3.0-3.5
-                         Clip{QStringLiteral("b"), 1.0, 2.0, 1.0}};                 // 3.5-4.5
-        project.background.type = QStringLiteral("color");
-        project.background.color = QColor(QStringLiteral("#ffff00"));
-        project.cursor.visible = false;
-        project.camera.enabled = false;
+        QJsonObject project = ProjectJson::defaults(QStringLiteral("Inserts"), 2.0);
+        project.insert(QStringLiteral("clips"), QJsonArray{
+            ProjectJson::clip(QStringLiteral("a"), 0.0, 1.0),           // 0.0-1.0
+            insert("fit", "lime.mp4", 0.2, 1.2, "fit"),                 // 1.0-2.0
+            insert("fill", "lime.mp4", 0.2, 0.7, "fill"),               // 2.0-2.5
+            insert("framed", "lime.mp4", 0.7, 1.2, "framed"),           // 2.5-3.0
+            insert("quiet", "silent.mp4", 0.0, 0.5, "fill"),            // 3.0-3.5
+            ProjectJson::clip(QStringLiteral("b"), 1.0, 2.0)});         // 3.5-4.5
+        ProjectJson::set(project, {"background", "type"}, QStringLiteral("color"));
+        ProjectJson::set(project, {"background", "color"}, QStringLiteral("#ffff00"));
+        ProjectJson::set(project, {"cursor", "visible"}, false);
+        ProjectJson::set(project, {"camera", "enabled"}, false);
         const QString projectPath = QDir(bundle).filePath(QStringLiteral("project.json"));
         QString error;
-        QVERIFY2(project.save(projectPath, &error), qPrintable(error));
+        QVERIFY2(ProjectJson::save(project, projectPath, &error), qPrintable(error));
 
         const QString output = temporary.filePath(QStringLiteral("inserts.mp4"));
         QVERIFY2(exportBundle(bundle, output, &error), qPrintable(error));
@@ -469,16 +470,16 @@ private slots:
         QVERIFY(captureFile.open(QIODevice::WriteOnly | QIODevice::Truncate));
         captureFile.write(QJsonDocument(capture).toJson(QJsonDocument::Indented));
         captureFile.close();
-        Project project = Project::defaults(QStringLiteral("Camera smoke"), 2.0);
-        project.background.type = QStringLiteral("color");
-        project.background.color = QColor(QStringLiteral("#101020"));
-        project.cursor.visible = false;
-        project.cursor.clickSound = QStringLiteral("soft");
-        project.keystrokes.enabled = true;
-        project.camera.enabled = true;
-        project.camera.shadow.enabled = false;
+        QJsonObject project = ProjectJson::defaults(QStringLiteral("Camera smoke"), 2.0);
+        ProjectJson::set(project, {"background", "type"}, QStringLiteral("color"));
+        ProjectJson::set(project, {"background", "color"}, QStringLiteral("#101020"));
+        ProjectJson::set(project, {"cursor", "visible"}, false);
+        ProjectJson::set(project, {"cursor", "clickSound"}, QStringLiteral("soft"));
+        ProjectJson::set(project, {"keystrokes", "enabled"}, true);
+        ProjectJson::set(project, {"camera", "enabled"}, true);
+        ProjectJson::set(project, {"camera", "shadow", "enabled"}, false);
         QString projectError;
-        QVERIFY2(project.save(QDir(bundle).filePath(QStringLiteral("project.json")), &projectError),
+        QVERIFY2(ProjectJson::save(project, QDir(bundle).filePath(QStringLiteral("project.json")), &projectError),
                  qPrintable(projectError));
 
         const QString output = temporary.filePath(QStringLiteral("out.mp4"));
@@ -530,8 +531,8 @@ private slots:
             + std::abs(cameraPixel.blue() - backgroundPixel.blue());
         QVERIFY2(colorDistance > 60, "The exported camera overlay did not differ from the background");
 
-        project.camera.rotation = 180;
-        QVERIFY2(project.save(QDir(bundle).filePath(QStringLiteral("project.json")), &projectError),
+        ProjectJson::set(project, {"camera", "rotation"}, 180);
+        QVERIFY2(ProjectJson::save(project, QDir(bundle).filePath(QStringLiteral("project.json")), &projectError),
                  qPrintable(projectError));
         const QString rotatedOutput = temporary.filePath(QStringLiteral("rotated.mp4"));
         Exporter rotatedExporter;
