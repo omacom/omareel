@@ -11,24 +11,35 @@
 //! - the QColor files that round channels with `qRound(float)`: lighter/darker (whose HSV step
 //!   aarch64 also fuses into one multiply-subtract), `setAlphaF` and `fromRgbF`;
 //! - `easing/ease-in-out-cubic.txt`, which prints glibc `pow` results bit for bit, and glibc
-//!   computes `pow` with FMA on aarch64.
+//!   computes `pow` with FMA on aarch64;
+//! - `theme/cases.txt`, whose colours are mixed in float channels, rounded with qRound, and
+//!   chosen by a luminance computed with `pow`.
 //!
 //! The Rust code follows each architecture's C++, so on aarch64 those files need not match.
 //! Everything else is byte formatting, parsing, or IEEE arithmetic that Rust evaluates the same
 //! way everywhere (cursorpath only compares `hypot` results with thresholds, never prints them),
 //! and runs on every architecture.
 //!
+//! The project, omarchypaths and theme families read the environment and write under `$HOME`;
+//! `hermetic` rebuilds the oracle's hermetic world for them (fresh `HOME` and XDG directories,
+//! the golden shims first on `PATH`, `umask 022`, `$HOME` as the working directory), one test
+//! at a time behind a mutex, and puts the process back afterwards.
+//!
 //! Rows the Rust API cannot produce (no counterpart yet, or unpaired surrogates a Rust string
 //! cannot hold) are left out or normalised where each test says so; known differences from the
 //! C++ are `#[ignore]`d tests whose reason states the difference.
 
+mod hermetic;
 mod support;
 
 mod cursorpath;
 mod easing;
 mod inputlog;
+mod omarchypaths;
+mod project;
 mod qcolor;
 mod qjson;
 mod qnumber;
 mod qround;
+mod theme;
 mod zoomtimeline;
