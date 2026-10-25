@@ -1,0 +1,31 @@
+[package]
+name = "omareel-slint-spike"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "omareel's preview, export and recording bar drawn with Slint 1.18 over omareel_core"
+
+# Its own workspace: not part of omareel's build.
+[workspace]
+
+[dependencies]
+omareel_core = { path = "../../crates/omareel_core" }
+# Slint 1.18.1, the current release. renderer-femtovg-wgpu draws with femtovg on wgpu, which is
+# what Image::try_from(wgpu::Texture) and FemtoVGWGPURenderer (offscreen) need; both are behind
+# the unstable-wgpu-30 feature. Winit on Wayland only; the software renderer is for the bar.
+slint = { version = "=1.18.1", default-features = false, features = [
+    "std",
+    "compat-1-2",
+    "backend-winit-wayland",
+    "renderer-femtovg-wgpu",
+    "renderer-software",
+    "unstable-wgpu-30",
+] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+pollster = "0.4"
+
+[build-dependencies]
+slint-build = "=1.18.1"
+
+[profile.release]
+debug = "line-tables-only"
