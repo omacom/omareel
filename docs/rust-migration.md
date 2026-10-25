@@ -12,7 +12,7 @@ same after each one: same commands, same files written byte for byte, same pixel
 | `crates/omareel_qt` | The one Rust static library linked into the C++ binary: CXX-Qt objects and C++-callable functions that expose `omareel_core` to QML and C++. |
 | `crates/omareel_qt/cpp` | C++ that calls into Rust and is compiled into the same archive by the crate's build script: `EditorBase` (the editor object's C++ base) and `Exporter` (the export render loop over the Rust export job). |
 | `src/plumbing` | C++ that Rust drives: Qt-only pieces (the editor's players, GL export rendering, camera, file watchers). |
-| `src/` (rest) | C++ that has not moved yet, plus `main.cpp`'s window setup. |
+| `src/` (rest) | C++ that has not moved yet: the recording side (`src/record`; the launcher, recording bar, microphone meter and capture test client in `src/ui`; and `OmarchyPaths` and `RecordingPreferences` in `src/core`, which it uses), `FrameSource` and the video decoding setup in `src/render`, and `main.cpp`'s window setup. The editor's logic is all Rust: its C++ (`Project`, the timelines and tracks) is deleted, and its unit tests' cases are `#[test]`s in `omareel_core`. |
 
 The layering only goes one way, which keeps static-library linking free of cycles:
 

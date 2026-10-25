@@ -66,15 +66,6 @@ target_link_libraries(omareel_plumbing PUBLIC Qt6::Core Qt6::Gui Qt6::Multimedia
 target_link_libraries(omareel_qt INTERFACE omareel_plumbing)
 
 add_library(omareel_core STATIC
-    src/core/Project.cpp
-    src/core/InputLog.cpp
-    src/core/CursorPath.cpp
-    src/core/MotionTrack.cpp
-    src/core/KeystrokeTrack.cpp
-    src/core/ZoomTimeline.cpp
-    src/core/ClipTimeline.cpp
-    src/core/CameraTimeline.cpp
-    src/core/LayoutTimeline.cpp
     src/core/OmarchyPaths.cpp
     src/core/RecordingPreferences.cpp
     src/record/CursorSampler.cpp
@@ -266,7 +257,7 @@ add_custom_command(TARGET omareel POST_BUILD
 
 include(CTest)
 if(BUILD_TESTING)
-    foreach(test_name IN ITEMS zoomtimeline cursorpath cliptimeline cameratimeline layouttimeline keystroketrack project inputlog regionpicker omarchypaths recorder)
+    foreach(test_name IN ITEMS regionpicker omarchypaths recorder)
         qt_add_executable(test_${test_name} tests/test_${test_name}.cpp)
         target_link_libraries(test_${test_name} PRIVATE omareel_core Qt6::Test)
         add_test(NAME ${test_name} COMMAND test_${test_name})

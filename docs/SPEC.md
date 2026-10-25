@@ -292,13 +292,8 @@ Exporter pipeline (`crates/omareel_qt/cpp/Exporter`, over `crates/omareel_core/s
 ```
 CMakeLists.txt
 src/main.cpp                 subcommand dispatch
-src/core/   Project.{h,cpp}  JSON model, load/save, defaults, undo snapshots
-            InputLog.{h,cpp} parse input.jsonl → samples/clicks/keys in video time
-            CursorPath.{h,cpp} resample + spring smoothing + click anim state
-            ZoomTimeline.{h,cpp} auto-zoom generation + level/center evaluation
-            ClipTimeline.{h,cpp} output↔source time mapping, split/trim ops
-            Theme.{h,cpp}    Omarchy colors.toml watcher
-            Easing.h
+src/core/   OmarchyPaths.{h,cpp} Omarchy state, wallpapers, recordings directory (recording side)
+            RecordingPreferences.{h,cpp} the launcher's settings.json
 src/record/ Recorder.{h,cpp} gsr process, ts file, bundle finalize, state file
             CursorSampler.{h,cpp} Hyprland IPC poller thread
             EvdevListener.{h,cpp} libevdev thread
@@ -306,6 +301,11 @@ src/record/ Recorder.{h,cpp} gsr process, ts file, bundle finalize, state file
 src/render/ FrameSource.{h,cpp} QQuickItem texture node
 src/plumbing/ PlaybackDriver.{h,cpp} the editor's three QMediaPlayers
             ExportRenderer.{h,cpp} offscreen Composition.qml rendering for export
+crates/omareel_core/src  project (JSON model, load/save, defaults, migrations), input_log
+            (input.jsonl → samples/clicks/keys in video time), cursor_path, motion_track
+            (spring smoothing, click ripples), zoom_timeline (auto-zoom generation, targets),
+            clip_timeline (output↔source time mapping, split/trim ops), camera_timeline,
+            layout_timeline, keystroke_track, easing, theme (Omarchy colors.toml)
 crates/omareel_core/src/editor  the editor's document: project, history, timeline ops,
             playback decisions (crates/omareel_core/src/export: plan, ffmpeg decode/encode pipes)
 crates/omareel_qt/src/editor.rs the `editor`/`comp` object QML uses (CXX-Qt), over
@@ -314,8 +314,9 @@ crates/omareel_qt/src/editor.rs the `editor`/`comp` object QML uses (CXX-Qt), ov
 src/ui/     qml/Main.qml Composition.qml Timeline.qml ZoomTrack.qml ClipTrack.qml
                  SidePanel.qml panels/*.qml Launcher.qml
 assets/     cursors/arrow.svg, icons (Lucide-style inline SVG), gradients.json
-tests/      QtTest: test_zoomtimeline, test_cursorpath, test_cliptimeline, test_project,
-            test_inputlog (fixtures in tests/fixtures)
+tests/      QtTest: test_editor, test_exporter_smoke, test_recorder, test_regionpicker,
+            test_omarchypaths (fixtures in tests/fixtures); the Rust crates' tests and the
+            goldens in tests/golden run as ctest's rust test
 pkg/        PKGBUILD, omareel.desktop, omareel.svg, install-omarchy script
 docs/
 ```
