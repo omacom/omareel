@@ -1,0 +1,115 @@
+{
+ "settings": {
+  "disabled": {},
+  "enabled": {
+   "enabled": true
+  },
+  "all-keys": {
+   "enabled": true,
+   "showOnlyShortcuts": false
+  },
+  "hold-0": {
+   "enabled": true,
+   "showOnlyShortcuts": false,
+   "holdMs": 0
+  },
+  "hold-1": {
+   "enabled": true,
+   "holdMs": 1
+  },
+  "hold-negative": {
+   "enabled": true,
+   "showOnlyShortcuts": false,
+   "holdMs": -400
+  },
+  "hold-max": {
+   "enabled": true,
+   "holdMs": 2147483647
+  },
+  "hold-min": {
+   "enabled": true,
+   "holdMs": -2147483648
+  },
+  "hold-5000": {
+   "enabled": true,
+   "holdMs": 5000
+  },
+  "size-position": {
+   "enabled": true,
+   "size": 3.5,
+   "position": "top-left"
+  }
+ },
+ "runs": [
+  [
+   "inputlog/fixture-input.jsonl",
+   [
+    "all-keys",
+    "disabled",
+    "enabled",
+    "hold-0",
+    "hold-1",
+    "hold-5000",
+    "hold-max",
+    "hold-min",
+    "hold-negative",
+    "size-position"
+   ]
+  ],
+  [
+   "inputlog/kinds.jsonl",
+   [
+    "enabled",
+    "all-keys"
+   ]
+  ],
+  [
+   "inputlog/unicode.jsonl",
+   [
+    "enabled",
+    "all-keys"
+   ]
+  ],
+  [
+   "keystroketrack/labels.jsonl",
+   [
+    "all-keys"
+   ]
+  ],
+  [
+   "keystroketrack/single-characters.jsonl",
+   [
+    "enabled",
+    "all-keys"
+   ]
+  ],
+  [
+   "keystroketrack/modifiers.jsonl",
+   [
+    "enabled",
+    "all-keys"
+   ]
+  ],
+  [
+   "keystroketrack/grouping.jsonl",
+   [
+    "all-keys",
+    "disabled",
+    "enabled",
+    "hold-0",
+    "hold-1",
+    "hold-5000",
+    "hold-max",
+    "hold-min",
+    "hold-negative",
+    "size-position"
+   ]
+  ],
+  [
+   "keystroketrack/repeats-and-holds.jsonl",
+   [
+    "enabled"
+   ]
+  ]
+ ]
+}

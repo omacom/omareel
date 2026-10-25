@@ -1,0 +1,44 @@
+{
+    "captureBackend": "portal",
+    "countdownBeforeRecording": true,
+    "microphone": false,
+    "microphoneDevice": "alsa_input.usb-Blue_Yeti",
+    "selfViewEnabled": false,
+    "selfViewPosition": {
+        "x": 0.25,
+        "y": 0.75
+    },
+    "selfViewSize": "L",
+    "systemAudio": false,
+    "webcam": {
+        "enabled": true,
+        "device": "/dev/video0",
+        "chosenDevice": "/dev/video4",
+        "captureHeight": 720,
+        "rotation": 270,
+        "flipHorizontal": true,
+        "position": "top-left",
+        "size": 0.3,
+        "shape": "square",
+        "radius": 8,
+        "crop": "square",
+        "shadow": {
+            "enabled": false,
+            "intensity": 0.5,
+            "blur": 10,
+            "distance": 5,
+            "angle": 90
+        },
+        "border": {
+            "enabled": false,
+            "width": 2,
+            "color": "#000000",
+            "alpha": 1
+        },
+        "scaleDuringZoom": 1,
+        "offset": {
+            "x": 0.05,
+            "y": 0.02
+        }
+    }
+}

@@ -25,6 +25,9 @@ find_package(Qt6 6.8 REQUIRED COMPONENTS Core Gui)
 file(GLOB ORACLE_BASE_SOURCES CONFIGURE_DEPENDS "${OMAREEL_BASE}/src/core/*.cpp")
 # Headers next to the sources are listed so AUTOMOC sees Theme.h's Q_OBJECT.
 file(GLOB ORACLE_BASE_HEADERS CONFIGURE_DEPENDS "${OMAREEL_BASE}/src/core/*.h")
+# The one file of src/render the oracle runs: it needs only QtCore (QProcess for ffprobe).
+list(APPEND ORACLE_BASE_SOURCES "${OMAREEL_BASE}/src/render/MediaProbe.cpp")
+list(APPEND ORACLE_BASE_HEADERS "${OMAREEL_BASE}/src/render/MediaProbe.h")
 file(GLOB ORACLE_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/cases/*.cpp")
 

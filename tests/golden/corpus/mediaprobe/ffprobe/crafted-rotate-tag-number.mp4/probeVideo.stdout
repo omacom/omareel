@@ -1,0 +1,21 @@
+{
+    "programs": [],
+    "stream_groups": [],
+    "streams": [
+        {
+            "codec_type": "video",
+            "width": 320,
+            "height": 240,
+            "sample_aspect_ratio": "1:1",
+            "r_frame_rate": "30/1",
+            "avg_frame_rate": "30/1",
+            "duration": "2.000000",
+            "tags": {
+                "rotate": 90
+            }
+        }
+    ],
+    "format": {
+        "duration": "2.000000"
+    }
+}
