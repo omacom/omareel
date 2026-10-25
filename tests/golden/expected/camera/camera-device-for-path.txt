@@ -1,0 +1,3 @@
+""	null
+"/dev/oracle-camera-that-does-not-exist"	null
+"$HOME/oracle-scratch/camera/missing/video0"	null

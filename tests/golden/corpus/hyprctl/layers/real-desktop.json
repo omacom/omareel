@@ -1,0 +1,46 @@
+{
+"HDMI-A-1": {
+    "levels": {
+
+        "0": [
+                {
+                    "address": "0x62207de1d000",
+                    "x": 0,
+                    "y": 0,
+                    "w": 1920,
+                    "h": 1080,
+                    "alpha": 1,
+                    "namespace": "omarchy-background",
+                    "pid": 1441
+                }
+        ],
+        "1": [
+],
+        "2": [
+                {
+                    "address": "0x62207db93540",
+                    "x": 0,
+                    "y": 0,
+                    "w": 1920,
+                    "h": 26,
+                    "alpha": 1,
+                    "namespace": "omarchy-bar",
+                    "pid": 1441
+                }
+        ],
+        "3": [
+                {
+                    "address": "0x62207dbae1b0",
+                    "x": 0,
+                    "y": 0,
+                    "w": 1920,
+                    "h": 1080,
+                    "alpha": 1,
+                    "namespace": "omarchy-notifications",
+                    "pid": 1441
+                }
+        ]
+    }
+}
+}
+

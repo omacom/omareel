@@ -1,0 +1,29 @@
+firstFrameTimestamp	blank-lines.ts	987654
+firstFrameTimestamp	bom.ts	0
+firstFrameTimestamp	crlf.ts	42
+firstFrameTimestamp	decimal.ts	0
+firstFrameTimestamp	empty.ts	0
+firstFrameTimestamp	gsr.ts	1234567
+firstFrameTimestamp	header-only.ts	0
+firstFrameTimestamp	hex.ts	0
+firstFrameTimestamp	huge.ts	9223372036854775807
+firstFrameTimestamp	native.ts	1234567
+firstFrameTimestamp	negative.ts	-5
+firstFrameTimestamp	no-newline.ts	31337
+firstFrameTimestamp	nul.ts	12
+firstFrameTimestamp	overflow.ts	0
+firstFrameTimestamp	plus.ts	77
+firstFrameTimestamp	space-separated.ts	0
+firstFrameTimestamp	spaces.ts	555
+firstFrameTimestamp	two-values.ts	100
+firstFrameTimestamp	zero.ts	0
+firstFrameTimestamp	<missing file>	0
+firstFrameTimestamp	<directory>	0
+firstFrameTimestamp	<empty path>	0
+writeStartTimestamp	new file	123456789	true	"monotonic_microsec\x09realtime_microsec\x0a123456789\x09{realtime}\x0a"	0644	123456789
+writeStartTimestamp	replaced	5	true	"monotonic_microsec\x09realtime_microsec\x0a5\x09{realtime}\x0a"	0644	5
+writeStartTimestamp	zero	0	true	"monotonic_microsec\x09realtime_microsec\x0a0\x09{realtime}\x0a"	0644	0
+writeStartTimestamp	negative	-5	true	"monotonic_microsec\x09realtime_microsec\x0a-5\x09{realtime}\x0a"	0644	-5
+writeStartTimestamp	maximum	9223372036854775807	true	"monotonic_microsec\x09realtime_microsec\x0a9223372036854775807\x09{realtime}\x0a"	0644	9223372036854775807
+writeStartTimestamp	missing directory	1	false	-	-	0
+writeStartTimestamp	path is a directory	1	false	-	0755	0

@@ -1,0 +1,12 @@
+{
+    "id": 3,
+    "name": "3",
+    "monitor": "HDMI-A-1",
+    "monitorID": 0,
+    "windows": 1,
+    "hasfullscreen": false,
+    "lastwindow": "0x62207e8ef620",
+    "lastwindowtitle": "Window 1",
+    "ispersistent": false,
+    "tiledLayout": "dwindle"
+}

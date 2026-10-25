@@ -1,0 +1,29 @@
+[
+    {
+        "id": 0,
+        "name": "NOFIELDS",
+        "description": "Oracle NOFIELDS",
+        "make": "Oracle",
+        "model": "NOFIELDS",
+        "serial": "",
+        "width": 1280,
+        "height": 720,
+        "refreshRate": 60.0,
+        "activeWorkspace": {
+            "id": 1,
+            "name": "1"
+        },
+        "specialWorkspace": {
+            "id": 0,
+            "name": ""
+        },
+        "dpmsStatus": true,
+        "vrr": false,
+        "currentFormat": "XRGB8888",
+        "mirrorOf": "none"
+    },
+    {
+        "name": "BARE"
+    },
+    {}
+]

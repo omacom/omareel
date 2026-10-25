@@ -291,32 +291,41 @@ Exporter pipeline (`crates/omareel_qt/cpp/Exporter`, over `crates/omareel_core/s
 
 ```
 CMakeLists.txt
-src/main.cpp                 subcommand dispatch
-src/core/   OmarchyPaths.{h,cpp} Omarchy state, wallpapers, recordings directory (recording side)
-            RecordingPreferences.{h,cpp} the launcher's settings.json
-src/record/ Recorder.{h,cpp} gsr process, ts file, bundle finalize, state file
-            CursorSampler.{h,cpp} Hyprland IPC poller thread
-            EvdevListener.{h,cpp} libevdev thread
-            RegionPicker.{h,cpp} slurp / omarchy-capture-region wrapper, monitor math
+src/main.cpp                 subcommand dispatch, fonts, the editor, launcher and record-bar windows
 src/render/ FrameSource.{h,cpp} QQuickItem texture node
+            VideoDecoding.{h,cpp} keeps playback off NVIDIA's VA-API driver
 src/plumbing/ PlaybackDriver.{h,cpp} the editor's three QMediaPlayers
             ExportRenderer.{h,cpp} offscreen Composition.qml rendering for export
+            CameraCapture.{h,cpp} the webcam: QCamera, frame packing, ffmpeg encoder thread
+            ThemeBase.{h,cpp} theme file watcher; QtShims.{h,cpp} Qt calls the Rust side makes
 crates/omareel_core/src  project (JSON model, load/save, defaults, migrations), input_log
             (input.jsonl → samples/clicks/keys in video time), cursor_path, motion_track
             (spring smoothing, click ripples), zoom_timeline (auto-zoom generation, targets),
             clip_timeline (output↔source time mapping, split/trim ops), camera_timeline,
-            layout_timeline, keystroke_track, easing, theme (Omarchy colors.toml)
+            layout_timeline, keystroke_track, easing, theme (Omarchy colors.toml),
+            omarchy_paths (Omarchy state, wallpapers, recordings directory),
+            recording_preferences (settings.json), microphone_meter, compat (Qt's rules)
 crates/omareel_core/src/editor  the editor's document: project, history, timeline ops,
             playback decisions (crates/omareel_core/src/export: plan, ffmpeg decode/encode pipes)
+crates/omareel_record/src  recorder (daemon, gsr process, ts files, bundle finalize, state
+            files), cli (`omareel record` and the IPC commands), screen_capture (Wayland
+            capture, encoder), cursor_sampler (Hyprland IPC cursor poller), evdev_listener
+            (libevdev thread), region_picker (slurp / omarchy-capture-region wrapper and monitor
+            math), capture_exclusion, camera, launcher and recording_bar decisions
 crates/omareel_qt/src/editor.rs the `editor`/`comp` object QML uses (CXX-Qt), over
             crates/omareel_qt/cpp/EditorBase.{h,cpp} (players, timers) and Exporter.{h,cpp}
             (offscreen render loop over the Rust export job)
+crates/omareel_qt/src/launcher.rs, recording_bar.rs  the `launcher` and `recordingBar` objects,
+            over crates/omareel_qt/cpp/LauncherBase and RecordingBarBase (devices, camera,
+            timers, watcher); record.rs hands main.cpp's recording commands to omareel_record
 src/ui/     qml/Main.qml Composition.qml Timeline.qml ZoomTrack.qml ClipTrack.qml
-                 SidePanel.qml panels/*.qml Launcher.qml
+                 SidePanel.qml *Panel.qml Launcher.qml RecordingBar.qml ui/Om*.qml
+            CaptureTestClient.{h,cpp} the capture exclusion test windows
+plugin/     the Hyprland capture exclusion plugin
 assets/     cursors/arrow.svg, icons (Lucide-style inline SVG), gradients.json
-tests/      QtTest: test_editor, test_exporter_smoke, test_recorder, test_regionpicker,
-            test_omarchypaths (fixtures in tests/fixtures); the Rust crates' tests and the
-            goldens in tests/golden run as ctest's rust test
+tests/      QtTest: test_editor, test_exporter_smoke, test_cameracapture (fixtures in
+            tests/fixtures); the Rust crates' tests and the goldens in tests/golden run as
+            ctest's rust test
 pkg/        PKGBUILD, omareel.desktop, omareel.svg, install-omarchy script
 docs/
 ```

@@ -1,0 +1,38 @@
+selfViewStatus	0	true	{}	"Starting camera…"
+selfViewStatus	0	true	{"camera_status":"starting"}	"Starting camera…"
+selfViewStatus	0	true	{"camera_status":"ready","monitor":"DP-1","visible":true}	"Self-view floating on DP-1 — drag it where you want it"
+selfViewStatus	0	true	{"camera_status":"ready","monitor":"DP-1","visible":false}	"Camera ready — self-view hidden"
+selfViewStatus	0	true	{"camera_status":"ready","monitor":3,"visible":"true"}	"Camera ready — self-view hidden"
+selfViewStatus	0	true	{"camera_status":"ready","visible":true}	"Self-view floating on  — drag it where you want it"
+selfViewStatus	0	true	{"camera_error":"Selected camera is unavailable","camera_status":"ready"}	"Selected camera is unavailable"
+selfViewStatus	0	true	{"camera_error":"","camera_status":"failed"}	"Starting camera…"
+selfViewStatus	0	true	{"camera_status":"READY","visible":true}	"Starting camera…"
+selfViewStatus	0	true	{"camera_status":"ready","monitor":"Écran %1 ☃","visible":true}	"Self-view floating on Écran %1 ☃ — drag it where you want it"
+selfViewStatus	4242	true	{}	"Starting camera…"
+selfViewStatus	4242	true	{"camera_status":"starting"}	"Starting camera…"
+selfViewStatus	4242	true	{"camera_status":"ready","monitor":"DP-1","visible":true}	"Self-view floating on DP-1 — drag it where you want it"
+selfViewStatus	4242	true	{"camera_status":"ready","monitor":"DP-1","visible":false}	"Camera ready — self-view hidden"
+selfViewStatus	4242	true	{"camera_status":"ready","monitor":3,"visible":"true"}	"Camera ready — self-view hidden"
+selfViewStatus	4242	true	{"camera_status":"ready","visible":true}	"Self-view floating on  — drag it where you want it"
+selfViewStatus	4242	true	{"camera_error":"Selected camera is unavailable","camera_status":"ready"}	"Selected camera is unavailable"
+selfViewStatus	4242	true	{"camera_error":"","camera_status":"failed"}	"Starting camera…"
+selfViewStatus	4242	true	{"camera_status":"READY","visible":true}	"Starting camera…"
+selfViewStatus	4242	true	{"camera_status":"ready","monitor":"Écran %1 ☃","visible":true}	"Self-view floating on Écran %1 ☃ — drag it where you want it"
+selfViewStatus	4242	false	{}	"Camera preview closed"
+selfViewStatus	4242	false	{"camera_status":"starting"}	"Camera preview closed"
+selfViewStatus	4242	false	{"camera_status":"ready","monitor":"DP-1","visible":true}	"Camera preview closed"
+selfViewStatus	4242	false	{"camera_status":"ready","monitor":"DP-1","visible":false}	"Camera preview closed"
+selfViewStatus	4242	false	{"camera_status":"ready","monitor":3,"visible":"true"}	"Camera preview closed"
+selfViewStatus	4242	false	{"camera_status":"ready","visible":true}	"Camera preview closed"
+selfViewStatus	4242	false	{"camera_error":"Selected camera is unavailable","camera_status":"ready"}	"Camera preview closed"
+selfViewStatus	4242	false	{"camera_error":"","camera_status":"failed"}	"Camera preview closed"
+selfViewStatus	4242	false	{"camera_status":"READY","visible":true}	"Camera preview closed"
+selfViewStatus	4242	false	{"camera_status":"ready","monitor":"Écran %1 ☃","visible":true}	"Camera preview closed"
+recordArguments	false	false	false	["record","--no-audio"]
+recordArguments	false	false	true	["record","--no-audio","--with-webcam","--webcam-device","/dev/v4l/by-id/usb-Insta360_Link_2-video-index0","--webcam-height","720"]
+recordArguments	false	true	false	["record","--with-microphone-audio","--microphone-device","alsa_input.unplugged"]
+recordArguments	false	true	true	["record","--with-microphone-audio","--microphone-device","alsa_input.unplugged","--with-webcam","--webcam-device","/dev/v4l/by-id/usb-Insta360_Link_2-video-index0","--webcam-height","720"]
+recordArguments	true	false	false	["record","--with-desktop-audio"]
+recordArguments	true	false	true	["record","--with-desktop-audio","--with-webcam","--webcam-device","/dev/v4l/by-id/usb-Insta360_Link_2-video-index0","--webcam-height","720"]
+recordArguments	true	true	false	["record","--with-desktop-audio","--with-microphone-audio","--microphone-device","alsa_input.unplugged"]
+recordArguments	true	true	true	["record","--with-desktop-audio","--with-microphone-audio","--microphone-device","alsa_input.unplugged","--with-webcam","--webcam-device","/dev/v4l/by-id/usb-Insta360_Link_2-video-index0","--webcam-height","720"]

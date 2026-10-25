@@ -1,0 +1,132 @@
+== start desktop
+result	true	positive
+call	["pactl","get-default-sink"]
+call	["ffmpeg","-y","-hide_banner","-nostats","-loglevel","info","-thread_queue_size","1024","-f","pulse","-i","alsa_output.pci-0000_00_1f.3.analog-stereo.monitor","-map","0:a","-c:a","aac","-b:a","192k","-flush_packets","1","-cluster_time_limit","500","$HOME/oracle-scratch/recorder/audio/bundle/audio.mka"]
+log	"ffmpeg shim log\x0aon stderr\x0a"
+ts	"monotonic_microsec\x09realtime_microsec\x0a{startedUs}\x09{realtime}\x0a"
+bundle	audio.mka.log:f0644 audio.mka.ts:f0644
+== start microphone
+result	true	positive
+call	["ffmpeg","-y","-hide_banner","-nostats","-loglevel","info","-thread_queue_size","1024","-f","pulse","-i","alsa_input.usb-Blue_Yeti-00.analog-stereo","-map","0:a","-af","volumedetect","-c:a","aac","-b:a","192k","-flush_packets","1","-cluster_time_limit","500","$HOME/oracle-scratch/recorder/audio/bundle/audio.mka"]
+log	"ffmpeg shim log\x0aon stderr\x0a"
+ts	"monotonic_microsec\x09realtime_microsec\x0a{startedUs}\x09{realtime}\x0a"
+bundle	audio.mka.log:f0644 audio.mka.ts:f0644
+== start default microphone
+result	true	positive
+call	["pactl","get-default-source"]
+call	["ffmpeg","-y","-hide_banner","-nostats","-loglevel","info","-thread_queue_size","1024","-f","pulse","-i","alsa_input.default","-map","0:a","-af","volumedetect","-c:a","aac","-b:a","192k","-flush_packets","1","-cluster_time_limit","500","$HOME/oracle-scratch/recorder/audio/bundle/audio.mka"]
+log	"ffmpeg shim log\x0aon stderr\x0a"
+ts	"monotonic_microsec\x09realtime_microsec\x0a{startedUs}\x09{realtime}\x0a"
+bundle	audio.mka.log:f0644 audio.mka.ts:f0644
+== start both
+result	true	positive
+call	["pactl","get-default-sink"]
+call	["ffmpeg","-y","-hide_banner","-nostats","-loglevel","info","-thread_queue_size","1024","-f","pulse","-i","sink.monitor","-thread_queue_size","1024","-f","pulse","-i","alsa_input.usb-Blue_Yeti-00.analog-stereo","-filter_complex","[1:a]volumedetect[m];[0:a][m]amix=inputs=2:duration=longest[a]","-map","[a]","-c:a","aac","-b:a","192k","-flush_packets","1","-cluster_time_limit","500","$HOME/oracle-scratch/recorder/audio/bundle/audio.mka"]
+log	"ffmpeg shim log\x0aon stderr\x0a"
+ts	"monotonic_microsec\x09realtime_microsec\x0a{startedUs}\x09{realtime}\x0a"
+bundle	audio.mka.log:f0644 audio.mka.ts:f0644
+== start both defaults
+result	true	positive
+call	["pactl","get-default-sink"]
+call	["pactl","get-default-source"]
+call	["ffmpeg","-y","-hide_banner","-nostats","-loglevel","info","-thread_queue_size","1024","-f","pulse","-i","sink.monitor","-thread_queue_size","1024","-f","pulse","-i","source","-filter_complex","[1:a]volumedetect[m];[0:a][m]amix=inputs=2:duration=longest[a]","-map","[a]","-c:a","aac","-b:a","192k","-flush_packets","1","-cluster_time_limit","500","$HOME/oracle-scratch/recorder/audio/bundle/audio.mka"]
+log	"ffmpeg shim log\x0aon stderr\x0a"
+ts	"monotonic_microsec\x09realtime_microsec\x0a{startedUs}\x09{realtime}\x0a"
+bundle	audio.mka.log:f0644 audio.mka.ts:f0644
+== start no default sink
+result	false	untouched
+call	["pactl","get-default-sink"]
+log	-
+ts	-
+bundle	(empty)
+== start empty default source
+result	false	untouched
+call	["pactl","get-default-source"]
+log	-
+ts	-
+bundle	(empty)
+== start sink fails, microphone left
+result	true	positive
+call	["pactl","get-default-sink"]
+call	["ffmpeg","-y","-hide_banner","-nostats","-loglevel","info","-thread_queue_size","1024","-f","pulse","-i","mic","-map","0:a","-af","volumedetect","-c:a","aac","-b:a","192k","-flush_packets","1","-cluster_time_limit","500","$HOME/oracle-scratch/recorder/audio/bundle/audio.mka"]
+log	"ffmpeg shim log\x0aon stderr\x0a"
+ts	"monotonic_microsec\x09realtime_microsec\x0a{startedUs}\x09{realtime}\x0a"
+bundle	audio.mka.log:f0644 audio.mka.ts:f0644
+== start source fails, desktop left
+result	true	positive
+call	["pactl","get-default-sink"]
+call	["pactl","get-default-source"]
+call	["ffmpeg","-y","-hide_banner","-nostats","-loglevel","info","-thread_queue_size","1024","-f","pulse","-i","sink.monitor","-map","0:a","-c:a","aac","-b:a","192k","-flush_packets","1","-cluster_time_limit","500","$HOME/oracle-scratch/recorder/audio/bundle/audio.mka"]
+log	"ffmpeg shim log\x0aon stderr\x0a"
+ts	"monotonic_microsec\x09realtime_microsec\x0a{startedUs}\x09{realtime}\x0a"
+bundle	audio.mka.log:f0644 audio.mka.ts:f0644
+== start nothing requested
+result	false	untouched
+log	-
+ts	-
+bundle	(empty)
+== start empty device
+result	false	untouched
+log	-
+ts	-
+bundle	(empty)
+== start ffmpeg not on PATH
+result	false	positive
+call	["pactl","get-default-sink"]
+log	""
+ts	-
+bundle	audio.mka.log:f0644
+== start log file cannot be created
+result	false	positive
+call	["pactl","get-default-sink"]
+log	-
+ts	-
+bundle	-
+== finish muxes
+arguments	1000000	1250000	2000000
+result	true	recorder not started
+call	["ffmpeg","-y","-loglevel","error","-i","$HOME/oracle-scratch/recorder/audio/screen-video.mp4","-itsoffset","0.250000","-i","$HOME/oracle-scratch/recorder/audio/audio.mka","-map","0:v:0","-map","1:a:0","-c","copy","-t","2.000000","-movflags","+faststart","$HOME/oracle-scratch/recorder/audio/screen.mp4"]
+output	"muxed"
+== finish audio empty
+arguments	1000000	1250000	2000000
+result	false	recorder not started
+output	-
+== finish audio missing
+arguments	1000000	1250000	2000000
+result	false	recorder not started
+output	-
+== finish mux fails
+arguments	1000000	1250000	2000000
+result	false	recorder not started
+call	["ffmpeg","-y","-loglevel","error","-i","$HOME/oracle-scratch/recorder/audio/screen-video.mp4","-itsoffset","0.250000","-i","$HOME/oracle-scratch/recorder/audio/audio.mka","-map","0:v:0","-map","1:a:0","-c","copy","-t","2.000000","-movflags","+faststart","$HOME/oracle-scratch/recorder/audio/screen.mp4"]
+output	"muxed"
+== finish mux writes nothing
+arguments	1000000	1250000	2000000
+result	false	recorder not started
+call	["ffmpeg","-y","-loglevel","error","-i","$HOME/oracle-scratch/recorder/audio/screen-video.mp4","-itsoffset","0.250000","-i","$HOME/oracle-scratch/recorder/audio/audio.mka","-map","0:v:0","-map","1:a:0","-c","copy","-t","2.000000","-movflags","+faststart","$HOME/oracle-scratch/recorder/audio/screen.mp4"]
+output	-
+== finish no screen duration
+arguments	1000000	1250000	0
+result	true	recorder not started
+call	["ffmpeg","-y","-loglevel","error","-i","$HOME/oracle-scratch/recorder/audio/screen-video.mp4","-itsoffset","0.250000","-i","$HOME/oracle-scratch/recorder/audio/audio.mka","-map","0:v:0","-map","1:a:0","-c","copy","-shortest","-movflags","+faststart","$HOME/oracle-scratch/recorder/audio/screen.mp4"]
+output	"muxed"
+== finish audio started first
+arguments	2000000	1999999	1
+result	true	recorder not started
+call	["ffmpeg","-y","-loglevel","error","-i","$HOME/oracle-scratch/recorder/audio/screen-video.mp4","-itsoffset","-0.000001","-i","$HOME/oracle-scratch/recorder/audio/audio.mka","-map","0:v:0","-map","1:a:0","-c","copy","-t","0.000001","-movflags","+faststart","$HOME/oracle-scratch/recorder/audio/screen.mp4"]
+output	"muxed"
+== finish long recording
+arguments	0	3600000000	7200000000
+result	true	recorder not started
+call	["ffmpeg","-y","-loglevel","error","-i","$HOME/oracle-scratch/recorder/audio/screen-video.mp4","-itsoffset","3600.000000","-i","$HOME/oracle-scratch/recorder/audio/audio.mka","-map","0:v:0","-map","1:a:0","-c","copy","-t","7200.000000","-movflags","+faststart","$HOME/oracle-scratch/recorder/audio/screen.mp4"]
+output	"muxed"
+== finish negative duration
+arguments	5	3	-1
+result	true	recorder not started
+call	["ffmpeg","-y","-loglevel","error","-i","$HOME/oracle-scratch/recorder/audio/screen-video.mp4","-itsoffset","-0.000002","-i","$HOME/oracle-scratch/recorder/audio/audio.mka","-map","0:v:0","-map","1:a:0","-c","copy","-shortest","-movflags","+faststart","$HOME/oracle-scratch/recorder/audio/screen.mp4"]
+output	"muxed"
+== finish stops a running recorder
+arguments	1000000	1000000	500000
+result	true	recorder stopped
+call	["ffmpeg","-y","-loglevel","error","-i","$HOME/oracle-scratch/recorder/audio/screen-video.mp4","-itsoffset","0.000000","-i","$HOME/oracle-scratch/recorder/audio/audio.mka","-map","0:v:0","-map","1:a:0","-c","copy","-t","0.500000","-movflags","+faststart","$HOME/oracle-scratch/recorder/audio/screen.mp4"]
+output	"muxed"

@@ -1,0 +1,6 @@
+  default_input  |  Default input  
+	alsa_input.x	|	Tabbed	
+
+
+alsa_input.y|
+alsa_input.z|a|b|c

@@ -1,0 +1,3 @@
+45	alsa_output.pci-0000_00_1f.3.analog-stereo.monitor	PipeWire	s32le 2ch 48000Hz	SUSPENDED
+46	alsa_input.usb-Insta360_Insta360_Link_2-02.mono-fallback	PipeWire	s16le 1ch 48000Hz	RUNNING
+47	alsa_input.platform-mtk_sdw_mc.HiFi__Mic__source	PipeWire	s32le 2ch 48000Hz	IDLE

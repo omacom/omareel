@@ -1,0 +1,397 @@
+{
+ "trees": {
+  "laptop-and-dock": [
+   {
+    "label": "plugged in",
+    "files": {
+     "sys/devices/usb7/7-1/idVendor": "636e\n",
+     "sys/devices/usb7/7-1/idProduct": "0bdb\n",
+     "sys/devices/usb7/7-1/serial": "200901010001\n",
+     "sys/devices/usb1/1-1.1/idVendor": "2e1a\n",
+     "sys/devices/usb1/1-1.1/idProduct": "4c04\n",
+     "dev/video0": "",
+     "sys/class/video4linux/video0/index": "0\n",
+     "dev/video1": "",
+     "sys/class/video4linux/video1/index": "1\n",
+     "dev/video2": "",
+     "sys/class/video4linux/video2/index": "0\n",
+     "dev/video4": "",
+     "sys/class/video4linux/video4/index": "0\n"
+    },
+    "dirs": [
+     "sys/devices/usb7/7-1/7-1:1.0",
+     "sys/devices/usb7/7-1/7-1:1.0",
+     "sys/devices/usb7/7-1/7-1:1.2",
+     "sys/devices/usb1/1-1.1/1-1.1:1.0"
+    ],
+    "links": {
+     "sys/class/video4linux/video0/device": "sys/devices/usb7/7-1/7-1:1.0",
+     "sys/class/video4linux/video1/device": "sys/devices/usb7/7-1/7-1:1.0",
+     "sys/class/video4linux/video2/device": "sys/devices/usb7/7-1/7-1:1.2",
+     "sys/class/video4linux/video4/device": "sys/devices/usb1/1-1.1/1-1.1:1.0",
+     "dev/v4l/by-id/usb-ASUS_FHD_webcam_200901010001-video-index0": "dev/video2",
+     "dev/v4l/by-id/usb-ASUS_FHD_webcam_200901010001-video-index1": "dev/video1",
+     "dev/v4l/by-id/usb-Insta360_Insta360_Link_2-video-index0": "dev/video4",
+     "dev/v4l/by-path/platform-x-usbv2-0:1:1.0-video-index0": "dev/video0",
+     "dev/v4l/by-path/platform-x-usb-0:1:1.0-video-index0": "dev/video0",
+     "dev/v4l/by-path/platform-x-usb-0:1:1.2-video-index0": "dev/video2",
+     "dev/v4l/by-path/platform-y-usb-0:1.1:1.0-video-index0": "dev/video4"
+    },
+    "queries": [
+     "dev/video0",
+     "dev/video1",
+     "dev/video2",
+     "dev/video4",
+     "dev/video9",
+     "dev/v4l/by-id/usb-Insta360_Insta360_Link_2-video-index0",
+     "dev/v4l/by-path/platform-x-usb-0:1:1.0-video-index0",
+     "dev/../dev/video4",
+     "",
+     "/dev/oracle-camera-that-does-not-exist"
+    ]
+   },
+   {
+    "label": "dock renumbered",
+    "remove": [
+     "dev/video4"
+    ],
+    "files": {
+     "dev/video6": "",
+     "sys/class/video4linux/video6/index": "0\n"
+    },
+    "dirs": [
+     "sys/devices/usb1/1-1.1/1-1.1:1.0"
+    ],
+    "links": {
+     "sys/class/video4linux/video6/device": "sys/devices/usb1/1-1.1/1-1.1:1.0",
+     "dev/v4l/by-id/usb-Insta360_Insta360_Link_2-video-index0": "dev/video6"
+    },
+    "queries": [
+     "dev/video0",
+     "dev/video1",
+     "dev/video2",
+     "dev/video4",
+     "dev/video9",
+     "dev/v4l/by-id/usb-Insta360_Insta360_Link_2-video-index0",
+     "dev/v4l/by-path/platform-x-usb-0:1:1.0-video-index0",
+     "dev/../dev/video4",
+     "",
+     "/dev/oracle-camera-that-does-not-exist",
+     "dev/video6"
+    ]
+   },
+   {
+    "label": "unplugged",
+    "remove": [
+     "dev/video6"
+    ],
+    "queries": [
+     "dev/video0",
+     "dev/video1",
+     "dev/video2",
+     "dev/video4",
+     "dev/video9",
+     "dev/v4l/by-id/usb-Insta360_Insta360_Link_2-video-index0",
+     "dev/v4l/by-path/platform-x-usb-0:1:1.0-video-index0",
+     "dev/../dev/video4",
+     "",
+     "/dev/oracle-camera-that-does-not-exist",
+     "dev/video6"
+    ]
+   }
+  ],
+  "only-usbv-by-path": [
+   {
+    "label": "one camera",
+    "files": {
+     "dev/video0": "",
+     "sys/class/video4linux/video0/index": "0\n",
+     "sys/devices/usb3/3-2/idVendor": "046d\n",
+     "sys/devices/usb3/3-2/idProduct": "085e\n"
+    },
+    "dirs": [
+     "sys/devices/usb3/3-2/3-2:1.0"
+    ],
+    "links": {
+     "sys/class/video4linux/video0/device": "sys/devices/usb3/3-2/3-2:1.0",
+     "dev/v4l/by-path/pci-0000:00:14.0-usbv2-0:2:1.0-video-index0": "dev/video0",
+     "dev/v4l/by-path/pci-0000:00:14.0-usbv3-0:2:1.0-video-index0": "dev/video0"
+    },
+    "queries": [
+     "dev/video0"
+    ]
+   }
+  ],
+  "no-links": [
+   {
+    "label": "bare node",
+    "files": {
+     "dev/video3": "",
+     "sys/class/video4linux/video3/index": "0\n"
+    },
+    "dirs": [
+     "sys/devices/platform/csi"
+    ],
+    "links": {
+     "sys/class/video4linux/video3/device": "sys/devices/platform/csi"
+    },
+    "queries": [
+     "dev/video3"
+    ]
+   }
+  ],
+  "no-sys": [
+   {
+    "label": "by-id only",
+    "files": {
+     "dev/video5": ""
+    },
+    "links": {
+     "dev/v4l/by-id/usb-Camera-video-index0": "dev/video5",
+     "dev/v4l/by-path/usb-0:1-video-index0": "dev/video5"
+    },
+    "queries": [
+     "dev/video5"
+    ]
+   }
+  ],
+  "identical-cameras": [
+   {
+    "label": "two without serials",
+    "files": {
+     "sys/devices/usb2/2-1/idVendor": "1234\n",
+     "sys/devices/usb2/2-1/idProduct": "5678\n",
+     "sys/devices/usb2/2-2/idVendor": "1234\n",
+     "sys/devices/usb2/2-2/idProduct": "5678\n",
+     "dev/video0": "",
+     "sys/class/video4linux/video0/index": "0\n",
+     "dev/video2": "",
+     "sys/class/video4linux/video2/index": "0\n"
+    },
+    "dirs": [
+     "sys/devices/usb2/2-1/2-1:1.0",
+     "sys/devices/usb2/2-2/2-2:1.0"
+    ],
+    "links": {
+     "sys/class/video4linux/video0/device": "sys/devices/usb2/2-1/2-1:1.0",
+     "sys/class/video4linux/video2/device": "sys/devices/usb2/2-2/2-2:1.0",
+     "dev/v4l/by-id/usb-Generic_Camera-video-index0": "dev/video2",
+     "dev/v4l/by-path/pci-usb-0:1:1.0-video-index0": "dev/video0",
+     "dev/v4l/by-path/pci-usb-0:2:1.0-video-index0": "dev/video2"
+    },
+    "queries": [
+     "dev/video0",
+     "dev/video2"
+    ]
+   }
+  ],
+  "sorting": [
+   {
+    "label": "several links to one node",
+    "files": {
+     "dev/video7": ""
+    },
+    "links": {
+     "dev/v4l/by-id/z-camera-video-index0": "dev/video7",
+     "dev/v4l/by-id/a-camera-video-index0": "dev/video7",
+     "dev/v4l/by-id/B-camera-video-index0": "dev/video7",
+     "dev/v4l/by-id/usbv-camera-video-index0": "dev/video7"
+    },
+    "queries": [
+     "dev/video7"
+    ]
+   }
+  ],
+  "chained-links": [
+   {
+    "label": "link to a link",
+    "files": {
+     "dev/video8": ""
+    },
+    "links": {
+     "dev/camera": "dev/video8",
+     "dev/v4l/by-id/usb-Chained-video-index0": "dev/camera"
+    },
+    "queries": [
+     "dev/video8",
+     "dev/camera"
+    ]
+   }
+  ]
+ },
+ "ids": [
+  "/dev/video6",
+  "v4l2 /dev/video6 usb",
+  "v4l2:/dev/video0",
+  "/dev/video10 /dev/video11",
+  "obs-virtual",
+  "",
+  "/dev/videoX",
+  "/dev/video",
+  "prefix/dev/video3/suffix rest",
+  "/DEV/VIDEO1",
+  "/dev/v4l/by-id/usb-x-video-index0",
+  " /dev/video2",
+  "/dev/video2\t3",
+  "é/dev/video4☃ x"
+ ],
+ "devices": {
+  "webcam-1080p": [
+   [
+    "Jpeg",
+    1920,
+    1080,
+    5,
+    30
+   ],
+   [
+    "Jpeg",
+    1280,
+    720,
+    5,
+    30
+   ],
+   [
+    "YUYV",
+    640,
+    480,
+    5,
+    30
+   ],
+   [
+    "YUYV",
+    1920,
+    1080,
+    5,
+    5
+   ]
+  ],
+  "webcam-60fps": [
+   [
+    "Jpeg",
+    1920,
+    1080,
+    30,
+    60
+   ],
+   [
+    "Jpeg",
+    1920,
+    1080,
+    30,
+    30
+   ],
+   [
+    "NV12",
+    1280,
+    720,
+    60,
+    60
+   ]
+  ],
+  "ir-sensor": [
+   [
+    "Y8",
+    640,
+    360,
+    15,
+    15
+   ],
+   [
+    "Y8",
+    340,
+    340,
+    2,
+    29.98
+   ]
+  ],
+  "just-under-30": [
+   [
+    "YUYV",
+    1920,
+    1080,
+    29.99,
+    29.99
+   ],
+   [
+    "YUYV",
+    1280,
+    720,
+    29.98,
+    29.98
+   ]
+  ],
+  "ties": [
+   [
+    "YUYV",
+    1920,
+    1081,
+    30,
+    30
+   ],
+   [
+    "Jpeg",
+    1920,
+    1079,
+    30,
+    30
+   ],
+   [
+    "NV12",
+    1921,
+    1080,
+    30,
+    30
+   ]
+  ],
+  "only-4k": [
+   [
+    "Jpeg",
+    3840,
+    2160,
+    30,
+    30
+   ],
+   [
+    "Jpeg",
+    2560,
+    1440,
+    30,
+    30
+   ]
+  ],
+  "only-small": [
+   [
+    "YUYV",
+    320,
+    240,
+    30,
+    30
+   ],
+   [
+    "YUYV",
+    160,
+    120,
+    60,
+    60
+   ]
+  ],
+  "high-rate": [
+   [
+    "Jpeg",
+    1920,
+    1080,
+    120,
+    120
+   ],
+   [
+    "Jpeg",
+    1280,
+    720,
+    30,
+    30
+   ]
+  ],
+  "no-formats": []
+ }
+}

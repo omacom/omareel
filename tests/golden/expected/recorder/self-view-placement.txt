@@ -1,0 +1,27 @@
+disabled-target	true	true	"M"	"DP-1"	1	1	true	false	""	"M"	160	0	0	1
+duplicate-names	true	true	"M"	"DUP"	1	1	true	true	"DUP"	"M"	160	1744	904	1
+hyprctl-fails	true	true	"M"	"DP-1"	0.5	0.5	true	false	""	"M"	160	0	0	1
+no-selfview	true	false	"S"	"DP-1"	0.5	0.5	false	false	""	"S"	120	0	0	0
+no-webcam	false	true	"L"	"DP-1"	0.5	0.5	false	false	""	"L"	220	0	0	0
+position--1-2	true	true	"M"	"HDMI-A-1"	-1	2	true	true	"HDMI-A-1"	"M"	160	-1712	1792	1
+position-0-0	true	true	"M"	"HDMI-A-1"	0	0	true	true	"HDMI-A-1"	"M"	160	16	16	1
+position-0.25-0.75	true	true	"M"	"HDMI-A-1"	0.25	0.75	true	true	"HDMI-A-1"	"M"	160	448	682	1
+position-0.5000001-0.4999999	true	true	"M"	"HDMI-A-1"	0.50000009999999995	0.4999999	true	true	"HDMI-A-1"	"M"	160	880	460	1
+position-1-1	true	true	"M"	"HDMI-A-1"	1	1	true	true	"HDMI-A-1"	"M"	160	1744	904	1
+position-1000--1000	true	true	"M"	"HDMI-A-1"	1000	-1000	true	true	"HDMI-A-1"	"M"	160	1728016	-887984	1
+real-desktop	true	true	"M"	"HDMI-A-1"	0.29999999999999999	0.90000000000000002	true	true	"HDMI-A-1"	"M"	160	534	815	1
+scaled-odd	true	true	"M"	"eDP-1"	1	1	true	true	"eDP-1"	"M"	160	1105	545	1
+size-L	true	true	"L"	"DP-1"	0.5	0.5	true	true	"DP-1"	"L"	220	914	466	1
+size-M	true	true	"M"	"DP-1"	0.5	0.5	true	true	"DP-1"	"M"	160	944	496	1
+size-S	true	true	"S"	"DP-1"	0.5	0.5	true	true	"DP-1"	"S"	120	964	516	1
+size-XL	true	true	"XL"	"DP-1"	0.5	0.5	true	true	"DP-1"	"XL"	160	944	496	1
+size-empty	true	true	""	"DP-1"	0.5	0.5	true	true	"DP-1"	""	160	944	496	1
+size-m	true	true	"m"	"DP-1"	0.5	0.5	true	true	"DP-1"	"m"	160	944	496	1
+tiny-monitor	true	true	"L"	"TINY"	1	1	true	true	"TINY"	"L"	220	16	16	1
+unknown-monitor	true	true	"M"	"DP-9"	0.5	0.5	true	false	""	"M"	160	0	0	1
+selfViewPixels	"S"	120
+selfViewPixels	"M"	160
+selfViewPixels	"L"	220
+selfViewPixels	"s"	160
+selfViewPixels	"XL"	160
+selfViewPixels	""	160

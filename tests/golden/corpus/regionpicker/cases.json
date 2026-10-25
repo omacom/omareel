@@ -1,0 +1,1793 @@
+{
+ "rects": [
+  "10,20 300x200",
+  "0,0 1x1",
+  "-10,-20 300x200",
+  "10.5,20.25 300.75x200.5",
+  " 10,20 300x200 ",
+  "\t10,20\t300x200\t",
+  "10,20  300x200",
+  "10, 20 300x200",
+  "10,20 300X200",
+  "10,20 300x200x",
+  "10,20 -300x200",
+  "+10,20 300x200",
+  "10,20 300x200\n",
+  "10,20\n300x200",
+  ".5,1 2x3",
+  "5.,1 2x3",
+  "1e3,0 2x3",
+  "10,20 0x0",
+  "999999999999999999999,0 1x1",
+  "١٠,٢٠ ٣٠٠x٢٠٠",
+  "10,20 300x200 extra",
+  "",
+  "monitor:DP-1",
+  "10,20",
+  "10 20 300x200",
+  "-0,-0 0.0x0.000",
+  "00010,0020 0300x0200"
+ ],
+ "rectangles": [
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-one.json",
+   "clients": "hyprctl/clients/crafted-mixed.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-one.json",
+   "clients": "hyprctl/clients/crafted-special.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-one.json",
+   "clients": "hyprctl/clients/crafted-none.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-one.json",
+   "clients": "hyprctl/clients/crafted-object.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-one.json",
+   "clients": "hyprctl/clients/crafted-garbage.txt"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-one.json",
+   "clients": "hyprctl/clients/real-desktop.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-two.json",
+   "clients": "hyprctl/clients/crafted-mixed.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-two.json",
+   "clients": "hyprctl/clients/crafted-special.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-two.json",
+   "clients": "hyprctl/clients/crafted-none.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-two.json",
+   "clients": "hyprctl/clients/crafted-object.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-two.json",
+   "clients": "hyprctl/clients/crafted-garbage.txt"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-two.json",
+   "clients": "hyprctl/clients/real-desktop.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-special.json",
+   "clients": "hyprctl/clients/crafted-mixed.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-special.json",
+   "clients": "hyprctl/clients/crafted-special.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-special.json",
+   "clients": "hyprctl/clients/crafted-none.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-special.json",
+   "clients": "hyprctl/clients/crafted-object.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-special.json",
+   "clients": "hyprctl/clients/crafted-garbage.txt"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-special.json",
+   "clients": "hyprctl/clients/real-desktop.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-string-id.json",
+   "clients": "hyprctl/clients/crafted-mixed.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-string-id.json",
+   "clients": "hyprctl/clients/crafted-special.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-string-id.json",
+   "clients": "hyprctl/clients/crafted-none.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-string-id.json",
+   "clients": "hyprctl/clients/crafted-object.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-string-id.json",
+   "clients": "hyprctl/clients/crafted-garbage.txt"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-string-id.json",
+   "clients": "hyprctl/clients/real-desktop.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-missing-id.json",
+   "clients": "hyprctl/clients/crafted-mixed.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-missing-id.json",
+   "clients": "hyprctl/clients/crafted-special.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-missing-id.json",
+   "clients": "hyprctl/clients/crafted-none.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-missing-id.json",
+   "clients": "hyprctl/clients/crafted-object.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-missing-id.json",
+   "clients": "hyprctl/clients/crafted-garbage.txt"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-missing-id.json",
+   "clients": "hyprctl/clients/real-desktop.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-array.json",
+   "clients": "hyprctl/clients/crafted-mixed.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-array.json",
+   "clients": "hyprctl/clients/crafted-special.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-array.json",
+   "clients": "hyprctl/clients/crafted-none.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-array.json",
+   "clients": "hyprctl/clients/crafted-object.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-array.json",
+   "clients": "hyprctl/clients/crafted-garbage.txt"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-array.json",
+   "clients": "hyprctl/clients/real-desktop.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-garbage.txt",
+   "clients": "hyprctl/clients/crafted-mixed.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-garbage.txt",
+   "clients": "hyprctl/clients/crafted-special.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-garbage.txt",
+   "clients": "hyprctl/clients/crafted-none.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-garbage.txt",
+   "clients": "hyprctl/clients/crafted-object.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-garbage.txt",
+   "clients": "hyprctl/clients/crafted-garbage.txt"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-garbage.txt",
+   "clients": "hyprctl/clients/real-desktop.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/real-desktop.json",
+   "clients": "hyprctl/clients/crafted-mixed.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/real-desktop.json",
+   "clients": "hyprctl/clients/crafted-special.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/real-desktop.json",
+   "clients": "hyprctl/clients/crafted-none.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/real-desktop.json",
+   "clients": "hyprctl/clients/crafted-object.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/real-desktop.json",
+   "clients": "hyprctl/clients/crafted-garbage.txt"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/real-desktop.json",
+   "clients": "hyprctl/clients/real-desktop.json"
+  },
+  {
+   "workspace": null,
+   "clients": "hyprctl/clients/crafted-mixed.json"
+  },
+  {
+   "workspace": "hyprctl/activeworkspace/crafted-one.json",
+   "clients": null
+  }
+ ],
+ "snap": {
+  "rectangles": [
+   "12,38 1896x1030\n400,300 640x480\n",
+   "400,300 640x480\n12,38 1896x1030\n",
+   "",
+   "garbage\n10,10 5x5\n",
+   "0,0 0x0\n",
+   "-50,-40 300x200\n",
+   "10,20 300x200",
+   "\n\n10,20 300x200\n\n",
+   "10.5,20.5 1.5x1.5\n"
+  ],
+  "points": [
+   [
+    12,
+    38
+   ],
+   [
+    11.999,
+    38
+   ],
+   [
+    1907,
+    1067
+   ],
+   [
+    1908,
+    1068
+   ],
+   [
+    400,
+    300
+   ],
+   [
+    1039.5,
+    779.9
+   ],
+   [
+    10,
+    10
+   ],
+   [
+    14.999,
+    14.999
+   ],
+   [
+    15,
+    15
+   ],
+   [
+    0,
+    0
+   ],
+   [
+    -50,
+    -40
+   ],
+   [
+    249.999,
+    159.999
+   ],
+   [
+    10.5,
+    20.5
+   ],
+   [
+    12,
+    22
+   ]
+  ]
+ },
+ "monitorFor": {
+  "sets": [
+   "hyprctl/monitors/crafted-two.json",
+   "hyprctl/monitors/crafted-negative-positions.json",
+   "hyprctl/monitors/crafted-empty-array.json",
+   "hyprctl/monitors/crafted-rotated.json",
+   "hyprctl/monitors/real-desktop.json"
+  ],
+  "rects": [
+   [
+    0,
+    0,
+    10,
+    10
+   ],
+   [
+    2047,
+    0,
+    2,
+    2
+   ],
+   [
+    2046,
+    0,
+    2,
+    2
+   ],
+   [
+    2048,
+    1000,
+    0,
+    0
+   ],
+   [
+    5000,
+    5000,
+    1,
+    1
+   ],
+   [
+    -1920,
+    -200,
+    0,
+    0
+   ],
+   [
+    -1,
+    -1,
+    2,
+    2
+   ],
+   [
+    100,
+    100,
+    -300,
+    -300
+   ],
+   [
+    0,
+    1151.9,
+    0,
+    0.2
+   ],
+   [
+    1e+300,
+    0,
+    1e+300,
+    0
+   ],
+   [
+    1919.5,
+    1079.5,
+    1,
+    1
+   ]
+  ]
+ },
+ "capturable": {
+  "DP-1 two-monitors": {
+   "monitors": "hyprctl/monitors/crafted-two.json",
+   "requested": "DP-1",
+   "env": {
+    "OMAREEL_CAPTURE": "gsr"
+   },
+   "answers": [
+    {
+     "argv": [
+      "gpu-screen-recorder",
+      "--list-capture-options"
+     ],
+     "status": 0,
+     "stdoutFile": "gpu-screen-recorder/list-capture-options/crafted-two-monitors.txt"
+    }
+   ]
+  },
+  "DP-1 only-region": {
+   "monitors": "hyprctl/monitors/crafted-two.json",
+   "requested": "DP-1",
+   "env": {
+    "OMAREEL_CAPTURE": "gsr"
+   },
+   "answers": [
+    {
+     "argv": [
+      "gpu-screen-recorder",
+      "--list-capture-options"
+     ],
+     "status": 0,
+     "stdoutFile": "gpu-screen-recorder/list-capture-options/crafted-only-region.txt"
+    }
+   ]
+  },
+  "DP-1 duplicates": {
+   "monitors": "hyprctl/monitors/crafted-two.json",
+   "requested": "DP-1",
+   "env": {
+    "OMAREEL_CAPTURE": "gsr"
+   },
+   "answers": [
+    {
+     "argv": [
+      "gpu-screen-recorder",
+      "--list-capture-options"
+     ],
+     "status": 0,
+     "stdoutFile": "gpu-screen-recorder/list-capture-options/crafted-duplicates.txt"
+    }
+   ]
+  },
+  "DP-1 spaces": {
+   "monitors": "hyprctl/monitors/crafted-two.json",
+   "requested": "DP-1",
+   "env": {
+    "OMAREEL_CAPTURE": "gsr"
+   },
+   "answers": [
+    {
+     "argv": [
+      "gpu-screen-recorder",
+      "--list-capture-options"
+     ],
+     "status": 0,
+     "stdoutFile": "gpu-screen-recorder/list-capture-options/crafted-spaces.txt"
+    }
+   ]
+  },
+  "DP-1 empty": {
+   "monitors": "hyprctl/monitors/crafted-two.json",
+   "requested": "DP-1",
+   "env": {
+    "OMAREEL_CAPTURE": "gsr"
+   },
+   "answers": [
+    {
+     "argv": [
+      "gpu-screen-recorder",
+      "--list-capture-options"
+     ],
+     "status": 0,
+     "stdoutFile": "gpu-screen-recorder/list-capture-options/crafted-empty.txt"
+    }
+   ]
+  },
+  "DP-1 fails": {
+   "monitors": "hyprctl/monitors/crafted-two.json",
+   "requested": "DP-1",
+   "env": {
+    "OMAREEL_CAPTURE": "gsr"
+   },
+   "answers": [
+    {
+     "argv": [
+      "gpu-screen-recorder",
+      "--list-capture-options"
+     ],
+     "status": 1,
+     "stdoutFile": "gpu-screen-recorder/list-capture-options/crafted-two-monitors.txt"
+    }
+   ]
+  },
+  "DP-1 real-desktop": {
+   "monitors": "hyprctl/monitors/crafted-two.json",
+   "requested": "DP-1",
+   "env": {
+    "OMAREEL_CAPTURE": "gsr"
+   },
+   "answers": [
+    {
+     "argv": [
+      "gpu-screen-recorder",
+      "--list-capture-options"
+     ],
+     "status": 0,
+     "stdoutFile": "gpu-screen-recorder/list-capture-options/real-desktop.txt"
+    }
+   ]
+  },
+  "HDMI-A-1 two-monitors": {
+   "monitors": "hyprctl/monitors/crafted-two.json",
+   "requested": "HDMI-A-1",
+   "env": {
+    "OMAREEL_CAPTURE": "gsr"
+   },
+   "answers": [
+    {
+     "argv": [
+      "gpu-screen-recorder",
+      "--list-capture-options"
+     ],
+     "status": 0,
+     "stdoutFile": "gpu-screen-recorder/list-capture-options/crafted-two-monitors.txt"
+    }
+   ]
+  },
+  "HDMI-A-1 only-region": {
+   "monitors": "hyprctl/monitors/crafted-two.json",
+   "requested": "HDMI-A-1",
+   "env": {
+    "OMAREEL_CAPTURE": "gsr"
+   },
+   "answers": [
+    {
+     "argv": [
+      "gpu-screen-recorder",
+      "--list-capture-options"
+     ],
+     "status": 0,
+     "stdoutFile": "gpu-screen-recorder/list-capture-options/crafted-only-region.txt"
+    }
+   ]
+  },
+  "HDMI-A-1 duplicates": {
+   "monitors": "hyprctl/monitors/crafted-two.json",
+   "requested": "HDMI-A-1",
+   "env": {
+    "OMAREEL_CAPTURE": "gsr"
+   },
+   "answers": [
+    {
+     "argv": [
+      "gpu-screen-recorder",
+      "--list-capture-options"
+     ],
+     "status": 0,
+     "stdoutFile": "gpu-screen-recorder/list-capture-options/crafted-duplicates.txt"
+    }
+   ]
+  },
+  "HDMI-A-1 spaces": {
+   "monitors": "hyprctl/monitors/crafted-two.json",
+   "requested": "HDMI-A-1",
+   "env": {
+    "OMAREEL_CAPTURE": "gsr"
+   },
+   "answers": [
+    {
+     "argv": [
+      "gpu-screen-recorder",
+      "--list-capture-options"
+     ],
+     "status": 0,
+     "stdoutFile": "gpu-screen-recorder/list-capture-options/crafted-spaces.txt"
+    }
+   ]
+  },
+  "HDMI-A-1 empty": {
+   "monitors": "hyprctl/monitors/crafted-two.json",
+   "requested": "HDMI-A-1",
+   "env": {
+    "OMAREEL_CAPTURE": "gsr"
+   },
+   "answers": [
+    {
+     "argv": [
+      "gpu-screen-recorder",
+      "--list-capture-options"
+     ],
+     "status": 0,
+     "stdoutFile": "gpu-screen-recorder/list-capture-options/crafted-empty.txt"
+    }
+   ]
+  },
+  "HDMI-A-1 fails": {
+   "monitors": "hyprctl/monitors/crafted-two.json",
+   "requested": "HDMI-A-1",
+   "env": {
+    "OMAREEL_CAPTURE": "gsr"
+   },
+   "answers": [
+    {
+     "argv": [
+      "gpu-screen-recorder",
+      "--list-capture-options"
+     ],
+     "status": 1,
+     "stdoutFile": "gpu-screen-recorder/list-capture-options/crafted-two-monitors.txt"
+    }
+   ]
+  },
+  "HDMI-A-1 real-desktop": {
+   "monitors": "hyprctl/monitors/crafted-two.json",
+   "requested": "HDMI-A-1",
+   "env": {
+    "OMAREEL_CAPTURE": "gsr"
+   },
+   "answers": [
+    {
+     "argv": [
+      "gpu-screen-recorder",
+      "--list-capture-options"
+     ],
+     "status": 0,
+     "stdoutFile": "gpu-screen-recorder/list-capture-options/real-desktop.txt"
+    }
+   ]
+  },
+  "DP-1 capture env GSR uppercase": {
+   "monitors": "hyprctl/monitors/crafted-two.json",
+   "requested": "DP-1",
+   "env": {
+    "OMAREEL_CAPTURE": "GSR"
+   },
+   "answers": [
+    {
+     "argv": [
+      "gpu-screen-recorder",
+      "--list-capture-options"
+     ],
+     "status": 0,
+     "stdoutFile": "gpu-screen-recorder/list-capture-options/crafted-two-monitors.txt"
+    }
+   ]
+  },
+  "DP-1 preferences gsr": {
+   "monitors": "hyprctl/monitors/crafted-two.json",
+   "requested": "DP-1",
+   "captureBackend": "gsr",
+   "answers": [
+    {
+     "argv": [
+      "gpu-screen-recorder",
+      "--list-capture-options"
+     ],
+     "status": 0,
+     "stdoutFile": "gpu-screen-recorder/list-capture-options/crafted-two-monitors.txt"
+    }
+   ]
+  },
+  "DP-1 auto without a compositor": {
+   "monitors": "hyprctl/monitors/crafted-two.json",
+   "requested": "DP-1",
+   "answers": [
+    {
+     "argv": [
+      "gpu-screen-recorder",
+      "--list-capture-options"
+     ],
+     "status": 0,
+     "stdoutFile": "gpu-screen-recorder/list-capture-options/crafted-two-monitors.txt"
+    }
+   ]
+  },
+  "DP-1 gpu-screen-recorder missing": {
+   "monitors": "hyprctl/monitors/crafted-two.json",
+   "requested": "DP-1",
+   "env": {
+    "OMAREEL_CAPTURE": "gsr"
+   },
+   "programs": [
+    "hyprctl"
+   ],
+   "answers": []
+  },
+  "DP-1 gpu-screen-recorder hangs": {
+   "monitors": "hyprctl/monitors/crafted-two.json",
+   "requested": "DP-1",
+   "env": {
+    "OMAREEL_CAPTURE": "gsr"
+   },
+   "answers": [
+    {
+     "argv": [
+      "gpu-screen-recorder",
+      "--list-capture-options"
+     ],
+     "status": 0,
+     "stdout": "",
+     "hang": 6
+    }
+   ]
+  }
+ },
+ "pick": {
+  "fullscreen focused": {
+   "mode": "Fullscreen",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json"
+    }
+   ]
+  },
+  "fullscreen focus none": {
+   "mode": "Fullscreen",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-focus-none.json"
+    }
+   ]
+  },
+  "fullscreen focus both": {
+   "mode": "Fullscreen",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-focus-both.json"
+    }
+   ]
+  },
+  "fullscreen rotated": {
+   "mode": "Fullscreen",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-rotated.json"
+    }
+   ]
+  },
+  "fullscreen odd size": {
+   "mode": "Fullscreen",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-odd-size.json"
+    }
+   ]
+  },
+  "fullscreen scales": {
+   "mode": "Fullscreen",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-scales.json"
+    }
+   ]
+  },
+  "fullscreen real desktop": {
+   "mode": "Fullscreen",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/real-desktop.json"
+    }
+   ]
+  },
+  "fullscreen not capturable": {
+   "mode": "Fullscreen",
+   "env": {
+    "OMAREEL_CAPTURE": "gsr"
+   },
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json"
+    },
+    {
+     "argv": [
+      "gpu-screen-recorder",
+      "--list-capture-options"
+     ],
+     "status": 0,
+     "stdoutFile": "gpu-screen-recorder/list-capture-options/crafted-duplicates.txt"
+    }
+   ]
+  },
+  "fullscreen capturable": {
+   "mode": "Fullscreen",
+   "env": {
+    "OMAREEL_CAPTURE": "gsr"
+   },
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json"
+    },
+    {
+     "argv": [
+      "gpu-screen-recorder",
+      "--list-capture-options"
+     ],
+     "status": 0,
+     "stdoutFile": "gpu-screen-recorder/list-capture-options/crafted-two-monitors.txt"
+    }
+   ]
+  },
+  "monitors fail": {
+   "mode": "Fullscreen",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 1,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json",
+     "stderr": "Couldn't connect to Hyprland\n"
+    }
+   ]
+  },
+  "monitors fail quietly": {
+   "mode": "Region",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 2,
+     "stdoutFile": "hyprctl/monitors/crafted-empty.txt"
+    }
+   ]
+  },
+  "monitors empty": {
+   "mode": "Region",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-empty-array.json"
+    }
+   ]
+  },
+  "monitors garbage": {
+   "mode": "Window",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-garbage.txt"
+    }
+   ]
+  },
+  "region rectangle": {
+   "mode": "Region",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json"
+    },
+    {
+     "argv": [
+      "omarchy-capture-region",
+      "smart",
+      "--match-monitor"
+     ],
+     "status": 0,
+     "stdout": "10,20 300x200\n"
+    }
+   ]
+  },
+  "region on second monitor": {
+   "mode": "Region",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json"
+    },
+    {
+     "argv": [
+      "omarchy-capture-region",
+      "smart",
+      "--match-monitor"
+     ],
+     "status": 0,
+     "stdout": "2100,100 641x359\n"
+    }
+   ]
+  },
+  "region fractional": {
+   "mode": "Region",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json"
+    },
+    {
+     "argv": [
+      "omarchy-capture-region",
+      "smart",
+      "--match-monitor"
+     ],
+     "status": 0,
+     "stdout": "10.5,20.25 300.75x200.5"
+    }
+   ]
+  },
+  "region outside every monitor": {
+   "mode": "Region",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json"
+    },
+    {
+     "argv": [
+      "omarchy-capture-region",
+      "smart",
+      "--match-monitor"
+     ],
+     "status": 0,
+     "stdout": "9000,9000 10x10"
+    }
+   ]
+  },
+  "region monitor": {
+   "mode": "Region",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json"
+    },
+    {
+     "argv": [
+      "omarchy-capture-region",
+      "smart",
+      "--match-monitor"
+     ],
+     "status": 0,
+     "stdout": "monitor:HDMI-A-1\n"
+    }
+   ]
+  },
+  "region monitor not capturable": {
+   "mode": "Region",
+   "env": {
+    "OMAREEL_CAPTURE": "gsr"
+   },
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json"
+    },
+    {
+     "argv": [
+      "omarchy-capture-region",
+      "smart",
+      "--match-monitor"
+     ],
+     "status": 0,
+     "stdout": "monitor:DP-1"
+    },
+    {
+     "argv": [
+      "gpu-screen-recorder",
+      "--list-capture-options"
+     ],
+     "status": 0,
+     "stdoutFile": "gpu-screen-recorder/list-capture-options/crafted-duplicates.txt"
+    }
+   ]
+  },
+  "region unknown monitor": {
+   "mode": "Region",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json"
+    },
+    {
+     "argv": [
+      "omarchy-capture-region",
+      "smart",
+      "--match-monitor"
+     ],
+     "status": 0,
+     "stdout": "monitor:DP-9\n"
+    }
+   ]
+  },
+  "region empty monitor name": {
+   "mode": "Region",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json"
+    },
+    {
+     "argv": [
+      "omarchy-capture-region",
+      "smart",
+      "--match-monitor"
+     ],
+     "status": 0,
+     "stdout": "monitor:"
+    }
+   ]
+  },
+  "region click": {
+   "mode": "Region",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json"
+    },
+    {
+     "argv": [
+      "omarchy-capture-region",
+      "smart",
+      "--match-monitor"
+     ],
+     "status": 0,
+     "stdout": "2500,500 1x1\n"
+    }
+   ]
+  },
+  "region click not capturable": {
+   "mode": "Region",
+   "env": {
+    "OMAREEL_CAPTURE": "gsr"
+   },
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json"
+    },
+    {
+     "argv": [
+      "omarchy-capture-region",
+      "smart",
+      "--match-monitor"
+     ],
+     "status": 0,
+     "stdout": "2500,500 1x1\n"
+    },
+    {
+     "argv": [
+      "gpu-screen-recorder",
+      "--list-capture-options"
+     ],
+     "status": 0,
+     "stdoutFile": "gpu-screen-recorder/list-capture-options/crafted-duplicates.txt"
+    }
+   ]
+  },
+  "region zero size": {
+   "mode": "Region",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json"
+    },
+    {
+     "argv": [
+      "omarchy-capture-region",
+      "smart",
+      "--match-monitor"
+     ],
+     "status": 0,
+     "stdout": "100,100 0x0\n"
+    }
+   ]
+  },
+  "region cancelled": {
+   "mode": "Region",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json"
+    },
+    {
+     "argv": [
+      "omarchy-capture-region",
+      "smart",
+      "--match-monitor"
+     ],
+     "status": 1,
+     "stdout": ""
+    }
+   ]
+  },
+  "region cancelled with output": {
+   "mode": "Region",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json"
+    },
+    {
+     "argv": [
+      "omarchy-capture-region",
+      "smart",
+      "--match-monitor"
+     ],
+     "status": 130,
+     "stdout": "10,20 300x200\n"
+    }
+   ]
+  },
+  "region unparsable": {
+   "mode": "Region",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json"
+    },
+    {
+     "argv": [
+      "omarchy-capture-region",
+      "smart",
+      "--match-monitor"
+     ],
+     "status": 0,
+     "stdout": "  what is this  \n"
+    }
+   ]
+  },
+  "region empty answer": {
+   "mode": "Region",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json"
+    },
+    {
+     "argv": [
+      "omarchy-capture-region",
+      "smart",
+      "--match-monitor"
+     ],
+     "status": 0,
+     "stdout": ""
+    }
+   ]
+  },
+  "region slurp": {
+   "mode": "Region",
+   "programs": [
+    "hyprctl",
+    "slurp",
+    "gpu-screen-recorder"
+   ],
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "activeworkspace"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/activeworkspace/crafted-one.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "clients"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/clients/crafted-mixed.json"
+    },
+    {
+     "argv": [
+      "slurp",
+      "-f",
+      "%x,%y %wx%h"
+     ],
+     "status": 0,
+     "stdout": "10,20 300x200\n",
+     "stdin": true
+    }
+   ]
+  },
+  "region slurp click on window": {
+   "mode": "Region",
+   "programs": [
+    "hyprctl",
+    "slurp",
+    "gpu-screen-recorder"
+   ],
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "activeworkspace"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/activeworkspace/crafted-one.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "clients"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/clients/crafted-mixed.json"
+    },
+    {
+     "argv": [
+      "slurp",
+      "-f",
+      "%x,%y %wx%h"
+     ],
+     "status": 0,
+     "stdout": "500,400 2x2\n",
+     "stdin": true
+    }
+   ]
+  },
+  "region slurp click on hidden window": {
+   "mode": "Region",
+   "programs": [
+    "hyprctl",
+    "slurp",
+    "gpu-screen-recorder"
+   ],
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "activeworkspace"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/activeworkspace/crafted-one.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "clients"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/clients/crafted-mixed.json"
+    },
+    {
+     "argv": [
+      "slurp",
+      "-f",
+      "%x,%y %wx%h"
+     ],
+     "status": 0,
+     "stdout": "50,50 1x1\n",
+     "stdin": true
+    }
+   ]
+  },
+  "region slurp click outside windows": {
+   "mode": "Region",
+   "programs": [
+    "hyprctl",
+    "slurp",
+    "gpu-screen-recorder"
+   ],
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "activeworkspace"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/activeworkspace/crafted-one.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "clients"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/clients/crafted-mixed.json"
+    },
+    {
+     "argv": [
+      "slurp",
+      "-f",
+      "%x,%y %wx%h"
+     ],
+     "status": 0,
+     "stdout": "2500,1000 1x1\n",
+     "stdin": true
+    }
+   ]
+  },
+  "region slurp without workspace": {
+   "mode": "Region",
+   "programs": [
+    "hyprctl",
+    "slurp",
+    "gpu-screen-recorder"
+   ],
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "activeworkspace"
+     ],
+     "status": 1,
+     "stdout": ""
+    },
+    {
+     "argv": [
+      "slurp",
+      "-f",
+      "%x,%y %wx%h"
+     ],
+     "status": 0,
+     "stdout": "500,400 1x1\n",
+     "stdin": true
+    }
+   ]
+  },
+  "region slurp clients fail": {
+   "mode": "Region",
+   "programs": [
+    "hyprctl",
+    "slurp",
+    "gpu-screen-recorder"
+   ],
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "activeworkspace"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/activeworkspace/crafted-one.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "clients"
+     ],
+     "status": 1,
+     "stdout": ""
+    },
+    {
+     "argv": [
+      "slurp",
+      "-f",
+      "%x,%y %wx%h"
+     ],
+     "status": 0,
+     "stdout": "500,400 1x1\n",
+     "stdin": true
+    }
+   ]
+  },
+  "region slurp missing": {
+   "mode": "Region",
+   "programs": [
+    "hyprctl"
+   ],
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "activeworkspace"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/activeworkspace/crafted-one.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "clients"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/clients/crafted-mixed.json"
+    }
+   ]
+  },
+  "window": {
+   "mode": "Window",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "activeworkspace"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/activeworkspace/crafted-one.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "clients"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/clients/crafted-mixed.json"
+    },
+    {
+     "argv": [
+      "slurp",
+      "-r",
+      "-f",
+      "%x,%y %wx%h"
+     ],
+     "status": 0,
+     "stdout": "400,300 640x480\n",
+     "stdin": true
+    }
+   ]
+  },
+  "window tiny": {
+   "mode": "Window",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "activeworkspace"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/activeworkspace/crafted-one.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "clients"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/clients/crafted-mixed.json"
+    },
+    {
+     "argv": [
+      "slurp",
+      "-r",
+      "-f",
+      "%x,%y %wx%h"
+     ],
+     "status": 0,
+     "stdout": "400,300 2x2\n",
+     "stdin": true
+    }
+   ]
+  },
+  "window cancelled": {
+   "mode": "Window",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "activeworkspace"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/activeworkspace/crafted-one.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "clients"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/clients/crafted-mixed.json"
+    },
+    {
+     "argv": [
+      "slurp",
+      "-r",
+      "-f",
+      "%x,%y %wx%h"
+     ],
+     "status": 1,
+     "stdout": "",
+     "stdin": true
+    }
+   ]
+  },
+  "window no rectangles": {
+   "mode": "Window",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/crafted-two.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "activeworkspace"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/activeworkspace/crafted-two.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "clients"
+     ],
+     "status": 0,
+     "stdout": "[]"
+    },
+    {
+     "argv": [
+      "slurp",
+      "-r",
+      "-f",
+      "%x,%y %wx%h"
+     ],
+     "status": 0,
+     "stdout": "10,10 100x100\n",
+     "stdin": true
+    }
+   ]
+  },
+  "window real desktop": {
+   "mode": "Window",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "monitors"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/monitors/real-desktop.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "activeworkspace"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/activeworkspace/real-desktop.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "clients"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/clients/real-desktop.json"
+    },
+    {
+     "argv": [
+      "slurp",
+      "-r",
+      "-f",
+      "%x,%y %wx%h"
+     ],
+     "status": 0,
+     "stdout": "12,38 1896x1030\n",
+     "stdin": true
+    }
+   ]
+  }
+ }
+}

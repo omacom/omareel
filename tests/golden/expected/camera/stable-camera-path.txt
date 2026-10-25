@@ -1,0 +1,49 @@
+== chained-links: link to a link
+"dev/video8"	"$HOME/oracle-scratch/camera/trees/chained-links/dev/v4l/by-id/usb-Chained-video-index0"	"$HOME/oracle-scratch/camera/trees/chained-links/dev/video8"
+"dev/camera"	"$HOME/oracle-scratch/camera/trees/chained-links/dev/v4l/by-id/usb-Chained-video-index0"	"$HOME/oracle-scratch/camera/trees/chained-links/dev/video8"
+== identical-cameras: two without serials
+"dev/video0"	"$HOME/oracle-scratch/camera/trees/identical-cameras/dev/v4l/by-path/pci-usb-0:1:1.0-video-index0"	"$HOME/oracle-scratch/camera/trees/identical-cameras/dev/video0"
+"dev/video2"	"$HOME/oracle-scratch/camera/trees/identical-cameras/dev/v4l/by-path/pci-usb-0:2:1.0-video-index0"	"$HOME/oracle-scratch/camera/trees/identical-cameras/dev/video2"
+== laptop-and-dock: plugged in
+"dev/video0"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/v4l/by-path/platform-x-usb-0:1:1.0-video-index0"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/video0"
+"dev/video1"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/v4l/by-id/usb-ASUS_FHD_webcam_200901010001-video-index1"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/video1"
+"dev/video2"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/v4l/by-path/platform-x-usb-0:1:1.2-video-index0"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/video2"
+"dev/video4"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/v4l/by-id/usb-Insta360_Insta360_Link_2-video-index0"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/video4"
+"dev/video9"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/video9"	""
+"dev/v4l/by-id/usb-Insta360_Insta360_Link_2-video-index0"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/v4l/by-id/usb-Insta360_Insta360_Link_2-video-index0"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/video4"
+"dev/v4l/by-path/platform-x-usb-0:1:1.0-video-index0"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/v4l/by-path/platform-x-usb-0:1:1.0-video-index0"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/video0"
+"dev/../dev/video4"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/v4l/by-id/usb-Insta360_Insta360_Link_2-video-index0"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/video4"
+""	""	""
+"/dev/oracle-camera-that-does-not-exist"	"/dev/oracle-camera-that-does-not-exist"	""
+== laptop-and-dock: dock renumbered
+"dev/video0"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/v4l/by-path/platform-x-usb-0:1:1.0-video-index0"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/video0"
+"dev/video1"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/v4l/by-id/usb-ASUS_FHD_webcam_200901010001-video-index1"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/video1"
+"dev/video2"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/v4l/by-path/platform-x-usb-0:1:1.2-video-index0"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/video2"
+"dev/video4"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/video4"	""
+"dev/video9"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/video9"	""
+"dev/v4l/by-id/usb-Insta360_Insta360_Link_2-video-index0"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/video6"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/video6"
+"dev/v4l/by-path/platform-x-usb-0:1:1.0-video-index0"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/v4l/by-path/platform-x-usb-0:1:1.0-video-index0"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/video0"
+"dev/../dev/video4"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/../dev/video4"	""
+""	""	""
+"/dev/oracle-camera-that-does-not-exist"	"/dev/oracle-camera-that-does-not-exist"	""
+"dev/video6"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/video6"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/video6"
+== laptop-and-dock: unplugged
+"dev/video0"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/v4l/by-path/platform-x-usb-0:1:1.0-video-index0"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/video0"
+"dev/video1"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/v4l/by-id/usb-ASUS_FHD_webcam_200901010001-video-index1"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/video1"
+"dev/video2"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/v4l/by-path/platform-x-usb-0:1:1.2-video-index0"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/video2"
+"dev/video4"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/video4"	""
+"dev/video9"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/video9"	""
+"dev/v4l/by-id/usb-Insta360_Insta360_Link_2-video-index0"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/v4l/by-id/usb-Insta360_Insta360_Link_2-video-index0"	""
+"dev/v4l/by-path/platform-x-usb-0:1:1.0-video-index0"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/v4l/by-path/platform-x-usb-0:1:1.0-video-index0"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/video0"
+"dev/../dev/video4"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/../dev/video4"	""
+""	""	""
+"/dev/oracle-camera-that-does-not-exist"	"/dev/oracle-camera-that-does-not-exist"	""
+"dev/video6"	"$HOME/oracle-scratch/camera/trees/laptop-and-dock/dev/video6"	""
+== no-links: bare node
+"dev/video3"	"$HOME/oracle-scratch/camera/trees/no-links/dev/video3"	"$HOME/oracle-scratch/camera/trees/no-links/dev/video3"
+== no-sys: by-id only
+"dev/video5"	"$HOME/oracle-scratch/camera/trees/no-sys/dev/v4l/by-id/usb-Camera-video-index0"	"$HOME/oracle-scratch/camera/trees/no-sys/dev/video5"
+== only-usbv-by-path: one camera
+"dev/video0"	"$HOME/oracle-scratch/camera/trees/only-usbv-by-path/dev/v4l/by-path/pci-0000:00:14.0-usbv2-0:2:1.0-video-index0"	"$HOME/oracle-scratch/camera/trees/only-usbv-by-path/dev/video0"
+== sorting: several links to one node
+"dev/video7"	"$HOME/oracle-scratch/camera/trees/sorting/dev/v4l/by-id/B-camera-video-index0"	"$HOME/oracle-scratch/camera/trees/sorting/dev/video7"

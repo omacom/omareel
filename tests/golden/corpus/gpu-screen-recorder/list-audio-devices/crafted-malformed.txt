@@ -1,0 +1,8 @@
+|Nothing
+no separator line
+alsa_input.bad
+|
+ALSA_INPUT.upper|Upper
+alsa_input|Bare prefix
+alsa_input.|Prefix dot
+ default_input|Leading space

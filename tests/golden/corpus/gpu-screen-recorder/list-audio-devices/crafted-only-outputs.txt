@@ -1,0 +1,2 @@
+default_output|Default output
+alsa_output.pci.hdmi-stereo.monitor|HDMI

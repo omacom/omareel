@@ -20,6 +20,12 @@ pub fn trimmed(s: &str) -> &str {
     s.trim_matches(is_qchar_space)
 }
 
+/// `QString::simplified()`: whitespace (as `QChar::isSpace` has it) trimmed from both ends and
+/// every inner run of it made one space.
+pub fn simplified(s: &str) -> String {
+    s.split(is_qchar_space).filter(|piece| !piece.is_empty()).collect::<Vec<_>>().join(" ")
+}
+
 /// `QString::toLower()`: each code point lowercased on its own, by its full mapping (U+0130 `İ`
 /// becomes `i` and U+0307). There is no context: unlike `str::to_lowercase`, a final `Σ` becomes
 /// `σ`, not `ς`. The table is Qt's (see `qchar`), so the result does not depend on the Unicode
@@ -35,6 +41,20 @@ pub fn to_lower(s: &str) -> String {
         result.push(char::from_u32(map_case(&LOWER, u32::from(c))).unwrap_or(c));
     }
     result
+}
+
+/// `QString::toUpper()` for the uses omareel has: every character of the Basic Multilingual
+/// Plane mapped as `QChar::toUpper` maps it (Qt's table, so `ſ` becomes `S`). Qt also expands
+/// its special cases (`ß` to `SS`, `ﬁ` to `FI`) and maps characters past U+FFFF, which this leaves
+/// alone; omareel only compares the result with single ASCII letters (`S`, `M`, `L`), which
+/// neither can ever equal, so the decisions are Qt's.
+pub fn to_upper(s: &str) -> String {
+    s.chars()
+        .map(|c| match u16::try_from(u32::from(c)) {
+            Ok(unit) => char::from_u32(u32::from(super::qchar::to_upper(unit))).unwrap_or(c),
+            Err(_) => c,
+        })
+        .collect()
 }
 
 /// `QString::arg(const QString &a)`: replaces every occurrence of the lowest-numbered `%N`
@@ -150,6 +170,15 @@ mod tests {
         assert_eq!(size("é"), 1);
         assert_eq!(size("€"), 1);
         assert_eq!(size("😀"), 2);
+    }
+
+    #[test]
+    fn upper_case_and_simplified() {
+        // QChar::toUpper's table: the long s is S; multi-character mappings stay as they are.
+        assert_eq!(to_upper("s\u{17f}l\u{ff}"), "SSL\u{178}");
+        assert_eq!(to_upper("\u{df}"), "\u{df}");
+        assert_eq!(simplified(" \t a \n\u{a0} b  "), "a b");
+        assert_eq!(simplified("\u{2028}"), "");
     }
 
     #[test]

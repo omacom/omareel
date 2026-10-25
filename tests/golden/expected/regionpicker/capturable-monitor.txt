@@ -1,0 +1,75 @@
+== DP-1 auto without a compositor
+result	"DP-1"	"DP-1"	requested
+note	"<untouched>"
+call	["gpu-screen-recorder","--list-capture-options"]
+== DP-1 capture env GSR uppercase
+result	"DP-1"	"DP-1"	requested
+note	"<untouched>"
+call	["gpu-screen-recorder","--list-capture-options"]
+== DP-1 duplicates
+result	"DP-1"	"DP-1"	requested
+note	"<untouched>"
+call	["gpu-screen-recorder","--list-capture-options"]
+== DP-1 empty
+result	"DP-1"	"DP-1"	requested
+note	"<untouched>"
+call	["gpu-screen-recorder","--list-capture-options"]
+== DP-1 fails
+result	"DP-1"	"DP-1"	requested
+note	"<untouched>"
+call	["gpu-screen-recorder","--list-capture-options"]
+== DP-1 gpu-screen-recorder hangs
+result	"DP-1"	"DP-1"	requested
+note	"<untouched>"
+call	["gpu-screen-recorder","--list-capture-options"]
+== DP-1 gpu-screen-recorder missing
+result	"DP-1"	"DP-1"	requested
+note	"<untouched>"
+== DP-1 only-region
+result	"DP-1"	"DP-1"	requested
+note	"<untouched>"
+call	["gpu-screen-recorder","--list-capture-options"]
+== DP-1 preferences gsr
+result	"DP-1"	"DP-1"	requested
+note	"<untouched>"
+call	["gpu-screen-recorder","--list-capture-options"]
+== DP-1 real-desktop
+result	"DP-1"	"HDMI-A-1"	1
+note	"DP-1 is not capturable by gpu-screen-recorder; recording HDMI-A-1 instead"
+call	["gpu-screen-recorder","--list-capture-options"]
+== DP-1 spaces
+result	"DP-1"	"DP-1"	requested
+note	"<untouched>"
+call	["gpu-screen-recorder","--list-capture-options"]
+== DP-1 two-monitors
+result	"DP-1"	"DP-1"	requested
+note	"<untouched>"
+call	["gpu-screen-recorder","--list-capture-options"]
+== HDMI-A-1 duplicates
+result	"HDMI-A-1"	"DP-1"	0
+note	"HDMI-A-1 is not capturable by gpu-screen-recorder; recording DP-1 instead"
+call	["gpu-screen-recorder","--list-capture-options"]
+== HDMI-A-1 empty
+result	"HDMI-A-1"	"HDMI-A-1"	requested
+note	"<untouched>"
+call	["gpu-screen-recorder","--list-capture-options"]
+== HDMI-A-1 fails
+result	"HDMI-A-1"	"HDMI-A-1"	requested
+note	"<untouched>"
+call	["gpu-screen-recorder","--list-capture-options"]
+== HDMI-A-1 only-region
+result	"HDMI-A-1"	"HDMI-A-1"	requested
+note	"<untouched>"
+call	["gpu-screen-recorder","--list-capture-options"]
+== HDMI-A-1 real-desktop
+result	"HDMI-A-1"	"HDMI-A-1"	requested
+note	"<untouched>"
+call	["gpu-screen-recorder","--list-capture-options"]
+== HDMI-A-1 spaces
+result	"HDMI-A-1"	"HDMI-A-1"	requested
+note	"<untouched>"
+call	["gpu-screen-recorder","--list-capture-options"]
+== HDMI-A-1 two-monitors
+result	"HDMI-A-1"	"HDMI-A-1"	requested
+note	"<untouched>"
+call	["gpu-screen-recorder","--list-capture-options"]
