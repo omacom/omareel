@@ -405,4 +405,38 @@ mod tests {
         assert_eq!(query_cursor(b"/nonexistent/omareel/.socket.sock"), None);
         assert_eq!(query_cursor(&[b'x'; 200]), None);
     }
+
+    /// Answers one `j/cursorpos` request on a socket at `path` with `reply`.
+    fn serve_once(path: &std::path::Path, reply: &'static [u8]) -> std::thread::JoinHandle<Vec<u8>> {
+        use std::io::{Read, Write};
+        let listener = std::os::unix::net::UnixListener::bind(path).unwrap();
+        std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0u8; 64];
+            let count = stream.read(&mut request).unwrap();
+            stream.write_all(reply).unwrap();
+            request[..count].to_vec()
+        })
+    }
+
+    #[test]
+    fn cursor_query_reads_hyprlands_reply() {
+        let directory = std::env::temp_dir().join(format!("omareel-cursor-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let socket = directory.join(".socket.sock");
+        let path = std::os::unix::ffi::OsStrExt::as_bytes(socket.as_os_str()).to_vec();
+        let server = serve_once(&socket, br#"{"x": 1234.5, "y": -16}"#);
+        assert_eq!(query_cursor(&path), Some(PointF::new(1234.5, -16.0)));
+        assert_eq!(server.join().unwrap(), b"j/cursorpos");
+        std::fs::remove_file(&socket).unwrap();
+        // An answer without both coordinates is no position.
+        let server = serve_once(&socket, br#"{"x": 10}"#);
+        assert_eq!(query_cursor(&path), None);
+        server.join().unwrap();
+        std::fs::remove_file(&socket).unwrap();
+        let server = serve_once(&socket, b"not json");
+        assert_eq!(query_cursor(&path), None);
+        server.join().unwrap();
+        std::fs::remove_dir_all(&directory).unwrap();
+    }
 }
