@@ -1,99 +1,41 @@
 #include "Exporter.h"
 
-#include "EncoderPipe.h"
 #include "ExportRenderer.h"
-#include "FfmpegDecoder.h"
-#include "MediaProbe.h"
-#include "core/ClipTimeline.h"
-#include "core/CameraTimeline.h"
-#include "core/InputLog.h"
-#include "core/KeystrokeTrack.h"
-#include "core/LayoutTimeline.h"
-#include "core/MotionTrack.h"
-#include "core/OmarchyPaths.h"
-#include "core/Project.h"
 #include "omareel_qt/src/theme.cxxqt.h"
-#include "core/ZoomTimeline.h"
 
-#include <QDir>
-#include <QElapsedTimer>
 #include <QFileInfo>
 #include <QGuiApplication>
-#include <QHash>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QProcess>
+#include <QImage>
 #include <QQuickWindow>
-#include <QStandardPaths>
-#include <QScopeGuard>
-#include <QTemporaryFile>
 #include <QTextStream>
-#include <algorithm>
-#include <cmath>
-#include <condition_variable>
-#include <chrono>
-#include <deque>
-#include <mutex>
-#include <thread>
+#include <QUrl>
+#include <cstdint>
+#include <utility>
 
 using namespace Omareel;
 
 QSize Omareel::paddedEvenSize(int width, int height)
 {
-    return {width + std::abs(width % 2), height + std::abs(height % 2)};
+    const omareel::exporter::EvenSize size = omareel::exporter::paddedEvenSize(width, height);
+    return {size.width, size.height};
 }
 
-struct MediaInfo { int width = 0; int height = 0; double duration = 0.0; double fps = 30.0; bool audio = false; };
+Exporter::Exporter(QObject *parent): QObject(parent), m_cancel(omareel::exporter::newCancelFlag()) {}
 
-static double rateValue(const QString &value)
+Exporter::~Exporter() = default;
+
+void Exporter::cancel()
 {
-    const QStringList parts = value.split('/');
-    return parts.size() == 2 && parts[1].toDouble() != 0.0
-        ? parts[0].toDouble() / parts[1].toDouble() : value.toDouble();
+    m_cancel->cancel();
 }
 
-static MediaInfo probe(const QString &path, QString *error)
-{
-    QProcess process;
-    process.start(QStringLiteral("ffprobe"), {QStringLiteral("-v"), QStringLiteral("error"),
-        QStringLiteral("-show_entries"), QStringLiteral("stream=codec_type,width,height,r_frame_rate:format=duration"),
-        QStringLiteral("-of"), QStringLiteral("json"), path});
-    if (!process.waitForFinished(15000) || process.exitCode() != 0) {
-        if (error) *error = QString::fromUtf8(process.readAllStandardError()).trimmed();
-        return {};
-    }
-    const auto root = QJsonDocument::fromJson(process.readAllStandardOutput()).object();
-    MediaInfo result;
-    result.duration = root.value("format").toObject().value("duration").toString().toDouble();
-    for (const auto &value : root.value("streams").toArray()) {
-        const auto stream = value.toObject();
-        if (stream.value("codec_type") == QLatin1String("video") && result.width == 0) {
-            result.width = stream.value("width").toInt();
-            result.height = stream.value("height").toInt();
-            result.fps = rateValue(stream.value("r_frame_rate").toString());
-        } else if (stream.value("codec_type") == QLatin1String("audio")) result.audio = true;
-    }
-    if (result.width <= 0 || result.height <= 0 || result.duration <= 0.0) {
-        if (error) *error = QStringLiteral("ffprobe returned invalid video metadata");
-    }
-    if (result.fps <= 0.0) result.fps = 30.0;
-    return result;
-}
+namespace {
 
-static double outputAspect(const QString &aspect, int sourceWidth, int sourceHeight, const QRectF &crop)
+// The project as Composition.qml reads it: its JSON as a map, the colours keystroke pills are
+// drawn with, and the background image the job resolved, as a URL.
+QVariantMap projectMap(const omareel::exporter::ExportJob &job)
 {
-    if (aspect == QLatin1String("16:9")) return 16.0 / 9.0;
-    if (aspect == QLatin1String("1:1")) return 1.0;
-    if (aspect == QLatin1String("4:3")) return 4.0 / 3.0;
-    if (aspect == QLatin1String("9:16")) return 9.0 / 16.0;
-    if (aspect == QLatin1String("3:4")) return 3.0 / 4.0;
-    if (aspect == QLatin1String("4:5")) return 4.0 / 5.0;
-    return (sourceWidth * crop.width()) / std::max(1.0, sourceHeight * crop.height());
-}
-
-static QVariantMap projectMap(const Project &project)
-{
-    QVariantMap map = project.toJson().toVariantMap();
+    QVariantMap map = job.projectMap();
     // A Theme built here used to set the application font as it loaded; the composition's
     // text without a theme of its own falls back to that font.
     ThemeFonts::setApplicationFont(ThemeFonts::interfaceFamily(), omareel::theme::bodyTextSize());
@@ -101,132 +43,43 @@ static QVariantMap projectMap(const Project &project)
         {QStringLiteral("background"), omareel::theme::renderBackground()},
         {QStringLiteral("foreground"), omareel::theme::renderForeground()}};
     QVariantMap background = map.value(QStringLiteral("background")).toMap();
-    QString image;
-    if (project.background.type == QLatin1String("image")) image = project.background.image;
-    else if (project.background.type == QLatin1String("wallpaper"))
-        image = project.background.wallpaper == QLatin1String("omarchy:current")
-            ? OmarchyPaths::currentBackground() : project.background.wallpaper;
+    const QString image = job.backgroundImage();
     background[QStringLiteral("resolvedImage")] = image.isEmpty() ? QString() : QUrl::fromLocalFile(image).toString();
     map[QStringLiteral("background")] = background;
     return map;
 }
 
-static QString atempo(double speed)
+// A decoded frame as a QImage over the job's pixels, which it keeps alive until its last copy
+// goes; a null frame is a null image.
+QImage frameImage(::rust::Box<omareel::exporter::DecodedImage> frame)
 {
-    QStringList filters;
-    while (speed > 2.0) { filters << QStringLiteral("atempo=2"); speed /= 2.0; }
-    while (speed < 0.5) { filters << QStringLiteral("atempo=0.5"); speed /= 0.5; }
-    filters << QStringLiteral("atempo=%1").arg(speed, 0, 'g', 8);
-    return filters.join(',');
+    using Owner = ::rust::Box<omareel::exporter::DecodedImage>;
+    if (frame->isNull()) return QImage();
+    auto *owner = new Owner(std::move(frame));
+    const ::rust::Slice<const std::uint8_t> pixels = (*owner)->pixels();
+    return QImage(pixels.data(), (*owner)->width(), (*owner)->height(), qsizetype((*owner)->width()) * 4,
+                  QImage::Format_RGBA8888, [](void *info) { delete static_cast<Owner *>(info); }, owner);
 }
 
-static QVector<double> clickOutputTimes(const InputLog &input, const QVector<Clip> &clips)
+// The members the frame loop changes, from the job's state after nextFrame.
+void applyFrame(CompositionState &state, const omareel::exporter::ExportJob &job)
 {
-    QVector<double> result;
-    double outputStart = 0.0;
-    const QVector<InputEvent> clicks = input.clickDowns();
-    for (const Clip &clip : clips) {
-        for (const InputEvent &click : clicks) {
-            if (clip.isMedia() || click.time < clip.in || click.time >= clip.out) continue;
-            result << outputStart + (click.time - clip.in) / clip.speed;
-            if (result.size() == 200) return result;
-        }
-        outputStart += (clip.out - clip.in) / clip.speed;
-    }
-    return result;
+    const omareel::exporter::Composition composition = job.composition();
+    state.time = composition.time;
+    state.zoom = job.zoomMap();
+    state.cursor = job.cursorMap();
+    state.ripples = job.ripples();
+    state.keystrokePills = job.keystrokePills();
+    state.layout = job.layoutMap();
+    state.cameraVisible = composition.camera_visible;
+    state.media = job.mediaMap();
 }
 
-// A clip's audio, brought to one format and to exactly the clip's output length, so a source
-// with other rates or channels, or audio that ends early, cannot shift the clips after it.
-static QString audioSegment(const QString &source, double speed, double length)
-{
-    return source + QStringLiteral(",aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,"
-                                   "%1,apad=whole_dur=%2,atrim=end=%2").arg(atempo(speed)).arg(length, 0, 'f', 6);
-}
-
-static QString silentSegment(double length)
-{
-    return QStringLiteral("anullsrc=r=48000:cl=stereo,atrim=duration=%1,"
-                          "aformat=sample_fmts=fltp:channel_layouts=stereo").arg(length, 0, 'f', 6);
-}
-
-// segments holds one filter chain per clip, in output order (see audioSegment), or is empty
-// when no clip has audio.
-static QString audioFilter(const QStringList &segments, double volume,
-                           const QVector<double> &clicks, int clickInput,
-                           double outputDuration)
-{
-    QString filter;
-    QStringList mixLabels;
-    if (!segments.isEmpty()) {
-        QStringList clipLabels;
-        for (int i = 0; i < segments.size(); ++i) {
-            const QString label = QStringLiteral("a%1").arg(i);
-            filter += segments[i] + QStringLiteral("[%1];").arg(label);
-            clipLabels << QStringLiteral("[%1]").arg(label);
-        }
-        filter += clipLabels.join(QString())
-            + QStringLiteral("concat=n=%1:v=0:a=1,volume=%2[source];")
-                .arg(segments.size()).arg(volume, 0, 'g', 8);
-        mixLabels << QStringLiteral("[source]");
-    }
-    if (!clicks.isEmpty()) {
-        QStringList clickSources;
-        if (clicks.size() > 1) {
-            filter += QStringLiteral("[%1:a]asplit=%2").arg(clickInput).arg(clicks.size());
-            for (int i = 0; i < clicks.size(); ++i) {
-                const QString label = QStringLiteral("clicksrc%1").arg(i);
-                filter += QStringLiteral("[%1]").arg(label);
-                clickSources << QStringLiteral("[%1]").arg(label);
-            }
-            filter += QLatin1Char(';');
-        } else {
-            clickSources << QStringLiteral("[%1:a]").arg(clickInput);
-        }
-        for (int i = 0; i < clicks.size(); ++i) {
-            const QString label = QStringLiteral("click%1").arg(i);
-            const qint64 delayMs = std::max<qint64>(0, qRound64(clicks[i] * 1000.0));
-            filter += QStringLiteral("%1atrim=duration=0.03,asetpts=PTS-STARTPTS,volume=0.25,adelay=%2:all=1[%3];")
-                .arg(clickSources[i]).arg(delayMs).arg(label);
-            mixLabels << QStringLiteral("[%1]").arg(label);
-        }
-    }
-    filter += mixLabels.join(QString())
-        + QStringLiteral("amix=inputs=%1:normalize=0:duration=longest,apad=pad_dur=%2,atrim=duration=%2[aout]")
-            .arg(mixLabels.size()).arg(outputDuration, 0, 'f', 6);
-    return filter;
-}
-
-static bool nvencWorks()
-{
-    QProcess process;
-    process.start(QStringLiteral("ffmpeg"), {QStringLiteral("-v"), QStringLiteral("error"),
-        QStringLiteral("-f"), QStringLiteral("lavfi"), QStringLiteral("-i"), QStringLiteral("color=size=256x256:rate=1"),
-        QStringLiteral("-frames:v"), QStringLiteral("1"), QStringLiteral("-c:v"), QStringLiteral("h264_nvenc"),
-        QStringLiteral("-f"), QStringLiteral("null"), QStringLiteral("-")});
-    return process.waitForFinished(15000) && process.exitCode() == 0;
-}
-
-static QString normalizedQuality(QString quality)
-{
-    if (quality == QLatin1String("low")) return QStringLiteral("web-low");
-    if (quality == QLatin1String("medium")) return QStringLiteral("web-high");
-    if (quality == QLatin1String("high")) return QStringLiteral("social");
-    if (quality == QLatin1String("best")) return QStringLiteral("studio");
-    return quality;
-}
-
-static double bitrateMultiplier(const QString &quality)
-{
-    if (quality == QLatin1String("web-low")) return 0.0075;
-    if (quality == QLatin1String("web-high")) return 0.0175;
-    if (quality == QLatin1String("studio")) return 0.3;
-    return 0.05;
-}
+} // namespace
 
 void Exporter::exportBundle(const ExportOptions &options)
 {
-    m_cancelled = false;
+    m_cancel->reset();
     QString error;
     if (run(options, &error)) emit finished(QFileInfo(options.outputPath).absoluteFilePath());
     else emit failed(error.isEmpty() ? QStringLiteral("Export failed") : error);
@@ -234,662 +87,84 @@ void Exporter::exportBundle(const ExportOptions &options)
 
 bool Exporter::run(const ExportOptions &options, QString *error)
 {
-    QElapsedTimer totalTimer;
-    totalTimer.start();
-    qint64 decodeNs = 0;
-    qint64 encodeWriteNs = 0;
-    const QDir bundle(options.bundlePath);
-    const QString videoPath = bundle.filePath(QStringLiteral("screen.mp4"));
-    const QString cameraPath = bundle.filePath(QStringLiteral("camera.mp4"));
-    const MediaInfo media = probe(videoPath, error);
-    if (media.width <= 0) return false;
-
-    Project project;
-    const QString projectPath = bundle.filePath(QStringLiteral("project.json"));
-    if (QFileInfo(projectPath).isFile()) {
-        project = Project::load(projectPath, error);
-        if (error && !error->isEmpty()) return false;
-    } else {
-        project = Project::defaults(bundle.dirName(), media.duration);
-        project.camera.enabled = QFileInfo(cameraPath).isFile();
-        QFile captureFile(bundle.filePath(QStringLiteral("capture.json")));
-        if (captureFile.open(QIODevice::ReadOnly)) {
-            const QJsonObject camera = QJsonDocument::fromJson(captureFile.readAll())
-                                           .object().value(QStringLiteral("camera")).toObject();
-            const int rotation = camera.value(QStringLiteral("rotation")).toInt(0);
-            if (rotation == 0 || rotation == 90 || rotation == 180 || rotation == 270)
-                project.camera.rotation = rotation;
-            project.camera.flipHorizontal = camera
-                .value(QStringLiteral("flipHorizontal")).toBool(false);
-            const QString shape = camera.value(QStringLiteral("shape")).toString(QStringLiteral("round"));
-            if (shape == QLatin1String("round") || shape == QLatin1String("square")
-                    || shape == QLatin1String("rectangle"))
-                project.camera.shape = shape;
-            project.camera.radius = camera.value(QStringLiteral("radius")).toDouble(16.0);
-        }
-        QString inputError;
-        const auto input = InputLog::loadBundle(bundle.absolutePath(), media.duration, &inputError);
-        if (!inputError.isEmpty()) { if (error) *error = inputError; return false; }
-        QVector<double> clicks;
-        for (const auto &event : input.clickDowns(true)) clicks << event.time;
-        project.zooms = ZoomTimeline::generate(clicks, media.duration);
-    }
-    if (project.clips.isEmpty()) project.clips = {Clip{QStringLiteral("c1"), 0.0, media.duration, 1.0}};
-    ClipTimeline timeline(project.clips);
-    const double outputDuration = timeline.totalDuration();
-    if (outputDuration <= 0.0) { if (error) *error = QStringLiteral("Project has no exportable clips"); return false; }
-    QHash<QString, VideoInfo> inserts;
-    for (const Clip &clip : std::as_const(project.clips)) {
-        if (!clip.isMedia() || inserts.contains(clip.media)) continue;
-        QString insertError;
-        const VideoInfo info = probeVideo(bundle.filePath(clip.media), &insertError);
-        if (!info.isValid()) {
-            if (error) *error = QStringLiteral("Inserted clip: %1").arg(insertError);
-            return false;
-        }
-        inserts.insert(clip.media, info);
-    }
-
-    QString inputError;
-    const auto input = InputLog::loadBundle(bundle.absolutePath(), media.duration, &inputError);
-    if (!inputError.isEmpty()) { if (error) *error = inputError; return false; }
-    double captureFps = 60.0;
-    double captureScale = 1.0;
-    double cameraOffset = 0.0;
-    QJsonObject captureRoot;
-    QFile capture(bundle.filePath(QStringLiteral("capture.json")));
-    if (capture.open(QIODevice::ReadOnly)) {
-        captureRoot = QJsonDocument::fromJson(capture.readAll()).object();
-        captureFps = captureRoot.value("fps").toDouble(60.0);
-        captureScale = captureRoot.value(QStringLiteral("scale")).toDouble(1.0);
-        const qint64 screenFirst = captureRoot.value(QStringLiteral("first_frame_us")).toVariant().toLongLong();
-        const qint64 cameraFirst = captureRoot.value(QStringLiteral("camera")).toObject()
-                                       .value(QStringLiteral("first_frame_us")).toVariant().toLongLong();
-        if (screenFirst > 0 && cameraFirst > 0)
-            cameraOffset = (cameraFirst - screenFirst) / 1000000.0;
-    }
-    QString cameraProbeError;
-    const MediaInfo cameraMedia = QFileInfo(cameraPath).isFile() ? probe(cameraPath, &cameraProbeError) : MediaInfo{};
-    const bool cameraFullFrame = std::any_of(project.clips.cbegin(), project.clips.cend(),
-        [](const Clip &clip) { return clip.layout == QLatin1String("camera"); });
-    // Camera clips show the webcam even when its bubble is switched off.
-    const bool cameraEnabled = cameraMedia.width > 0
-        && (project.camera.enabled || cameraFullFrame);
-    const MotionTrack motion = MotionTrack::build(media.duration, media.width, media.height,
-                                                   input.events(), project, captureFps);
-    const KeystrokeTrack keystrokes = KeystrokeTrack::build(input.events(), project.keystrokes);
-
-    const bool gif = options.outputPath.endsWith(QStringLiteral(".gif"), Qt::CaseInsensitive);
-    const int fps = options.fps > 0 ? options.fps : (gif && options.gifFps > 0 ? options.gifFps
-                                                    : gif ? project.exportSettings.gif.fps : project.exportSettings.fps);
-    const double aspect = outputAspect(project.aspect, media.width, media.height, project.crop);
-    int width = gif && options.gifWidth > 0 ? options.gifWidth : options.width;
-    int height = 0;
-    if (width > 0) height = qRound(width / aspect);
-    else {
-        height = gif ? project.exportSettings.gif.height : project.exportSettings.height;
-        width = qRound(height * aspect);
-    }
-    const QSize evenSize = paddedEvenSize(width, height);
-    width = evenSize.width();
-    height = evenSize.height();
-    const int totalFrames = std::max(1, int(std::ceil(outputDuration * fps)));
-
-    double maximumZoom = 1.0;
-    for (const auto &zoom : project.zooms) maximumZoom = std::max(maximumZoom, zoom.level);
-    const double neededWidth = maximumZoom * width / std::max(0.0001, project.crop.width());
-    const double neededHeight = maximumZoom * height / std::max(0.0001, project.crop.height());
-    const double decodeScale = std::clamp(std::max(neededWidth / media.width,
-                                                   neededHeight / media.height), 0.01, 1.0);
-    const int decodeWidth = std::min(media.width, std::max(2, qRound(media.width * decodeScale / 2.0) * 2));
-    const int decodeHeight = std::min(media.height, std::max(2, qRound(media.height * decodeScale / 2.0) * 2));
-    // A bubble needs a fraction of the output height; a full-frame camera has to cover the
-    // output once rotated.
-    const bool cameraQuarterTurn = project.camera.rotation == 90 || project.camera.rotation == 270;
-    const double cameraDisplayWidth = cameraQuarterTurn ? cameraMedia.height : cameraMedia.width;
-    const double cameraDisplayHeight = cameraQuarterTurn ? cameraMedia.width : cameraMedia.height;
-    const double cameraDecodeScale = cameraEnabled
-        ? std::clamp(std::max(height * project.camera.size * 1.5 / cameraDisplayHeight,
-                              cameraFullFrame ? std::max(width / cameraDisplayWidth,
-                                                         height / cameraDisplayHeight) : 0.0),
-                     0.01, 1.0) : 1.0;
-    const int cameraDecodeWidth = cameraEnabled
-        ? std::min(cameraMedia.width, std::max(2, qRound(cameraMedia.width * cameraDecodeScale / 2.0) * 2)) : 0;
-    const int cameraDecodeHeight = cameraEnabled
-        ? std::min(cameraMedia.height, std::max(2, qRound(cameraMedia.height * cameraDecodeScale / 2.0) * 2)) : 0;
+    ::rust::Box<omareel::exporter::ExportJob> job = omareel::exporter::newExportJob();
+    const omareel::exporter::ExportOptions jobOptions{options.bundlePath, options.outputPath, options.fps,
+        options.width, options.quality, options.gifFps, options.gifWidth, options.timing};
+    if (!job->prepare(jobOptions, *m_cancel, *error)) return false;
+    const omareel::exporter::Composition composition = job->composition();
+    const int totalFrames = job->totalFrames();
 
     const bool softwareRendering = QQuickWindow::graphicsApi() == QSGRendererInterface::Software
                                 || QGuiApplication::platformName() == QLatin1String("offscreen");
     ExportRenderer renderer;
     // Composition.qml reads the state as it loads.
     CompositionState &state = renderer.state();
-    state.outputWidth = width; state.outputHeight = height;
+    state.outputWidth = composition.output_width; state.outputHeight = composition.output_height;
     state.softwareRendering = softwareRendering;
-    state.sourceWidth = media.width; state.sourceHeight = media.height;
-    state.captureScale = captureScale > 0.0 ? captureScale : 1.0;
-    state.cameraAvailable = cameraMedia.width > 0;
-    state.cameraSourceWidth = cameraMedia.width;
-    state.cameraSourceHeight = cameraMedia.height;
-    state.project = projectMap(project);
-    state.zoom = {{QStringLiteral("scale"), 1.0}, {QStringLiteral("cx"), 0.5},
-        {QStringLiteral("cy"), 0.5}, {QStringLiteral("velocity"), 0.0}};
-    state.layout = {{QStringLiteral("cameraFull"), 0.0}, {QStringLiteral("bubble"), 1.0}};
-    state.media = {{QStringLiteral("active"), false}, {QStringLiteral("ready"), true},
-        {QStringLiteral("fit"), QStringLiteral("fit")}, {QStringLiteral("width"), 16},
-        {QStringLiteral("height"), 9}};
-    state.cursor = {{QStringLiteral("x"), 0.5}, {QStringLiteral("y"), 0.5},
-        {QStringLiteral("visible"), project.cursor.visible}, {QStringLiteral("scale"), 1.0},
-        {QStringLiteral("opacity"), project.cursor.visible ? 1.0 : 0.0}, {QStringLiteral("rotation"), 0.0}};
-    if (!renderer.init(width, height, softwareRendering, error)) return false;
-
-    QString runtime = qEnvironmentVariable("XDG_RUNTIME_DIR");
-    if (runtime.isEmpty() || !QFileInfo(runtime).isWritable()) runtime = QDir::tempPath();
-    QTemporaryFile rawFile(QDir(runtime).filePath(QStringLiteral("omareel-export-XXXXXX.rgba")));
-    QTemporaryFile clickFile(QDir(runtime).filePath(QStringLiteral("omareel-click-XXXXXX.wav")));
-    QTemporaryFile encodedFile(QFileInfo(options.outputPath).absoluteDir().filePath(
-        QStringLiteral(".omareel-export-XXXXXX.mp4")));
-    QString encodedPath = options.outputPath;
-    if (!gif) {
-        if (!encodedFile.open()) { if (error) *error = encodedFile.errorString(); return false; }
-        encodedPath = encodedFile.fileName();
-        encodedFile.close();
-    }
-    QStringList encoderArgs;
-    const bool useSourceAudio = !gif && media.audio && (project.audio.desktop || project.audio.mic);
-    const QVector<double> clickTimes = !gif && project.cursor.clickSound == QLatin1String("soft")
-        ? clickOutputTimes(input, project.clips) : QVector<double>{};
-    const bool useClicks = !clickTimes.isEmpty();
-    if (gif) {
-        if (!rawFile.open()) { if (error) *error = rawFile.errorString(); return false; }
-    } else {
-        encoderArgs = {QStringLiteral("-y"), QStringLiteral("-v"), QStringLiteral("error"),
-            QStringLiteral("-f"), QStringLiteral("rawvideo"), QStringLiteral("-pix_fmt"), QStringLiteral("rgba"),
-            QStringLiteral("-s:v"), QStringLiteral("%1x%2").arg(width).arg(height),
-            QStringLiteral("-r"), QString::number(fps), QStringLiteral("-i"), QStringLiteral("-")};
-        int nextInput = 1;
-        int sourceInput = -1;
-        int clickInput = -1;
-        // One audio segment per clip: the recording's audio, an inserted video's own audio, or
-        // silence. Each inserted clip opens its file at its in point, so containers that do not
-        // start at zero need no timestamp arithmetic.
-        QStringList audioSegments;
-        bool anyAudio = false;
-        for (const Clip &clip : std::as_const(project.clips)) {
-            const double length = (clip.out - clip.in) / clip.speed;
-            if (clip.isMedia() && inserts.value(clip.media).audio) {
-                const int input = nextInput++;
-                encoderArgs << QStringLiteral("-ss") << QString::number(clip.in, 'f', 6)
-                            << QStringLiteral("-t") << QString::number(clip.out - clip.in, 'f', 6)
-                            << QStringLiteral("-i") << bundle.filePath(clip.media);
-                audioSegments << audioSegment(QStringLiteral("[%1:a:0]asetpts=PTS-STARTPTS").arg(input),
-                                              clip.speed, length);
-                anyAudio = true;
-            } else if (!clip.isMedia() && useSourceAudio) {
-                if (sourceInput < 0) {
-                    sourceInput = nextInput++;
-                    encoderArgs << QStringLiteral("-i") << videoPath;
-                }
-                audioSegments << audioSegment(
-                    QStringLiteral("[%1:a:0]atrim=start=%2:end=%3,asetpts=PTS-STARTPTS")
-                        .arg(sourceInput).arg(clip.in, 0, 'f', 6).arg(clip.out, 0, 'f', 6),
-                    clip.speed, length);
-                anyAudio = true;
-            } else {
-                audioSegments << silentSegment(length);
-            }
-        }
-        if (!anyAudio) audioSegments.clear();
-        if (useClicks) {
-            QFile resource(QStringLiteral(":/omareel/assets/sounds/click.wav"));
-            if (!resource.open(QIODevice::ReadOnly) || !clickFile.open()) {
-                if (error) *error = QStringLiteral("Could not prepare the click sound");
-                return false;
-            }
-            const QByteArray sound = resource.readAll();
-            if (clickFile.write(sound) != sound.size() || !clickFile.flush()) {
-                if (error) *error = QStringLiteral("Could not prepare the click sound");
-                return false;
-            }
-            clickFile.close();
-            clickInput = nextInput++;
-            encoderArgs << QStringLiteral("-i") << clickFile.fileName();
-        }
-        if (anyAudio || useClicks)
-            encoderArgs << QStringLiteral("-filter_complex")
-                           << audioFilter(audioSegments, project.audio.volume, clickTimes,
-                                          clickInput, outputDuration)
-                           << QStringLiteral("-map") << QStringLiteral("0:v:0")
-                           << QStringLiteral("-map") << QStringLiteral("[aout]")
-                           << QStringLiteral("-c:a") << QStringLiteral("aac")
-                           << QStringLiteral("-b:a") << QStringLiteral("192k");
-        else encoderArgs << QStringLiteral("-an");
-        if (!softwareRendering)
-            encoderArgs << QStringLiteral("-vf") << QStringLiteral("vflip");
-        const QString quality = normalizedQuality(options.quality.isEmpty() ? project.exportSettings.quality : options.quality);
-        const qint64 bitrate = qint64(std::floor(width * double(height) * fps * bitrateMultiplier(quality)));
-        if (!qEnvironmentVariableIsSet("OMAREEL_DISABLE_NVENC") && nvencWorks()) {
-            encoderArgs << QStringLiteral("-c:v") << QStringLiteral("h264_nvenc")
-                 << QStringLiteral("-preset") << QStringLiteral("p5")
-                 << QStringLiteral("-b:v") << QString::number(bitrate)
-                 << QStringLiteral("-maxrate") << QString::number(qint64(bitrate * 1.2))
-                 << QStringLiteral("-bufsize") << QString::number(bitrate * 2)
-                 << QStringLiteral("-profile:v") << QStringLiteral("high");
-        } else {
-            encoderArgs << QStringLiteral("-c:v") << QStringLiteral("libx264")
-                 << QStringLiteral("-preset") << QStringLiteral("medium")
-                 << QStringLiteral("-b:v") << QString::number(bitrate)
-                 << QStringLiteral("-maxrate") << QString::number(qint64(bitrate * 1.2))
-                 << QStringLiteral("-bufsize") << QString::number(bitrate * 2)
-                 << QStringLiteral("-profile:v") << QStringLiteral("high");
-        }
-        encoderArgs << QStringLiteral("-pix_fmt") << QStringLiteral("yuv420p")
-             << QStringLiteral("-movflags") << QStringLiteral("+faststart") << encodedPath;
-    }
-
-    std::mutex encodeMutex;
-    std::condition_variable encodeReady;
-    std::condition_variable encodeSpace;
-    std::deque<QByteArray> encodeQueue;
-    bool encodeStarted = gif;
-    bool encodeStartOk = gif;
-    bool encodeClosing = false;
-    std::atomic_bool encodeAbort{false};
-    std::atomic_bool encodeDone{false};
-    QString encodeError;
-    std::thread encodeThread;
-    if (!gif) {
-        encodeThread = std::thread([&] {
-            QProcess process;
-            const auto cleanup = qScopeGuard([&] {
-                if (process.state() != QProcess::NotRunning) {
-                    process.kill();
-                    process.waitForFinished(2000);
-                }
-                encodeDone = true;
-                encodeSpace.notify_all();
-            });
-            const auto cancelled = [&] { return encodeAbort || m_cancelled; };
-            process.start(QStringLiteral("ffmpeg"), encoderArgs, QIODevice::ReadWrite);
-            const bool started = process.waitForStarted(10000);
-            {
-                std::lock_guard lock(encodeMutex);
-                encodeStarted = true;
-                encodeStartOk = started;
-                if (!started) encodeError = process.errorString();
-            }
-            encodeReady.notify_all();
-            if (!started) return;
-            while (true) {
-                QByteArray bytes;
-                {
-                    std::unique_lock lock(encodeMutex);
-                    encodeReady.wait(lock, [&] {
-                        return !encodeQueue.empty() || encodeClosing || encodeAbort || m_cancelled;
-                    });
-                    if (cancelled()) {
-                        encodeError = QStringLiteral("Export cancelled");
-                        return;
-                    }
-                    if (encodeQueue.empty() && encodeClosing) break;
-                    bytes = std::move(encodeQueue.front());
-                    encodeQueue.pop_front();
-                }
-                encodeSpace.notify_one();
-                QElapsedTimer writeTimer;
-                writeTimer.start();
-                QString pipeError;
-                if (!writeEncoderFrame(process, bytes, cancelled, &pipeError)) {
-                    std::lock_guard lock(encodeMutex);
-                    encodeError = pipeError;
-                    encodeAbort = true;
-                    encodeSpace.notify_all();
-                    return;
-                }
-                encodeWriteNs += writeTimer.nsecsElapsed();
-            }
-            QString pipeError;
-            if (!finishEncoderPipe(process, cancelled, &pipeError)) {
-                std::lock_guard lock(encodeMutex);
-                encodeError = pipeError;
-            }
-        });
-        std::unique_lock lock(encodeMutex);
-        encodeReady.wait(lock, [&] { return encodeStarted; });
-        if (!encodeStartOk) {
-            lock.unlock();
-            encodeThread.join();
-            if (error) *error = encodeError;
-            return false;
-        }
-    }
-    const auto finishEncoder = [&](bool abort) {
-        if (gif) return;
-        {
-            std::lock_guard lock(encodeMutex);
-            encodeAbort = abort;
-            encodeClosing = !abort;
-        }
-        encodeReady.notify_all();
-        encodeSpace.notify_all();
-        // Export runs on the GUI thread. Keep Cancel and the finishing status
-        // responsive while the worker drains the last frames and finalizes MP4.
-        while (!encodeDone) {
-            renderer.processEvents();
-            std::unique_lock lock(encodeMutex);
-            encodeSpace.wait_for(lock, std::chrono::milliseconds(20), [&] { return encodeDone.load(); });
-        }
-        if (encodeThread.joinable()) encodeThread.join();
-    };
-
-    // An inserted clip decodes at the size that covers the output, never larger than itself.
-    const auto insertDecodeSize = [width, height](const VideoInfo &info) {
-        const double scale = std::clamp(std::max(width / double(info.width),
-                                                 height / double(info.height)), 0.01, 1.0);
-        return QSize(std::max(2, qRound(info.width * scale / 2.0) * 2),
-                     std::max(2, qRound(info.height * scale / 2.0) * 2));
-    };
-    // clip says which of image (the recording) and insertImage the frame shows.
-    struct DecodedPacket {
-        QImage image;
-        QImage cameraImage;
-        QString error;
-        int clip = -1;
-        QImage insertImage;
-    };
-    std::mutex decodeMutex;
-    std::condition_variable decodeReady;
-    std::condition_variable decodeSpace;
-    std::deque<DecodedPacket> decodeQueue;
-    bool decodeDone = false;
-    std::atomic_bool stopDecode{false};
-    std::thread decodeThread([&] {
-        FfmpegDecoder decoder;
-        FfmpegDecoder cameraDecoder;
-        int activeClip = -1;
-        // The last frame of the recording and of the current inserted clip, kept apart so a
-        // clip that runs out of frames repeats its own last frame, never the other's.
-        QImage decoded;
-        QImage insertDecoded;
-        QImage cameraDecoded;
-        int cameraFrame = -1;
-        bool cameraEof = false;
-        if (cameraEnabled) {
-            QString cameraError;
-            if (!cameraDecoder.start(cameraPath, 0.0, cameraMedia.duration, cameraMedia.fps,
-                                     cameraDecodeWidth, cameraDecodeHeight,
-                                     cameraDecodeWidth != cameraMedia.width
-                                         || cameraDecodeHeight != cameraMedia.height,
-                                     &cameraError)) {
-                std::lock_guard lock(decodeMutex);
-                decodeQueue.push_back({{}, {}, cameraError});
-                decodeDone = true;
-                decodeReady.notify_all();
-                return;
-            }
-        }
-        for (int frame = 0; frame < totalFrames && !stopDecode && !m_cancelled; ++frame) {
-            const double outputTime = frame / double(fps);
-            const int clipIndex = timeline.clipAt(outputTime);
-            const auto &clip = project.clips[clipIndex];
-            QString decodeError;
-            if (clipIndex != activeClip) {
-                bool started = false;
-                if (clip.isMedia()) {
-                    const QSize size = insertDecodeSize(inserts.value(clip.media));
-                    insertDecoded = QImage();
-                    // Always scaled: the filter fixes the frame size whatever rotation or sample
-                    // aspect the file carries.
-                    started = decoder.start(bundle.filePath(clip.media), clip.in, clip.out - clip.in,
-                                            fps / clip.speed, size.width(), size.height(), true,
-                                            &decodeError);
-                } else {
-                    started = decoder.start(videoPath, clip.in, clip.out - clip.in, fps / clip.speed,
-                                            decodeWidth, decodeHeight,
-                                            decodeWidth != media.width || decodeHeight != media.height,
-                                            &decodeError);
-                }
-                if (!started) {
-                    std::lock_guard lock(decodeMutex);
-                    decodeQueue.push_back({{}, {}, decodeError});
-                    break;
-                }
-                activeClip = clipIndex;
-            }
-            QImage next;
-            QImage &shown = clip.isMedia() ? insertDecoded : decoded;
-            if (decoder.readFrame(&next, &decodeError)) shown = std::move(next);
-            else if (shown.isNull()) {
-                std::lock_guard lock(decodeMutex);
-                decodeQueue.push_back({{}, {}, decodeError.isEmpty()
-                    ? QStringLiteral("Decoder ended before the first frame") : decodeError});
-                break;
-            }
-            if (cameraEnabled && !clip.isMedia()) {
-                const double screenSourceTime = timeline.sourceTime(outputTime);
-                const CameraTime mapped = mapCameraTime(screenSourceTime, cameraOffset,
-                                                        cameraMedia.duration);
-                const int wanted = std::max(0, int(std::floor(mapped.seconds * cameraMedia.fps + 1e-6)));
-                if (wanted < cameraFrame) {
-                    cameraDecoder.cancel();
-                    cameraFrame = -1;
-                    cameraEof = false;
-                    if (!cameraDecoder.start(cameraPath, 0.0, cameraMedia.duration, cameraMedia.fps,
-                                             cameraDecodeWidth, cameraDecodeHeight,
-                                             cameraDecodeWidth != cameraMedia.width
-                                                 || cameraDecodeHeight != cameraMedia.height,
-                                             &decodeError)) {
-                        std::lock_guard lock(decodeMutex);
-                        decodeQueue.push_back({{}, {}, decodeError});
-                        break;
-                    }
-                }
-                while (!cameraEof && cameraFrame < wanted) {
-                    QImage nextCamera;
-                    if (cameraDecoder.readFrame(&nextCamera, &decodeError)) {
-                        cameraDecoded = std::move(nextCamera);
-                        ++cameraFrame;
-                    } else {
-                        cameraEof = true;
-                        if (cameraDecoded.isNull()) {
-                            std::lock_guard lock(decodeMutex);
-                            decodeQueue.push_back({{}, {}, decodeError.isEmpty()
-                                ? QStringLiteral("Camera decoder ended before the first frame") : decodeError});
-                        }
-                    }
-                }
-                if (cameraDecoded.isNull()) break;
-            }
-            std::unique_lock lock(decodeMutex);
-            decodeSpace.wait(lock, [&] { return decodeQueue.size() < 3 || stopDecode || m_cancelled; });
-            if (stopDecode || m_cancelled) break;
-            decodeQueue.push_back({decoded, cameraDecoded, {}, clipIndex, insertDecoded});
-            lock.unlock();
-            decodeReady.notify_one();
-        }
-        decoder.cancel();
-        cameraDecoder.cancel();
-        {
-            std::lock_guard lock(decodeMutex);
-            decodeDone = true;
-        }
-        decodeReady.notify_all();
-    });
-    const auto finishDecoder = [&] {
-        stopDecode = true;
-        decodeReady.notify_all();
-        decodeSpace.notify_all();
-        if (decodeThread.joinable()) decodeThread.join();
-    };
+    state.sourceWidth = composition.source_width; state.sourceHeight = composition.source_height;
+    state.captureScale = composition.capture_scale;
+    state.cameraAvailable = composition.camera_available;
+    state.cameraSourceWidth = composition.camera_source_width;
+    state.cameraSourceHeight = composition.camera_source_height;
+    state.project = projectMap(*job);
+    state.zoom = job->zoomMap();
+    state.layout = job->layoutMap();
+    state.media = job->mediaMap();
+    state.cursor = job->cursorMap();
+    if (!renderer.init(composition.output_width, composition.output_height, softwareRendering, error)) return false;
+    if (!job->start(softwareRendering, *error)) return false;
 
     QString pipelineError;
-    const auto writeFrame = [&](const QByteArray &bytes) {
-        if (gif) {
-            QElapsedTimer writeTimer;
-            writeTimer.start();
-            if (rawFile.write(bytes) != bytes.size()) pipelineError = rawFile.errorString();
-            encodeWriteNs += writeTimer.nsecsElapsed();
-        } else {
-            std::unique_lock lock(encodeMutex);
-            // Two queued frames, one in the pipe, and two GPU readbacks bound
-            // how far rendering can run ahead, independent of video length.
-            const auto ready = [&] {
-                return encodeQueue.size() < 2 || encodeAbort || !encodeError.isEmpty() || m_cancelled;
-            };
-            while (!encodeSpace.wait_for(lock, std::chrono::milliseconds(20), ready)) {
-                lock.unlock();
-                renderer.processEvents();
-                lock.lock();
-            }
-            if (encodeAbort || !encodeError.isEmpty() || m_cancelled) {
-                pipelineError = !encodeError.isEmpty() ? encodeError : QStringLiteral("Export cancelled");
-            } else {
-                encodeQueue.push_back(bytes);
-                lock.unlock();
-                encodeReady.notify_one();
-            }
-        }
+    const auto writeFrame = [&](QByteArray bytes) {
+        // Export runs on the GUI thread. Keep Cancel and the status responsive while the
+        // encoder catches up: two queued frames, one in the pipe, and two GPU readbacks bound
+        // how far rendering can run ahead.
+        while (!job->waitEncodeSpace(20)) renderer.processEvents();
+        const QString writeError = job->encode(std::move(bytes));
+        if (!writeError.isEmpty()) pipelineError = writeError;
     };
     for (int frame = 0; frame < totalFrames; ++frame) {
-        if (m_cancelled) { pipelineError = QStringLiteral("Export cancelled"); break; }
-        const double outputTime = frame / double(fps);
-        QElapsedTimer stageTimer;
-        stageTimer.start();
-        DecodedPacket packet;
-        {
-            std::unique_lock lock(decodeMutex);
-            decodeReady.wait(lock, [&] { return !decodeQueue.empty() || decodeDone || m_cancelled; });
-            if (!decodeQueue.empty()) {
-                packet = std::move(decodeQueue.front());
-                decodeQueue.pop_front();
-            }
-        }
-        decodeSpace.notify_one();
-        decodeNs += stageTimer.nsecsElapsed();
-        const Clip *clip = packet.clip >= 0 ? &project.clips[packet.clip] : nullptr;
-        const bool insert = clip && clip->isMedia();
-        if (!clip || (insert ? packet.insertImage : packet.image).isNull()) {
-            pipelineError = !packet.error.isEmpty() ? packet.error
-                          : m_cancelled ? QStringLiteral("Export cancelled")
-                          : QStringLiteral("Decoder ended unexpectedly");
-            break;
-        }
-
-        // An inserted clip shows none of the recording's motion, cursor, keys, or camera.
-        const double sourceTime = timeline.recordingSourceTime(outputTime);
-        const MotionSample sample = insert ? MotionSample{} : motion.sample(sourceTime);
-        state.time = sourceTime;
-        state.zoom = {{QStringLiteral("scale"), sample.zoomScale}, {QStringLiteral("cx"), sample.zoomCx},
-            {QStringLiteral("cy"), sample.zoomCy},
-            {QStringLiteral("velocity"), sample.zoomCenterVelocity}};
-        state.cursor = {{QStringLiteral("x"), sample.cursorX}, {QStringLiteral("y"), sample.cursorY},
-            {QStringLiteral("visible"), project.cursor.visible}, {QStringLiteral("scale"), sample.cursorScale},
-            {QStringLiteral("opacity"), sample.cursorOpacity}, {QStringLiteral("rotation"), sample.cursorRotation}};
-        state.ripples.clear();
-        if (!insert && (project.cursor.clickEffect == QLatin1String("ripple")
-                        || project.cursor.clickEffect == QLatin1String("circle"))) {
-            for (const auto &ripple : motion.ripples(sourceTime))
-                state.ripples << QVariantMap{{QStringLiteral("x"), ripple.x}, {QStringLiteral("y"), ripple.y},
-                                             {QStringLiteral("progress"), ripple.progress}};
-        }
-        state.keystrokePills.clear();
-        for (const KeystrokePill &pill : insert ? QVector<KeystrokePill>{} : keystrokes.sample(sourceTime))
-            state.keystrokePills << QVariantMap{{QStringLiteral("keys"), pill.keys},
-                {QStringLiteral("text"), pill.text}, {QStringLiteral("opacity"), pill.opacity}};
-        const LayoutSample layout = sampleLayout(project.clips, outputTime, cameraMedia.width > 0,
-                                                 project.camera.enabled);
-        state.layout = {{QStringLiteral("cameraFull"), layout.cameraFull},
-                        {QStringLiteral("bubble"), layout.bubble}};
-        const CameraTime cameraTime = mapCameraTime(sourceTime, cameraOffset, cameraMedia.duration);
-        state.cameraVisible = !insert && (!cameraTime.beforeStart || layout.cameraFull > 0.0);
-        if (insert) {
-            const VideoInfo info = inserts.value(clip->media);
-            state.media = {{QStringLiteral("active"), true}, {QStringLiteral("ready"), true},
-                {QStringLiteral("fit"), clip->fit}, {QStringLiteral("width"), info.width},
-                {QStringLiteral("height"), info.height}};
-        } else {
-            state.media.insert(QStringLiteral("active"), false);
-        }
+        if (!job->nextFrame(frame, pipelineError)) break;
+        applyFrame(state, *job);
         QByteArray bytes;
-        if (!renderer.renderFrame(insert ? QImage() : packet.image,
-                                  cameraEnabled && !insert ? packet.cameraImage : QImage(),
-                                  insert ? packet.insertImage : QImage(), &bytes, &pipelineError))
+        if (!renderer.renderFrame(frameImage(job->screenImage()), frameImage(job->cameraImage()),
+                                  frameImage(job->insertImage()), &bytes, &pipelineError))
             break;
-        if (!bytes.isEmpty()) writeFrame(bytes);
+        if (!bytes.isEmpty()) writeFrame(std::move(bytes));
         if (!pipelineError.isEmpty()) break;
         emit progress(frame + 1, totalFrames);
     }
-    finishDecoder();
+    job->finishDecoder();
     if (pipelineError.isEmpty()) {
         QByteArray bytes;
         while (renderer.takePendingFrame(&bytes, &pipelineError)) {
-            writeFrame(bytes);
+            writeFrame(std::move(bytes));
             if (!pipelineError.isEmpty()) break;
         }
     }
     renderer.releaseReadbacks();
+    const auto finishEncoder = [&](bool abort) {
+        job->closeEncoder(abort);
+        // Keep Cancel and the finishing status responsive while the worker drains the last
+        // frames and finalizes MP4.
+        while (!job->encoderDone()) {
+            renderer.processEvents();
+            job->waitEncoderDone(20);
+        }
+        job->joinEncoder();
+    };
     if (!pipelineError.isEmpty()) {
         finishEncoder(true);
-        if (error) *error = pipelineError;
+        *error = pipelineError;
         return false;
     }
     renderer.invalidate();
-    if (!gif) {
-        finishEncoder(false);
-        if (!encodeError.isEmpty() || m_cancelled) {
-            if (error) *error = !encodeError.isEmpty() ? encodeError : QStringLiteral("Export cancelled");
-            return false;
-        }
-        if (QFileInfo::exists(options.outputPath) && !QFile::remove(options.outputPath)) {
-            if (error) *error = QStringLiteral("Could not replace existing output %1").arg(options.outputPath);
-            return false;
-        }
-        if (!QFile::rename(encodedPath, options.outputPath)) {
-            if (error) *error = QStringLiteral("Could not finalize output %1").arg(options.outputPath);
-            return false;
-        }
-        // QTemporaryFile creates 0600 files; exports are meant to be shared, so give
-        // them the ordinary umask-style permissions a freshly written file would have.
-        QFile::setPermissions(options.outputPath, QFile::ReadOwner | QFile::WriteOwner
-                              | QFile::ReadGroup | QFile::ReadOther);
-    } else {
-        rawFile.flush();
-        QStringList args{QStringLiteral("-y"), QStringLiteral("-v"), QStringLiteral("error"),
-            QStringLiteral("-f"), QStringLiteral("rawvideo"), QStringLiteral("-pixel_format"), QStringLiteral("rgba"),
-            QStringLiteral("-video_size"), QStringLiteral("%1x%2").arg(width).arg(height),
-            QStringLiteral("-framerate"), QString::number(fps), QStringLiteral("-i"), rawFile.fileName()};
-        const QString quality = normalizedQuality(options.quality.isEmpty() ? project.exportSettings.gif.quality : options.quality);
-        const QString flip = softwareRendering ? QString() : QStringLiteral("vflip,");
-        if (quality == QLatin1String("studio"))
-            args << QStringLiteral("-vf") << flip + QStringLiteral("split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle");
-        else if (!flip.isEmpty()) args << QStringLiteral("-vf") << QStringLiteral("vflip");
-        args << QStringLiteral("-loop") << (project.exportSettings.gif.loop ? QStringLiteral("0") : QStringLiteral("-1"))
-             << options.outputPath;
-        QProcess gifProcess;
-        gifProcess.start(QStringLiteral("ffmpeg"), args);
-        if (!gifProcess.waitForFinished(120000) || gifProcess.exitCode() != 0) {
-            if (error) *error = QString::fromUtf8(gifProcess.readAllStandardError()).trimmed();
-            return false;
-        }
-        if (!QStandardPaths::findExecutable(QStringLiteral("gifsicle")).isEmpty()) {
-            QProcess optimize;
-            optimize.start(QStringLiteral("gifsicle"), {QStringLiteral("--batch"), QStringLiteral("--optimize=3"),
-                QStringLiteral("--lossy=30"), options.outputPath});
-            optimize.waitForFinished(120000);
-        }
-    }
+    finishEncoder(false);
+    if (!job->finish(*error)) return false;
     if (options.timing) {
-        const double divisor = std::max(1, totalFrames) * 1000000.0;
-        const double seconds = totalTimer.elapsed() / 1000.0;
-        QTextStream(stderr)
-            << "\nTiming (" << totalFrames << " frames):\n"
-            << "  decode wait:  " << QString::number(decodeNs / divisor, 'f', 3) << " ms/frame\n"
-            << "  upload:       " << QString::number(renderer.timing().uploadNs / divisor, 'f', 3) << " ms/frame\n"
-            << "  render:       " << QString::number(renderer.timing().renderNs / divisor, 'f', 3) << " ms/frame\n"
-            << "  readback:     " << QString::number(renderer.timing().readbackNs / divisor, 'f', 3) << " ms/frame\n"
-            << "  encode write: " << QString::number(encodeWriteNs / divisor, 'f', 3) << " ms/frame\n"
-            << "  total:        " << QString::number(seconds, 'f', 3) << " s ("
-            << QString::number(totalFrames / std::max(0.001, seconds), 'f', 1) << " frames/s)\n";
+        const ExportRenderer::Timing &timing = renderer.timing();
+        QTextStream(stderr) << job->timingReport(timing.uploadNs, timing.renderNs, timing.readbackNs);
     }
-    if (error) error->clear();
+    error->clear();
     return true;
 }

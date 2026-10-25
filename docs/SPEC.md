@@ -304,8 +304,8 @@ src/record/ Recorder.{h,cpp} gsr process, ts file, bundle finalize, state file
             EvdevListener.{h,cpp} libevdev thread
             RegionPicker.{h,cpp} slurp / omarchy-capture-region wrapper, monitor math
 src/render/ FrameSource.{h,cpp} QQuickItem texture node
-            Exporter.{h,cpp} offscreen render + ffmpeg pipes
-            FfmpegDecoder.{h,cpp} rawvideo pipe reader
+            Exporter.{h,cpp} offscreen render loop over the Rust export job
+            (crates/omareel_core/src/export: plan, ffmpeg decode/encode pipes)
 src/ui/     Editor.{h,cpp} QObject facade exposed to QML (project, playback, timeline ops)
             qml/Main.qml Composition.qml Timeline.qml ZoomTrack.qml ClipTrack.qml
                  SidePanel.qml panels/*.qml Launcher.qml
@@ -502,7 +502,7 @@ clip always remains. Zooms, the motion track, keystrokes and the camera use reco
 (`ClipTimeline::recordingSourceTime`, which inside an inserted clip is the recording time it
 interrupts), and `outputRange` never maps recording time into an inserted clip.
 
-Inserting probes the file (`render/MediaProbe`: display size after rotation and sample aspect,
+Inserting probes the file (`media_probe` in omareel_core: display size after rotation and sample aspect,
 video-stream duration), reflinks it (`FICLONE`) or copies it to `media/.name.part`, renames it
 to a unique name, then splits the clip at the playhead and inserts the new clip under one undo
 snapshot. Undo never deletes media files.

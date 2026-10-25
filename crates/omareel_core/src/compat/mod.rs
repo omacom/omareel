@@ -14,4 +14,5 @@ pub mod qround;
 pub mod qsavefile;
 pub mod qstandardpaths;
 pub mod qstring;
+pub mod qtemporaryfile;
 pub mod qurl;

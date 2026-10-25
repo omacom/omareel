@@ -16,8 +16,11 @@ trap 'rm -rf "$scratch"' EXIT
 python="${PYTHON:-python3}"
 failures=0
 
-mkdir -p "$scratch"/{home,config,cache,state,data,runtime,bundles,out}
+mkdir -p "$scratch"/{home,config,cache,state,data,runtime,bundles,out,shims}
 chmod 700 "$scratch/runtime"
+# Only the fc-match and hyprctl shims: the golden ffprobe shim replays recordings for the
+# mediaprobe goldens and refuses every other call, so both binaries need the real ffprobe.
+ln -s "$root/tests/golden/shims/fc-match" "$root/tests/golden/shims/hyprctl" "$scratch/shims/"
 state="$scratch/state/omarchy"
 mkdir -p "$state/theme"
 cp "$root/tests/golden/corpus/themes/tokyo-night/colors.toml" "$state/theme/"
@@ -30,7 +33,7 @@ run() { # run <old|new> <name> <args...>: stdout, stderr and status go to out/<n
     set +e
     env -i HOME="$scratch/home" XDG_CONFIG_HOME="$scratch/config" XDG_CACHE_HOME="$scratch/cache" \
         XDG_STATE_HOME="$scratch/state" XDG_DATA_HOME="$scratch/data" XDG_RUNTIME_DIR="$scratch/runtime" \
-        PATH="$root/tests/golden/shims:/usr/bin:/bin" LANG=C.UTF-8 TZ=UTC \
+        PATH="$scratch/shims:/usr/bin:/bin" LANG=C.UTF-8 TZ=UTC \
         OMAREEL_OMARCHY_STATE_DIR="$state" QT_QPA_PLATFORM=offscreen OMAREEL_THEME_RADIUS=8 \
         "${EXTRA_ENV[@]}" "$binary" "$@" > "$scratch/out/$name.$side.stdout" 2> "$scratch/out/$name.$side.stderr"
     echo $? > "$scratch/out/$name.$side.status"

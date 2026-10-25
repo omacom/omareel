@@ -59,6 +59,13 @@ started (CXX-Qt 0.10, Qt 6.11):
 - Values coming in from QML go through `QJsonValue::fromVariant`, the same conversion the C++
   editor uses.
 
+- CXX-Qt generates an `Omareel::rust` namespace for the objects declared in `Omareel`, so C++
+  in that namespace spells cxx's types `::rust::Box` and `::rust::Slice`.
+- cxx-qt-lib's Qt containers are trivially relocatable, so C++ can hand Rust a `QByteArray` by
+  value; the export job moves each rendered frame to its encode thread that way, in a `Send`
+  wrapper, without copying. Decoded frames go the other way as `QImage`s over Rust's pixels,
+  whose cleanup function drops the Rust box.
+
 ## Build notes
 
 - CMake drives cargo through Corrosion (`corrosion` on Arch). `cmake/CxxQt.cmake` is vendored
