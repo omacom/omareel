@@ -2,7 +2,7 @@
 //! `section.key` (`.key` at the top level), values are quoted strings or the text before a
 //! comment. Anything else on a line is ignored, as the regexes ignore it.
 
-use crate::compat::qfile;
+use crate::compat::{qdir, qfile};
 use std::collections::HashMap;
 
 /// PCRE's `\s` without Unicode properties: ASCII whitespace, vertical tab included.
@@ -68,13 +68,23 @@ pub(crate) fn value(line: &str) -> Option<(&str, &str)> {
     }
 }
 
+/// The lines of a file as `QString::fromUtf8(file.readLine())` gives them: each line decoded on
+/// its own, so a byte-order mark at the start of any line is dropped, and invalid UTF-8 becomes
+/// U+FFFD the way Qt replaces it.
+///
+/// The files are opened with `QIODevice::Text`, which also turns a final "\r\n" into "\n" and
+/// drops a "\r" inside the first line. The patterns read "\r" as space, so only a "\r" within
+/// the first line's text would read differently here; that is not reproduced.
+pub(crate) fn decoded_lines(bytes: &[u8]) -> impl Iterator<Item = String> + '_ {
+    qfile::lines(bytes).map(qdir::decode_name)
+}
+
 /// The values of a TOML file Theme reads; empty when it can't be opened.
 pub fn read(path: &str) -> HashMap<String, String> {
     let mut values = HashMap::new();
     let Ok(bytes) = qfile::read_all(path) else { return values };
     let mut current = String::new();
-    for line in qfile::lines(&bytes) {
-        let line = String::from_utf8_lossy(line);
+    for line in decoded_lines(&bytes) {
         if let Some(name) = section(&line) {
             current = name.to_owned();
             continue;
@@ -132,5 +142,15 @@ mod tests {
         assert_eq!(value("x.y = 1\n"), None);
         assert_eq!(section("[font] # sizes\n"), Some("font"));
         assert_eq!(section("[]\n"), None);
+    }
+
+    #[test]
+    fn lines_decode_as_qstring_from_utf8_does() {
+        // QString::fromUtf8 drops a byte-order mark at the start of each line it is given.
+        // (Checked against Qt 6.11.2.)
+        let lines: Vec<String> =
+            decoded_lines(b"\xef\xbb\xbfaccent = \"#ff0000\"\r\n\xef\xbb\xbfx = 1\nb\xffad\n").collect();
+        assert_eq!(lines, ["accent = \"#ff0000\"\r\n", "x = 1\n", "b\u{fffd}ad\n"]);
+        assert_eq!(value(&lines[0]), Some(("accent", "#ff0000")));
     }
 }

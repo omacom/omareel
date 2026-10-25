@@ -322,6 +322,40 @@ impl Palette {
     pub fn accent_foreground(&self) -> QColor {
         if luminance(&self.accent) > 0.179 { QColor::from_rgb(16, 17, 22) } else { white() }
     }
+
+    /// A control's fill: the selected fill, the hover fill when focused or hovered, otherwise
+    /// the normal fill.
+    pub fn control_fill(&self, focused: bool, hot: bool, selected: bool) -> QColor {
+        if selected {
+            self.selected_fill
+        } else if focused || hot {
+            self.hover_fill
+        } else {
+            self.normal_fill
+        }
+    }
+
+    /// A control's border colour, chosen as [`control_fill`](Self::control_fill) chooses.
+    pub fn control_border(&self, focused: bool, hot: bool, selected: bool) -> QColor {
+        if selected {
+            self.selected_border
+        } else if focused || hot {
+            self.hover_border
+        } else {
+            self.normal_border
+        }
+    }
+
+    /// A control's border width, chosen as [`control_fill`](Self::control_fill) chooses.
+    pub fn control_border_width(&self, focused: bool, hot: bool, selected: bool) -> i32 {
+        if selected {
+            self.selected_border_width
+        } else if focused || hot {
+            self.hover_border_width
+        } else {
+            self.normal_border_width
+        }
+    }
 }
 
 /// `QHash::value(key, fallback)`.
