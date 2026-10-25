@@ -1,10 +1,11 @@
 #pragma once
 
+#include "omareel_qt/src/export.cxxqt.h"
+
 #include <QObject>
 #include <QSize>
 #include <QVariantList>
 #include <QVariantMap>
-#include <atomic>
 
 namespace Omareel {
 
@@ -67,15 +68,20 @@ signals:
     void changed();
 };
 
+// Exports a bundle to MP4 or GIF. What to export and how is decided in Rust
+// (crates/omareel_core/src/export, through crates/omareel_qt/src/export.rs); this class renders
+// the composition with ExportRenderer, runs the event loop while it waits, and reports.
 class Exporter : public QObject
 {
     Q_OBJECT
 public:
-    explicit Exporter(QObject *parent = nullptr): QObject(parent) {}
+    explicit Exporter(QObject *parent = nullptr);
+    ~Exporter() override;
     void exportBundle(const ExportOptions &options);
 
 public slots:
-    void cancel() { m_cancelled = true; }
+    // Safe from any thread and while an export runs: it only sets the flag the export checks.
+    void cancel();
 
 signals:
     void progress(int frame, int total);
@@ -84,7 +90,7 @@ signals:
 
 private:
     bool run(const ExportOptions &options, QString *error);
-    std::atomic_bool m_cancelled{false};
+    ::rust::Box<omareel::exporter::CancelFlag> m_cancel;
 };
 
 } // namespace Omareel

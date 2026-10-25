@@ -9,7 +9,9 @@ The MP4 pipeline now has:
 
 - Two queued rendered frames and two asynchronous GPU readback slots.
 - One encoder worker that drains `bytesToWrite()` to zero before taking another
-  frame. Qt can buffer at most one submitted frame, not the remaining video.
+  frame. The process's buffer holds at most one submitted frame, not the
+  remaining video. (The worker is Rust now, `crates/omareel_core/src/export`,
+  with `compat::qprocess::Process` keeping QProcess's buffering.)
 - Short polling waits for cancellation, with a 30-second **no-progress** write
   deadline. A frame can take longer than that to transfer if bytes keep moving.
 - GUI event processing while waiting for queue space or encoder shutdown, with
@@ -44,7 +46,7 @@ omadev run 1 env OMAREEL_DISABLE_NVENC=1 ctest \
   --test-dir /tmp/omareel-backpressure-build --output-on-failure --timeout 90
 omadev run 1 env QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
   OMAREEL_DISABLE_NVENC=1 ctest --test-dir /tmp/omareel-backpressure-build \
-  -R 'encoderpipe|exporter_smoke' --output-on-failure --timeout 90
+  -R 'rust|exporter_smoke' --output-on-failure --timeout 90
 omadev run 1 python3 "$repo/tests/tools/export-memory-proof.py" \
   /tmp/omareel-backpressure-build/omareel
 omadev diff 1
@@ -52,7 +54,8 @@ omadev stop 1
 omadev clean 1
 ```
 
-`encoderpipe` tests slow reads, byte integrity, a progressing frame exceeding
+The encoder pipe's cargo tests (`export::encoder_pipe` in omareel_core, part of
+the `rust` test) cover slow reads, byte integrity, a progressing frame exceeding
 its stall timeout, blocked-write cancellation, silent failure, process death,
 and finishing waits/timeouts/cancellation. `exporter_smoke` exercises a real
 rate-limited encoder, cancellation with a full queue, cancellation during

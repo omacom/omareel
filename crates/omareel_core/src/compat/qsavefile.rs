@@ -41,6 +41,7 @@
 //! a temporary name.
 
 use super::qdir::{self, FileInfo};
+use super::qtemporaryfile::{self, errno, linkat_fd, rename_raw, TemplateName};
 use std::ffi::CString;
 
 /// `QFILE_WRITEBUFFER_SIZE`.
@@ -58,131 +59,6 @@ enum FileError {
     Unspecified,
 }
 
-/// `QTemporaryFileName`: the template path with a run of at least six "X" to replace.
-struct TemplateName {
-    path: Vec<u8>,
-    pos: usize,
-    len: usize,
-}
-
-impl TemplateName {
-    fn new(name: &str) -> TemplateName {
-        let mut q = name.to_string();
-        let b = q.as_bytes();
-        let (mut pos, mut len) = (b.len(), 0usize);
-        while pos != 0 {
-            pos -= 1;
-            if b[pos] == b'X' {
-                len += 1;
-                continue;
-            }
-            if len >= 6 || b[pos] == b'/' {
-                break;
-            }
-            len = 0;
-        }
-        if len < 6 {
-            q.push_str(".XXXXXX");
-        }
-        let path = qdir::clean_path(&q).into_bytes();
-        let (mut pos, mut len) = (path.len(), 0usize);
-        while pos != 0 {
-            pos -= 1;
-            if path[pos] == b'X' {
-                len += 1;
-                continue;
-            }
-            if len >= 6 {
-                pos += 1;
-                break;
-            }
-            len = 0;
-        }
-        TemplateName { path, pos, len }
-    }
-
-    /// `generateNext`: the placeholder replaced by random letters.
-    fn generate(&mut self) -> Vec<u8> {
-        let mut random = [0u8; 64];
-        let filled = random_bytes(&mut random[..self.len.min(64)]);
-        for i in 0..self.len {
-            let fallback = (i * 31 + std::process::id() as usize) as u8;
-            let r = if filled { random[i % 64] } else { fallback };
-            let v = (u32::from(r) * 52) >> 8;
-            self.path[self.pos + i] = if v < 26 { b'A' + v as u8 } else { b'a' + (v - 26) as u8 };
-        }
-        self.path.clone()
-    }
-
-    /// The directory `O_TMPFILE` opens: up to the last "/", "/" for a root child, "." for none.
-    fn dir(&self) -> Vec<u8> {
-        match self.path.iter().rposition(|&c| c == b'/') {
-            None => b".".to_vec(),
-            Some(0) => b"/".to_vec(),
-            Some(i) => self.path[..i].to_vec(),
-        }
-    }
-}
-
-fn random_bytes(buf: &mut [u8]) -> bool {
-    // SAFETY: the buffer is valid for its length.
-    let n = unsafe { libc::getrandom(buf.as_mut_ptr().cast(), buf.len(), 0) };
-    n == buf.len() as isize
-}
-
-fn errno() -> i32 {
-    std::io::Error::last_os_error().raw_os_error().unwrap_or(0)
-}
-
-/// `qt_haveLinuxProcfs`: an unnamed file can only be linked in through /proc/self/fd.
-fn have_procfs() -> bool {
-    static PRESENT: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    // SAFETY: a valid NUL-terminated string.
-    *PRESENT.get_or_init(|| unsafe { libc::access(c"/proc/version".as_ptr(), libc::F_OK) == 0 })
-}
-
-/// `qt_safe_open`: `open` with `O_CLOEXEC`, retried on EINTR.
-fn open_raw(path: &[u8], flags: libc::c_int, mode: u32) -> Result<libc::c_int, i32> {
-    let Ok(c) = CString::new(path) else { return Err(libc::EINVAL) };
-    loop {
-        // SAFETY: `c` is a valid NUL-terminated string.
-        let fd = unsafe { libc::open(c.as_ptr(), flags | libc::O_CLOEXEC, mode as libc::c_uint) };
-        if fd >= 0 {
-            return Ok(fd);
-        }
-        let e = errno();
-        if e != libc::EINTR {
-            return Err(e);
-        }
-    }
-}
-
-fn linkat_fd(fd: libc::c_int, target: &[u8]) -> Result<(), i32> {
-    let src = CString::new(format!("/proc/self/fd/{fd}")).map_err(|_| libc::EINVAL)?;
-    let dst = CString::new(target).map_err(|_| libc::EINVAL)?;
-    // SAFETY: both are valid NUL-terminated strings.
-    let rc = unsafe {
-        let follow = libc::AT_SYMLINK_FOLLOW;
-        libc::linkat(libc::AT_FDCWD, src.as_ptr(), libc::AT_FDCWD, dst.as_ptr(), follow)
-    };
-    if rc == 0 {
-        Ok(())
-    } else {
-        Err(errno())
-    }
-}
-
-fn rename_raw(from: &[u8], to: &[u8]) -> Result<(), i32> {
-    let from = CString::new(from).map_err(|_| libc::EINVAL)?;
-    let to = CString::new(to).map_err(|_| libc::EINVAL)?;
-    // SAFETY: both are valid NUL-terminated strings.
-    if unsafe { libc::rename(from.as_ptr(), to.as_ptr()) } == 0 {
-        Ok(())
-    } else {
-        Err(errno())
-    }
-}
-
 /// `QTemporaryFileEngine` as `QSaveFile` drives it.
 struct Engine {
     fd: libc::c_int,
@@ -196,29 +72,8 @@ struct Engine {
 impl Engine {
     /// `QTemporaryFileEngine::open` for `template` with the given creation mode.
     fn open(template: &str, mode: u32) -> Result<Engine, String> {
-        let mut name = TemplateName::new(template);
-        let engine = |fd, named| Engine {
-            fd,
-            named,
-            template: template.to_string(),
-            error: (FileError::Unspecified, String::new()),
-        };
-        if have_procfs() {
-            match open_raw(&name.dir(), libc::O_TMPFILE | libc::O_RDWR, mode) {
-                Ok(fd) => return Ok(engine(fd, None)),
-                Err(e) if e == libc::EOPNOTSUPP || e == libc::EISDIR => {}
-                Err(e) => return Err(qdir::error_string(e)),
-            }
-        }
-        for _ in 0..16 {
-            let path = name.generate();
-            match open_raw(&path, libc::O_CREAT | libc::O_EXCL | libc::O_RDWR, mode) {
-                Ok(fd) => return Ok(engine(fd, Some(path))),
-                Err(libc::EEXIST) => continue,
-                Err(e) => return Err(qdir::error_string(e)),
-            }
-        }
-        Err("No error".into())
+        let (fd, named) = qtemporaryfile::create(template, mode)?;
+        Ok(Engine { fd, named, template: template.to_string(), error: (FileError::Unspecified, String::new()) })
     }
 
     /// `QFSFileEnginePrivate::writeFdFh`: everything, or as much as the system took; -1 and an
@@ -713,24 +568,5 @@ mod tests {
         assert!(!SaveFile::new(f.clone()).commit());
         assert_eq!(SaveFile::new(f.clone()).write(b"x"), -1);
         assert_eq!(entries(&dir.0), ["f"]);
-    }
-
-    #[test]
-    fn temporary_name_template() {
-        let t = TemplateName::new("/a/b.json");
-        assert_eq!((t.path.as_slice(), t.pos, t.len), (&b"/a/b.json.XXXXXX"[..], 10, 6));
-        assert_eq!(t.dir(), b"/a");
-        let t = TemplateName::new("fooXXXXXXXbar");
-        assert_eq!((t.path.as_slice(), t.pos, t.len), (&b"fooXXXXXXXbar"[..], 3, 7));
-        assert_eq!(t.dir(), b".");
-        let t = TemplateName::new("XXXXXX/x");
-        assert_eq!((t.path.as_slice(), t.pos, t.len), (&b"XXXXXX/x.XXXXXX"[..], 9, 6));
-        let t = TemplateName::new("/f");
-        assert_eq!(t.dir(), b"/");
-        let t = TemplateName::new("a/../b");
-        assert_eq!(t.path, b"b.XXXXXX");
-        let mut t = TemplateName::new("x");
-        let name = t.generate();
-        assert!(name.starts_with(b"x.") && name[2..].iter().all(|c| c.is_ascii_alphabetic()));
     }
 }

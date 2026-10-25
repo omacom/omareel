@@ -5,7 +5,7 @@
 #include "core/LayoutTimeline.h"
 #include "core/MotionTrack.h"
 #include "core/Project.h"
-#include "render/MediaProbe.h"
+#include "omareel_qt/src/export.cxxqt.h"
 #include "ui/PlaybackDriver.h"
 
 #include <QFutureWatcher>

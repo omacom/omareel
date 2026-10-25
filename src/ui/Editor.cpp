@@ -224,7 +224,7 @@ bool cloneOrCopy(const QString &from, const QString &to, QString *error)
 Editor::ImportedInsert importInsert(const QString &source, const QString &bundlePath)
 {
     Editor::ImportedInsert result;
-    result.info = probeVideo(source, &result.error);
+    result.info = probeVideo(source, result.error);
     if (!result.info.isValid()) return result;
     const QDir media(QDir(bundlePath).filePath(QStringLiteral("media")));
     const QFileInfo file(source);
