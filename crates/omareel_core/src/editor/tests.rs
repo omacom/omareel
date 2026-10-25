@@ -1522,3 +1522,71 @@ fn default_export_path_and_output_size() {
     assert!(qt.document.default_export_path("webm").ends_with("/named.mp4"));
     assert_eq!((qt.document.output_width(), qt.document.output_height()), (1280, 720));
 }
+
+// -------------------------------------------------------------------------------------------
+// With the real ffmpeg and ffprobe, when they are installed (test_editor.cpp skips without them).
+
+/// A JPEG's size from its first start-of-frame marker.
+fn jpeg_size(path: &str) -> Option<(u16, u16)> {
+    let bytes = std::fs::read(path).ok()?;
+    let mut i = 2;
+    while i + 9 < bytes.len() {
+        if bytes[i] != 0xff {
+            return None;
+        }
+        let marker = bytes[i + 1];
+        let length = usize::from(u16::from_be_bytes([bytes[i + 2], bytes[i + 3]]));
+        if (0xc0..=0xc3).contains(&marker) {
+            let height = u16::from_be_bytes([bytes[i + 5], bytes[i + 6]]);
+            let width = u16::from_be_bytes([bytes[i + 7], bytes[i + 8]]);
+            return Some((width, height));
+        }
+        i += 2 + length;
+    }
+    None
+}
+
+#[test]
+fn real_ffmpeg_probes_and_builds_frames() {
+    use crate::compat::qstandardpaths::find_executable;
+    if find_executable("ffmpeg").is_empty() || find_executable("ffprobe").is_empty() {
+        eprintln!("ffmpeg/ffprobe unavailable");
+        return;
+    }
+    let world = World::new("editor-ffmpeg");
+    let bundle = world.bundle("real.omareel");
+    let screen = format!("{bundle}/screen.mp4");
+    let made = crate::compat::qprocess::run(
+        "ffmpeg",
+        &["-y", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=30", "-t", "1", "-c:v", "libx264", &screen],
+        30000,
+    );
+    if !made.is_some_and(|f| f.succeeded()) {
+        eprintln!("ffmpeg could not encode a test video");
+        return;
+    }
+    let info = probe(&screen).unwrap();
+    assert_eq!((info.width, info.height, info.fps, info.audio), (320, 180, 30.0, false));
+    assert!((info.duration - 1.0).abs() < 0.1);
+    // ffprobe's own complaint, trimmed.
+    let error = probe(&format!("{bundle}/input.jsonl")).unwrap_err();
+    assert!(!error.is_empty() && error == error.trim(), "{error:?}");
+
+    let frame = world.path("cache/0000000300.jpg");
+    assert!(build_video_thumbnail(&screen, "", &frame, 300));
+    assert_eq!(jpeg_size(&frame), Some((160, 90)));
+    // The temporary file is gone.
+    let names: Vec<String> = std::fs::read_dir(world.path("cache")).unwrap().map(|e| e.unwrap().file_name().into_string().unwrap()).collect();
+    assert_eq!(names, ["0000000300.jpg"]);
+    // A frame already there is kept.
+    let before = std::fs::read(&frame).unwrap();
+    assert!(build_video_thumbnail(&screen, "hflip", &frame, 300));
+    assert_eq!(std::fs::read(&frame).unwrap(), before);
+    assert!(!build_video_thumbnail(&format!("{bundle}/missing.mp4"), "", &world.path("cache/0000000400.jpg"), 400));
+
+    let strip = build_camera_thumbnails(&screen, 1.0, &world.path("camera-cache"));
+    assert_eq!(strip.len(), CAMERA_THUMBNAIL_COUNT);
+    assert_eq!(strip[0], crate::compat::qurl::from_local_file(&world.path("camera-cache/camera-01.jpg")));
+    assert_eq!(jpeg_size(&world.path("camera-cache/camera-08.jpg")), Some((112, 72)));
+    assert!(build_camera_thumbnails(&format!("{bundle}/missing.mp4"), 1.0, &world.path("other-cache")).is_empty());
+}
