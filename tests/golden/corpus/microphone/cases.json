@@ -1,0 +1,116 @@
+{
+ "buffers": {
+  "UInt8": {
+   "silence": "8080808080808080",
+   "zeros-are-full-scale": "0080",
+   "max": "ff",
+   "quiet": "817f",
+   "odd": "8080ff",
+   "one-byte": "ff",
+   "empty": "",
+   "ramp": "00112233445566778899aabbccddeeff"
+  },
+  "Int16": {
+   "silence": "000000000000000000000000",
+   "full-scale": "0000ff7f0000",
+   "minimum": "0080",
+   "minus-20-dbfs": "640033f33200",
+   "tiny": "0100",
+   "sixteen": "1000",
+   "odd-bytes": "0000ff7f7f",
+   "single-byte": "7f",
+   "empty": "",
+   "stereo-pairs": "e80330f8b80b60f0",
+   "minus-60-dbfs": "2100",
+   "minus-61-dbfs": "1d00"
+  },
+  "Int32": {
+   "silence": "0000000000000000",
+   "full-scale": "ffffff7f",
+   "minimum": "00000080",
+   "half": "00000040",
+   "tiny": "63080000",
+   "odd-bytes": "00000040ffffff",
+   "three-bytes": "ffffff",
+   "empty": ""
+  },
+  "Float": {
+   "silence": "0000000000000080",
+   "half": "0000003f",
+   "one": "0000803f",
+   "over-one": "0000c03f000000c0",
+   "nan": "0000c07f",
+   "nan-then-half": "0000c07f0000003f",
+   "half-then-nan": "0000003f0000c07f",
+   "infinity": "0000807f",
+   "minus-infinity": "000080ff",
+   "denormal": "01000000",
+   "tiny": "6f12833a",
+   "minus-60-dbfs": "6f12833a",
+   "odd-bytes": "0000803e0000",
+   "empty": ""
+  }
+ },
+ "channels": [
+  1,
+  2,
+  6
+ ],
+ "sequences": {
+  "Int16 attack and decay": [
+   "Int16",
+   [
+    "full-scale",
+    "silence",
+    "silence",
+    "silence",
+    "silence",
+    "silence",
+    "silence",
+    "silence",
+    "silence",
+    "silence",
+    "silence",
+    "silence",
+    "silence",
+    "silence",
+    "silence",
+    "silence",
+    "silence",
+    "silence"
+   ]
+  ],
+  "Int16 small changes": [
+   "Int16",
+   [
+    "minus-20-dbfs",
+    "minus-20-dbfs",
+    "stereo-pairs",
+    "minus-20-dbfs",
+    "tiny",
+    "minus-60-dbfs",
+    "empty"
+   ]
+  ],
+  "Float nan": [
+   "Float",
+   [
+    "half",
+    "nan",
+    "nan-then-half",
+    "half-then-nan",
+    "infinity",
+    "silence"
+   ]
+  ],
+  "UInt8 zeros": [
+   "UInt8",
+   [
+    "silence",
+    "zeros-are-full-scale",
+    "quiet",
+    "silence"
+   ]
+  ]
+ }
+}

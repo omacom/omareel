@@ -1,0 +1,8 @@
+empty	true	"<untouched>"	0644
+recording-json	true	"<untouched>"	0644
+state	true	"<untouched>"	0644
+special-values	true	"<untouched>"	0644
+<existing file, mode 0600>	true	"<untouched>"	0600	"{\x0a    \"version\": 1\x0a}\x0a"
+<missing directory>	false	"No such file or directory"	-	-
+<path is a directory>	false	"Filename refers to a directory"	0755	-
+<empty path>	false	"No such file or directory"	-	-

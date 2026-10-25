@@ -1,0 +1,207 @@
+== built hash missing
+loaded	false
+builtHash	""
+reason	"Plugin status or default prefix is unavailable"
+details	{"monitors":[{"capturing":false,"excluded_layers":0,"name":"DP-1"}],"prefixes":["omareel-"],"version":"0.1.0"}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","omareel-exclude","status"]
+call	["hyprctl","-j","version"]
+== built hash number
+loaded	false
+builtHash	""
+reason	"Plugin status or default prefix is unavailable"
+details	{"built_hash":1,"monitors":[{"capturing":false,"excluded_layers":0,"name":"DP-1"}],"prefixes":["omareel-"],"version":"0.1.0"}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","omareel-exclude","status"]
+call	["hyprctl","-j","version"]
+== commit missing
+loaded	false
+builtHash	"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+reason	"Plugin status or default prefix is unavailable"
+details	{"built_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","monitors":[{"capturing":false,"excluded_layers":0,"name":"DP-1"}],"prefixes":["omareel-"],"version":"0.1.0"}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","omareel-exclude","status"]
+call	["hyprctl","-j","version"]
+== dirty commit
+loaded	false
+builtHash	"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+reason	"Plugin status or default prefix is unavailable"
+details	{"built_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","monitors":[{"capturing":false,"excluded_layers":0,"name":"DP-1"}],"prefixes":["omareel-"],"version":"0.1.0"}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","omareel-exclude","status"]
+call	["hyprctl","-j","version"]
+== hash mismatch
+loaded	false
+builtHash	"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+reason	"Plugin status or default prefix is unavailable"
+details	{"built_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","monitors":[{"capturing":false,"excluded_layers":0,"name":"DP-1"}],"prefixes":["omareel-"],"version":"0.1.0"}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","omareel-exclude","status"]
+call	["hyprctl","-j","version"]
+== hyprctl missing
+loaded	false
+builtHash	""
+reason	"Capture exclusion plugin is not loaded"
+details	{}
+== loaded
+loaded	true
+builtHash	"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+reason	""
+details	{"built_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","monitors":[{"capturing":false,"excluded_layers":0,"name":"DP-1"}],"prefixes":["omareel-"],"version":"0.1.0"}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","omareel-exclude","status"]
+call	["hyprctl","-j","version"]
+== no plugins
+loaded	false
+builtHash	""
+reason	"Capture exclusion plugin is not loaded"
+details	{}
+call	["hyprctl","-j","plugin","list"]
+== no plugins text
+loaded	false
+builtHash	""
+reason	"Capture exclusion plugin is not loaded"
+details	{}
+call	["hyprctl","-j","plugin","list"]
+== no prefix
+loaded	false
+builtHash	"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+reason	"Plugin status or default prefix is unavailable"
+details	{"built_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","monitors":[{"capturing":false,"excluded_layers":0,"name":"DP-1"}],"prefixes":[],"version":"0.1.0"}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","omareel-exclude","status"]
+call	["hyprctl","-j","version"]
+== other plugins
+loaded	false
+builtHash	""
+reason	"Capture exclusion plugin is not loaded"
+details	{}
+call	["hyprctl","-j","plugin","list"]
+== other prefixes
+loaded	false
+builtHash	"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+reason	"Plugin status or default prefix is unavailable"
+details	{"built_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","monitors":[{"capturing":false,"excluded_layers":0,"name":"DP-1"}],"prefixes":["omarecord-","omareel"],"version":"0.1.0"}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","omareel-exclude","status"]
+call	["hyprctl","-j","version"]
+== plugin list fails
+loaded	false
+builtHash	""
+reason	"Capture exclusion plugin is not loaded"
+details	{}
+call	["hyprctl","-j","plugin","list"]
+== plugin list hangs
+loaded	false
+builtHash	""
+reason	"Capture exclusion plugin is not loaded"
+details	{}
+call	["hyprctl","-j","plugin","list"]
+== plugin list object
+loaded	false
+builtHash	""
+reason	"Capture exclusion plugin is not loaded"
+details	{}
+call	["hyprctl","-j","plugin","list"]
+== plugin name not string
+loaded	false
+builtHash	""
+reason	"Capture exclusion plugin is not loaded"
+details	{}
+call	["hyprctl","-j","plugin","list"]
+== plugin twice
+loaded	true
+builtHash	"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+reason	""
+details	{"built_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","monitors":[{"capturing":false,"excluded_layers":0,"name":"DP-1"}],"prefixes":["omareel-"],"version":"0.1.0"}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","omareel-exclude","status"]
+call	["hyprctl","-j","version"]
+== prefixes missing
+loaded	false
+builtHash	"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+reason	"Plugin status or default prefix is unavailable"
+details	{"built_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","monitors":[{"capturing":false,"excluded_layers":0,"name":"DP-1"}],"version":"0.1.0"}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","omareel-exclude","status"]
+call	["hyprctl","-j","version"]
+== prefixes string
+loaded	false
+builtHash	"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+reason	"Plugin status or default prefix is unavailable"
+details	{"built_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","monitors":[{"capturing":false,"excluded_layers":0,"name":"DP-1"}],"prefixes":"omareel-","version":"0.1.0"}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","omareel-exclude","status"]
+call	["hyprctl","-j","version"]
+== real desktop
+loaded	true
+builtHash	"efb50993780079460b0cbed1363e2166a2de1d9f"
+reason	""
+details	{"built_hash":"efb50993780079460b0cbed1363e2166a2de1d9f","monitors":[{"capturing":false,"excluded_layers":0,"name":"HDMI-A-1"}],"prefixes":["omareel-"],"version":"0.1.0"}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","omareel-exclude","status"]
+call	["hyprctl","-j","version"]
+== short commit
+loaded	false
+builtHash	"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+reason	"Plugin status or default prefix is unavailable"
+details	{"built_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","monitors":[{"capturing":false,"excluded_layers":0,"name":"DP-1"}],"prefixes":["omareel-"],"version":"0.1.0"}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","omareel-exclude","status"]
+call	["hyprctl","-j","version"]
+== status empty
+loaded	false
+builtHash	""
+reason	"Plugin status or default prefix is unavailable"
+details	{}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","omareel-exclude","status"]
+call	["hyprctl","-j","version"]
+== status fails
+loaded	false
+builtHash	""
+reason	"Plugin status or default prefix is unavailable"
+details	{}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","omareel-exclude","status"]
+call	["hyprctl","-j","version"]
+== status unknown request
+loaded	false
+builtHash	""
+reason	"Plugin status or default prefix is unavailable"
+details	{}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","omareel-exclude","status"]
+call	["hyprctl","-j","version"]
+== two prefixes
+loaded	true
+builtHash	"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+reason	""
+details	{"built_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","monitors":[{"capturing":false,"excluded_layers":0,"name":"DP-1"}],"prefixes":["x-","omareel-"],"version":"0.1.0"}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","omareel-exclude","status"]
+call	["hyprctl","-j","version"]
+== uppercase commit
+loaded	false
+builtHash	"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+reason	"Plugin status or default prefix is unavailable"
+details	{"built_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","monitors":[{"capturing":false,"excluded_layers":0,"name":"DP-1"}],"prefixes":["omareel-"],"version":"0.1.0"}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","omareel-exclude","status"]
+call	["hyprctl","-j","version"]
+== version fails
+loaded	false
+builtHash	"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+reason	"Plugin status or default prefix is unavailable"
+details	{"built_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","monitors":[{"capturing":false,"excluded_layers":0,"name":"DP-1"}],"prefixes":["omareel-"],"version":"0.1.0"}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","omareel-exclude","status"]
+call	["hyprctl","-j","version"]
+== version garbage
+loaded	false
+builtHash	"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+reason	"Plugin status or default prefix is unavailable"
+details	{"built_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","monitors":[{"capturing":false,"excluded_layers":0,"name":"DP-1"}],"prefixes":["omareel-"],"version":"0.1.0"}
+call	["hyprctl","-j","plugin","list"]
+call	["hyprctl","omareel-exclude","status"]
+call	["hyprctl","-j","version"]

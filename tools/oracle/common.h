@@ -94,5 +94,13 @@ void runMotionTrack(const Context &context);
 void runRecordingPreferences(const Context &context);
 void runMediaProbe(const Context &context);
 void runComposition(const Context &context);
+void runRecorder(const Context &context);
+void runRegionPicker(const Context &context);
+void runCaptureExclusion(const Context &context);
+void runCamera(const Context &context);
+void runRecordingBar(const Context &context);
+void runMicrophone(const Context &context);
+void runScreenCapture(const Context &context);
+void runLauncher(const Context &context);
 
 } // namespace Oracle

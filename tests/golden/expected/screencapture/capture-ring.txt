@@ -1,0 +1,119 @@
+== drops count every refusal slotCount=2
+acquire	-	0	CAA	0	1 1 0 0
+acquire	-	1	CCA	0	0 2 0 0
+acquire	-	-1	CCA	1	0 2 0 0
+acquire	-	-1	CCA	2	0 2 0 0
+release	0	true	ACA	2	1 1 0 0
+acquire	-	0	CCA	2	0 2 0 0
+acquire	-	-1	CCA	3	0 2 0 0
+== five slots, the capture's ring slotCount=5
+acquire	-	0	CAAAAA	0	4 1 0 0
+acquire	-	1	CCAAAA	0	3 2 0 0
+acquire	-	2	CCCAAA	0	2 3 0 0
+acquire	-	3	CCCCAA	0	1 4 0 0
+acquire	-	4	CCCCCA	0	0 5 0 0
+acquire	-	-1	CCCCCA	1	0 5 0 0
+markQueued	0	true	QCCCCA	1	0 4 1 0
+markQueued	1	true	QQCCCA	1	0 3 2 0
+markQueued	2	true	QQQCCA	1	0 2 3 0
+markQueued	3	true	QQQQCA	1	0 1 4 0
+markQueued	4	true	QQQQQA	1	0 0 5 0
+takeQueued	-	0	WQQQQA	1	0 0 4 1
+takeQueued	-	1	WWQQQA	1	0 0 3 2
+takeQueued	-	2	WWWQQA	1	0 0 2 3
+takeQueued	-	3	WWWWQA	1	0 0 1 4
+takeQueued	-	4	WWWWWA	1	0 0 0 5
+takeQueued	-	-1	WWWWWA	1	0 0 0 5
+== invalid transitions slotCount=3
+markQueued	0	false	AAAA	0	3 0 0 0
+release	0	false	AAAA	0	3 0 0 0
+takeQueued	-	-1	AAAA	0	3 0 0 0
+acquire	-	0	CAAA	0	2 1 0 0
+markQueued	0	true	QAAA	0	2 0 1 0
+markQueued	0	false	QAAA	0	2 0 1 0
+release	0	true	AAAA	0	3 0 0 0
+takeQueued	-	-1	AAAA	0	3 0 0 0
+markQueued	-1	false	AAAA	0	3 0 0 0
+release	-1	false	AAAA	0	3 0 0 0
+release	3	false	AAAA	0	3 0 0 0
+state	-1		AAAA	0	3 0 0 0
+state	3	A	AAAA	0	3 0 0 0
+state	99	A	AAAA	0	3 0 0 0
+== negative slots slotCount=-3
+acquire	-	0	CA	0	0 1 0 0
+acquire	-	-1	CA	1	0 1 0 0
+== one slot slotCount=1
+acquire	-	0	CA	0	0 1 0 0
+acquire	-	-1	CA	1	0 1 0 0
+markQueued	0	true	QA	1	0 0 1 0
+acquire	-	-1	QA	2	0 0 1 0
+takeQueued	-	0	WA	2	0 0 0 1
+release	0	true	AA	2	1 0 0 0
+acquire	-	0	CA	2	0 1 0 0
+== queue keeps its order slotCount=5
+acquire	-	0	CAAAAA	0	4 1 0 0
+acquire	-	1	CCAAAA	0	3 2 0 0
+acquire	-	2	CCCAAA	0	2 3 0 0
+markQueued	2	true	CCQAAA	0	2 2 1 0
+markQueued	0	true	QCQAAA	0	2 1 2 0
+markQueued	1	true	QQQAAA	0	2 0 3 0
+takeQueued	-	2	QQWAAA	0	2 0 2 1
+takeQueued	-	0	WQWAAA	0	2 0 1 2
+takeQueued	-	1	WWWAAA	0	2 0 0 3
+takeQueued	-	-1	WWWAAA	0	2 0 0 3
+== release while capturing slotCount=2
+acquire	-	0	CAA	0	1 1 0 0
+release	0	true	AAA	0	2 0 0 0
+acquire	-	0	CAA	0	1 1 0 0
+markQueued	0	true	QAA	0	1 0 1 0
+takeQueued	-	0	WAA	0	1 0 0 1
+release	0	true	AAA	0	2 0 0 0
+release	0	false	AAA	0	2 0 0 0
+== release while queued slotCount=3
+acquire	-	0	CAAA	0	2 1 0 0
+markQueued	0	true	QAAA	0	2 0 1 0
+release	0	true	AAAA	0	3 0 0 0
+takeQueued	-	-1	AAAA	0	3 0 0 0
+acquire	-	0	CAAA	0	2 1 0 0
+markQueued	0	true	QAAA	0	2 0 1 0
+takeQueued	-	0	WAAA	0	2 0 0 1
+== requeued slot slotCount=2
+acquire	-	0	CAA	0	1 1 0 0
+markQueued	0	true	QAA	0	1 0 1 0
+takeQueued	-	0	WAA	0	1 0 0 1
+release	0	true	AAA	0	2 0 0 0
+acquire	-	0	CAA	0	1 1 0 0
+markQueued	0	true	QAA	0	1 0 1 0
+takeQueued	-	0	WAA	0	1 0 0 1
+== stale queue entry slotCount=2
+acquire	-	0	CAA	0	1 1 0 0
+markQueued	0	true	QAA	0	1 0 1 0
+release	0	true	AAA	0	2 0 0 0
+acquire	-	0	CAA	0	1 1 0 0
+acquire	-	1	CCA	0	0 2 0 0
+markQueued	1	true	CQA	0	0 1 1 0
+takeQueued	-	-1	CQA	0	0 1 1 0
+takeQueued	-	1	CWA	0	0 1 0 1
+markQueued	0	true	QWA	0	0 0 1 1
+takeQueued	-	0	WWA	0	0 0 0 2
+== the tag's test slotCount=4
+acquire	-	0	CAAAA	0	3 1 0 0
+acquire	-	1	CCAAA	0	2 2 0 0
+acquire	-	2	CCCAA	0	1 3 0 0
+acquire	-	3	CCCCA	0	0 4 0 0
+acquire	-	-1	CCCCA	1	0 4 0 0
+markQueued	1	true	CQCCA	1	0 3 1 0
+markQueued	0	true	QQCCA	1	0 2 2 0
+takeQueued	-	1	QWCCA	1	0 2 1 1
+takeQueued	-	0	WWCCA	1	0 2 0 2
+state	1	W	WWCCA	1	0 2 0 2
+release	1	true	WACCA	1	1 2 0 1
+state	1	A	WACCA	1	1 2 0 1
+acquire	-	1	WCCCA	1	0 3 0 1
+markQueued	8	false	WCCCA	1	0 3 0 1
+== zero slots slotCount=0
+acquire	-	0	CA	0	0 1 0 0
+acquire	-	-1	CA	1	0 1 0 0
+state	0	C	CA	1	0 1 0 0
+markQueued	0	true	QA	1	0 0 1 0
+takeQueued	-	0	WA	1	0 0 0 1

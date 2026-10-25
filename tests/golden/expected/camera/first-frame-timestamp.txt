@@ -1,0 +1,30 @@
+== the tag's test
+recordFrameArrival	1234567	9876543	true	1234567
+recordFrameArrival	2345678	8765432	true	1234567
+  file	"$HOME/oracle-scratch/camera/timestamps/camera.mp4.ts"	"monotonic_microsec\x09realtime_microsec\x0a1234567\x099876543\x0a"	0644
+setPath	"$HOME/oracle-scratch/camera/timestamps/next.ts"	0
+recordFrameArrival	42	43	true	42
+  file	"$HOME/oracle-scratch/camera/timestamps/next.ts"	"monotonic_microsec\x09realtime_microsec\x0a42\x0943\x0a"	0644
+  file	"$HOME/oracle-scratch/camera/timestamps/camera.mp4.ts"	"monotonic_microsec\x09realtime_microsec\x0a1234567\x099876543\x0a"	0644
+== refused values
+recordFrameArrival	0	1	false	0
+recordFrameArrival	-5	1	false	0
+recordFrameArrival	1	0	false	0
+recordFrameArrival	1	-1	false	0
+  file	"$HOME/oracle-scratch/camera/timestamps/refused.ts"	-	-
+recordFrameArrival	9223372036854775807	9223372036854775807	true	9223372036854775807
+  file	"$HOME/oracle-scratch/camera/timestamps/refused.ts"	"monotonic_microsec\x09realtime_microsec\x0a9223372036854775807\x099223372036854775807\x0a"	0644
+== no path
+recordFrameArrival	1	1	false	0
+recordFrameArrival	1	1	false	0
+== missing directory
+recordFrameArrival	10	20	false	0
+recordFrameArrival	11	21	false	0
+  file	"$HOME/oracle-scratch/camera/timestamps/missing/camera.mp4.ts"	-	-
+== path is a directory
+recordFrameArrival	10	20	false	0
+recordFrameArrival	11	21	false	0
+  file	"$HOME/oracle-scratch/camera/timestamps/directory.ts"	-	0755
+== replaces an existing file, keeping mode 0600
+recordFrameArrival	7	8	true	7
+  file	"$HOME/oracle-scratch/camera/timestamps/existing.ts"	"monotonic_microsec\x09realtime_microsec\x0a7\x098\x0a"	0600

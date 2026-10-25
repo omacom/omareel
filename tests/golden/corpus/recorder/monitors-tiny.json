@@ -1,0 +1,37 @@
+[
+    {
+        "id": 0,
+        "name": "TINY",
+        "description": "Oracle TINY",
+        "make": "Oracle",
+        "model": "TINY",
+        "serial": "",
+        "width": 300,
+        "height": 200,
+        "refreshRate": 60.0,
+        "x": 0,
+        "y": 0,
+        "activeWorkspace": {
+            "id": 1,
+            "name": "1"
+        },
+        "specialWorkspace": {
+            "id": 0,
+            "name": ""
+        },
+        "reserved": [
+            0,
+            0,
+            0,
+            0
+        ],
+        "scale": 1.5,
+        "transform": 0,
+        "focused": false,
+        "dpmsStatus": true,
+        "vrr": false,
+        "disabled": false,
+        "currentFormat": "XRGB8888",
+        "mirrorOf": "none"
+    }
+]

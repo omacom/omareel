@@ -1,0 +1,1844 @@
+{
+ "hashes": [
+  "",
+  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  "0123456789abcdef0123456789abcdef01234567",
+  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+  " aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "gggggggggggggggggggggggggggggggggggggggg",
+  "unknown",
+  "efb50993780079460b0cbed1363e2166a2de1d9f"
+ ],
+ "status": {
+  "loaded": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "plugin",
+     "list"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/plugin-list/crafted-ours.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "omareel-exclude",
+     "status"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/exclude-status/crafted-a40.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "version"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/version/crafted-a40.json"
+   }
+  ],
+  "real desktop": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "plugin",
+     "list"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/plugin-list/real-desktop.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "omareel-exclude",
+     "status"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/exclude-status/real-desktop.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "version"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/version/real-desktop.json"
+   }
+  ],
+  "hash mismatch": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "plugin",
+     "list"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/plugin-list/crafted-ours.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "omareel-exclude",
+     "status"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/exclude-status/crafted-a40.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "version"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/version/crafted-b40.json"
+   }
+  ],
+  "uppercase commit": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "plugin",
+     "list"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/plugin-list/crafted-ours.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "omareel-exclude",
+     "status"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/exclude-status/crafted-a40.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "version"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/version/crafted-uppercase.json"
+   }
+  ],
+  "short commit": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "plugin",
+     "list"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/plugin-list/crafted-ours.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "omareel-exclude",
+     "status"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/exclude-status/crafted-a40.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "version"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/version/crafted-short.json"
+   }
+  ],
+  "dirty commit": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "plugin",
+     "list"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/plugin-list/crafted-ours.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "omareel-exclude",
+     "status"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/exclude-status/crafted-a40.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "version"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/version/crafted-dirty.json"
+   }
+  ],
+  "commit missing": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "plugin",
+     "list"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/plugin-list/crafted-ours.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "omareel-exclude",
+     "status"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/exclude-status/crafted-a40.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "version"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/version/crafted-missing.json"
+   }
+  ],
+  "version garbage": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "plugin",
+     "list"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/plugin-list/crafted-ours.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "omareel-exclude",
+     "status"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/exclude-status/crafted-a40.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "version"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/version/crafted-garbage.txt"
+   }
+  ],
+  "version fails": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "plugin",
+     "list"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/plugin-list/crafted-ours.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "omareel-exclude",
+     "status"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/exclude-status/crafted-a40.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "version"
+    ],
+    "status": 1,
+    "stdout": "{\"commit\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"
+   }
+  ],
+  "no prefix": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "plugin",
+     "list"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/plugin-list/crafted-ours.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "omareel-exclude",
+     "status"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/exclude-status/crafted-no-prefix.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "version"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/version/crafted-a40.json"
+   }
+  ],
+  "other prefixes": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "plugin",
+     "list"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/plugin-list/crafted-ours.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "omareel-exclude",
+     "status"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/exclude-status/crafted-other-prefix.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "version"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/version/crafted-a40.json"
+   }
+  ],
+  "two prefixes": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "plugin",
+     "list"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/plugin-list/crafted-ours.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "omareel-exclude",
+     "status"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/exclude-status/crafted-two-prefixes.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "version"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/version/crafted-a40.json"
+   }
+  ],
+  "prefixes missing": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "plugin",
+     "list"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/plugin-list/crafted-ours.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "omareel-exclude",
+     "status"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/exclude-status/crafted-prefixes-missing.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "version"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/version/crafted-a40.json"
+   }
+  ],
+  "prefixes string": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "plugin",
+     "list"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/plugin-list/crafted-ours.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "omareel-exclude",
+     "status"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/exclude-status/crafted-prefixes-string.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "version"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/version/crafted-a40.json"
+   }
+  ],
+  "built hash missing": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "plugin",
+     "list"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/plugin-list/crafted-ours.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "omareel-exclude",
+     "status"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/exclude-status/crafted-hash-missing.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "version"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/version/crafted-a40.json"
+   }
+  ],
+  "built hash number": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "plugin",
+     "list"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/plugin-list/crafted-ours.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "omareel-exclude",
+     "status"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/exclude-status/crafted-hash-number.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "version"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/version/crafted-a40.json"
+   }
+  ],
+  "status unknown request": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "plugin",
+     "list"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/plugin-list/crafted-ours.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "omareel-exclude",
+     "status"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/exclude-status/crafted-unknown-request.txt"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "version"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/version/crafted-a40.json"
+   }
+  ],
+  "status empty": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "plugin",
+     "list"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/plugin-list/crafted-ours.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "omareel-exclude",
+     "status"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/exclude-status/crafted-empty.txt"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "version"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/version/crafted-a40.json"
+   }
+  ],
+  "status fails": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "plugin",
+     "list"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/plugin-list/crafted-ours.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "version"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/version/crafted-a40.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "omareel-exclude",
+     "status"
+    ],
+    "status": 1,
+    "stdoutFile": "hyprctl/exclude-status/crafted-a40.json"
+   }
+  ],
+  "plugin twice": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "plugin",
+     "list"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/plugin-list/crafted-twice.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "omareel-exclude",
+     "status"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/exclude-status/crafted-a40.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "version"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/version/crafted-a40.json"
+   }
+  ],
+  "other plugins": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "plugin",
+     "list"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/plugin-list/crafted-others.json"
+   }
+  ],
+  "no plugins": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "plugin",
+     "list"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/plugin-list/crafted-none.json"
+   }
+  ],
+  "no plugins text": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "plugin",
+     "list"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/plugin-list/crafted-no-plugins.txt"
+   }
+  ],
+  "plugin name not string": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "plugin",
+     "list"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/plugin-list/crafted-name-not-string.json"
+   }
+  ],
+  "plugin list object": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "plugin",
+     "list"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/plugin-list/crafted-object.json"
+   }
+  ],
+  "plugin list fails": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "plugin",
+     "list"
+    ],
+    "status": 1,
+    "stdoutFile": "hyprctl/plugin-list/crafted-ours.json"
+   }
+  ],
+  "plugin list hangs": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "plugin",
+     "list"
+    ],
+    "status": 0,
+    "stdout": "[]",
+    "hang": 5
+   }
+  ],
+  "hyprctl missing": null
+ },
+ "ensureLoaded": {
+  "path missing": {
+   "plugin": "missing",
+   "answers": []
+  },
+  "path is a directory": {
+   "plugin": "directory",
+   "answers": []
+  },
+  "path empty": {
+   "plugin": "empty-variable",
+   "answers": []
+  },
+  "already loaded": {
+   "plugin": "file",
+   "hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "plugin",
+      "list"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/plugin-list/crafted-ours.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "omareel-exclude",
+      "status"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/exclude-status/crafted-a40.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "version"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/version/crafted-a40.json"
+    }
+   ]
+  },
+  "already loaded without override": {
+   "plugin": null,
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "plugin",
+      "list"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/plugin-list/crafted-ours.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "omareel-exclude",
+      "status"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/exclude-status/crafted-a40.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "version"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/version/crafted-a40.json"
+    }
+   ]
+  },
+  "no hash file": {
+   "plugin": "file",
+   "hash": null,
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "plugin",
+      "list"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/plugin-list/crafted-none.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "version"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/version/crafted-a40.json"
+    }
+   ]
+  },
+  "hash mismatch": {
+   "plugin": "file",
+   "hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "plugin",
+      "list"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/plugin-list/crafted-none.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "version"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/version/crafted-a40.json"
+    }
+   ]
+  },
+  "hash with newline": {
+   "plugin": "file",
+   "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "plugin",
+      "list"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/plugin-list/crafted-none.json",
+     "call": 1
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "plugin",
+      "list"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/plugin-list/crafted-ours.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "omareel-exclude",
+      "status"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/exclude-status/crafted-a40.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "version"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/version/crafted-a40.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "plugin",
+      "load",
+      "@PLUGIN@"
+     ],
+     "status": 0,
+     "stdout": "ok"
+    }
+   ]
+  },
+  "hash with spaces": {
+   "plugin": "file",
+   "hash": "  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \r\n",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "plugin",
+      "list"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/plugin-list/crafted-none.json",
+     "call": 1
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "plugin",
+      "list"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/plugin-list/crafted-ours.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "omareel-exclude",
+      "status"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/exclude-status/crafted-a40.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "version"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/version/crafted-a40.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "plugin",
+      "load",
+      "@PLUGIN@"
+     ],
+     "status": 0,
+     "stdout": "ok"
+    }
+   ]
+  },
+  "hash uppercase": {
+   "plugin": "file",
+   "hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "plugin",
+      "list"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/plugin-list/crafted-none.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "version"
+     ],
+     "status": 0,
+     "stdout": "{\"commit\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}"
+    }
+   ]
+  },
+  "loads": {
+   "plugin": "file",
+   "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "plugin",
+      "list"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/plugin-list/crafted-none.json",
+     "call": 1
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "plugin",
+      "list"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/plugin-list/crafted-ours.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "omareel-exclude",
+      "status"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/exclude-status/crafted-a40.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "version"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/version/crafted-a40.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "plugin",
+      "load",
+      "@PLUGIN@"
+     ],
+     "status": 0,
+     "stdout": "ok"
+    }
+   ]
+  },
+  "loads but status stays unloaded": {
+   "plugin": "file",
+   "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "plugin",
+      "list"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/plugin-list/crafted-none.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "version"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/version/crafted-a40.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "plugin",
+      "load",
+      "@PLUGIN@"
+     ],
+     "status": 0,
+     "stdout": "ok"
+    }
+   ]
+  },
+  "load reply with newline": {
+   "plugin": "file",
+   "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "plugin",
+      "list"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/plugin-list/crafted-none.json",
+     "call": 1
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "plugin",
+      "list"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/plugin-list/crafted-ours.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "omareel-exclude",
+      "status"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/exclude-status/crafted-a40.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "version"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/version/crafted-a40.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "plugin",
+      "load",
+      "@PLUGIN@"
+     ],
+     "status": 0,
+     "stdout": "ok\n"
+    }
+   ]
+  },
+  "load reply spaced": {
+   "plugin": "file",
+   "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "plugin",
+      "list"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/plugin-list/crafted-none.json",
+     "call": 1
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "plugin",
+      "list"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/plugin-list/crafted-ours.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "omareel-exclude",
+      "status"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/exclude-status/crafted-a40.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "version"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/version/crafted-a40.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "plugin",
+      "load",
+      "@PLUGIN@"
+     ],
+     "status": 0,
+     "stdout": "  ok  \n\n"
+    }
+   ]
+  },
+  "load reply Ok": {
+   "plugin": "file",
+   "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "plugin",
+      "list"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/plugin-list/crafted-none.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "version"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/version/crafted-a40.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "plugin",
+      "load",
+      "@PLUGIN@"
+     ],
+     "status": 0,
+     "stdout": "Ok"
+    }
+   ]
+  },
+  "load refused": {
+   "plugin": "file",
+   "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "plugin",
+      "list"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/plugin-list/crafted-none.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "version"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/version/crafted-a40.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "plugin",
+      "load",
+      "@PLUGIN@"
+     ],
+     "status": 0,
+     "stdout": "error: plugin could not be loaded:\n  version mismatch\n"
+    }
+   ]
+  },
+  "load exit status": {
+   "plugin": "file",
+   "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "plugin",
+      "list"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/plugin-list/crafted-none.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "version"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/version/crafted-a40.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "plugin",
+      "load",
+      "@PLUGIN@"
+     ],
+     "status": 1,
+     "stdout": "ok"
+    }
+   ]
+  },
+  "load exit status quiet": {
+   "plugin": "file",
+   "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "plugin",
+      "list"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/plugin-list/crafted-none.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "version"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/version/crafted-a40.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "plugin",
+      "load",
+      "@PLUGIN@"
+     ],
+     "status": 3,
+     "stdout": ""
+    }
+   ]
+  },
+  "load stderr only": {
+   "plugin": "file",
+   "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "plugin",
+      "list"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/plugin-list/crafted-none.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "version"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/version/crafted-a40.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "plugin",
+      "load",
+      "@PLUGIN@"
+     ],
+     "status": 1,
+     "stderr": "couldn't connect\n"
+    }
+   ]
+  },
+  "load stdout and stderr": {
+   "plugin": "file",
+   "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "plugin",
+      "list"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/plugin-list/crafted-none.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "version"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/version/crafted-a40.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "plugin",
+      "load",
+      "@PLUGIN@"
+     ],
+     "status": 0,
+     "stdout": "ok",
+     "stderr": "warning\n"
+    }
+   ]
+  },
+  "load hangs": {
+   "plugin": "file",
+   "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "plugin",
+      "list"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/plugin-list/crafted-none.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "version"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/version/crafted-a40.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "plugin",
+      "load",
+      "@PLUGIN@"
+     ],
+     "status": 0,
+     "stdout": "ok",
+     "hang": 5
+    }
+   ]
+  },
+  "relative path": {
+   "plugin": "relative",
+   "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "answers": [
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "plugin",
+      "list"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/plugin-list/crafted-none.json",
+     "call": 1
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "plugin",
+      "list"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/plugin-list/crafted-ours.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "omareel-exclude",
+      "status"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/exclude-status/crafted-a40.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "-j",
+      "version"
+     ],
+     "status": 0,
+     "stdoutFile": "hyprctl/version/crafted-a40.json"
+    },
+    {
+     "argv": [
+      "hyprctl",
+      "plugin",
+      "load",
+      "@PLUGIN@"
+     ],
+     "status": 0,
+     "stdout": "ok"
+    }
+   ]
+  }
+ },
+ "overlaysOffMonitor": {
+  "files": [
+   "crafted-array.json",
+   "crafted-clean-two.json",
+   "crafted-empty-object.json",
+   "crafted-empty.txt",
+   "crafted-garbage.txt",
+   "crafted-layer-not-object.json",
+   "crafted-level-not-array.json",
+   "crafted-levels-array.json",
+   "crafted-levels-missing.json",
+   "crafted-monitor-not-object.json",
+   "crafted-namespace-not-string.json",
+   "crafted-near-prefixes.json",
+   "crafted-overlay-on-dp1.json",
+   "crafted-overlay-on-hdmi.json",
+   "crafted-prefix-alone.json",
+   "crafted-trailing-garbage.json",
+   "real-desktop.json"
+  ],
+  "monitors": [
+   "DP-1",
+   "HDMI-A-1",
+   "",
+   "dp-1",
+   "DP-9"
+  ]
+ },
+ "overlayMonitor": {
+  "monitors": [
+   [],
+   [
+    "DP-3"
+   ],
+   [
+    "DP-3",
+    "DP-5"
+   ],
+   [
+    "DP-5",
+    "DP-3"
+   ],
+   [
+    "DP-3",
+    "DP-3",
+    "DP-5"
+   ],
+   [
+    "",
+    "DP-3"
+   ],
+   [
+    "DP-3",
+    ""
+   ],
+   [
+    "dp-3",
+    "DP-5"
+   ]
+  ],
+  "recorded": [
+   "DP-3",
+   "DP-5",
+   "",
+   "dp-3",
+   "DP-9"
+  ]
+ },
+ "hardwareCursor": {
+  "automatic": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "getoption",
+     "cursor:no_hardware_cursors"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/getoption-cursor/crafted-2.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "eval",
+     "hl.config({ cursor = { no_hardware_cursors = 0 } })"
+    ],
+    "status": 0,
+    "stdout": "ok"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "eval",
+     "hl.config({ cursor = { no_hardware_cursors = 2 } })"
+    ],
+    "status": 0,
+    "stdout": "ok"
+   }
+  ],
+  "real desktop": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "getoption",
+     "cursor:no_hardware_cursors"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/getoption-cursor/real-desktop.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "eval",
+     "hl.config({ cursor = { no_hardware_cursors = 0 } })"
+    ],
+    "status": 0,
+    "stdout": "ok"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "eval",
+     "hl.config({ cursor = { no_hardware_cursors = 2 } })"
+    ],
+    "status": 0,
+    "stdout": "ok"
+   }
+  ],
+  "software": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "getoption",
+     "cursor:no_hardware_cursors"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/getoption-cursor/crafted-1.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "eval",
+     "hl.config({ cursor = { no_hardware_cursors = 0 } })"
+    ],
+    "status": 0,
+    "stdout": "ok"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "eval",
+     "hl.config({ cursor = { no_hardware_cursors = 1 } })"
+    ],
+    "status": 0,
+    "stdout": "ok"
+   }
+  ],
+  "already hardware": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "getoption",
+     "cursor:no_hardware_cursors"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/getoption-cursor/crafted-0.json"
+   }
+  ],
+  "negative": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "getoption",
+     "cursor:no_hardware_cursors"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/getoption-cursor/crafted-negative.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "eval",
+     "hl.config({ cursor = { no_hardware_cursors = 0 } })"
+    ],
+    "status": 0,
+    "stdout": "ok"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "eval",
+     "hl.config({ cursor = { no_hardware_cursors = -1 } })"
+    ],
+    "status": 0,
+    "stdout": "ok"
+   }
+  ],
+  "string value": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "getoption",
+     "cursor:no_hardware_cursors"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/getoption-cursor/crafted-string.json"
+   }
+  ],
+  "custom type": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "getoption",
+     "cursor:no_hardware_cursors"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/getoption-cursor/crafted-custom-type.json"
+   }
+  ],
+  "no such option": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "getoption",
+     "cursor:no_hardware_cursors"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/getoption-cursor/crafted-no-such-option.txt"
+   }
+  ],
+  "getoption fails": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "getoption",
+     "cursor:no_hardware_cursors"
+    ],
+    "status": 1,
+    "stdoutFile": "hyprctl/getoption-cursor/crafted-2.json"
+   }
+  ],
+  "hyprlang config": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "getoption",
+     "cursor:no_hardware_cursors"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/getoption-cursor/crafted-1.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "eval",
+     "hl.config({ cursor = { no_hardware_cursors = 0 } })"
+    ],
+    "status": 1,
+    "stdout": "ok"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "keyword",
+     "cursor:no_hardware_cursors",
+     "0"
+    ],
+    "status": 0,
+    "stdout": "ok"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "eval",
+     "hl.config({ cursor = { no_hardware_cursors = 1 } })"
+    ],
+    "status": 1,
+    "stdout": "ok"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "keyword",
+     "cursor:no_hardware_cursors",
+     "1"
+    ],
+    "status": 0,
+    "stdout": "ok"
+   }
+  ],
+  "nothing works": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "getoption",
+     "cursor:no_hardware_cursors"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/getoption-cursor/crafted-2.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "eval",
+     "hl.config({ cursor = { no_hardware_cursors = 0 } })"
+    ],
+    "status": 1,
+    "stdout": "ok"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "keyword",
+     "cursor:no_hardware_cursors",
+     "0"
+    ],
+    "status": 1,
+    "stdout": "ok"
+   }
+  ],
+  "eval works only first": [
+   {
+    "argv": [
+     "hyprctl",
+     "-j",
+     "getoption",
+     "cursor:no_hardware_cursors"
+    ],
+    "status": 0,
+    "stdoutFile": "hyprctl/getoption-cursor/crafted-2.json"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "eval",
+     "hl.config({ cursor = { no_hardware_cursors = 0 } })"
+    ],
+    "status": 0,
+    "stdout": "ok"
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "eval",
+     "hl.config({ cursor = { no_hardware_cursors = 2 } })"
+    ],
+    "status": 1,
+    "stdout": "ok",
+    "call": 1
+   },
+   {
+    "argv": [
+     "hyprctl",
+     "keyword",
+     "cursor:no_hardware_cursors",
+     "2"
+    ],
+    "status": 0,
+    "stdout": "ok"
+   }
+  ]
+ }
+}

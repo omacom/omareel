@@ -1,0 +1,2 @@
+gsr info: Capturing region
+gsr error: failed to create encoder: h264 not supported

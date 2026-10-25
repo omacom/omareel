@@ -1,0 +1,37 @@
+[
+    {
+        "id": 0,
+        "name": "HUGE",
+        "description": "Oracle HUGE",
+        "make": "Oracle",
+        "model": "HUGE",
+        "serial": "",
+        "width": 3000000000,
+        "height": 2147483647,
+        "refreshRate": 60.0,
+        "x": 1e+300,
+        "y": -1e+300,
+        "activeWorkspace": {
+            "id": 1,
+            "name": "1"
+        },
+        "specialWorkspace": {
+            "id": 0,
+            "name": ""
+        },
+        "reserved": [
+            0,
+            0,
+            0,
+            0
+        ],
+        "scale": 1,
+        "transform": 0,
+        "focused": false,
+        "dpmsStatus": true,
+        "vrr": false,
+        "disabled": false,
+        "currentFormat": "XRGB8888",
+        "mirrorOf": "none"
+    }
+]

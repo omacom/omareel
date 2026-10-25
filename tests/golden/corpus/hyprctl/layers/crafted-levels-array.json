@@ -1,0 +1,17 @@
+{
+    "DP-1": {
+        "levels": [
+            [
+                {
+                    "address": "0x1",
+                    "x": 0,
+                    "y": 0,
+                    "w": 100,
+                    "h": 40,
+                    "namespace": "omareel-bar",
+                    "pid": 1
+                }
+            ]
+        ]
+    }
+}

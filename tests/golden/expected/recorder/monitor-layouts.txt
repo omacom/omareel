@@ -1,0 +1,69 @@
+== crafted-all-disabled.json
+== crafted-disabled.json
+"DP-2"	1920	0	2560	1440	0	0	0	0
+== crafted-duplicate-names.json
+"DUP"	0	0	1920	1080	0	0	0	0
+"DUP"	1920	0	1280	720	0	0	0	0
+== crafted-empty-array.json
+== crafted-empty.txt
+== crafted-focus-both.json
+"A"	0	0	1920	1080	0	0	0	0
+"B"	1920	0	1920	1080	0	0	0	0
+== crafted-focus-none.json
+"A"	0	0	1920	1080	0	0	0	0
+"B"	1920	0	1920	1080	0	0	0	0
+== crafted-garbage.txt
+== crafted-huge.json
+"HUGE"	1.0000000000000001e+300	-1.0000000000000001e+300	3000000000	2147483647	0	0	0	0
+== crafted-missing-fields.json
+"NOFIELDS"	0	0	1280	720	0	0	0	0
+"BARE"	0	0	0	0	0	0	0	0
+""	0	0	0	0	0	0	0	0
+== crafted-negative-positions.json
+"LEFT"	-1920	-200	1920	1080	0	0	0	0
+"MAIN"	0	0	1920	1080	0	0	0	0
+== crafted-null.json
+== crafted-object.json
+== crafted-odd-size.json
+"eDP-1"	0	0	1280.6666666666667	720.66666666666663	0	0	0	0
+== crafted-reserved.json
+"R-SHORT"	0	0	1920	1080	10	0	0	0
+"R-EMPTY"	0	0	1920	1080	0	0	0	0
+"R-LONG"	0	0	1920	1080	1	2	3	4
+"R-STRINGS"	0	0	1920	1080	0	6	0	7.5
+"R-OBJECT"	0	0	1920	1080	0	0	0	0
+== crafted-rotated.json
+"ROT-0"	0	0	1600	1000	0	0	0	0
+"ROT-1"	1600	0	1600	1000	0	0	0	0
+"ROT-2"	3200	0	1600	1000	0	0	0	0
+"ROT-3"	4800	0	1600	1000	0	0	0	0
+"ROT-4"	6400	0	1600	1000	0	0	0	0
+"ROT-5"	8000	0	1600	1000	0	0	0	0
+"ROT-6"	9600	0	1600	1000	0	0	0	0
+"ROT-7"	11200	0	1600	1000	0	0	0	0
+== crafted-scalars.json
+""	0	0	0	0	0	0	0	0
+""	0	0	0	0	0	0	0	0
+""	0	0	0	0	0	0	0	0
+""	0	0	0	0	0	0	0	0
+""	0	0	0	0	0	0	0	0
+== crafted-scales.json
+"S0"	0	0	192000	108000	0	0	0	0
+"S-NEG"	0	0	192000	108000	0	0	0	0
+"S-THIRD"	0	0	1920	1080	0	0	0	0
+"S-STRING"	0	0	1920	1080	0	0	0	0
+"S-HALF"	0	0	3840	2160	0	0	0	0
+"S-TINY"	0	0	192000	108000	0	0	0	0
+== crafted-truncated.json
+== crafted-two.json
+"DP-1"	0	0	2048	1152	0	30	0	0
+"HDMI-A-1"	2048	0	1920	1080	0	0	0	0
+== crafted-unicode.json
+"Écran \"1\" ☃"	0	0	1920	1080	0	0	0	0
+== crafted-wrong-types.json
+"STR"	0	0	0	0	0	0	0	0
+""	12.75	-0.5	1920.5	1080.5	0	0	0	0
+== real-desktop.json
+"HDMI-A-1"	0	0	1920	1080	0	26	0	0
+== <crafted-two.json, exit status 1>
+== <hyprctl not on PATH>

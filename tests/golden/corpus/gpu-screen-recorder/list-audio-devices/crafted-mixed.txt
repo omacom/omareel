@@ -1,0 +1,7 @@
+default_output|Default output
+default_input|Default input
+alsa_output.usb-Speaker.analog-stereo.monitor|Monitor of Speaker
+alsa_input.usb-Blue_Yeti-00.analog-stereo|Yeti Stereo Microphone Analog Stereo
+alsa_input.usb-Insta360_Insta360_Link_2-02.mono-fallback|Insta360 Link 2 Mono
+bluez_input.00_11_22_33_44_55|Headset
+alsa_input.platform-mtk_sdw_mc.HiFi__Mic__source|Digital Microphone

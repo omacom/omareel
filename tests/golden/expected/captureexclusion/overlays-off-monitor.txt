@@ -1,0 +1,18 @@
+crafted-array.json	"DP-1"=false	"HDMI-A-1"=false	""=false	"dp-1"=false	"DP-9"=false
+crafted-clean-two.json	"DP-1"=true	"HDMI-A-1"=true	""=false	"dp-1"=false	"DP-9"=false
+crafted-empty-object.json	"DP-1"=false	"HDMI-A-1"=false	""=false	"dp-1"=false	"DP-9"=false
+crafted-empty.txt	"DP-1"=false	"HDMI-A-1"=false	""=false	"dp-1"=false	"DP-9"=false
+crafted-garbage.txt	"DP-1"=false	"HDMI-A-1"=false	""=false	"dp-1"=false	"DP-9"=false
+crafted-layer-not-object.json	"DP-1"=true	"HDMI-A-1"=false	""=false	"dp-1"=false	"DP-9"=false
+crafted-level-not-array.json	"DP-1"=true	"HDMI-A-1"=false	""=false	"dp-1"=false	"DP-9"=false
+crafted-levels-array.json	"DP-1"=true	"HDMI-A-1"=false	""=false	"dp-1"=false	"DP-9"=false
+crafted-levels-missing.json	"DP-1"=true	"HDMI-A-1"=false	""=false	"dp-1"=false	"DP-9"=false
+crafted-monitor-not-object.json	"DP-1"=true	"HDMI-A-1"=false	""=false	"dp-1"=false	"DP-9"=false
+crafted-namespace-not-string.json	"DP-1"=true	"HDMI-A-1"=false	""=false	"dp-1"=false	"DP-9"=false
+crafted-near-prefixes.json	"DP-1"=true	"HDMI-A-1"=false	""=false	"dp-1"=false	"DP-9"=false
+crafted-overlay-on-dp1.json	"DP-1"=false	"HDMI-A-1"=true	""=false	"dp-1"=false	"DP-9"=false
+crafted-overlay-on-hdmi.json	"DP-1"=true	"HDMI-A-1"=false	""=false	"dp-1"=false	"DP-9"=false
+crafted-prefix-alone.json	"DP-1"=false	"HDMI-A-1"=false	""=false	"dp-1"=false	"DP-9"=false
+crafted-trailing-garbage.json	"DP-1"=false	"HDMI-A-1"=false	""=false	"dp-1"=false	"DP-9"=false
+real-desktop.json	"DP-1"=false	"HDMI-A-1"=true	""=false	"dp-1"=false	"DP-9"=false
+<crafted-clean-two.json, exit status 1>	"DP-1"=false	"HDMI-A-1"=false	""=false	"dp-1"=false	"DP-9"=false

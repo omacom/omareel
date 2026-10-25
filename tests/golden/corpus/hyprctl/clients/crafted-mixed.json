@@ -1,0 +1,232 @@
+[
+    {
+        "address": "0x1",
+        "mapped": true,
+        "hidden": false,
+        "at": [
+            12,
+            38
+        ],
+        "size": [
+            1896,
+            1030
+        ],
+        "workspace": {
+            "id": 1,
+            "name": "1"
+        },
+        "floating": false,
+        "class": "kitty",
+        "title": "Window 1"
+    },
+    {
+        "address": "0x2",
+        "mapped": true,
+        "hidden": false,
+        "at": [
+            400,
+            300
+        ],
+        "size": [
+            640,
+            480
+        ],
+        "workspace": {
+            "id": 1,
+            "name": "1"
+        },
+        "floating": true,
+        "class": "float",
+        "title": "Window 2"
+    },
+    {
+        "address": "0x3",
+        "mapped": true,
+        "hidden": true,
+        "at": [
+            0,
+            0
+        ],
+        "size": [
+            100,
+            100
+        ],
+        "workspace": {
+            "id": 1,
+            "name": "1"
+        },
+        "class": "hidden",
+        "title": "Window 3"
+    },
+    {
+        "address": "0x4",
+        "mapped": true,
+        "hidden": false,
+        "at": [
+            2060,
+            10
+        ],
+        "size": [
+            1000,
+            700
+        ],
+        "workspace": {
+            "id": 2,
+            "name": "2"
+        },
+        "class": "other",
+        "title": "Window 4"
+    },
+    {
+        "address": "0x5",
+        "at": [
+            -50,
+            -40
+        ],
+        "size": [
+            300,
+            200
+        ],
+        "workspace": {
+            "id": 1
+        }
+    },
+    {
+        "address": "0x6",
+        "at": [
+            10,
+            20,
+            30
+        ],
+        "size": [
+            300,
+            200
+        ],
+        "workspace": {
+            "id": 1
+        }
+    },
+    {
+        "address": "0x7",
+        "at": [
+            10,
+            20
+        ],
+        "size": [
+            300
+        ],
+        "workspace": {
+            "id": 1
+        }
+    },
+    {
+        "address": "0x8",
+        "at": [
+            12.5,
+            20.25
+        ],
+        "size": [
+            300.75,
+            200
+        ],
+        "workspace": {
+            "id": 1
+        }
+    },
+    {
+        "address": "0x9",
+        "at": [
+            "10",
+            20
+        ],
+        "size": [
+            300,
+            200
+        ],
+        "workspace": {
+            "id": 1
+        }
+    },
+    {
+        "address": "0xa",
+        "at": [
+            5,
+            5
+        ],
+        "size": [
+            0,
+            0
+        ],
+        "workspace": {
+            "id": 1
+        }
+    },
+    {
+        "address": "0xb",
+        "at": [
+            5,
+            5
+        ],
+        "size": [
+            -10,
+            20
+        ],
+        "workspace": {
+            "id": 1
+        }
+    },
+    {
+        "address": "0xc",
+        "at": [
+            100,
+            100
+        ],
+        "size": [
+            200,
+            200
+        ],
+        "workspace": {
+            "id": "1"
+        }
+    },
+    {
+        "address": "0xd",
+        "at": [
+            100,
+            100
+        ],
+        "size": [
+            200,
+            200
+        ],
+        "hidden": "true",
+        "workspace": {
+            "id": 1
+        }
+    },
+    {
+        "address": "0xe",
+        "at": [
+            100,
+            100
+        ],
+        "size": [
+            200,
+            200
+        ]
+    },
+    {
+        "address": "0xf",
+        "at": [
+            3000000000,
+            1
+        ],
+        "size": [
+            2147483647,
+            1
+        ],
+        "workspace": {
+            "id": 1
+        }
+    }
+]

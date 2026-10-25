@@ -1,0 +1,786 @@
+{
+ "inputLog": {
+  "empty": {
+   "region": {
+    "x": 100.0,
+    "y": 50.0,
+    "scale": 2.0
+   },
+   "cursor": [],
+   "devices": []
+  },
+  "moves-only": {
+   "region": {
+    "x": 100.0,
+    "y": 50.0,
+    "scale": 2.0
+   },
+   "cursor": [
+    [
+     1000,
+     100,
+     50
+    ],
+    [
+     2000,
+     100.5,
+     50.25
+    ],
+    [
+     3000,
+     1379.5,
+     769.75
+    ],
+    [
+     4000,
+     99,
+     49
+    ]
+   ]
+  },
+  "clicks-and-scrolls": {
+   "region": {
+    "x": 100.0,
+    "y": 50.0,
+    "scale": 2.0
+   },
+   "cursor": [
+    [
+     1000,
+     300,
+     200
+    ],
+    [
+     5000,
+     310,
+     205
+    ],
+    [
+     9000,
+     500,
+     400
+    ]
+   ],
+   "devices": [
+    {
+     "t": 500,
+     "kind": "ButtonDown",
+     "button": "left"
+    },
+    {
+     "t": 1000,
+     "kind": "ButtonUp",
+     "button": "left"
+    },
+    {
+     "t": 4999,
+     "kind": "ButtonDown",
+     "button": "right"
+    },
+    {
+     "t": 5000,
+     "kind": "Scroll",
+     "dx": 0,
+     "dy": -1
+    },
+    {
+     "t": 7000,
+     "kind": "Scroll",
+     "dx": 2,
+     "dy": 0
+    },
+    {
+     "t": 9000,
+     "kind": "ButtonUp",
+     "button": "right"
+    },
+    {
+     "t": 12000,
+     "kind": "ButtonDown",
+     "button": "middle"
+    },
+    {
+     "t": 12001,
+     "kind": "ButtonDown",
+     "button": ""
+    }
+   ]
+  },
+  "keys": {
+   "region": {
+    "x": 0.0,
+    "y": 0.0,
+    "scale": 1.0
+   },
+   "cursor": [
+    [
+     100,
+     1,
+     2
+    ]
+   ],
+   "devices": [
+    {
+     "t": 200,
+     "kind": "KeyDown",
+     "code": 29,
+     "name": "KEY_LEFTCTRL",
+     "mods": [
+      "ctrl"
+     ]
+    },
+    {
+     "t": 300,
+     "kind": "KeyDown",
+     "code": 31,
+     "name": "KEY_S",
+     "mods": [
+      "ctrl"
+     ]
+    },
+    {
+     "t": 350,
+     "kind": "KeyUp",
+     "code": 31,
+     "name": "KEY_S",
+     "mods": [
+      "ctrl"
+     ]
+    },
+    {
+     "t": 400,
+     "kind": "KeyUp",
+     "code": 29,
+     "name": "KEY_LEFTCTRL",
+     "mods": []
+    },
+    {
+     "t": 500,
+     "kind": "KeyDown",
+     "code": 57,
+     "name": "KEY_SPACE",
+     "mods": []
+    },
+    {
+     "t": 600,
+     "kind": "KeyDown",
+     "code": 0,
+     "name": "",
+     "mods": [
+      "shift",
+      "alt",
+      "meta",
+      "ctrl"
+     ]
+    },
+    {
+     "t": 700,
+     "kind": "KeyDown",
+     "code": 240,
+     "name": "KEY_UNKNOWN",
+     "mods": [
+      "shift",
+      "shift"
+     ]
+    }
+   ]
+  },
+  "ties-and-order": {
+   "region": {
+    "x": 100.0,
+    "y": 50.0,
+    "scale": 2.0
+   },
+   "cursor": [
+    [
+     1000,
+     1,
+     1
+    ],
+    [
+     1000,
+     2,
+     2
+    ],
+    [
+     3000,
+     3,
+     3
+    ],
+    [
+     2000,
+     4,
+     4
+    ]
+   ],
+   "devices": [
+    {
+     "t": 1000,
+     "kind": "KeyDown",
+     "code": 30,
+     "name": "KEY_A",
+     "mods": []
+    },
+    {
+     "t": 1000,
+     "kind": "ButtonDown",
+     "button": "left"
+    },
+    {
+     "t": 500,
+     "kind": "ButtonUp",
+     "button": "left"
+    },
+    {
+     "t": 2000,
+     "kind": "KeyUp",
+     "code": 30
+    },
+    {
+     "t": 3000,
+     "kind": "Scroll",
+     "dx": -3,
+     "dy": 4
+    }
+   ]
+  },
+  "before-first-sample": {
+   "region": {
+    "x": 100.0,
+    "y": 50.0,
+    "scale": 2.0
+   },
+   "cursor": [
+    [
+     5000,
+     640,
+     360
+    ]
+   ],
+   "devices": [
+    {
+     "t": 1,
+     "kind": "ButtonDown",
+     "button": "left"
+    },
+    {
+     "t": 4999,
+     "kind": "Scroll",
+     "dy": 1
+    }
+   ]
+  },
+  "no-cursor": {
+   "region": {
+    "x": 100.0,
+    "y": 50.0,
+    "scale": 2.0
+   },
+   "cursor": [],
+   "devices": [
+    {
+     "t": 10,
+     "kind": "ButtonDown",
+     "button": "left"
+    },
+    {
+     "t": 20,
+     "kind": "Scroll",
+     "dx": 1,
+     "dy": 1
+    }
+   ]
+  },
+  "negative-and-large-times": {
+   "region": {
+    "x": 100.0,
+    "y": 50.0,
+    "scale": 2.0
+   },
+   "cursor": [
+    [
+     -5,
+     0,
+     0
+    ],
+    [
+     9007199254740993,
+     1,
+     1
+    ],
+    [
+     9223372036854775807,
+     2,
+     2
+    ]
+   ],
+   "devices": [
+    {
+     "t": -10,
+     "kind": "ButtonDown",
+     "button": "left"
+    },
+    {
+     "t": 9223372036854775807,
+     "kind": "KeyUp",
+     "code": 1
+    }
+   ]
+  },
+  "fractional-scale": {
+   "region": {
+    "x": 0.3,
+    "y": -0.1,
+    "scale": 1.3333333333333333
+   },
+   "cursor": [
+    [
+     1,
+     0.1,
+     0.2
+    ],
+    [
+     2,
+     1919.9,
+     1079.95
+    ],
+    [
+     3,
+     -4,
+     1e-07
+    ]
+   ],
+   "devices": [
+    {
+     "t": 2,
+     "kind": "ButtonDown",
+     "button": "left"
+    }
+   ]
+  },
+  "zero-scale": {
+   "region": {
+    "x": 10.0,
+    "y": 10.0,
+    "scale": 0.0
+   },
+   "cursor": [
+    [
+     1,
+     15,
+     25
+    ]
+   ],
+   "devices": [
+    {
+     "t": 1,
+     "kind": "ButtonDown",
+     "button": "left"
+    }
+   ]
+  },
+  "unicode-names": {
+   "region": {
+    "x": 100.0,
+    "y": 50.0,
+    "scale": 2.0
+   },
+   "cursor": [],
+   "devices": [
+    {
+     "t": 1,
+     "kind": "KeyDown",
+     "code": 30,
+     "name": "KEY_Ä \"q\" \\",
+     "mods": [
+      "Strg",
+      "☃"
+     ]
+    }
+   ]
+  }
+ },
+ "microphone": {
+  "devices": [
+   "default_input",
+   "alsa_input.usb-Insta360_Insta360_Link_2-02.mono-fallback",
+   "alsa_input.usb-Elgato_Cam_Link_4K-02.analog-stereo",
+   "",
+   "Default_Input",
+   " default_input",
+   "alsa_input.platform-mtk_sdw_mc.HiFi__Mic__source"
+  ],
+  "sources": {
+   "none": [],
+   "laptop-and-camera": [
+    "alsa_input.platform-mtk_sdw_mc.HiFi__Mic__source",
+    "alsa_input.usb-Insta360_Insta360_Link_2-02.mono-fallback"
+   ],
+   "empty-name": [
+    ""
+   ],
+   "with-default": [
+    "default_input"
+   ],
+   "duplicates": [
+    "alsa_input.usb-Elgato_Cam_Link_4K-02.analog-stereo",
+    "alsa_input.usb-Elgato_Cam_Link_4K-02.analog-stereo"
+   ]
+  }
+ },
+ "selfViewPlacement": {
+  "size-S": {
+   "webcam": true,
+   "selfView": true,
+   "size": "S",
+   "monitor": "DP-1",
+   "x": 0.5,
+   "y": 0.5,
+   "monitors": "hyprctl/monitors/crafted-two.json"
+  },
+  "size-M": {
+   "webcam": true,
+   "selfView": true,
+   "size": "M",
+   "monitor": "DP-1",
+   "x": 0.5,
+   "y": 0.5,
+   "monitors": "hyprctl/monitors/crafted-two.json"
+  },
+  "size-L": {
+   "webcam": true,
+   "selfView": true,
+   "size": "L",
+   "monitor": "DP-1",
+   "x": 0.5,
+   "y": 0.5,
+   "monitors": "hyprctl/monitors/crafted-two.json"
+  },
+  "size-XL": {
+   "webcam": true,
+   "selfView": true,
+   "size": "XL",
+   "monitor": "DP-1",
+   "x": 0.5,
+   "y": 0.5,
+   "monitors": "hyprctl/monitors/crafted-two.json"
+  },
+  "size-empty": {
+   "webcam": true,
+   "selfView": true,
+   "size": "",
+   "monitor": "DP-1",
+   "x": 0.5,
+   "y": 0.5,
+   "monitors": "hyprctl/monitors/crafted-two.json"
+  },
+  "size-m": {
+   "webcam": true,
+   "selfView": true,
+   "size": "m",
+   "monitor": "DP-1",
+   "x": 0.5,
+   "y": 0.5,
+   "monitors": "hyprctl/monitors/crafted-two.json"
+  },
+  "position-0-0": {
+   "webcam": true,
+   "selfView": true,
+   "size": "M",
+   "monitor": "HDMI-A-1",
+   "x": 0,
+   "y": 0,
+   "monitors": "hyprctl/monitors/crafted-two.json"
+  },
+  "position-1-1": {
+   "webcam": true,
+   "selfView": true,
+   "size": "M",
+   "monitor": "HDMI-A-1",
+   "x": 1,
+   "y": 1,
+   "monitors": "hyprctl/monitors/crafted-two.json"
+  },
+  "position-0.25-0.75": {
+   "webcam": true,
+   "selfView": true,
+   "size": "M",
+   "monitor": "HDMI-A-1",
+   "x": 0.25,
+   "y": 0.75,
+   "monitors": "hyprctl/monitors/crafted-two.json"
+  },
+  "position--1-2": {
+   "webcam": true,
+   "selfView": true,
+   "size": "M",
+   "monitor": "HDMI-A-1",
+   "x": -1,
+   "y": 2,
+   "monitors": "hyprctl/monitors/crafted-two.json"
+  },
+  "position-0.5000001-0.4999999": {
+   "webcam": true,
+   "selfView": true,
+   "size": "M",
+   "monitor": "HDMI-A-1",
+   "x": 0.5000001,
+   "y": 0.4999999,
+   "monitors": "hyprctl/monitors/crafted-two.json"
+  },
+  "position-1000--1000": {
+   "webcam": true,
+   "selfView": true,
+   "size": "M",
+   "monitor": "HDMI-A-1",
+   "x": 1000,
+   "y": -1000,
+   "monitors": "hyprctl/monitors/crafted-two.json"
+  },
+  "no-webcam": {
+   "webcam": false,
+   "selfView": true,
+   "size": "L",
+   "monitor": "DP-1",
+   "x": 0.5,
+   "y": 0.5,
+   "monitors": "hyprctl/monitors/crafted-two.json"
+  },
+  "no-selfview": {
+   "webcam": true,
+   "selfView": false,
+   "size": "S",
+   "monitor": "DP-1",
+   "x": 0.5,
+   "y": 0.5,
+   "monitors": "hyprctl/monitors/crafted-two.json"
+  },
+  "unknown-monitor": {
+   "webcam": true,
+   "selfView": true,
+   "size": "M",
+   "monitor": "DP-9",
+   "x": 0.5,
+   "y": 0.5,
+   "monitors": "hyprctl/monitors/crafted-two.json"
+  },
+  "hyprctl-fails": {
+   "webcam": true,
+   "selfView": true,
+   "size": "M",
+   "monitor": "DP-1",
+   "x": 0.5,
+   "y": 0.5,
+   "monitors": null
+  },
+  "tiny-monitor": {
+   "webcam": true,
+   "selfView": true,
+   "size": "L",
+   "monitor": "TINY",
+   "x": 1,
+   "y": 1,
+   "monitors": "recorder/monitors-tiny.json"
+  },
+  "scaled-odd": {
+   "webcam": true,
+   "selfView": true,
+   "size": "M",
+   "monitor": "eDP-1",
+   "x": 1,
+   "y": 1,
+   "monitors": "hyprctl/monitors/crafted-odd-size.json"
+  },
+  "disabled-target": {
+   "webcam": true,
+   "selfView": true,
+   "size": "M",
+   "monitor": "DP-1",
+   "x": 1,
+   "y": 1,
+   "monitors": "hyprctl/monitors/crafted-disabled.json"
+  },
+  "duplicate-names": {
+   "webcam": true,
+   "selfView": true,
+   "size": "M",
+   "monitor": "DUP",
+   "x": 1,
+   "y": 1,
+   "monitors": "hyprctl/monitors/crafted-duplicate-names.json"
+  },
+  "real-desktop": {
+   "webcam": true,
+   "selfView": true,
+   "size": "M",
+   "monitor": "HDMI-A-1",
+   "x": 0.3,
+   "y": 0.9,
+   "monitors": "hyprctl/monitors/real-desktop.json"
+  }
+ },
+ "valueAfter": {
+  "arguments": [
+   [],
+   [
+    "--fps"
+   ],
+   [
+    "--fps",
+    "60"
+   ],
+   [
+    "--fps",
+    "60",
+    "--fps",
+    "30"
+   ],
+   [
+    "--dir",
+    "--fps",
+    "5"
+   ],
+   [
+    "--x",
+    "-1.5",
+    "--y"
+   ],
+   [
+    "--fps",
+    ""
+   ],
+   [
+    "--FPS",
+    "60"
+   ],
+   [
+    "x",
+    "--fps",
+    "--fps"
+   ]
+  ],
+  "names": [
+   "--fps",
+   "--dir",
+   "--x",
+   "--y",
+   "",
+   "60"
+  ]
+ },
+ "cursorAt": {
+  "samples": {
+   "empty": [],
+   "one": [
+    [
+     1000,
+     1.5,
+     2.5
+    ]
+   ],
+   "three": [
+    [
+     1000,
+     1,
+     1
+    ],
+    [
+     2000,
+     2,
+     2
+    ],
+    [
+     3000,
+     3,
+     3
+    ]
+   ],
+   "ties": [
+    [
+     1000,
+     1,
+     1
+    ],
+    [
+     1000,
+     2,
+     2
+    ],
+    [
+     1000,
+     3,
+     3
+    ],
+    [
+     2000,
+     4,
+     4
+    ]
+   ]
+  },
+  "times": [
+   -9223372036854775807,
+   0,
+   999,
+   1000,
+   1001,
+   1999,
+   2000,
+   2500,
+   3000,
+   3001,
+   9223372036854775807
+  ]
+ },
+ "positionObject": {
+  "points": [
+   [
+    0,
+    0
+   ],
+   [
+    100,
+    50
+   ],
+   [
+    100.5,
+    50.25
+   ],
+   [
+    -1e+300,
+    1e+300
+   ],
+   [
+    1919.9999999999998,
+    0.1
+   ]
+  ],
+  "regions": [
+   {
+    "x": 0.0,
+    "y": 0.0,
+    "scale": 1.0
+   },
+   {
+    "x": 100.0,
+    "y": 50.0,
+    "scale": 2.0
+   },
+   {
+    "x": 0.1,
+    "y": 0.2,
+    "scale": 1.25
+   },
+   {
+    "x": -1920.0,
+    "y": 0.0,
+    "scale": 0.0
+   },
+   {
+    "x": 0.0,
+    "y": 0.0,
+    "scale": -1.0
+   }
+  ]
+ }
+}

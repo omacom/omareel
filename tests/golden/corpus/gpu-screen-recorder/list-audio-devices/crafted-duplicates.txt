@@ -1,0 +1,3 @@
+alsa_input.a|First
+alsa_input.a|Second
+default_input|Default input

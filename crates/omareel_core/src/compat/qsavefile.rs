@@ -64,6 +64,9 @@ struct Engine {
     fd: libc::c_int,
     /// `None` while the file is unnamed, else the path it has in the file system.
     named: Option<Vec<u8>>,
+    /// A `QFSFileEngine` on the final file itself (`setDirectWriteFallback`), not a temporary
+    /// file: removing it removes the final file.
+    direct: bool,
     /// The final file name, which is also the engine's template name.
     template: String,
     error: (FileError, String),
@@ -71,9 +74,22 @@ struct Engine {
 
 impl Engine {
     /// `QTemporaryFileEngine::open` for `template` with the given creation mode.
-    fn open(template: &str, mode: u32) -> Result<Engine, String> {
-        let (fd, named) = qtemporaryfile::create(template, mode)?;
-        Ok(Engine { fd, named, template: template.to_string(), error: (FileError::Unspecified, String::new()) })
+    fn open(template: &str, mode: u32) -> Result<Engine, (i32, String)> {
+        let (fd, named) = qtemporaryfile::create_with_errno(template, mode)?;
+        Ok(Engine { fd, named, direct: false, template: template.to_string(), error: (FileError::Unspecified, String::new()) })
+    }
+
+    /// `QFSFileEngine(path).open(WriteOnly)`: the file itself, created or truncated.
+    fn open_direct(path: &str) -> Result<Engine, String> {
+        let fd = qtemporaryfile::open_raw(path.as_bytes(), libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC, 0o666)
+            .map_err(qdir::error_string)?;
+        Ok(Engine {
+            fd,
+            named: Some(path.as_bytes().to_vec()),
+            direct: true,
+            template: path.to_string(),
+            error: (FileError::Unspecified, String::new()),
+        })
     }
 
     /// `QFSFileEnginePrivate::writeFdFh`: everything, or as much as the system took; -1 and an
@@ -198,6 +214,7 @@ pub struct SaveFile {
     error: FileError,
     error_text: String,
     write_error: FileError,
+    direct_write_fallback: bool,
 }
 
 impl SaveFile {
@@ -212,7 +229,15 @@ impl SaveFile {
             error: FileError::NoError,
             error_text: String::new(),
             write_error: FileError::NoError,
+            direct_write_fallback: false,
         }
+    }
+
+    /// `setDirectWriteFallback(enabled)`: when the temporary file cannot be created because the
+    /// directory may not be written (EACCES), `open` writes the file itself instead, and a
+    /// `SaveFile` dropped without `commit` then removes it, as Qt's does.
+    pub fn set_direct_write_fallback(&mut self, enabled: bool) {
+        self.direct_write_fallback = enabled;
     }
 
     /// `fileName()`.
@@ -279,7 +304,22 @@ impl SaveFile {
         let exists = existing.exists();
         match Engine::open(&self.final_file_name, if exists { 0o600 } else { 0o666 }) {
             Ok(engine) => self.engine = Some(engine),
-            Err(text) => {
+            Err((code, _)) if self.direct_write_fallback && code == libc::EACCES => {
+                match Engine::open_direct(&self.final_file_name) {
+                    Ok(engine) => {
+                        self.engine = Some(engine);
+                        self.open = true;
+                        self.buffer.clear();
+                        return true;
+                    }
+                    Err(text) => {
+                        self.engine = None;
+                        self.set_error(FileError::Open, text);
+                        return false;
+                    }
+                }
+            }
+            Err((_, text)) => {
                 self.engine = None;
                 self.set_error(FileError::Open, text);
                 return false;
@@ -293,15 +333,18 @@ impl SaveFile {
         true
     }
 
-    /// `QFileDevice::setPermissions` on the open temporary file.
-    fn set_permissions(&mut self, mode: u32) {
-        let Some(engine) = &self.engine else { return };
+    /// `QFileDevice::setPermissions` on the open file (the temporary one, or the final one when
+    /// writing directly), with the permissions as mode bits.
+    pub fn set_permissions(&mut self, mode: u32) -> bool {
+        let Some(engine) = &self.engine else { return false };
         // SAFETY: `fd` is open.
         if unsafe { libc::fchmod(engine.fd, mode as libc::mode_t) } == 0 {
             self.unset_error();
+            true
         } else {
             let text = qdir::error_string(errno());
             self.set_error(FileError::Permissions, text);
+            false
         }
     }
 
@@ -393,6 +436,12 @@ impl SaveFile {
             self.error = self.write_error;
         }
         self.write_error = FileError::NoError;
+        if engine.direct {
+            // Written in place: nothing to rename, and the result is whether every write and
+            // the close succeeded.
+            engine.close();
+            return self.error == FileError::NoError;
+        }
         if self.error != FileError::NoError {
             engine.remove();
             return false;

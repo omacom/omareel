@@ -1516,6 +1516,1080 @@ def make_composition() -> None:
     write(out / "cases.json", json.dumps(cases, indent=1, ensure_ascii=False) + "\n")
 
 
+# ---------------------------------------------------------------------------------------------
+# The recording side (src/record, src/ui): crafted answers of the programs it asks (hyprctl,
+# gpu-screen-recorder, pactl) next to the real-* recordings of record-recording-tools.sh, and the
+# cases of the recorder, regionpicker, captureexclusion, camera, recordingbar, microphone,
+# screencapture and launcher families.
+
+
+def crafted(directory: Path, files: dict) -> None:
+    """Replaces the crafted-* files of a directory that also holds recordings."""
+    directory.mkdir(parents=True, exist_ok=True)
+    for path in directory.glob("crafted-*"):
+        path.unlink()
+    for name, data in files.items():
+        write(directory / f"crafted-{name}", data)
+
+
+def monitor(name: str, width: int, height: int, x=0, y=0, scale=1, transform=0, focused=False,
+            reserved=(0, 0, 0, 0), disabled=False, **extra) -> dict:
+    value = {"id": 0, "name": name, "description": f"Oracle {name}", "make": "Oracle",
+             "model": name, "serial": "", "width": width, "height": height,
+             "refreshRate": 60.0, "x": x, "y": y,
+             "activeWorkspace": {"id": 1, "name": "1"}, "specialWorkspace": {"id": 0, "name": ""},
+             "reserved": list(reserved) if reserved is not None else None, "scale": scale,
+             "transform": transform, "focused": focused, "dpmsStatus": True, "vrr": False,
+             "disabled": disabled, "currentFormat": "XRGB8888", "mirrorOf": "none"}
+    value.update(extra)
+    return {k: v for k, v in value.items() if v is not None}
+
+
+def pretty(value) -> str:
+    return json.dumps(value, indent=4, ensure_ascii=False) + "\n"
+
+
+def make_tool_answers() -> None:
+    hyprctl = CORPUS / "hyprctl"
+    two = [monitor("DP-1", 2560, 1440, scale=1.25, reserved=(0, 30, 0, 0)),
+           monitor("HDMI-A-1", 1920, 1080, x=2048, focused=True)]
+    for index, value in enumerate(two):
+        value["id"] = index
+    rotated = [monitor(f"ROT-{t}", 2560, 1600, x=1600 * t, scale=1.6, transform=t, focused=t == 3)
+               for t in range(8)]
+    for index, value in enumerate(rotated):
+        value["id"] = index
+    edge = monitor("eDP-1", 1921, 1081, scale=1.5, focused=True)
+    without = monitor("NOFIELDS", 1280, 720)
+    for key in ("x", "y", "scale", "transform", "focused", "reserved", "disabled"):
+        del without[key]
+    crafted(hyprctl / "monitors", {
+        "two.json": pretty(two),
+        "rotated.json": pretty(rotated),
+        "disabled.json": pretty([monitor("DP-1", 1920, 1080, disabled=True, focused=True),
+                                 monitor("DP-2", 2560, 1440, x=1920)]),
+        "all-disabled.json": pretty([monitor("DP-1", 1920, 1080, disabled=True)]),
+        "odd-size.json": pretty([edge]),
+        "scales.json": pretty([monitor("S0", 1920, 1080, scale=0), monitor("S-NEG", 1920, 1080, scale=-2),
+                               monitor("S-THIRD", 2560, 1440, scale=1.3333333333333333),
+                               monitor("S-STRING", 1920, 1080, scale="2"),
+                               monitor("S-HALF", 1920, 1080, scale=0.5),
+                               monitor("S-TINY", 1920, 1080, scale=0.001)]),
+        "missing-fields.json": pretty([without, {"name": "BARE"}, {}]),
+        "wrong-types.json": pretty([monitor("STR", "1920", "1080", x="10", y=None, focused="true",
+                                            transform="1", disabled="false", reserved="0,0,0,0"),
+                                    monitor(7, 1920.5, 1080.5, x=12.75, y=-0.5, transform=1.0)]),
+        "reserved.json": pretty([monitor("R-SHORT", 1920, 1080, reserved=[10]),
+                                 monitor("R-EMPTY", 1920, 1080, reserved=[]),
+                                 monitor("R-LONG", 1920, 1080, reserved=[1, 2, 3, 4, 5]),
+                                 monitor("R-STRINGS", 1920, 1080, reserved=["5", 6, None, 7.5]),
+                                 monitor("R-OBJECT", 1920, 1080, reserved={"top": 30})]),
+        "negative-positions.json": pretty([monitor("LEFT", 1920, 1080, x=-1920, y=-200),
+                                           monitor("MAIN", 3840, 2160, scale=2, focused=True)]),
+        "focus-none.json": pretty([monitor("A", 1920, 1080), monitor("B", 1920, 1080, x=1920)]),
+        "focus-both.json": pretty([monitor("A", 1920, 1080, focused=True),
+                                   monitor("B", 1920, 1080, x=1920, focused=True)]),
+        "duplicate-names.json": pretty([monitor("DUP", 1920, 1080), monitor("DUP", 1280, 720, x=1920, focused=True)]),
+        "huge.json": pretty([monitor("HUGE", 3000000000, 2147483647, x=1e300, y=-1e300)]),
+        "unicode.json": pretty([monitor("Écran \"1\" ☃", 1920, 1080, focused=True)]),
+        "empty-array.json": "[]\n",
+        "object.json": pretty({"name": "DP-1", "width": 1920}),
+        "null.json": "null\n",
+        "scalars.json": "[1, \"DP-1\", null, true, [2]]\n",
+        "garbage.txt": "unknown request\n",
+        "empty.txt": "",
+        "truncated.json": pretty(two)[:120],
+    })
+    clients = [
+        {"address": "0x1", "mapped": True, "hidden": False, "at": [12, 38], "size": [1896, 1030],
+         "workspace": {"id": 1, "name": "1"}, "floating": False, "class": "kitty", "title": "Window 1"},
+        {"address": "0x2", "mapped": True, "hidden": False, "at": [400, 300], "size": [640, 480],
+         "workspace": {"id": 1, "name": "1"}, "floating": True, "class": "float", "title": "Window 2"},
+        {"address": "0x3", "mapped": True, "hidden": True, "at": [0, 0], "size": [100, 100],
+         "workspace": {"id": 1, "name": "1"}, "class": "hidden", "title": "Window 3"},
+        {"address": "0x4", "mapped": True, "hidden": False, "at": [2060, 10], "size": [1000, 700],
+         "workspace": {"id": 2, "name": "2"}, "class": "other", "title": "Window 4"},
+        {"address": "0x5", "at": [-50, -40], "size": [300, 200], "workspace": {"id": 1}},
+        {"address": "0x6", "at": [10, 20, 30], "size": [300, 200], "workspace": {"id": 1}},
+        {"address": "0x7", "at": [10, 20], "size": [300], "workspace": {"id": 1}},
+        {"address": "0x8", "at": [12.5, 20.25], "size": [300.75, 200], "workspace": {"id": 1}},
+        {"address": "0x9", "at": ["10", 20], "size": [300, 200], "workspace": {"id": 1}},
+        {"address": "0xa", "at": [5, 5], "size": [0, 0], "workspace": {"id": 1}},
+        {"address": "0xb", "at": [5, 5], "size": [-10, 20], "workspace": {"id": 1}},
+        {"address": "0xc", "at": [100, 100], "size": [200, 200], "workspace": {"id": "1"}},
+        {"address": "0xd", "at": [100, 100], "size": [200, 200], "hidden": "true", "workspace": {"id": 1}},
+        {"address": "0xe", "at": [100, 100], "size": [200, 200]},
+        {"address": "0xf", "at": [3000000000, 1], "size": [2147483647, 1], "workspace": {"id": 1}},
+    ]
+    special = [dict(clients[0], workspace={"id": -98, "name": "special:magic"}, title="Window 1")]
+    crafted(hyprctl / "clients", {
+        "mixed.json": pretty(clients),
+        "special.json": pretty(special),
+        "none.json": "[]\n",
+        "object.json": pretty(clients[0]),
+        "garbage.txt": "not json\n",
+        "empty.txt": "",
+    })
+    crafted(hyprctl / "activeworkspace", {
+        "one.json": pretty({"id": 1, "name": "1", "monitor": "DP-1", "windows": 3}),
+        "two.json": pretty({"id": 2, "name": "2", "monitor": "HDMI-A-1", "windows": 1}),
+        "special.json": pretty({"id": -98, "name": "special:magic", "monitor": "DP-1"}),
+        "string-id.json": pretty({"id": "1", "name": "1"}),
+        "missing-id.json": pretty({"name": "1"}),
+        "array.json": "[{\"id\": 1}]\n",
+        "garbage.txt": "no such request\n",
+        "empty.txt": "",
+    })
+
+    def layer(namespace: str) -> dict:
+        return {"address": "0x1", "x": 0, "y": 0, "w": 100, "h": 40, "namespace": namespace, "pid": 1}
+
+    def layers(monitors: dict) -> str:
+        return pretty({name: {"levels": levels} for name, levels in monitors.items()})
+
+    clean = {"0": [layer("omarchy-background")], "1": [], "2": [layer("waybar")], "3": []}
+    ours = {"0": [layer("omarchy-background")], "2": [layer("omareel-bar")], "3": []}
+    crafted(hyprctl / "layers", {
+        "clean-two.json": layers({"DP-1": clean, "HDMI-A-1": clean}),
+        "overlay-on-dp1.json": layers({"DP-1": ours, "HDMI-A-1": clean}),
+        "overlay-on-hdmi.json": layers({"DP-1": clean, "HDMI-A-1": {"3": [layer("omareel-selfview")]}}),
+        "near-prefixes.json": layers({"DP-1": {"0": [layer("omareel"), layer("xomareel-bar"),
+                                                      layer("Omareel-bar"), layer(" omareel-bar"),
+                                                      layer("omarecord-bar")]}}),
+        "prefix-alone.json": layers({"DP-1": {"1": [layer("omareel-")]}}),
+        "levels-array.json": pretty({"DP-1": {"levels": [[layer("omareel-bar")]]}}),
+        "levels-missing.json": pretty({"DP-1": {}}),
+        "layer-not-object.json": pretty({"DP-1": {"levels": {"0": ["omareel-bar", 3, None]}}}),
+        "namespace-not-string.json": pretty({"DP-1": {"levels": {"0": [{"namespace": 7}]}}}),
+        "level-not-array.json": pretty({"DP-1": {"levels": {"0": {"namespace": "omareel-bar"}}}}),
+        "monitor-not-object.json": pretty({"DP-1": "omareel-bar"}),
+        "empty-object.json": "{}\n",
+        "array.json": "[]\n",
+        "garbage.txt": "unknown request\n",
+        "trailing-garbage.json": layers({"DP-1": clean}) + "x",
+        "empty.txt": "",
+    })
+    good = "a" * 40
+    crafted(hyprctl / "plugin-list", {
+        "ours.json": pretty([{"name": "other", "version": "1"}, {"name": "omareel-capture-exclude", "version": "0.1.0"}]),
+        "others.json": pretty([{"name": "hyprexpo"}, {"name": "omareel-capture-exclude-old"}]),
+        "none.json": "[]\n",
+        "no-plugins.txt": "no plugins loaded\n",
+        "name-not-string.json": pretty([{"name": 1}]),
+        "object.json": pretty({"name": "omareel-capture-exclude"}),
+        "twice.json": pretty([{"name": "omareel-capture-exclude"}, {"name": "omareel-capture-exclude"}]),
+    })
+    crafted(hyprctl / "version", {
+        "a40.json": pretty({"branch": "", "commit": good, "version": "0.0.0", "tag": "v0.0.0"}),
+        "b40.json": pretty({"commit": "b" * 40}),
+        "uppercase.json": pretty({"commit": good.upper()}),
+        "short.json": pretty({"commit": "abc123"}),
+        "dirty.json": pretty({"commit": good + "-dirty"}),
+        "missing.json": pretty({"version": "0.56.2"}),
+        "garbage.txt": "unknown request\n",
+    })
+
+    def status(built=good, prefixes=("omareel-",), **extra) -> str:
+        value = {"version": "0.1.0", "built_hash": built, "prefixes": list(prefixes) if prefixes is not None else None,
+                 "monitors": [{"name": "DP-1", "capturing": False, "excluded_layers": 0}]}
+        value.update(extra)
+        return json.dumps({k: v for k, v in value.items() if v is not None}, separators=(",", ":"))
+
+    crafted(hyprctl / "exclude-status", {
+        "a40.json": status(),
+        "b40.json": status("b" * 40),
+        "no-prefix.json": status(prefixes=()),
+        "other-prefix.json": status(prefixes=("omarecord-", "omareel")),
+        "two-prefixes.json": status(prefixes=("x-", "omareel-")),
+        "prefixes-missing.json": status(prefixes=None),
+        "prefixes-string.json": status(prefixes=None).replace('"monitors"', '"prefixes":"omareel-","monitors"'),
+        "hash-missing.json": status(built=None),
+        "hash-number.json": status(built=None, built_hash=1),
+        "unknown-request.txt": "unknown request\n",
+        "empty.txt": "",
+    })
+    crafted(hyprctl / "getoption-cursor", {
+        "2.json": '{"option": "cursor:no_hardware_cursors", "int": 2, "set": false }\n',
+        "1.json": '{"option": "cursor:no_hardware_cursors", "int": 1, "set": true }\n',
+        "0.json": '{"option": "cursor:no_hardware_cursors", "int": 0, "set": true }\n',
+        "negative.json": '{"option": "cursor:no_hardware_cursors", "int": -1, "set": true }\n',
+        "string.json": '{"option": "cursor:no_hardware_cursors", "int": "2", "set": true }\n',
+        "custom-type.json": '{"option": "cursor:no_hardware_cursors", "custom": "2", "set": true }\n',
+        "no-such-option.txt": "no such option\n",
+    })
+
+    gsr = CORPUS / "gpu-screen-recorder"
+    crafted(gsr / "list-capture-options", {
+        "two-monitors.txt": "window\nfocused\nDP-1|2560x1440\nHDMI-A-1|1920x1080\nregion\nportal\n",
+        "crlf.txt": "DP-1|2560x1440\r\nHDMI-A-1|1920x1080\r\n",
+        "spaces.txt": "  DP-1 | 2560x1440  \n\tHDMI-A-1\t|\t1920x1080\t\nDell U2720Q|3840x2160\n",
+        "duplicates.txt": "DP-1|2560x1440\nDP-1|1920x1080\nDP-2|1920x1080\n",
+        "malformed.txt": "DP-1|\n|1920x1080\nDP-2|1920x1080x\nDP-3|1920X1080\nDP-4|1920x\nDP-5 1920x1080\n"
+                         "DP-6||1920x1080\nDP-7|1920x1080|\nDP-8|-1920x1080\nDP-9|+1920x1080\nDP|10|1920x1080\n",
+        "unicode.txt": "Écran☃|1920x1080\nＤＰ-1|1920x1080\nDP-1|１９２０x1080\n",
+        "no-newline.txt": "DP-1|2560x1440",
+        "only-region.txt": "region\nportal\n",
+        "empty.txt": "",
+    })
+    crafted(gsr / "list-audio-devices", {
+        "mixed.txt": "default_output|Default output\ndefault_input|Default input\n"
+                     "alsa_output.usb-Speaker.analog-stereo.monitor|Monitor of Speaker\n"
+                     "alsa_input.usb-Blue_Yeti-00.analog-stereo|Yeti Stereo Microphone Analog Stereo\n"
+                     "alsa_input.usb-Insta360_Insta360_Link_2-02.mono-fallback|Insta360 Link 2 Mono\n"
+                     "bluez_input.00_11_22_33_44_55|Headset\n"
+                     "alsa_input.platform-mtk_sdw_mc.HiFi__Mic__source|Digital Microphone\n",
+        "whitespace.txt": "  default_input  |  Default input  \r\n\talsa_input.x\t|\tTabbed\t\n\n\n"
+                          "alsa_input.y|\nalsa_input.z|a|b|c\n",
+        "malformed.txt": "|Nothing\nno separator line\nalsa_input.bad\n|\nALSA_INPUT.upper|Upper\n"
+                         "alsa_input|Bare prefix\nalsa_input.|Prefix dot\n default_input|Leading space\n",
+        "duplicates.txt": "alsa_input.a|First\nalsa_input.a|Second\ndefault_input|Default input\n",
+        "only-outputs.txt": "default_output|Default output\nalsa_output.pci.hdmi-stereo.monitor|HDMI\n",
+        "unicode.txt": "alsa_input.usb-Röde|Röde NT-USB ☃\n",
+        "empty.txt": "",
+    })
+    crafted(CORPUS / "pactl" / "list-short-sources", {
+        "dock.txt": "45\talsa_output.pci-0000_00_1f.3.analog-stereo.monitor\tPipeWire\ts32le 2ch 48000Hz\tSUSPENDED\n"
+                    "46\talsa_input.usb-Insta360_Insta360_Link_2-02.mono-fallback\tPipeWire\ts16le 1ch 48000Hz\tRUNNING\n"
+                    "47\talsa_input.platform-mtk_sdw_mc.HiFi__Mic__source\tPipeWire\ts32le 2ch 48000Hz\tIDLE\n",
+        "malformed.txt": "no tabs here\n\n10\t\tPipeWire\n11\tonly-name\n\t\n12\tspaced name\tPipeWire\r\n",
+        "empty.txt": "",
+    })
+
+
+def volumedetect_lines(n_samples, mean=None, peak=None, histogram=None, address="0x1") -> str:
+    tag = f"[Parsed_volumedetect_0 @ {address}] "
+    lines = [f"{tag}n_samples: {n_samples}\n"]
+    if mean is not None:
+        lines.append(f"{tag}mean_volume: {mean} dB\n")
+    if peak is not None:
+        lines.append(f"{tag}max_volume: {peak} dB\n")
+    if histogram is not None:
+        lines.append(f"{tag}histogram_{histogram}db: 12\n")
+    return "".join(lines)
+
+
+def make_recorder() -> None:
+    out = CORPUS / "recorder"
+    probe = "[Parsed_volumedetect_0 @ 0xbfe75fef2360] n_samples: 0\n"
+    crafted(out / "volumedetect", {
+        "two-graphs.log": probe + volumedetect_lines(49152, "-91.0", "-91.0", 91, "0xf76498003ae0"),
+        "speech.log": probe + volumedetect_lines(960000, "-38.2", "-6.4", 6),
+        "probe-only.log": probe,
+        "no-report.log": "size=N/A time=00:00:10.00\n",
+        "empty.log": "",
+        "max-before-samples.log": "[Parsed_volumedetect_0 @ 0x1] max_volume: -12.5 dB\n"
+                                  "[Parsed_volumedetect_0 @ 0x1] n_samples: 48000\n",
+        "samples-after-max-zero.log": volumedetect_lines(48000, "-20.0", "-3.0") + probe,
+        "minus-inf.log": volumedetect_lines(48000, "-inf", "-inf"),
+        "inf-and-nan.log": volumedetect_lines(48000, "nan", "inf"),
+        "plus-and-exponent.log": volumedetect_lines(48000, None, "+5.0")
+                                 + "[Parsed_volumedetect_1 @ 0x2] max_volume: -1e1 dB\n",
+        "comma-decimal.log": volumedetect_lines(48000, None, "-6,5"),
+        "unit-attached.log": "[Parsed_volumedetect_0 @ 0x1] max_volume: -6.4dB\n",
+        "double-space.log": "[Parsed_volumedetect_0 @ 0x1] max_volume:  -6.4 dB\n",
+        "garbage-value.log": volumedetect_lines(48000, None, "loud"),
+        "samples-garbage.log": "[Parsed_volumedetect_0 @ 0x1] n_samples: many\n",
+        "samples-negative.log": "[Parsed_volumedetect_0 @ 0x1] n_samples: -0\n",
+        "samples-zero-padded.log": "[Parsed_volumedetect_0 @ 0x1] n_samples: 00\n",
+        "crlf.log": volumedetect_lines(48000, "-20.0", "-3.0").replace("\n", "\r\n"),
+        "no-bracket-space.log": "[Parsed_volumedetect_0 @ 0x1]max_volume: -6.4 dB\n",
+        "two-brackets.log": "[aac @ 0x1] [Parsed_volumedetect_0 @ 0x2] max_volume: -6.4 dB\n",
+        "mention-only.log": "Parsed_volumedetect max_volume: -6.4 dB\n",
+        "other-filter.log": "[Parsed_astats_0 @ 0x1] max_volume: -6.4 dB\n",
+        "second-mic.log": volumedetect_lines(48000, "-30.0", "-10.0")
+                          + volumedetect_lines(48000, "-50.0", "-40.0", None, "0x2").replace("_0 @", "_1 @"),
+        "leading-text.log": "frame=1 [Parsed_volumedetect_0 @ 0x1] max_volume: -6.4 dB\n",
+        "unicode.log": "[Parsed_volumedetect_0 @ 0x1] max_volume: −6.4 dB\n",
+        "huge.log": volumedetect_lines(9223372036854775807, None, "-1e400"),
+    })
+    timestamps = out / "timestamps"
+    reset(timestamps)
+    for name, data in {
+        "gsr.ts": "1234567\n",
+        "native.ts": "monotonic_microsec\trealtime_microsec\n1234567\t1790000000000000\n",
+        "header-only.ts": "monotonic_microsec\trealtime_microsec\n",
+        "empty.ts": "",
+        "blank-lines.ts": "\n\n   \n987654\t1\n",
+        "crlf.ts": "monotonic_microsec\trealtime_microsec\r\n42\t43\r\n",
+        "zero.ts": "0\t1790000000000000\n",
+        "negative.ts": "-5\t1\n",
+        "plus.ts": "+77\t1\n",
+        "spaces.ts": "  555  \t 1\n",
+        "space-separated.ts": "555 1790000000000000\n",
+        "hex.ts": "0x10\t1\n",
+        "decimal.ts": "12.5\t1\n",
+        "huge.ts": "9223372036854775807\t1\n",
+        "overflow.ts": "9223372036854775808\t1\n",
+        "two-values.ts": "x\t1\n100\t2\n200\t3\n",
+        "no-newline.ts": "31337",
+        "nul.ts": b"12\x0034\n",
+        "bom.ts": "﻿99\t1\n",
+    }.items():
+        write(timestamps / name, data)
+    output = out / "output"
+    reset(output)
+    lines = "".join(f"line {i:04d} of the recorder's output\n" for i in range(140))
+    for name, data in {
+        "gsr-error.txt": "gsr info: Capturing region\ngsr error: failed to create encoder: h264 not supported\n",
+        "crlf.txt": "first\r\nlast line\r\n\r\n",
+        "trailing-blank.txt": "the reason\n\n   \n\t\n",
+        "whitespace-only.txt": " \n\t\n  \n",
+        "empty.txt": "",
+        "no-newline.txt": "a\nb without newline",
+        "invalid-utf8.bin": b"ok line\n\xff\xfe broken \xc3\n",
+        "nul.bin": b"before\x00after\n",
+        "big.txt": lines,
+        "unicode.txt": "Fehler: Gerät nicht gefunden ☃\n",
+        "carriage-return.txt": "progress 1\rprogress 2\rdone",
+    }.items():
+        write(output / name, data)
+    state = out / "state"
+    reset(state)
+    recording = {
+        "pid": 0, "bundle": "/home/user/Videos/Recording 2026-10-25 10-00-00.omareel",
+        "started_us": 123456789012, "daemon_started_us": 123456700000, "monitor": "DP-1",
+        "no_open": False, "webcam": True, "camera_device": "/dev/video2", "camera_height": 1080,
+        "camera_rotation": 90, "camera_flip_horizontal": True, "capture_mode": "region",
+        "capture_x": 10.5, "capture_y": 20, "capture_width": 640, "capture_height": 360,
+        "capture_backend": "ext-image-copy-capture", "overlay_exclusion": "plugin",
+        "overlay_monitor": "DP-1", "capture_started": True, "countdown_requested": False,
+        "countdown_active": False, "countdown_ready": False, "countdown_end_us": 0,
+        "countdown_width": 240, "countdown_height": 240, "bar_visible": True, "bar_width": 448,
+        "bar_height": 40, "selfview": True, "selfview_safe": True, "selfview_monitor": "DP-1",
+        "selfview_size": "M", "selfview_pixels": 160, "selfview_x": 16, "selfview_y": 16,
+        "camera_status": "ready", "camera_record": True, "camera_stop": False}
+    for name, data in {
+        "recording.json": json.dumps(recording, indent=4) + "\n",
+        "minimal.json": '{"pid": 1, "started_us": 5, "monitor": "HDMI-A-1", "webcam": false}\n',
+        "strings.json": '{"pid": "0", "started_us": "77", "monitor": 3, "webcam": "true", "command_sequence": "5"}\n',
+        "doubles.json": '{"pid": -1, "started_us": 1.5e6, "webcam": 1, "command_sequence": 2.5}\n',
+        "huge.json": '{"pid": 0, "started_us": 9007199254740993, "command_sequence": 9223372036854775806}\n',
+        "nulls.json": '{"pid": null, "started_us": null, "monitor": null, "webcam": null, "command_sequence": null}\n',
+        "nested.json": '{"command": "rotate", "command_sequence": 3, "extra": {"a": [1, 2, {"b": null}]}}\n',
+        "array.json": "[1, 2, 3]\n",
+        "invalid.json": '{"pid": 0,\n',
+        "empty.json": "",
+        "bom.json": "﻿{\"monitor\": \"DP-1\"}\n",
+        "duplicate-keys.json": '{"monitor": "first", "monitor": "second"}\n',
+        "trailing-garbage.json": '{"monitor": "DP-1"} trailing\n',
+        "unicode.json": '{"monitor": "Écran ☃", "bundle": "/tmp/r\\u00e9c\\u2028.omareel"}\n',
+    }.items():
+        write(state / name, data)
+
+    def cursor(*samples):
+        return [list(sample) for sample in samples]
+
+    def device(t, kind, **fields):
+        value = {"t": t, "kind": kind}
+        value.update(fields)
+        return value
+
+    region = {"x": 100.0, "y": 50.0, "scale": 2.0}
+    input_log = {
+        "empty": {"region": region, "cursor": [], "devices": []},
+        "moves-only": {"region": region, "cursor": cursor((1000, 100, 50), (2000, 100.5, 50.25),
+                                                          (3000, 1379.5, 769.75), (4000, 99, 49))},
+        "clicks-and-scrolls": {"region": region,
+            "cursor": cursor((1000, 300, 200), (5000, 310, 205), (9000, 500, 400)),
+            "devices": [device(500, "ButtonDown", button="left"), device(1000, "ButtonUp", button="left"),
+                        device(4999, "ButtonDown", button="right"), device(5000, "Scroll", dx=0, dy=-1),
+                        device(7000, "Scroll", dx=2, dy=0), device(9000, "ButtonUp", button="right"),
+                        device(12000, "ButtonDown", button="middle"), device(12001, "ButtonDown", button="")]},
+        "keys": {"region": {"x": 0.0, "y": 0.0, "scale": 1.0}, "cursor": cursor((100, 1, 2)),
+            "devices": [device(200, "KeyDown", code=29, name="KEY_LEFTCTRL", mods=["ctrl"]),
+                        device(300, "KeyDown", code=31, name="KEY_S", mods=["ctrl"]),
+                        device(350, "KeyUp", code=31, name="KEY_S", mods=["ctrl"]),
+                        device(400, "KeyUp", code=29, name="KEY_LEFTCTRL", mods=[]),
+                        device(500, "KeyDown", code=57, name="KEY_SPACE", mods=[]),
+                        device(600, "KeyDown", code=0, name="", mods=["shift", "alt", "meta", "ctrl"]),
+                        device(700, "KeyDown", code=240, name="KEY_UNKNOWN", mods=["shift", "shift"])]},
+        "ties-and-order": {"region": region,
+            "cursor": cursor((1000, 1, 1), (1000, 2, 2), (3000, 3, 3), (2000, 4, 4)),
+            "devices": [device(1000, "KeyDown", code=30, name="KEY_A", mods=[]),
+                        device(1000, "ButtonDown", button="left"), device(500, "ButtonUp", button="left"),
+                        device(2000, "KeyUp", code=30), device(3000, "Scroll", dx=-3, dy=4)]},
+        "before-first-sample": {"region": region, "cursor": cursor((5000, 640, 360)),
+            "devices": [device(1, "ButtonDown", button="left"), device(4999, "Scroll", dy=1)]},
+        "no-cursor": {"region": region, "cursor": [],
+            "devices": [device(10, "ButtonDown", button="left"), device(20, "Scroll", dx=1, dy=1)]},
+        "negative-and-large-times": {"region": region,
+            "cursor": cursor((-5, 0, 0), (9007199254740993, 1, 1), (9223372036854775807, 2, 2)),
+            "devices": [device(-10, "ButtonDown", button="left"), device(9223372036854775807, "KeyUp", code=1)]},
+        "fractional-scale": {"region": {"x": 0.3, "y": -0.1, "scale": 1.3333333333333333},
+            "cursor": cursor((1, 0.1, 0.2), (2, 1919.9, 1079.95), (3, -4, 1e-7)),
+            "devices": [device(2, "ButtonDown", button="left")]},
+        "zero-scale": {"region": {"x": 10.0, "y": 10.0, "scale": 0.0}, "cursor": cursor((1, 15, 25)),
+            "devices": [device(1, "ButtonDown", button="left")]},
+        "unicode-names": {"region": region, "cursor": [],
+            "devices": [device(1, "KeyDown", code=30, name="KEY_Ä \"q\" \\", mods=["Strg", "☃"])]},
+    }
+    microphone = {
+        "devices": ["default_input", "alsa_input.usb-Insta360_Insta360_Link_2-02.mono-fallback",
+                    "alsa_input.usb-Elgato_Cam_Link_4K-02.analog-stereo", "", "Default_Input",
+                    " default_input", "alsa_input.platform-mtk_sdw_mc.HiFi__Mic__source"],
+        "sources": {
+            "none": [],
+            "laptop-and-camera": ["alsa_input.platform-mtk_sdw_mc.HiFi__Mic__source",
+                                  "alsa_input.usb-Insta360_Insta360_Link_2-02.mono-fallback"],
+            "empty-name": [""],
+            "with-default": ["default_input"],
+            "duplicates": ["alsa_input.usb-Elgato_Cam_Link_4K-02.analog-stereo",
+                           "alsa_input.usb-Elgato_Cam_Link_4K-02.analog-stereo"],
+        },
+    }
+    two = "hyprctl/monitors/crafted-two.json"
+    placement = {}
+    for size in ("S", "M", "L", "XL", "", "m"):
+        placement[f"size-{size or 'empty'}"] = {"webcam": True, "selfView": True, "size": size,
+                                                "monitor": "DP-1", "x": 0.5, "y": 0.5, "monitors": two}
+    # qRound of the position is undefined past int's range, so the positions stay within it.
+    for x, y in ((0, 0), (1, 1), (0.25, 0.75), (-1, 2), (0.5000001, 0.4999999), (1000, -1000)):
+        placement[f"position-{x}-{y}"] = {"webcam": True, "selfView": True, "size": "M",
+                                          "monitor": "HDMI-A-1", "x": x, "y": y, "monitors": two}
+    placement.update({
+        "no-webcam": {"webcam": False, "selfView": True, "size": "L", "monitor": "DP-1", "x": 0.5,
+                      "y": 0.5, "monitors": two},
+        "no-selfview": {"webcam": True, "selfView": False, "size": "S", "monitor": "DP-1", "x": 0.5,
+                        "y": 0.5, "monitors": two},
+        "unknown-monitor": {"webcam": True, "selfView": True, "size": "M", "monitor": "DP-9", "x": 0.5,
+                            "y": 0.5, "monitors": two},
+        "hyprctl-fails": {"webcam": True, "selfView": True, "size": "M", "monitor": "DP-1", "x": 0.5,
+                          "y": 0.5, "monitors": None},
+        "tiny-monitor": {"webcam": True, "selfView": True, "size": "L", "monitor": "TINY", "x": 1,
+                         "y": 1, "monitors": "recorder/monitors-tiny.json"},
+        "scaled-odd": {"webcam": True, "selfView": True, "size": "M", "monitor": "eDP-1", "x": 1,
+                       "y": 1, "monitors": "hyprctl/monitors/crafted-odd-size.json"},
+        "disabled-target": {"webcam": True, "selfView": True, "size": "M", "monitor": "DP-1", "x": 1,
+                            "y": 1, "monitors": "hyprctl/monitors/crafted-disabled.json"},
+        "duplicate-names": {"webcam": True, "selfView": True, "size": "M", "monitor": "DUP", "x": 1,
+                            "y": 1, "monitors": "hyprctl/monitors/crafted-duplicate-names.json"},
+        "real-desktop": {"webcam": True, "selfView": True, "size": "M", "monitor": "HDMI-A-1", "x": 0.3,
+                         "y": 0.9, "monitors": "hyprctl/monitors/real-desktop.json"},
+    })
+    write(out / "monitors-tiny.json", pretty([monitor("TINY", 300, 200, scale=1.5)]))
+    value_after = {
+        "arguments": [[], ["--fps"], ["--fps", "60"], ["--fps", "60", "--fps", "30"], ["--dir", "--fps", "5"],
+                      ["--x", "-1.5", "--y"], ["--fps", ""], ["--FPS", "60"], ["x", "--fps", "--fps"]],
+        "names": ["--fps", "--dir", "--x", "--y", "", "60"],
+    }
+    cursor_at = {
+        "samples": {"empty": [], "one": [[1000, 1.5, 2.5]],
+                    "three": [[1000, 1, 1], [2000, 2, 2], [3000, 3, 3]],
+                    "ties": [[1000, 1, 1], [1000, 2, 2], [1000, 3, 3], [2000, 4, 4]]},
+        "times": [-9223372036854775807, 0, 999, 1000, 1001, 1999, 2000, 2500, 3000, 3001,
+                  9223372036854775807],
+    }
+    position_object = {
+        "points": [[0, 0], [100, 50], [100.5, 50.25], [-1e300, 1e300], [1919.9999999999998, 0.1]],
+        "regions": [{"x": 0.0, "y": 0.0, "scale": 1.0}, {"x": 100.0, "y": 50.0, "scale": 2.0},
+                    {"x": 0.1, "y": 0.2, "scale": 1.25}, {"x": -1920.0, "y": 0.0, "scale": 0.0},
+                    {"x": 0.0, "y": 0.0, "scale": -1.0}],
+    }
+    write(out / "cases.json", json.dumps({
+        "inputLog": input_log, "microphone": microphone, "selfViewPlacement": placement,
+        "valueAfter": value_after, "cursorAt": cursor_at, "positionObject": position_object,
+    }, indent=1, ensure_ascii=False, allow_nan=True) + "\n")
+
+
+def answer(argv, stdout=None, status=0, stdout_file=None, **extra) -> dict:
+    value = {"argv": argv, "status": status}
+    if stdout is not None:
+        value["stdout"] = stdout
+    if stdout_file is not None:
+        value["stdoutFile"] = stdout_file
+    value.update(extra)
+    return value
+
+
+def make_regionpicker() -> None:
+    out = CORPUS / "regionpicker"
+    reset(out)
+    rects = ["10,20 300x200", "0,0 1x1", "-10,-20 300x200", "10.5,20.25 300.75x200.5", " 10,20 300x200 ",
+             "\t10,20\t300x200\t", "10,20  300x200", "10, 20 300x200", "10,20 300X200", "10,20 300x200x",
+             "10,20 -300x200", "+10,20 300x200", "10,20 300x200\n", "10,20\n300x200", ".5,1 2x3",
+             "5.,1 2x3", "1e3,0 2x3", "10,20 0x0", "999999999999999999999,0 1x1", "١٠,٢٠ ٣٠٠x٢٠٠",
+             "10,20 300x200 extra", "", "monitor:DP-1", "10,20", "10 20 300x200",
+             "-0,-0 0.0x0.000", "00010,0020 0300x0200"]
+    two = "hyprctl/monitors/crafted-two.json"
+    workspaces = "hyprctl/activeworkspace"
+    clients = "hyprctl/clients"
+    rectangles = [
+        {"workspace": f"{workspaces}/{w}", "clients": f"{clients}/{c}"}
+        for w in ("crafted-one.json", "crafted-two.json", "crafted-special.json", "crafted-string-id.json",
+                  "crafted-missing-id.json", "crafted-array.json", "crafted-garbage.txt", "real-desktop.json")
+        for c in ("crafted-mixed.json", "crafted-special.json", "crafted-none.json", "crafted-object.json",
+                  "crafted-garbage.txt", "real-desktop.json")]
+    rectangles += [{"workspace": None, "clients": f"{clients}/crafted-mixed.json"},
+                   {"workspace": f"{workspaces}/crafted-one.json", "clients": None}]
+    snap = {
+        "rectangles": ["12,38 1896x1030\n400,300 640x480\n", "400,300 640x480\n12,38 1896x1030\n",
+                       "", "garbage\n10,10 5x5\n", "0,0 0x0\n", "-50,-40 300x200\n", "10,20 300x200",
+                       "\n\n10,20 300x200\n\n", "10.5,20.5 1.5x1.5\n"],
+        "points": [[12, 38], [11.999, 38], [1907, 1067], [1908, 1068], [400, 300], [1039.5, 779.9],
+                   [10, 10], [14.999, 14.999], [15, 15], [0, 0], [-50, -40], [249.999, 159.999],
+                   [10.5, 20.5], [12, 22]],
+    }
+    monitor_for = {
+        "sets": [two, "hyprctl/monitors/crafted-negative-positions.json", "hyprctl/monitors/crafted-empty-array.json",
+                 "hyprctl/monitors/crafted-rotated.json", "hyprctl/monitors/real-desktop.json"],
+        "rects": [[0, 0, 10, 10], [2047, 0, 2, 2], [2046, 0, 2, 2], [2048, 1000, 0, 0], [5000, 5000, 1, 1],
+                  [-1920, -200, 0, 0], [-1, -1, 2, 2], [100, 100, -300, -300], [0, 1151.9, 0, 0.2],
+                  [1e300, 0, 1e300, 0], [1919.5, 1079.5, 1, 1]],
+    }
+    options = "gpu-screen-recorder/list-capture-options"
+
+    def gsr_options(file=None, status=0, hang=0) -> dict:
+        extra = {"hang": hang} if hang else {}
+        if file is None:
+            return answer(["gpu-screen-recorder", "--list-capture-options"], "", status, **extra)
+        return answer(["gpu-screen-recorder", "--list-capture-options"], None, status,
+                      stdout_file=f"{options}/{file}", **extra)
+
+    capturable = {}
+    for requested in ("DP-1", "HDMI-A-1"):
+        for name, reply in (("two-monitors", gsr_options("crafted-two-monitors.txt")),
+                            ("only-region", gsr_options("crafted-only-region.txt")),
+                            ("duplicates", gsr_options("crafted-duplicates.txt")),
+                            ("spaces", gsr_options("crafted-spaces.txt")),
+                            ("empty", gsr_options("crafted-empty.txt")),
+                            ("fails", gsr_options("crafted-two-monitors.txt", 1)),
+                            ("real-desktop", gsr_options("real-desktop.txt"))):
+            capturable[f"{requested} {name}"] = {"monitors": two, "requested": requested,
+                                                 "env": {"OMAREEL_CAPTURE": "gsr"}, "answers": [reply]}
+    capturable.update({
+        "DP-1 capture env GSR uppercase": {"monitors": two, "requested": "DP-1", "env": {"OMAREEL_CAPTURE": "GSR"},
+                                           "answers": [gsr_options("crafted-two-monitors.txt")]},
+        "DP-1 preferences gsr": {"monitors": two, "requested": "DP-1", "captureBackend": "gsr",
+                                 "answers": [gsr_options("crafted-two-monitors.txt")]},
+        "DP-1 auto without a compositor": {"monitors": two, "requested": "DP-1",
+                                           "answers": [gsr_options("crafted-two-monitors.txt")]},
+        "DP-1 gpu-screen-recorder missing": {"monitors": two, "requested": "DP-1", "env": {"OMAREEL_CAPTURE": "gsr"},
+                                             "programs": ["hyprctl"], "answers": []},
+        "DP-1 gpu-screen-recorder hangs": {"monitors": two, "requested": "DP-1", "env": {"OMAREEL_CAPTURE": "gsr"},
+                                           "answers": [gsr_options(None, 0, 6)]},
+    })
+    monitors_answer = lambda file=two, status=0, **extra: answer(["hyprctl", "-j", "monitors"], None, status,
+                                                                 stdout_file=file, **extra)
+    window_answers = [answer(["hyprctl", "-j", "activeworkspace"], None, stdout_file=f"{workspaces}/crafted-one.json"),
+                      answer(["hyprctl", "-j", "clients"], None, stdout_file=f"{clients}/crafted-mixed.json")]
+    region = ["omarchy-capture-region", "smart", "--match-monitor"]
+    slurp = ["slurp", "-f", "%x,%y %wx%h"]
+    window = ["slurp", "-r", "-f", "%x,%y %wx%h"]
+    no_omarchy = ["hyprctl", "slurp", "gpu-screen-recorder"]
+    gsr_env = {"OMAREEL_CAPTURE": "gsr"}
+    two_options = gsr_options("crafted-two-monitors.txt")
+    pick = {
+        "fullscreen focused": {"mode": "Fullscreen", "answers": [monitors_answer()]},
+        "fullscreen focus none": {"mode": "Fullscreen",
+                                  "answers": [monitors_answer("hyprctl/monitors/crafted-focus-none.json")]},
+        "fullscreen focus both": {"mode": "Fullscreen",
+                                  "answers": [monitors_answer("hyprctl/monitors/crafted-focus-both.json")]},
+        "fullscreen rotated": {"mode": "Fullscreen", "answers": [monitors_answer("hyprctl/monitors/crafted-rotated.json")]},
+        "fullscreen odd size": {"mode": "Fullscreen", "answers": [monitors_answer("hyprctl/monitors/crafted-odd-size.json")]},
+        "fullscreen scales": {"mode": "Fullscreen", "answers": [monitors_answer("hyprctl/monitors/crafted-scales.json")]},
+        "fullscreen real desktop": {"mode": "Fullscreen",
+                                    "answers": [monitors_answer("hyprctl/monitors/real-desktop.json")]},
+        "fullscreen not capturable": {"mode": "Fullscreen", "env": gsr_env,
+                                      "answers": [monitors_answer(), gsr_options("crafted-duplicates.txt")]},
+        "fullscreen capturable": {"mode": "Fullscreen", "env": gsr_env, "answers": [monitors_answer(), two_options]},
+        "monitors fail": {"mode": "Fullscreen", "answers": [monitors_answer(status=1, stderr="Couldn't connect to Hyprland\n")]},
+        "monitors fail quietly": {"mode": "Region", "answers": [monitors_answer("hyprctl/monitors/crafted-empty.txt", 2)]},
+        "monitors empty": {"mode": "Region", "answers": [monitors_answer("hyprctl/monitors/crafted-empty-array.json")]},
+        "monitors garbage": {"mode": "Window", "answers": [monitors_answer("hyprctl/monitors/crafted-garbage.txt")]},
+        "region rectangle": {"mode": "Region", "answers": [monitors_answer(), answer(region, "10,20 300x200\n")]},
+        "region on second monitor": {"mode": "Region", "answers": [monitors_answer(), answer(region, "2100,100 641x359\n")]},
+        "region fractional": {"mode": "Region", "answers": [monitors_answer(), answer(region, "10.5,20.25 300.75x200.5")]},
+        "region outside every monitor": {"mode": "Region", "answers": [monitors_answer(), answer(region, "9000,9000 10x10")]},
+        "region monitor": {"mode": "Region", "answers": [monitors_answer(), answer(region, "monitor:HDMI-A-1\n")]},
+        "region monitor not capturable": {"mode": "Region", "env": gsr_env,
+                                          "answers": [monitors_answer(), answer(region, "monitor:DP-1"),
+                                                      gsr_options("crafted-duplicates.txt")]},
+        "region unknown monitor": {"mode": "Region", "answers": [monitors_answer(), answer(region, "monitor:DP-9\n")]},
+        "region empty monitor name": {"mode": "Region", "answers": [monitors_answer(), answer(region, "monitor:")]},
+        "region click": {"mode": "Region", "answers": [monitors_answer(), answer(region, "2500,500 1x1\n")]},
+        "region click not capturable": {"mode": "Region", "env": gsr_env,
+                                        "answers": [monitors_answer(), answer(region, "2500,500 1x1\n"),
+                                                    gsr_options("crafted-duplicates.txt")]},
+        "region zero size": {"mode": "Region", "answers": [monitors_answer(), answer(region, "100,100 0x0\n")]},
+        "region cancelled": {"mode": "Region", "answers": [monitors_answer(), answer(region, "", 1)]},
+        "region cancelled with output": {"mode": "Region",
+                                         "answers": [monitors_answer(), answer(region, "10,20 300x200\n", 130)]},
+        "region unparsable": {"mode": "Region", "answers": [monitors_answer(), answer(region, "  what is this  \n")]},
+        "region empty answer": {"mode": "Region", "answers": [monitors_answer(), answer(region, "")]},
+        "region slurp": {"mode": "Region", "programs": no_omarchy,
+                         "answers": [monitors_answer(), *window_answers, answer(slurp, "10,20 300x200\n", stdin=True)]},
+        "region slurp click on window": {"mode": "Region", "programs": no_omarchy,
+                                         "answers": [monitors_answer(), *window_answers,
+                                                     answer(slurp, "500,400 2x2\n", stdin=True)]},
+        "region slurp click on hidden window": {"mode": "Region", "programs": no_omarchy,
+                                                "answers": [monitors_answer(), *window_answers,
+                                                            answer(slurp, "50,50 1x1\n", stdin=True)]},
+        "region slurp click outside windows": {"mode": "Region", "programs": no_omarchy,
+                                               "answers": [monitors_answer(), *window_answers,
+                                                           answer(slurp, "2500,1000 1x1\n", stdin=True)]},
+        "region slurp without workspace": {"mode": "Region", "programs": no_omarchy,
+                                           "answers": [monitors_answer(),
+                                                       answer(["hyprctl", "-j", "activeworkspace"], "", 1),
+                                                       answer(slurp, "500,400 1x1\n", stdin=True)]},
+        "region slurp clients fail": {"mode": "Region", "programs": no_omarchy,
+                                      "answers": [monitors_answer(), window_answers[0],
+                                                  answer(["hyprctl", "-j", "clients"], "", 1),
+                                                  answer(slurp, "500,400 1x1\n", stdin=True)]},
+        "region slurp missing": {"mode": "Region", "programs": ["hyprctl"],
+                                 "answers": [monitors_answer(), *window_answers]},
+        "window": {"mode": "Window", "answers": [monitors_answer(), *window_answers,
+                                                 answer(window, "400,300 640x480\n", stdin=True)]},
+        "window tiny": {"mode": "Window", "answers": [monitors_answer(), *window_answers,
+                                                      answer(window, "400,300 2x2\n", stdin=True)]},
+        "window cancelled": {"mode": "Window", "answers": [monitors_answer(), *window_answers,
+                                                           answer(window, "", 1, stdin=True)]},
+        "window no rectangles": {"mode": "Window",
+                                 "answers": [monitors_answer(),
+                                             answer(["hyprctl", "-j", "activeworkspace"], None,
+                                                    stdout_file=f"{workspaces}/crafted-two.json"),
+                                             answer(["hyprctl", "-j", "clients"], "[]"),
+                                             answer(window, "10,10 100x100\n", stdin=True)]},
+        "window real desktop": {"mode": "Window",
+                                "answers": [monitors_answer("hyprctl/monitors/real-desktop.json"),
+                                            answer(["hyprctl", "-j", "activeworkspace"], None,
+                                                   stdout_file=f"{workspaces}/real-desktop.json"),
+                                            answer(["hyprctl", "-j", "clients"], None,
+                                                   stdout_file=f"{clients}/real-desktop.json"),
+                                            answer(window, "12,38 1896x1030\n", stdin=True)]},
+    }
+    write(out / "cases.json", json.dumps({
+        "rects": rects, "rectangles": rectangles, "snap": snap,
+        "monitorFor": monitor_for, "capturable": capturable, "pick": pick,
+    }, indent=1, ensure_ascii=False) + "\n")
+
+
+def make_captureexclusion() -> None:
+    out = CORPUS / "captureexclusion"
+    reset(out)
+    a40, b40 = "a" * 40, "b" * 40
+    hashes = ["", a40, b40, a40.upper(), "0123456789abcdef0123456789abcdef01234567", a40[:39], a40 + "a",
+              a40 + "\n", " " + a40, "g" * 40, "unknown", "efb50993780079460b0cbed1363e2166a2de1d9f"]
+    plugins = "hyprctl/plugin-list"
+    status = "hyprctl/exclude-status"
+    version = "hyprctl/version"
+
+    def hy(args, file=None, status_=0, stdout=None, **extra):
+        return answer(["hyprctl", *args], stdout, status_, stdout_file=file, **extra)
+
+    def scenario(plugin_list, exclude, version_file, extra=()):
+        answers = []
+        if plugin_list is not None:
+            answers.append(hy(["-j", "plugin", "list"], f"{plugins}/{plugin_list}"))
+        if exclude is not None:
+            answers.append(hy(["omareel-exclude", "status"], f"{status}/{exclude}"))
+        if version_file is not None:
+            answers.append(hy(["-j", "version"], f"{version}/{version_file}"))
+        return answers + list(extra)
+
+    statuses = {
+        "loaded": scenario("crafted-ours.json", "crafted-a40.json", "crafted-a40.json"),
+        "real desktop": scenario("real-desktop.json", "real-desktop.json", "real-desktop.json"),
+        "hash mismatch": scenario("crafted-ours.json", "crafted-a40.json", "crafted-b40.json"),
+        "uppercase commit": scenario("crafted-ours.json", "crafted-a40.json", "crafted-uppercase.json"),
+        "short commit": scenario("crafted-ours.json", "crafted-a40.json", "crafted-short.json"),
+        "dirty commit": scenario("crafted-ours.json", "crafted-a40.json", "crafted-dirty.json"),
+        "commit missing": scenario("crafted-ours.json", "crafted-a40.json", "crafted-missing.json"),
+        "version garbage": scenario("crafted-ours.json", "crafted-a40.json", "crafted-garbage.txt"),
+        "version fails": scenario("crafted-ours.json", "crafted-a40.json", None,
+                                  [hy(["-j", "version"], None, 1, stdout=f'{{"commit": "{a40}"}}')]),
+        "no prefix": scenario("crafted-ours.json", "crafted-no-prefix.json", "crafted-a40.json"),
+        "other prefixes": scenario("crafted-ours.json", "crafted-other-prefix.json", "crafted-a40.json"),
+        "two prefixes": scenario("crafted-ours.json", "crafted-two-prefixes.json", "crafted-a40.json"),
+        "prefixes missing": scenario("crafted-ours.json", "crafted-prefixes-missing.json", "crafted-a40.json"),
+        "prefixes string": scenario("crafted-ours.json", "crafted-prefixes-string.json", "crafted-a40.json"),
+        "built hash missing": scenario("crafted-ours.json", "crafted-hash-missing.json", "crafted-a40.json"),
+        "built hash number": scenario("crafted-ours.json", "crafted-hash-number.json", "crafted-a40.json"),
+        "status unknown request": scenario("crafted-ours.json", "crafted-unknown-request.txt", "crafted-a40.json"),
+        "status empty": scenario("crafted-ours.json", "crafted-empty.txt", "crafted-a40.json"),
+        "status fails": scenario("crafted-ours.json", None, "crafted-a40.json",
+                                 [hy(["omareel-exclude", "status"], f"{status}/crafted-a40.json", 1)]),
+        "plugin twice": scenario("crafted-twice.json", "crafted-a40.json", "crafted-a40.json"),
+        "other plugins": scenario("crafted-others.json", None, None),
+        "no plugins": scenario("crafted-none.json", None, None),
+        "no plugins text": scenario("crafted-no-plugins.txt", None, None),
+        "plugin name not string": scenario("crafted-name-not-string.json", None, None),
+        "plugin list object": scenario("crafted-object.json", None, None),
+        "plugin list fails": [hy(["-j", "plugin", "list"], f"{plugins}/crafted-ours.json", 1)],
+        "plugin list hangs": [hy(["-j", "plugin", "list"], None, 0, stdout="[]", hang=5)],
+        "hyprctl missing": None,
+    }
+
+    load = lambda reply, status_=0, **extra: answer(["hyprctl", "plugin", "load", "@PLUGIN@"], reply, status_, **extra)
+    not_loaded = [hy(["-j", "plugin", "list"], f"{plugins}/crafted-none.json")]
+    loaded_after = [hy(["-j", "plugin", "list"], f"{plugins}/crafted-none.json", call=1),
+                    hy(["-j", "plugin", "list"], f"{plugins}/crafted-ours.json"),
+                    hy(["omareel-exclude", "status"], f"{status}/crafted-a40.json"),
+                    hy(["-j", "version"], f"{version}/crafted-a40.json")]
+    version_a = [hy(["-j", "version"], f"{version}/crafted-a40.json")]
+    ensure = {
+        "path missing": {"plugin": "missing", "answers": []},
+        "path is a directory": {"plugin": "directory", "answers": []},
+        "path empty": {"plugin": "empty-variable", "answers": []},
+        "already loaded": {"plugin": "file", "hash": b40, "answers": loaded_after[1:]},
+        "already loaded without override": {"plugin": None, "answers": loaded_after[1:]},
+        "no hash file": {"plugin": "file", "hash": None, "answers": not_loaded + version_a},
+        "hash mismatch": {"plugin": "file", "hash": b40, "answers": not_loaded + version_a},
+        "hash with newline": {"plugin": "file", "hash": a40 + "\n", "answers": loaded_after + [load("ok")]},
+        "hash with spaces": {"plugin": "file", "hash": "  " + a40 + " \r\n", "answers": loaded_after + [load("ok")]},
+        "hash uppercase": {"plugin": "file", "hash": a40.upper(), "answers": not_loaded
+                           + [hy(["-j", "version"], None, stdout=f'{{"commit": "{a40.upper()}"}}')]},
+        "loads": {"plugin": "file", "hash": a40, "answers": loaded_after + [load("ok")]},
+        "loads but status stays unloaded": {"plugin": "file", "hash": a40,
+                                            "answers": not_loaded + version_a + [load("ok")]},
+        "load reply with newline": {"plugin": "file", "hash": a40, "answers": loaded_after + [load("ok\n")]},
+        "load reply spaced": {"plugin": "file", "hash": a40, "answers": loaded_after + [load("  ok  \n\n")]},
+        "load reply Ok": {"plugin": "file", "hash": a40, "answers": not_loaded + version_a + [load("Ok")]},
+        "load refused": {"plugin": "file", "hash": a40, "answers": not_loaded + version_a
+                         + [load("error: plugin could not be loaded:\n  version mismatch\n")]},
+        "load exit status": {"plugin": "file", "hash": a40, "answers": not_loaded + version_a + [load("ok", 1)]},
+        "load exit status quiet": {"plugin": "file", "hash": a40, "answers": not_loaded + version_a + [load("", 3)]},
+        "load stderr only": {"plugin": "file", "hash": a40,
+                             "answers": not_loaded + version_a + [load(None, 1, stderr="couldn't connect\n")]},
+        "load stdout and stderr": {"plugin": "file", "hash": a40,
+                                   "answers": not_loaded + version_a + [load("ok", 0, stderr="warning\n")]},
+        "load hangs": {"plugin": "file", "hash": a40, "answers": not_loaded + version_a + [load("ok", 0, hang=5)]},
+        "relative path": {"plugin": "relative", "hash": a40, "answers": loaded_after + [load("ok")]},
+    }
+    layers = "hyprctl/layers"
+    off = {"files": sorted(p.name for p in (CORPUS / layers).iterdir()),
+           "monitors": ["DP-1", "HDMI-A-1", "", "dp-1", "DP-9"]}
+    overlay = {"monitors": [[], ["DP-3"], ["DP-3", "DP-5"], ["DP-5", "DP-3"], ["DP-3", "DP-3", "DP-5"],
+                            ["", "DP-3"], ["DP-3", ""], ["dp-3", "DP-5"]],
+               "recorded": ["DP-3", "DP-5", "", "dp-3", "DP-9"]}
+    cursor = "hyprctl/getoption-cursor"
+    get = lambda file, status_=0: hy(["-j", "getoption", "cursor:no_hardware_cursors"], f"{cursor}/{file}", status_)
+    evaluate = lambda value, status_=0, **extra: hy(["eval", f"hl.config({{ cursor = {{ no_hardware_cursors = {value} }} }})"],
+                                                    None, status_, stdout="ok", **extra)
+    keyword = lambda value, status_=0: hy(["keyword", "cursor:no_hardware_cursors", str(value)], None, status_, stdout="ok")
+    cursors = {
+        "automatic": [get("crafted-2.json"), evaluate(0), evaluate(2)],
+        "real desktop": [get("real-desktop.json"), evaluate(0), evaluate(2)],
+        "software": [get("crafted-1.json"), evaluate(0), evaluate(1)],
+        "already hardware": [get("crafted-0.json")],
+        "negative": [get("crafted-negative.json"), evaluate(0), evaluate(-1)],
+        "string value": [get("crafted-string.json")],
+        "custom type": [get("crafted-custom-type.json")],
+        "no such option": [get("crafted-no-such-option.txt")],
+        "getoption fails": [get("crafted-2.json", 1)],
+        "hyprlang config": [get("crafted-1.json"), evaluate(0, 1), keyword(0), evaluate(1, 1), keyword(1)],
+        "nothing works": [get("crafted-2.json"), evaluate(0, 1), keyword(0, 1)],
+        "eval works only first": [get("crafted-2.json"), evaluate(0), evaluate(2, 1, call=1), keyword(2)],
+    }
+    write(out / "cases.json", json.dumps({
+        "hashes": hashes, "status": statuses, "ensureLoaded": ensure, "overlaysOffMonitor": off,
+        "overlayMonitor": overlay, "hardwareCursor": cursors,
+    }, indent=1, ensure_ascii=False) + "\n")
+
+
+def make_camera() -> None:
+    out = CORPUS / "camera"
+    reset(out)
+
+    def node(name, interface, index):
+        return {"files": {f"dev/{name}": "", f"sys/class/video4linux/{name}/index": f"{index}\n"},
+                "dirs": [f"sys/devices/{interface}"],
+                "links": {f"sys/class/video4linux/{name}/device": f"sys/devices/{interface}"}}
+
+    def merge(*parts):
+        value = {"files": {}, "dirs": [], "links": {}}
+        for part in parts:
+            value["files"].update(part.get("files", {}))
+            value["dirs"] += part.get("dirs", [])
+            value["links"].update(part.get("links", {}))
+        return value
+
+    usb = {"files": {"sys/devices/usb7/7-1/idVendor": "636e\n", "sys/devices/usb7/7-1/idProduct": "0bdb\n",
+                     "sys/devices/usb7/7-1/serial": "200901010001\n",
+                     "sys/devices/usb1/1-1.1/idVendor": "2e1a\n", "sys/devices/usb1/1-1.1/idProduct": "4c04\n"}}
+    by_id = "dev/v4l/by-id/"
+    by_path = "dev/v4l/by-path/"
+    laptop = merge(usb, node("video0", "usb7/7-1/7-1:1.0", 0), node("video1", "usb7/7-1/7-1:1.0", 1),
+                   node("video2", "usb7/7-1/7-1:1.2", 0), node("video4", "usb1/1-1.1/1-1.1:1.0", 0),
+                   {"links": {
+                       by_id + "usb-ASUS_FHD_webcam_200901010001-video-index0": "dev/video2",
+                       by_id + "usb-ASUS_FHD_webcam_200901010001-video-index1": "dev/video1",
+                       by_id + "usb-Insta360_Insta360_Link_2-video-index0": "dev/video4",
+                       by_path + "platform-x-usbv2-0:1:1.0-video-index0": "dev/video0",
+                       by_path + "platform-x-usb-0:1:1.0-video-index0": "dev/video0",
+                       by_path + "platform-x-usb-0:1:1.2-video-index0": "dev/video2",
+                       by_path + "platform-y-usb-0:1.1:1.0-video-index0": "dev/video4"}})
+    queries = ["dev/video0", "dev/video1", "dev/video2", "dev/video4", "dev/video9",
+               by_id + "usb-Insta360_Insta360_Link_2-video-index0", by_path + "platform-x-usb-0:1:1.0-video-index0",
+               "dev/../dev/video4", "", "/dev/oracle-camera-that-does-not-exist"]
+    trees = {
+        "laptop-and-dock": [
+            {"label": "plugged in", **laptop, "queries": queries},
+            {"label": "dock renumbered", "remove": ["dev/video4"],
+             **merge(node("video6", "usb1/1-1.1/1-1.1:1.0", 0),
+                     {"links": {by_id + "usb-Insta360_Insta360_Link_2-video-index0": "dev/video6"}}),
+             "queries": queries + ["dev/video6"]},
+            {"label": "unplugged", "remove": ["dev/video6"], "queries": queries + ["dev/video6"]},
+        ],
+        "only-usbv-by-path": [{"label": "one camera", **merge(
+            node("video0", "usb3/3-2/3-2:1.0", 0),
+            {"files": {"sys/devices/usb3/3-2/idVendor": "046d\n", "sys/devices/usb3/3-2/idProduct": "085e\n"},
+             "links": {by_path + "pci-0000:00:14.0-usbv2-0:2:1.0-video-index0": "dev/video0",
+                       by_path + "pci-0000:00:14.0-usbv3-0:2:1.0-video-index0": "dev/video0"}}),
+            "queries": ["dev/video0"]}],
+        "no-links": [{"label": "bare node", **node("video3", "platform/csi", 0), "queries": ["dev/video3"]}],
+        "no-sys": [{"label": "by-id only", "files": {"dev/video5": ""},
+                    "links": {by_id + "usb-Camera-video-index0": "dev/video5",
+                              by_path + "usb-0:1-video-index0": "dev/video5"},
+                    "queries": ["dev/video5"]}],
+        "identical-cameras": [{"label": "two without serials", **merge(
+            {"files": {"sys/devices/usb2/2-1/idVendor": "1234\n", "sys/devices/usb2/2-1/idProduct": "5678\n",
+                       "sys/devices/usb2/2-2/idVendor": "1234\n", "sys/devices/usb2/2-2/idProduct": "5678\n"}},
+            node("video0", "usb2/2-1/2-1:1.0", 0), node("video2", "usb2/2-2/2-2:1.0", 0),
+            {"links": {by_id + "usb-Generic_Camera-video-index0": "dev/video2",
+                       by_path + "pci-usb-0:1:1.0-video-index0": "dev/video0",
+                       by_path + "pci-usb-0:2:1.0-video-index0": "dev/video2"}}),
+            "queries": ["dev/video0", "dev/video2"]}],
+        "sorting": [{"label": "several links to one node", "files": {"dev/video7": ""},
+                     "links": {by_id + "z-camera-video-index0": "dev/video7",
+                               by_id + "a-camera-video-index0": "dev/video7",
+                               by_id + "B-camera-video-index0": "dev/video7",
+                               by_id + "usbv-camera-video-index0": "dev/video7"},
+                     "queries": ["dev/video7"]}],
+        "chained-links": [{"label": "link to a link", "files": {"dev/video8": ""},
+                           "links": {"dev/camera": "dev/video8", by_id + "usb-Chained-video-index0": "dev/camera"},
+                           "queries": ["dev/video8", "dev/camera"]}],
+    }
+    ids = ["/dev/video6", "v4l2 /dev/video6 usb", "v4l2:/dev/video0", "/dev/video10 /dev/video11",
+           "obs-virtual", "", "/dev/videoX", "/dev/video", "prefix/dev/video3/suffix rest", "/DEV/VIDEO1",
+           "/dev/v4l/by-id/usb-x-video-index0", " /dev/video2", "/dev/video2\t3", "é/dev/video4☃ x"]
+
+    def fmt(pixel, width, height, low, high):
+        return [pixel, width, height, low, high]
+
+    devices = {
+        "webcam-1080p": [fmt("Jpeg", 1920, 1080, 5, 30), fmt("Jpeg", 1280, 720, 5, 30), fmt("YUYV", 640, 480, 5, 30),
+                         fmt("YUYV", 1920, 1080, 5, 5)],
+        "webcam-60fps": [fmt("Jpeg", 1920, 1080, 30, 60), fmt("Jpeg", 1920, 1080, 30, 30), fmt("NV12", 1280, 720, 60, 60)],
+        "ir-sensor": [fmt("Y8", 640, 360, 15, 15), fmt("Y8", 340, 340, 2, 29.98)],
+        "just-under-30": [fmt("YUYV", 1920, 1080, 29.99, 29.99), fmt("YUYV", 1280, 720, 29.98, 29.98)],
+        "ties": [fmt("YUYV", 1920, 1081, 30, 30), fmt("Jpeg", 1920, 1079, 30, 30), fmt("NV12", 1921, 1080, 30, 30)],
+        "only-4k": [fmt("Jpeg", 3840, 2160, 30, 30), fmt("Jpeg", 2560, 1440, 30, 30)],
+        "only-small": [fmt("YUYV", 320, 240, 30, 30), fmt("YUYV", 160, 120, 60, 60)],
+        "high-rate": [fmt("Jpeg", 1920, 1080, 120, 120), fmt("Jpeg", 1280, 720, 30, 30)],
+        "no-formats": [],
+    }
+    write(out / "cases.json", json.dumps({"trees": trees, "ids": ids, "devices": devices}, indent=1,
+                                         ensure_ascii=False) + "\n")
+
+
+def make_microphone() -> None:
+    out = CORPUS / "microphone"
+    reset(out)
+
+    def pack(fmt, values):
+        return struct.pack("<" + fmt * len(values), *values).hex()
+
+    buffers = {
+        "UInt8": {"silence": pack("B", [128] * 8), "zeros-are-full-scale": pack("B", [0, 128]),
+                  "max": pack("B", [255]), "quiet": pack("B", [129, 127]), "odd": "8080ff",
+                  "one-byte": "ff", "empty": "", "ramp": bytes(range(0, 256, 17)).hex()},
+        "Int16": {"silence": pack("h", [0] * 6), "full-scale": pack("h", [0, 32767, 0]),
+                  "minimum": pack("h", [-32768]), "minus-20-dbfs": pack("h", [100, -3277, 50]),
+                  "tiny": pack("h", [1]), "sixteen": pack("h", [16]), "odd-bytes": pack("h", [0, 32767]) + "7f",
+                  "single-byte": "7f", "empty": "", "stereo-pairs": pack("h", [1000, -2000, 3000, -4000]),
+                  "minus-60-dbfs": pack("h", [33]), "minus-61-dbfs": pack("h", [29])},
+        "Int32": {"silence": pack("i", [0, 0]), "full-scale": pack("i", [2147483647]),
+                  "minimum": pack("i", [-2147483648]), "half": pack("i", [1073741824]),
+                  "tiny": pack("i", [2147]), "odd-bytes": pack("i", [1073741824]) + "ffffff", "three-bytes": "ffffff",
+                  "empty": ""},
+        "Float": {"silence": pack("f", [0.0, -0.0]), "half": pack("f", [0.5]), "one": pack("f", [1.0]),
+                  "over-one": pack("f", [1.5, -2.0]), "nan": "0000c07f", "nan-then-half": "0000c07f" + pack("f", [0.5]),
+                  "half-then-nan": pack("f", [0.5]) + "0000c07f", "infinity": "0000807f", "minus-infinity": "000080ff",
+                  "denormal": "01000000", "tiny": pack("f", [1e-3]), "minus-60-dbfs": pack("f", [0.001]),
+                  "odd-bytes": pack("f", [0.25]) + "0000", "empty": ""},
+    }
+    sequences = {
+        "Int16 attack and decay": ["Int16", ["full-scale", "silence", "silence", "silence", "silence", "silence",
+                                             "silence", "silence", "silence", "silence", "silence", "silence",
+                                             "silence", "silence", "silence", "silence", "silence", "silence"]],
+        "Int16 small changes": ["Int16", ["minus-20-dbfs", "minus-20-dbfs", "stereo-pairs", "minus-20-dbfs",
+                                          "tiny", "minus-60-dbfs", "empty"]],
+        "Float nan": ["Float", ["half", "nan", "nan-then-half", "half-then-nan", "infinity", "silence"]],
+        "UInt8 zeros": ["UInt8", ["silence", "zeros-are-full-scale", "quiet", "silence"]],
+    }
+    write(out / "cases.json", json.dumps({"buffers": buffers, "channels": [1, 2, 6],
+                                          "sequences": sequences}, indent=1) + "\n")
+
+
+def make_screencapture() -> None:
+    out = CORPUS / "screencapture"
+    reset(out)
+    rings = {
+        "the tag's test": [4, [["acquire"], ["acquire"], ["acquire"], ["acquire"], ["acquire"], ["markQueued", 1],
+                               ["markQueued", 0], ["takeQueued"], ["takeQueued"], ["state", 1], ["release", 1],
+                               ["state", 1], ["acquire"], ["markQueued", 8]]],
+        "drops count every refusal": [2, [["acquire"], ["acquire"], ["acquire"], ["acquire"], ["release", 0],
+                                          ["acquire"], ["acquire"]]],
+        "queue keeps its order": [5, [["acquire"], ["acquire"], ["acquire"], ["markQueued", 2], ["markQueued", 0],
+                                      ["markQueued", 1], ["takeQueued"], ["takeQueued"], ["takeQueued"],
+                                      ["takeQueued"]]],
+        "invalid transitions": [3, [["markQueued", 0], ["release", 0], ["takeQueued"], ["acquire"],
+                                    ["markQueued", 0], ["markQueued", 0], ["release", 0], ["takeQueued"],
+                                    ["markQueued", -1], ["release", -1], ["release", 3], ["state", -1],
+                                    ["state", 3], ["state", 99]]],
+        "release while queued": [3, [["acquire"], ["markQueued", 0], ["release", 0], ["takeQueued"], ["acquire"],
+                                     ["markQueued", 0], ["takeQueued"]]],
+        "release while capturing": [2, [["acquire"], ["release", 0], ["acquire"], ["markQueued", 0],
+                                        ["takeQueued"], ["release", 0], ["release", 0]]],
+        "requeued slot": [2, [["acquire"], ["markQueued", 0], ["takeQueued"], ["release", 0], ["acquire"],
+                              ["markQueued", 0], ["takeQueued"]]],
+        "stale queue entry": [2, [["acquire"], ["markQueued", 0], ["release", 0], ["acquire"], ["acquire"],
+                                  ["markQueued", 1], ["takeQueued"], ["takeQueued"], ["markQueued", 0],
+                                  ["takeQueued"]]],
+        "one slot": [1, [["acquire"], ["acquire"], ["markQueued", 0], ["acquire"], ["takeQueued"], ["release", 0],
+                         ["acquire"]]],
+        "zero slots": [0, [["acquire"], ["acquire"], ["state", 0], ["markQueued", 0], ["takeQueued"]]],
+        "negative slots": [-3, [["acquire"], ["acquire"]]],
+        "five slots, the capture's ring": [5, [["acquire"]] * 6 + [["markQueued", i] for i in range(5)]
+                                           + [["takeQueued"]] * 6],
+    }
+    crops = []
+    for width, height, stride in ((3840, 2160, 15360), (1920, 1080, 7680), (1920, 1080, 7936), (4, 3, 16),
+                                  (4, 3, 20), (4, 3, 15), (0, 3, 0), (4, 0, 16), (5, 3, 20), (-4, 3, 16)):
+        for crop in ([0, 0, 0, 0], [0, 0, width, height], [320, 240, 1280, 960], [0, 0, width, 1],
+                     [1, 1, 2, 1], [0, 1, 4, 2], [-1, -1, 3, 3], [2, 1, 10, 10], [width, 0, 4, 4],
+                     [0, 0, -2, 2], [1, 0, 1, 1], [0, 2, 4, 1]):
+            crops.append({"size": [width, height], "stride": stride, "crop": crop})
+    headers = {"sizes": [[1920, 1080], [3840, 2160], [2, 2], [0, 0], [-2, 4], [65536, 1], [1281, 721]],
+               "fps": [60, 30, 1, 0, -5, 7, 144, 1000000000, 2147483647]}
+    frames = {"timestamps": [0, 1, 16667, 1000000, -1, -9223372036854775807, 72057594037927935,
+                             9223372036854775807],
+              "bytes": [0, 1, 32, 8294400, 33177600, 4294967296, -4]}
+    encoders = []
+    for size in ([440, 234], [1280, 720], [1224, 1224], [1225, 1225], [1920, 1080], [2560, 1440], [3840, 2160],
+                 [7680, 4320], [2, 2]):
+        for fps in (60, 30, 144, 1, 240):
+            for preferred, gpu in ((False, False), (True, False), (True, True), (False, True)):
+                encoders.append({"size": size, "fps": fps, "preferred": preferred, "gpuConversion": gpu})
+    for conversion in ("cpu", "CPU", "gpu", ""):
+        for lossless in ("lossless", "Lossless", ""):
+            for preferred, gpu in ((True, True), (False, False)):
+                encoders.append({"size": [1920, 1080], "fps": 60, "preferred": preferred, "gpuConversion": gpu,
+                                 "conversion": conversion, "encoder": lossless})
+    trims = []
+    for width, height in ((3840, 2160), (1921, 1081), (2, 2), (1, 1)):
+        for crop in ([0, 0, 0, 0], [0, 0, width, height], [10, 20, 641, 361], [10, 20, 640, 360],
+                     [width - 5, height - 5, 100, 100], [-3, -3, 10, 10], [width, height, 10, 10],
+                     [0, 0, 1, 1], [0, 0, 2, 3], [1, 1, -4, 4], [5, 5, 0, 7]):
+            trims.append({"size": [width, height], "crop": crop})
+    writer = {
+        "steady 60": {"fps": 60, "size": [4, 2], "times": [1000000 + round(i * 1e6 / 60) for i in range(6)],
+                      "stop": 1000000 + 100000},
+        "still screen": {"fps": 30, "size": [4, 2], "times": [5000000], "stop": 7000000},
+        "stop before the last tick": {"fps": 30, "size": [4, 2], "times": [5000000, 5033333], "stop": 5040000},
+        "stop on the last frame": {"fps": 30, "size": [4, 2], "times": [5000000, 5033333], "stop": 5033333},
+        "no stop time": {"fps": 30, "size": [4, 2], "times": [5000000, 5100000], "stop": 0},
+        "same tick twice": {"fps": 60, "size": [4, 2], "times": [1000000, 1008000, 1008334, 1016667, 1024000],
+                            "stop": 1050000},
+        "out of order": {"fps": 60, "size": [4, 2], "times": [2000000, 2050000, 2030000, 2100000, 1990000],
+                         "stop": 2200000},
+        "gaps": {"fps": 10, "size": [2, 2], "times": [0, 1, 250000, 2000000, 2049999, 2050000], "stop": 3000000},
+        "first frame at zero": {"fps": 60, "size": [2, 1], "times": [0, 16667], "stop": 1000},
+        "cropped": {"fps": 30, "size": [6, 3], "crop": [2, 1, 2, 2], "times": [1000, 34333, 67666], "stop": 100000},
+        "cropped one row": {"fps": 30, "size": [6, 3], "crop": [0, 2, 6, 1], "times": [1000, 34333], "stop": 0},
+        "padded stride": {"fps": 30, "size": [3, 2], "stride": 16, "times": [1000, 34333], "stop": 70000},
+        "odd fps": {"fps": 7, "size": [2, 2], "times": [100, 142957, 285814, 400000], "stop": 1000000},
+        "high fps": {"fps": 1000, "size": [2, 1], "times": [10, 1010, 1510, 2010, 2499, 2500], "stop": 5000},
+        "many frames": {"fps": 60, "size": [2, 1], "times": [round(i * 1e6 / 60) + 7 for i in range(40)],
+                        "stop": round(41 * 1e6 / 60)},
+        "nothing captured": {"fps": 60, "size": [4, 2], "times": [], "stop": 5000000},
+        "timestamp unwritable": {"fps": 60, "size": [4, 2], "times": [1000, 2000], "stop": 5000,
+                                 "timestampPath": "missing-directory/screen.mp4.ts"},
+        "encoder closed": {"fps": 60, "size": [4, 2], "times": [1000, 20000], "stop": 50000, "encoder": "closed"},
+        "aborted": {"fps": 60, "size": [4, 2], "times": [1000, 20000], "stop": 50000, "abort": True},
+    }
+    write(out / "cases.json", json.dumps({
+        "rings": rings, "crops": crops, "streamHeaders": headers, "frameHeaders": frames,
+        "encoders": encoders, "trims": trims, "writer": writer,
+    }, indent=1) + "\n")
+
+
+def make_launcher() -> None:
+    out = CORPUS / "launcher"
+    reset(out)
+    names = ["Cam Link 4K: Cam Link 4K", "Integrated Webcam: Integrated W", "Integrated Webcam: Integrated Webcam",
+             "Insta360 Link 2: Insta360 Link 2", "Insta360 Link 2: Insta360 Link 2 Control",
+             "HD Pro Webcam C920", "USB Camera: USB Camera: Video", ": stream", "device: ", "device:  ",
+             "a: b", "Camera :Camera", "  Spaced  :  Spaced  ", "Laptop Camera: Laptop", "Laptop: Laptop Camera",
+             "", ":", ": ", "x: x: x", "Cámara: Cám", "Cam: cam", "Cam:Cam"]
+    audio = "gpu-screen-recorder/list-audio-devices"
+    files = sorted(p.name for p in (CORPUS / audio).iterdir())
+    audio_cases = []
+    for file in files:
+        for chosen, current in (("default_input", "default_input"),
+                                ("alsa_input.usb-Blue_Yeti-00.analog-stereo", "default_input"),
+                                ("alsa_input.unplugged", "alsa_input.unplugged"),
+                                ("alsa_input.pci-0000_00_1f.3.analog-stereo", "default_input")):
+            audio_cases.append({"file": f"{audio}/{file}", "chosen": chosen, "current": current, "status": 0})
+    audio_cases += [{"file": f"{audio}/crafted-mixed.txt", "chosen": "default_input", "current": "alsa_input.x",
+                     "status": 1},
+                    {"file": None, "chosen": "alsa_input.y", "current": "alsa_input.y", "status": 0}]
+
+    def camera(id_, description, formats=None):
+        return {"id": id_, "description": description,
+                "formats": formats if formats is not None else [["Jpeg", 1920, 1080, 5, 30]]}
+
+    ir = [["Y8", 640, 360, 15, 15]]
+    stable = {"/dev/video0": "/dev/v4l/by-id/usb-Laptop-video-index0", "/dev/video2": "/dev/v4l/by-path/usb-0:1:1.2",
+              "/dev/video4": "/dev/v4l/by-id/usb-Insta360_Link_2-video-index0",
+              "/dev/video6": "/dev/v4l/by-id/usb-Insta360_Link_2-video-index0",
+              "/dev/video8": "/dev/video8"}
+    laptop = [camera("/dev/video0", "Integrated Webcam: Integrated W"), camera("/dev/video1", "Integrated Webcam: Integrated I", ir),
+              camera("/dev/video4", "Insta360 Link 2: Insta360 Link 2")]
+    twins = [camera("/dev/video4", "USB Camera: USB Camera"), camera("/dev/video6", "USB Camera: USB Camera")]
+    webcams = {
+        "laptop, chosen plugged in": {"cameras": laptop, "device": "/dev/v4l/by-id/usb-Laptop-video-index0",
+                                      "chosen": "/dev/v4l/by-id/usb-Insta360_Link_2-video-index0"},
+        "laptop, chosen unplugged": {"cameras": laptop[:2], "device": "/dev/v4l/by-id/usb-Insta360_Link_2-video-index0",
+                                     "chosen": "/dev/v4l/by-id/usb-Insta360_Link_2-video-index0"},
+        "laptop, current listed": {"cameras": laptop, "device": "/dev/v4l/by-id/usb-Laptop-video-index0",
+                                   "chosen": "/dev/v4l/by-id/usb-Missing"},
+        "laptop, nothing listed": {"cameras": laptop, "device": "/dev/video9", "chosen": ""},
+        "twins share a name": {"cameras": twins, "device": "/dev/v4l/by-id/usb-Insta360_Link_2-video-index0",
+                               "chosen": ""},
+        "duplicate node": {"cameras": [camera("v4l2 /dev/video0 a", "First: First"),
+                                       camera("/dev/video0", "Second: Second")],
+                           "device": "", "chosen": ""},
+        "ids without nodes": {"cameras": [camera("obs-virtual", "OBS Virtual Camera"), camera("", "Nothing")],
+                              "device": "/dev/video2", "chosen": "/dev/video2", "exists": ["/dev/video2"]},
+        "only an ir sensor": {"cameras": [camera("/dev/video1", "IR: IR", ir)], "device": "/dev/video2",
+                              "chosen": "/dev/video2"},
+        "no cameras, saved path exists": {"cameras": [], "device": "/dev/video2", "chosen": "/dev/video2",
+                                          "exists": ["/dev/video2"]},
+        "no cameras, saved path missing": {"cameras": [], "device": "/dev/video2", "chosen": "/dev/video2"},
+        "no cameras, chosen elsewhere": {"cameras": [], "device": "/dev/video2", "chosen": "/dev/video8",
+                                         "exists": ["/dev/video2"]},
+        "three of a name": {"cameras": [camera("/dev/video0", "Cam: Cam"), camera("/dev/video2", "Cam: Cam"),
+                                        camera("/dev/video8", "Cam"), camera("/dev/video4", "Other: Other")],
+                            "device": "/dev/video8", "chosen": "/dev/video8"},
+        "stable path maps two nodes together": {"cameras": [camera("/dev/video4", "A: A"), camera("/dev/video6", "B: B")],
+                                                "device": "", "chosen": "/dev/v4l/by-id/usb-Insta360_Link_2-video-index0"},
+    }
+    write(out / "cases.json", json.dumps({"cameraNames": names, "audio": audio_cases, "stable": stable,
+                                          "webcams": webcams}, indent=1, ensure_ascii=False) + "\n")
+
+
+def make_recording_side() -> None:
+    make_tool_answers()
+    make_recorder()
+    make_regionpicker()
+    make_captureexclusion()
+    make_camera()
+    make_microphone()
+    make_screencapture()
+    make_launcher()
+
+
 def main() -> None:
     os.umask(0o022)
     make_numbers()
@@ -1531,6 +2605,7 @@ def main() -> None:
     make_recordingpreferences()
     make_mediaprobe()
     make_composition()
+    make_recording_side()
 
 
 if __name__ == "__main__":
