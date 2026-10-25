@@ -22,6 +22,26 @@ pub fn clamp<T: PartialOrd>(v: T, lo: T, hi: T) -> T {
     min(max(v, lo), hi)
 }
 
+/// `int(x)` for a double: truncation toward zero. Out of range (NaN included) is undefined in
+/// C++; x86-64's `cvttsd2si` gives `INT_MIN`, aarch64's `fcvtzs` saturates (NaN to 0), and this
+/// gives what each architecture's build of the C++ gives.
+pub fn int_cast(x: f64) -> i32 {
+    if cfg!(target_arch = "x86_64") && !(x > -2147483649.0 && x < 2147483648.0) {
+        i32::MIN
+    } else {
+        x as i32
+    }
+}
+
+/// `qint64(x)` for a double, as [`int_cast`] is `int(x)`.
+pub fn int64_cast(x: f64) -> i64 {
+    if cfg!(target_arch = "x86_64") && !(-9223372036854775808.0..9223372036854775808.0).contains(&x) {
+        i64::MIN
+    } else {
+        x as i64
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -40,5 +60,12 @@ mod tests {
         assert_eq!(clamp(2.5, 3.0, 2.0), 2.0);
         assert_eq!(clamp(4.0, 3.0, 2.0), 2.0);
         assert_eq!(min(2, 3), 2);
+    }
+
+    #[test]
+    fn integer_casts_truncate() {
+        assert_eq!((int_cast(2.9), int_cast(-2.9), int64_cast(1e15 + 0.5)), (2, -2, 1_000_000_000_000_000));
+        let out_of_range = if cfg!(target_arch = "x86_64") { i32::MIN } else { i32::MAX };
+        assert_eq!(int_cast(1e10), out_of_range);
     }
 }

@@ -1,11 +1,23 @@
 //! `QString` operations whose rules are not Rust's `str` rules, as Qt 6.11.2 has them.
 
 use super::qchar::{map_case, CaseRun};
+use super::qnumber::is_qchar_space;
 
 /// `QString::size()`: the length in UTF-16 code units, so a character outside the Basic
 /// Multilingual Plane counts twice.
 pub fn size(s: &str) -> usize {
     s.encode_utf16().count()
+}
+
+/// `QString::fromUtf8`: a leading byte-order mark dropped, and one U+FFFD for every byte that
+/// does not start a valid sequence.
+pub fn from_utf8(bytes: &[u8]) -> String {
+    super::qdir::decode_name(bytes)
+}
+
+/// `QString::trimmed()`: whitespace as `QChar::isSpace` has it removed from both ends.
+pub fn trimmed(s: &str) -> &str {
+    s.trim_matches(is_qchar_space)
 }
 
 /// `QString::toLower()`: each code point lowercased on its own, by its full mapping (U+0130 `İ`
