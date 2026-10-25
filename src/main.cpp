@@ -305,6 +305,7 @@ static void configureOverlayRule(const QString &scope)
 
 int main(int argc, char **argv)
 {
+    omareel::cli::installMessageHandler();
     // QProcess resolves executables to absolute paths, but Omarchy's REC indicator intentionally
     // matches an argv[0] beginning with "gpu-screen-recorder". Preserve that public contract.
     if (argc > 1 && std::strcmp(argv[1], "__record-gsr") == 0) {

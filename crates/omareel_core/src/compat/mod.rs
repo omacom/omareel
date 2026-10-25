@@ -9,6 +9,7 @@ pub mod qcoreapplication;
 pub mod qdir;
 pub mod qenv;
 pub mod qfile;
+pub mod qlog;
 pub mod qjson;
 pub mod qlockfile;
 pub mod qnumber;

@@ -107,16 +107,20 @@ def wait_until(condition, timeout):
     return False
 
 def omareel_processes():
+    # Only this nested session's processes: everything the harness starts inherits its
+    # XDG_RUNTIME_DIR, and an omareel running on the real desktop must never be killed.
+    session = ('XDG_RUNTIME_DIR=%s' % runtime).encode()
     found = []
     for entry in Path('/proc').iterdir():
         if not entry.name.isdigit():
             continue
         try:
             argv = (entry / 'cmdline').read_bytes().split(b'\0')
+            environ = (entry / 'environ').read_bytes().split(b'\0')
         except OSError:
             continue
         argv = [a.decode('utf-8', 'replace') for a in argv if a]
-        if len(argv) > 1 and 'omareel' in argv[0]:
+        if len(argv) > 1 and 'omareel' in argv[0] and session in environ:
             found.append((int(entry.name), argv))
     return found
 

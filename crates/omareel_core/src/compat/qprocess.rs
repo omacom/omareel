@@ -280,7 +280,7 @@ impl Process {
     /// `FailedToStart` and Qt's "Child process set up failed: execve: ..." message.
     pub fn start<S: AsRef<str>>(&mut self, program: &str, arguments: &[S]) {
         if self.state != ProcessState::NotRunning {
-            eprintln!("QProcess::start: Process is already running");
+            crate::compat::qlog::warning("QProcess::start: Process is already running");
             return;
         }
         self.program = program.to_string();
@@ -780,7 +780,7 @@ impl Drop for Process {
     /// `~QProcess`: a child still running is reported, killed and waited for.
     fn drop(&mut self) {
         if self.state != ProcessState::NotRunning {
-            eprintln!("QProcess: Destroyed while process (\"{}\") is still running.", self.program);
+            crate::compat::qlog::warning(&format!("QProcess: Destroyed while process (\"{}\") is still running.", self.program));
             self.kill();
             self.wait_for_finished(30000);
         }

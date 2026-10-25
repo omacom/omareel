@@ -392,7 +392,8 @@ fn run_record(program: &str, arguments: &[String], cancel: &AtomicBool) -> Optio
     if process.state() != ProcessState::Running {
         return None;
     }
-    while !process.wait_for_finished(100) {
+    // Short waits, so a launcher closing kills the run about as promptly as ~QProcess did.
+    while !process.wait_for_finished(10) {
         if cancel.load(Ordering::SeqCst) || process.state() != ProcessState::Running {
             return None;
         }
@@ -837,7 +838,7 @@ impl qobject::Launcher {
         let mut elapsed = if stopping { self.recording_elapsed.clone() } else { "00:00".to_owned() };
         if capture_started && !stopping {
             let started_us = state::recording_started_us();
-            elapsed = launcher::format_duration((recorder::monotonic_us() - started_us).max(0) as f64 / 1_000_000.0);
+            elapsed = launcher::format_duration(recorder::monotonic_us().wrapping_sub(started_us).max(0) as f64 / 1_000_000.0);
         }
         if elapsed != self.recording_elapsed {
             self.as_mut().rust_mut().recording_elapsed = elapsed;

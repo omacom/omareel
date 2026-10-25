@@ -6,12 +6,17 @@ use super::qdir::{self, FileInfo};
 /// has already made absolute and canonical (decoded as `QFile::decodeName` does; a binary
 /// replaced since it started ends in " (deleted)"). Empty when the link can't be read; Qt would
 /// then look at `argv[0]`, which a program started through `/proc` never needs.
+///
+/// Read once and kept, as Qt keeps it, so a binary replaced while the program runs (a package
+/// upgrade) is still found under its path.
 pub fn application_file_path() -> String {
     use std::os::unix::ffi::OsStrExt;
-    match std::fs::read_link("/proc/self/exe") {
+    static PATH: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    PATH.get_or_init(|| match std::fs::read_link("/proc/self/exe") {
         Ok(target) => qdir::decode_name(target.as_os_str().as_bytes()),
         Err(_) => String::new(),
-    }
+    })
+    .clone()
 }
 
 /// `QCoreApplication::applicationDirPath()`: the directory the program is in.

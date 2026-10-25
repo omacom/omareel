@@ -11,7 +11,17 @@ pub mod ffi {
         /// `omareel probe <bundle>` for an absolute bundle path: prints the summary and returns
         /// the exit status.
         fn probe(bundle: &str) -> i32;
+        /// Sends the Rust code's Qt-style warnings through Qt's message handler, as the C++'s
+        /// qWarning went; main() calls it first.
+        #[cxx_name = "installMessageHandler"]
+        fn install_message_handler();
     }
+}
+
+fn install_message_handler() {
+    omareel_core::compat::qlog::set_warning_handler(|message| {
+        crate::record::ffi::warning(&cxx_qt_lib::QString::from(message));
+    });
 }
 
 fn usage(error: &str) -> i32 {

@@ -60,7 +60,7 @@ fn errno() -> i32 {
 /// `QFile::remove(fileName)`: unlinks the file (a directory is not removed).
 pub fn remove(path: &str) -> bool {
     if path.is_empty() {
-        eprintln!("QFile::remove: Empty or null file name");
+        crate::compat::qlog::warning("QFile::remove: Empty or null file name");
         return false;
     }
     std::fs::remove_file(path).is_ok()
@@ -108,7 +108,7 @@ fn rename_file(source: &str, target: &str) -> bool {
 /// directory, where neither applies.
 pub fn rename(old_name: &str, new_name: &str) -> bool {
     if old_name.is_empty() {
-        eprintln!("QFile::rename: Empty or null file name");
+        crate::compat::qlog::warning("QFile::rename: Empty or null file name");
         return false;
     }
     if old_name == new_name || !crate::compat::qdir::file_exists(old_name) {
@@ -153,7 +153,7 @@ fn copy_then_remove(old_name: &str, new_name: &str) -> bool {
 /// reproduced: the error strings (omareel only looks at the result).
 pub fn copy(file_name: &str, new_name: &str) -> bool {
     if file_name.is_empty() {
-        eprintln!("QFile::copy: Empty or null file name");
+        crate::compat::qlog::warning("QFile::copy: Empty or null file name");
         return false;
     }
     if crate::compat::qdir::file_exists(new_name) {
