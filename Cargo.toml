@@ -4,8 +4,9 @@ members = ["crates/omareel_core", "crates/omareel_qt", "crates/omareel_record"]
 
 [workspace.package]
 edition = "2024"
-# Arch Linux ARM's rust can trail Arch's; cxx-qt 0.10 needs 1.85.
-rust-version = "1.85"
+# Arch Linux ARM's rust can trail Arch's; cxx-qt 0.10 needs 1.85 and wayland-protocols 0.32.13
+# (the capture's protocols) 1.86.
+rust-version = "1.86"
 license = "MIT"
 publish = false
 
