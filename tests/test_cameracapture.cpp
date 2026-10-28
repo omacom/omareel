@@ -395,14 +395,43 @@ private slots:
 
     void everyPackedFormatEncodes()
     {
-        // Every byte 128 is mid grey in each of them: Matroska names each format so that
-        // ffmpeg reads it back as what it is.
+        // An orange whose red, green and blue (and Y, Cb and Cr) all differ, laid out as each
+        // format stores it: a swapped channel or chroma plane in the FourCC mapping changes the
+        // colour ffmpeg decodes.
         if (!haveFfmpeg()) QSKIP("ffmpeg is not installed");
         QFETCH(int, format);
+        using F = QVideoFrameFormat;
+        const QColor colour(200, 60, 40);
+        const auto [y, cb, cr] = yuv(colour, false);
+        const uchar r = colour.red(), g = colour.green(), b = colour.blue(), a = 255;
+        // Each plane's bytes, repeated along every row.
+        QList<QByteArray> planes;
+        const auto bytes = [](std::initializer_list<uchar> values) {
+            return QByteArray(reinterpret_cast<const char *>(std::data(values)), qsizetype(values.size()));
+        };
+        switch (F::PixelFormat(format)) {
+        case F::Format_NV12: planes = {bytes({y}), bytes({cb, cr})}; break;
+        case F::Format_NV21: planes = {bytes({y}), bytes({cr, cb})}; break;
+        case F::Format_YUV420P: case F::Format_YUV422P: planes = {bytes({y}), bytes({cb}), bytes({cr})}; break;
+        case F::Format_YV12: planes = {bytes({y}), bytes({cr}), bytes({cb})}; break;
+        case F::Format_UYVY: planes = {bytes({cb, y, cr, y})}; break;
+        case F::Format_YUYV: planes = {bytes({y, cb, y, cr})}; break;
+        case F::Format_BGRA8888: planes = {bytes({b, g, r, a})}; break;
+        case F::Format_RGBA8888: planes = {bytes({r, g, b, a})}; break;
+        case F::Format_ARGB8888: planes = {bytes({a, r, g, b})}; break;
+        case F::Format_ABGR8888: planes = {bytes({a, b, g, r})}; break;
+        default: QFAIL("no layout for this format");
+        }
         const QSize size(64, 48);
-        QVideoFrame frame(QVideoFrameFormat(size, QVideoFrameFormat::PixelFormat(format)));
+        QVideoFrame frame(QVideoFrameFormat(size, F::PixelFormat(format)));
         QVERIFY(frame.map(QVideoFrame::WriteOnly));
-        for (int plane = 0; plane < frame.planeCount(); ++plane) std::memset(frame.bits(plane), 128, frame.mappedBytes(plane));
+        QCOMPARE(frame.planeCount(), int(planes.size()));
+        for (int plane = 0; plane < frame.planeCount(); ++plane) {
+            const int stride = frame.bytesPerLine(plane);
+            QCOMPARE(stride % planes[plane].size(), 0);
+            for (qsizetype offset = 0; offset < frame.mappedBytes(plane); ++offset)
+                frame.bits(plane)[offset] = uchar(planes[plane][offset % stride % planes[plane].size()]);
+        }
         frame.unmap();
         QTemporaryDir directory;
         QVERIFY(directory.isValid());
@@ -415,8 +444,11 @@ private slots:
                                               "-pix_fmt", "rgb24", "-"}, &ok);
         QVERIFY(ok);
         QCOMPARE(rgb.size(), qsizetype(size.width() * size.height() * 3));
-        for (int channel = 0; channel < 3; ++channel)
-            QVERIFY2(std::abs(int(uchar(rgb[channel])) - 129) <= 6, qPrintable(QString::number(uchar(rgb[channel]))));
+        const qsizetype centre = (size.height() / 2 * size.width() + size.width() / 2) * 3;
+        const int decoded[] = {uchar(rgb[centre]), uchar(rgb[centre + 1]), uchar(rgb[centre + 2])};
+        for (const int channel : {0, 1, 2})
+            QVERIFY2(std::abs(decoded[channel] - (channel == 0 ? r : channel == 1 ? g : b)) <= 6,
+                     qPrintable(QStringLiteral("decoded %1,%2,%3").arg(decoded[0]).arg(decoded[1]).arg(decoded[2])));
     }
 
     void cameraColoursAreBt709_data()
