@@ -548,17 +548,21 @@ impl ScreenCapture {
                 (buffers, None)
             }
         };
-        if encoder.is_none() {
-            let stride = buffers[0].planes().next().map_or(0, |(_, _, stride)| stride as usize);
-            let readable = buffers.iter().all(|buffer| buffer.planes().count() == 1 && buffer.readable_with_stride(stride));
-            if !readable || stride < width as usize * 4 {
-                return Err("the dmabufs can't be read back".into());
+        let (buffers, mapped) = match encoder {
+            Some(_) => (buffers, None),
+            None => {
+                let mapped = MappedSlots::new(buffers)?;
+                let mut crop = CaptureCrop::default();
+                trim_capture_crop(width as i32, height as i32, mapped.stride() as i32, self.config.crop, &mut crop)?;
+                self.crop = crop;
+                (Vec::new(), Some(mapped))
             }
-            let mut crop = CaptureCrop::default();
-            trim_capture_crop(width as i32, height as i32, stride as i32, self.config.crop, &mut crop)?;
-            self.crop = crop;
-        }
-        for buffer in &buffers {
+        };
+        let slot_buffers: Vec<&gpu::Buffer> = match &mapped {
+            Some(mapped) => mapped.buffers().collect(),
+            None => buffers.iter().collect(),
+        };
+        for buffer in slot_buffers {
             let params = dmabuf.create_params(handle, ());
             let modifier = buffer.modifier();
             for (plane, (fd, offset, stride)) in buffer.planes().enumerate() {
@@ -575,12 +579,8 @@ impl ScreenCapture {
             params.destroy();
             self.state.slots.push(Slot { buffer: Some(created), ..Slot::default() });
         }
-        if encoder.is_some() {
-            self.gpu_buffers = buffers;
-        } else {
-            let stride = buffers[0].planes().next().map_or(0, |(_, _, stride)| stride as usize);
-            self.mapped = Some(Arc::new(MappedSlots { buffers, stride, height: height as usize }));
-        }
+        self.gpu_buffers = buffers;
+        self.mapped = mapped.map(Arc::new);
         self.gpu_device = Some(device);
         Ok(encoder)
     }

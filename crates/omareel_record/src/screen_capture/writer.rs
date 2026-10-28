@@ -105,8 +105,9 @@ pub fn write_all<S: EncoderSink + ?Sized>(sink: &mut S, bytes: &[u8], abort: &At
 /// The capture slots' pixels, `stride * height` bytes each. A slot is only read while the ring
 /// says it is being written, and only filled while it is capturing.
 pub trait SlotMemory: Send + Sync {
-    /// Calls `read` with slot `index`'s bytes.
-    fn with_slot(&self, index: usize, read: &mut dyn FnMut(&[u8]));
+    /// Calls `read` with slot `index`'s bytes; false when they can't be read (and `read` isn't
+    /// called).
+    fn with_slot(&self, index: usize, read: &mut dyn FnMut(&[u8])) -> bool;
 }
 
 /// Slots in one block of memory the caller owns, such as the shared-memory pool the compositor
@@ -132,11 +133,13 @@ impl RawSlotMemory {
 }
 
 impl SlotMemory for RawSlotMemory {
-    fn with_slot(&self, index: usize, read: &mut dyn FnMut(&[u8])) {
-        if index < self.slots {
-            // SAFETY: `new`'s contract covers every slot below `slots`.
-            read(unsafe { std::slice::from_raw_parts(self.base.add(index * self.slot_bytes), self.slot_bytes) });
+    fn with_slot(&self, index: usize, read: &mut dyn FnMut(&[u8])) -> bool {
+        if index >= self.slots {
+            return false;
         }
+        // SAFETY: `new`'s contract covers every slot below `slots`.
+        read(unsafe { std::slice::from_raw_parts(self.base.add(index * self.slot_bytes), self.slot_bytes) });
+        true
     }
 }
 
@@ -363,7 +366,7 @@ impl<S: EncoderSink + ?Sized, M: SlotMemory + ?Sized> FrameOutput for MatroskaOu
     fn write(&mut self, index: usize, frame_index: i64) -> Result<(), String> {
         let MatroskaOutput { fps, rows, cropped, memory, sink, abort, .. } = self;
         let mut result = Ok(());
-        memory.with_slot(index, &mut |bytes: &[u8]| {
+        let read = memory.with_slot(index, &mut |bytes: &[u8]| {
             let Some(first) = rows.first() else { return };
             let output: &[u8] = if rows.len() > 1 {
                 for row in rows.iter() {
@@ -378,6 +381,9 @@ impl<S: EncoderSink + ?Sized, M: SlotMemory + ?Sized> FrameOutput for MatroskaOu
             let frame_header = capture_frame_header((frame_index as f64 * 1e6 / *fps).round() as i64, output.len() as i64);
             result = write_all(*sink, &frame_header, abort).and_then(|()| write_all(*sink, output, abort));
         });
+        if !read {
+            return Err("A captured frame could not be read".into());
+        }
         result
     }
 }

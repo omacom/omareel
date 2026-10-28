@@ -228,23 +228,52 @@ impl Drop for Buffer {
     }
 }
 
-/// Linear dmabufs read back on the CPU for the ffmpeg encoder, one per slot, each
+/// Linear dmabufs read back on the CPU for the ffmpeg encoder, one per slot, each read as
 /// `stride * height` bytes.
 pub struct MappedSlots {
-    pub buffers: Vec<Buffer>,
-    pub stride: usize,
-    pub height: usize,
+    buffers: Vec<Buffer>,
+    stride: usize,
+}
+
+impl MappedSlots {
+    /// The slots, when every buffer has one plane and maps with the first one's row stride, which
+    /// covers at least a row of 4-byte pixels.
+    pub fn new(buffers: Vec<Buffer>) -> Result<MappedSlots, String> {
+        let stride = buffers.first().and_then(|buffer| buffer.planes().next()).map_or(0, |(_, _, stride)| stride as usize);
+        let width = buffers.first().map_or(0, |buffer| buffer.0.width as usize);
+        let readable = buffers.iter().all(|buffer| buffer.planes().count() == 1 && buffer.readable_with_stride(stride));
+        if buffers.is_empty() || !readable || stride < width * 4 {
+            return Err("the dmabufs can't be read back".into());
+        }
+        Ok(MappedSlots { buffers, stride })
+    }
+
+    /// The buffers' row stride in bytes.
+    pub fn stride(&self) -> usize {
+        self.stride
+    }
+
+    /// The buffers, slot by slot.
+    pub fn buffers(&self) -> impl Iterator<Item = &Buffer> {
+        self.buffers.iter()
+    }
 }
 
 impl SlotMemory for MappedSlots {
-    fn with_slot(&self, index: usize, read: &mut dyn FnMut(&[u8])) {
-        let Some(buffer) = self.buffers.get(index) else { return };
-        let bytes = self.stride * self.height;
-        buffer.read(&mut |data, _| {
-            // SAFETY: the mapping covers `height` rows of `stride` bytes (checked when the slots
-            // were made) and stays mapped for this call.
-            read(unsafe { std::slice::from_raw_parts(data, bytes) });
+    fn with_slot(&self, index: usize, read: &mut dyn FnMut(&[u8])) -> bool {
+        let Some(buffer) = self.buffers.get(index) else { return false };
+        let mut called = false;
+        let mapped = buffer.read(&mut |data, stride| {
+            // A mapping with other rows than the slots were made for would be misread.
+            if stride != self.stride {
+                return;
+            }
+            called = true;
+            // SAFETY: the mapping covers the buffer's `height` rows of `stride` bytes and stays
+            // mapped for this call.
+            read(unsafe { std::slice::from_raw_parts(data, stride * buffer.0.height as usize) });
         });
+        mapped && called
     }
 }
 

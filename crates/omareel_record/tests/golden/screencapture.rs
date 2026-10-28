@@ -418,8 +418,9 @@ fn encoder_probe_txt() {
 struct TestSlots(Vec<Mutex<Vec<u8>>>);
 
 impl SlotMemory for TestSlots {
-    fn with_slot(&self, index: usize, read: &mut dyn FnMut(&[u8])) {
+    fn with_slot(&self, index: usize, read: &mut dyn FnMut(&[u8])) -> bool {
         read(&self.0[index].lock().unwrap_or_else(PoisonError::into_inner));
+        true
     }
 }
 
