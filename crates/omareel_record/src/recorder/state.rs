@@ -34,7 +34,7 @@ pub fn state_file_path() -> String {
 }
 
 /// The absolute directory of [`state_file_path`] (`QFileInfo(stateFilePath()).absolutePath()`).
-fn state_directory() -> String {
+pub fn state_directory() -> String {
     FileInfo::new(state_file_path()).absolute_path()
 }
 

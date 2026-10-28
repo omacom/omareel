@@ -16,7 +16,7 @@ use omareel_core::compat::geometry::PointF;
 use omareel_core::compat::qjson::{Format, Object, Value};
 use omareel_core::compat::qprocess::{ChannelMode, Process, ProcessState};
 use omareel_record::capture::*;
-use omareel_record::recorder::audio::{finish_audio_capture, start_audio_capture};
+use omareel_record::recorder::audio::{AudioCaptureStart, finish_audio_capture, start_audio_capture};
 use omareel_record::recorder::files::*;
 use omareel_record::recorder::self_view::*;
 use omareel_record::recorder::*;
@@ -971,15 +971,19 @@ fn audio_capture_txt() {
             recorder.start("sleep", &["30"]);
             assert!(recorder.wait_for_started(5000), "sleep did not start");
         }
+        // No log beside the audio: it is placed by when its recorder started.
+        let start =
+            AudioCaptureStart { started: true, started_us: Some(finish.audio_started_us), realtime_offset_us: 0 };
         let ok = finish_audio_capture(
             &mut recorder,
             &screen,
             &audio,
             &output,
             finish.screen_started_us,
-            finish.audio_started_us,
+            &start,
             finish.screen_duration_us,
-        );
+        )
+        .muxed;
         out.section(&format!("finish {}", finish.label));
         out.row([
             "arguments".to_owned(),

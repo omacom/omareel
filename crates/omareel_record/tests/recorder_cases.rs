@@ -7,7 +7,7 @@ use omareel_core::compat::qprocess::{Process, ProcessState};
 use omareel_core::compat::qstandardpaths;
 use omareel_record::capture::CaptureRegion;
 use omareel_record::capture_exclusion::{self, HardwareCursorHold};
-use omareel_record::recorder::audio::finish_audio_capture;
+use omareel_record::recorder::audio::{AudioCaptureStart, finish_audio_capture, first_sample_us};
 use omareel_record::recorder::{
     DiscardActions, GsrExitClassification, camera_capture_block, classify_gsr_exit, discard_timeline,
     even_capture_region, microphone_missing, microphone_peak_db,
@@ -247,8 +247,9 @@ fn stuck_audio_capture_stops_quickly_and_keeps_its_audio() {
     let mut stuck = Process::new();
     assert!(deaf_recorder(&mut stuck));
     let output = scratch.file("screen.mp4");
+    let start = AudioCaptureStart { started: true, started_us: Some(0), realtime_offset_us: 0 };
     let started = Instant::now();
-    assert!(finish_audio_capture(&mut stuck, &screen, &audio, &output, 0, 0, 2000000));
+    assert!(finish_audio_capture(&mut stuck, &screen, &audio, &output, 0, &start, 2000000).muxed);
     assert!(started.elapsed().as_millis() < 5000, "{:?}", started.elapsed());
     assert_eq!(stuck.state(), ProcessState::NotRunning);
     let mut probe = Process::new();
@@ -260,8 +261,21 @@ fn stuck_audio_capture_stops_quickly_and_keeps_its_audio() {
     let mut silent = Process::new();
     assert!(deaf_recorder(&mut silent));
     let started = Instant::now();
-    assert!(!finish_audio_capture(&mut silent, &screen, &scratch.file("none.mka"), &scratch.file("silent.mp4"), 0, 0, 2000000));
+    assert!(!finish_audio_capture(&mut silent, &screen, &scratch.file("none.mka"), &scratch.file("silent.mp4"), 0, &start, 2000000).muxed);
     assert!(started.elapsed().as_millis() < 5000, "{:?}", started.elapsed());
+}
+
+#[test]
+fn audio_is_placed_by_its_first_sample() {
+    // What ffmpeg logs for a PulseAudio input: the wall-clock time of its first sample.
+    let log = "Input #0, pulse, from 'alsa_output.monitor':\n  Duration: N/A, start: 1761612345.678900, bitrate: 1536 kb/s\n\
+               Input #1, pulse, from 'mic':\n  Duration: N/A, start: 1761612345.900000, bitrate: 1536 kb/s\n";
+    let offset = 1_761_612_000_000_000;
+    let started_us = 345_600_000;
+    assert_eq!(first_sample_us(log, started_us, offset), Some(345_678_900));
+    // No start line, or one from a wall clock that jumped: none.
+    assert_eq!(first_sample_us("Input #0, pulse, from 'x':\n", started_us, offset), None);
+    assert_eq!(first_sample_us(log, started_us, offset - 60_000_000), None);
 }
 
 #[test]
