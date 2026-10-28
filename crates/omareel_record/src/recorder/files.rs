@@ -88,7 +88,8 @@ pub fn cursor_at(samples: &[RawCursorSample], time: i64) -> PointF {
 /// time order (a stable sort, so cursor samples come before device events at the same time).
 /// Moves are `{t, k: "m", x, y}`; buttons `{t, k: "d"|"u", b, x, y}` and scrolls `{t, k: "s", dx,
 /// dy, x, y}` at the cursor's position then; keys `{t, k: "kd"|"ku", code}` with `name` and `mods`
-/// on key down. Positions are in the capture's pixels ([`position_object`]).
+/// on key down, and `label` too when the key has one. Positions are in the capture's pixels
+/// ([`position_object`]).
 pub fn input_log_lines(cursor: &[RawCursorSample], devices: &[DeviceEvent], region: &CaptureRegion) -> Vec<String> {
     let mut all: Vec<(i64, Object)> = Vec::with_capacity(cursor.len() + devices.len());
     let with_position = |object: &mut Object, logical: PointF| {
@@ -124,6 +125,9 @@ pub fn input_log_lines(cursor: &[RawCursorSample], devices: &[DeviceEvent], regi
                 object.insert("code", event.key_code);
                 if down {
                     object.insert("name", event.key_name.as_str());
+                    if !event.key_label.is_empty() {
+                        object.insert("label", event.key_label.as_str());
+                    }
                     let mods: Vec<Value> = event.modifiers.iter().map(|m| Value::from(m.as_str())).collect();
                     object.insert("mods", mods);
                 }
@@ -209,4 +213,36 @@ pub fn last_non_empty_line(output: &[u8]) -> String {
         }
     }
     String::new()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Not in the C++: a key down's layout label, written only when it has one.
+    #[test]
+    fn key_downs_carry_their_label() {
+        let key = |monotonic_us, kind, key_label: &str| DeviceEvent {
+            monotonic_us,
+            kind,
+            key_code: 16,
+            key_name: "KEY_Q".into(),
+            key_label: key_label.into(),
+            modifiers: vec!["ctrl".into()],
+            ..DeviceEvent::default()
+        };
+        let devices = [
+            key(1, DeviceEventKind::KeyDown, "A"),
+            key(2, DeviceEventKind::KeyUp, "A"),
+            key(3, DeviceEventKind::KeyDown, ""),
+        ];
+        assert_eq!(
+            input_log_lines(&[], &devices, &CaptureRegion::default()),
+            [
+                r#"{"code":16,"k":"kd","label":"A","mods":["ctrl"],"name":"KEY_Q","t":1}"#,
+                r#"{"code":16,"k":"ku","t":2}"#,
+                r#"{"code":16,"k":"kd","mods":["ctrl"],"name":"KEY_Q","t":3}"#,
+            ]
+        );
+    }
 }
