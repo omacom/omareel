@@ -1,7 +1,7 @@
 # Maintainer: Ryan <ryan@heyoodle.com>
 
 pkgname=omareel
-pkgver=0.3.0
+pkgver=0.4.0
 pkgrel=1
 pkgdesc='Screen recorder and editor for Omarchy with a synthetic cursor, auto zooms, and a camera bubble'
 arch=('x86_64' 'aarch64')
