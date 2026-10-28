@@ -926,7 +926,7 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
                 "-select_streams",
                 "v:0",
                 "-show_entries",
-                "stream=width,height,r_frame_rate",
+                "stream=width,height,r_frame_rate:format=duration",
                 "-of",
                 "json",
                 &camera_video,
@@ -936,7 +936,10 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
             let document = qjson::object_from_json(&camera_probe.read_all_standard_output()).unwrap_or_default();
             let streams = document.value("streams").to_array();
             let stream = streams.first().map(Value::to_object).unwrap_or_default();
-            if !stream.is_empty() {
+            // camera.mp4 is fragmented: a recorder killed before its first fragment was written
+            // leaves a header that probes as a stream without a single frame.
+            let duration = to_double(&document.value("format").to_object().value("duration").to_string_or(""));
+            if !stream.is_empty() && duration > 0.0 {
                 let rate_text = stream.value("r_frame_rate").to_string_or("");
                 let rate: Vec<&str> = rate_text.split('/').collect();
                 let fps = if rate.len() == 2 && to_double(rate[1]) != 0.0 {
