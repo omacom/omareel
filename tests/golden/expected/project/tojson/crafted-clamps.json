@@ -118,7 +118,6 @@
         "enabled": false,
         "holdMs": 5000,
         "position": "bottom-center",
-        "showOnlyShortcuts": true,
         "size": 0.5
     },
     "name": "Recording 13",

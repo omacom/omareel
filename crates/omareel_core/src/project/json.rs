@@ -317,7 +317,8 @@ impl Project {
             p.keystrokes.position = "bottom-center".into();
         }
         p.keystrokes.size = cpp::clamp(keystrokes.value("size").to_double(1.0), 0.5, 2.0);
-        p.keystrokes.show_only_shortcuts = keystrokes.value("showOnlyShortcuts").to_bool(true);
+        // "showOnlyShortcuts" from older projects is ignored: the recorder keeps no plain
+        // typing, and the keystroke track hides any an older recording has.
         p.keystrokes.hold_ms = cpp::clamp(keystrokes.value("holdMs").to_int(900), 100, 5000);
 
         let a = source.value("audio").to_object();
@@ -509,7 +510,6 @@ impl Project {
                     ("enabled", k.enabled.into()),
                     ("position", k.position.as_str().into()),
                     ("size", k.size.into()),
-                    ("showOnlyShortcuts", k.show_only_shortcuts.into()),
                     ("holdMs", k.hold_ms.into()),
                 ]),
             ),

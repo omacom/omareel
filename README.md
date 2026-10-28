@@ -120,7 +120,7 @@ want the bar to appear.
 An `.omareel` bundle is a directory. `screen.mp4` is the cursor-free source recording;
 `screen.mp4.ts` anchors input timestamps to the first video frame; `capture.json` describes the
 region, scale, dimensions, frame rate, and audio; `input.jsonl` stores pointer, button, scroll,
-and key events; `project.json` contains non-destructive editor choices; and `thumb.jpg` is the
+and key events (keyboard shortcuts and non-text keys only: plain typing is never recorded); `project.json` contains non-destructive editor choices; and `thumb.jpg` is the
 launcher thumbnail. Moving the whole directory preserves the editable project.
 
 ## Troubleshooting

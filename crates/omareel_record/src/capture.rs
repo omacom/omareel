@@ -118,5 +118,7 @@ pub struct DeviceEvent {
     pub dy: i32,
     pub key_code: i32,
     pub key_name: String,
+    /// What the keyboard's layout prints on the key, for a key down; empty without a layout.
+    pub key_label: String,
     pub modifiers: Vec<String>,
 }

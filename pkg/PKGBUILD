@@ -21,6 +21,7 @@ depends=(
   'libjpeg-turbo'
   'libva'
   'mesa'
+  'libxkbcommon'
   'qt6-base'
   'qt6-declarative'
   'qt6-multimedia'
