@@ -300,7 +300,6 @@ fn file_size(path: &str) -> i64 {
     FileInfo::new(path).size()
 }
 
-<<<<<<< HEAD
 /// How much the bundle's files hold together, which grows while a stopping recorder saves.
 fn bundle_bytes(bundle: &str) -> u64 {
     std::fs::read_dir(bundle)
@@ -319,15 +318,8 @@ const STOP_LIMIT: std::time::Duration = std::time::Duration::from_secs(600);
 /// discard, removed. Finishing a long recording (draining the encoder, muxing the audio) can take
 /// a while, so the wait lasts as long as the bundle keeps growing: a daemon that saves nothing
 /// for [`STOP_STALL`], or is still going after [`STOP_LIMIT`], is killed with its ffmpeg and
-/// `__record-gsr` descendants.
-=======
-/// `Recorder::stopExisting(cancel, &bundlePath, &error)`: signals the daemon and waits up to 20
-/// seconds (800 checks 25 ms apart) for it to go or for its state file to disappear, then says
-/// whether the bundle was finalized (`screen.mp4` and `capture.json` not empty, `input.jsonl` a
-/// file) or, after a discard, removed. A daemon that does not stop is killed with its ffmpeg and
-/// `__record-gsr` descendants, and the cursor setting it held is put back (up to a second for it
-/// to die first).
->>>>>>> origin/fix/cursor-session
+/// `__record-gsr` descendants, and the cursor setting it held is put back (up to a second for
+/// it to die first).
 pub fn stop_existing(cancel: bool) -> StopOutcome {
     let state = read_state();
     let pid = state.value("pid").to_variant_long_long();
