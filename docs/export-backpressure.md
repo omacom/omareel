@@ -28,6 +28,17 @@ frames, lookahead, filter buffers, or thread allocations. At 4K those can still
 use several GiB, but should not grow with video length. The GIF raw-file path
 is unchanged by this fix.
 
+## Encoder fallback
+
+The encode worker is handed every encoder to try: the GPU encoder that passed
+its one-frame probe at the export size (NVENC, else VA-API on an Intel or AMD
+render node), then libx264. An encoder that exits before it has taken the first
+frame (a device that will not open, a driver that refuses) is replaced by the
+next one, which gets the same frame; nothing else is buffered for a retry. An
+encoder that is still running when a write fails has stalled and is not
+replaced, so the stall deadline and cancellation behave as above. The tests
+below pin libx264 with `OMAREEL_EXPORT_ENCODER=x264`.
+
 ## Tests (omadev only)
 
 Use an owned nest and a canonical source path with a separate build directory.
@@ -42,10 +53,10 @@ omadev run 1 cmake -S "$repo" -B /tmp/omareel-backpressure-build \
 omadev run 1 cmake --build /tmp/omareel-backpressure-build -j 4
 # Let GUI tests keep their requested window dimensions, instead of being tiled.
 omadev hyprctl 1 eval 'hl.window_rule({name="omareel-backpressure-test", match={class="test_editor"}, float=true})'
-omadev run 1 env OMAREEL_DISABLE_NVENC=1 ctest \
+omadev run 1 env OMAREEL_EXPORT_ENCODER=x264 ctest \
   --test-dir /tmp/omareel-backpressure-build --output-on-failure --timeout 90
 omadev run 1 env QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
-  OMAREEL_DISABLE_NVENC=1 ctest --test-dir /tmp/omareel-backpressure-build \
+  OMAREEL_EXPORT_ENCODER=x264 ctest --test-dir /tmp/omareel-backpressure-build \
   -R 'rust|exporter_smoke' --output-on-failure --timeout 90
 omadev run 1 python3 "$repo/tests/tools/export-memory-proof.py" \
   /tmp/omareel-backpressure-build/omareel
