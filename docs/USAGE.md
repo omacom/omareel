@@ -25,8 +25,9 @@ clicks, and zooms non-destructively. Hyprland draws a software cursor into the s
 where capture would record it, and by default uses one on NVIDIA whenever a monitor has VRR on;
 while recording, Omareel sets `cursor:no_hardware_cursors` to 0 and restores it afterwards. If
 the recorder is killed before it can, the previous value is kept in
-`$XDG_RUNTIME_DIR/omareel/hardware-cursor-hold.json` and restored the next time the launcher or a
-recording starts (or by `omareel record --stop` when it has to kill a stuck recorder).
+`$XDG_RUNTIME_DIR/omareel/hardware-cursor-hold-<instance>.json` (one per Hyprland instance) and
+restored the next time the launcher or a recording starts on that instance (or by
+`omareel record --stop` when it has to kill a stuck recorder).
 
 ## Commands
 

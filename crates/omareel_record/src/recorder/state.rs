@@ -48,11 +48,25 @@ pub fn self_view_host_path() -> String {
     state_directory() + "/selfview-host.json"
 }
 
-/// `hardware-cursor-hold.json` beside the state file: the `cursor:no_hardware_cursors` value a
-/// recording's `HardwareCursorHold` changed, kept while the hold lasts so that a start after a
-/// crash can put it back (`capture_exclusion::restore_abandoned_hardware_cursor`).
-pub fn hardware_cursor_hold_path() -> String {
-    state_directory() + "/hardware-cursor-hold.json"
+/// `hardware-cursor-hold-<instance>.json` beside the state file: the `cursor:no_hardware_cursors`
+/// value a recording's `HardwareCursorHold` changed on that Hyprland instance, kept while the
+/// hold lasts so that a start after a crash can put it back
+/// (`capture_exclusion::restore_abandoned_hardware_cursor`). One per instance, so recordings on
+/// two compositors never overwrite each other's. Characters a file name should not hold become
+/// `_`; an empty instance is `none`.
+pub fn hardware_cursor_hold_path(instance: &str) -> String {
+    let name: String = instance
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.') { c } else { '_' })
+        .collect();
+    let name = if name.is_empty() || name.chars().all(|c| c == '.') { "none".to_owned() } else { name };
+    format!("{}/hardware-cursor-hold-{name}.json", state_directory())
+}
+
+/// `hardware-cursor-hold.lock` beside the state file: the file every process `flock`s while it
+/// restores, takes or gives back a hold.
+pub fn hardware_cursor_hold_lock_path() -> String {
+    state_directory() + "/hardware-cursor-hold.lock"
 }
 
 /// `QJsonDocument::fromJson(bytes).object()`: an empty object for anything but an object.

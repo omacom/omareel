@@ -27,6 +27,14 @@
 //! went is asked of IPC once, and kept like a still pointer's position until it comes back: the
 //! editor's cursor leaves the frame instead of sticking at its edge.
 //!
+//! Since moves the output never commits are moves the session never reports, a silent session is
+//! checked against IPC: after a second without events, one `j/cursorpos` (and one a second after
+//! that while the silence lasts). Should it disagree twice in a row, 100 ms apart, with nothing
+//! from the session in between, the session missed moves and the sampler polls for the rest of
+//! the recording. A still pointer costs one request a second instead of 240. (A hidden cursor has
+//! no image to overlap the output, so Hyprland says `leave` with the pointer on it: that too
+//! ends in polling, which still knows where the pointer is.)
+//!
 //! Hyprland only sends positions to clients with the `cursorpos` permission. Every client has it
 //! unless `ecosystem:enforce_permissions` is on; then an unknown client would make Hyprland ask
 //! the user, in a dialog the recording would capture, so the session is not tried. Without the
@@ -65,6 +73,13 @@ pub use crate::recorder::monotonic_us;
 
 /// How long a still pointer goes without a sample: a quarter second.
 const STILL_INTERVAL_US: i64 = 250_000;
+
+/// How long the session may stay silent before IPC is asked whether it missed a move.
+const SILENCE_CHECK_US: i64 = 1_000_000;
+
+/// How soon a disagreement is checked again before the session is given up: long enough for a
+/// move IPC saw first to reach the session with the output's next commit.
+const RECHECK_US: i64 = 100_000;
 
 /// `qEnvironmentVariable(name)`: the value decoded as UTF-8, empty when unset.
 fn environment_variable(name: &str) -> String {
@@ -192,7 +207,7 @@ pub fn cursor_position() -> Option<PointF> {
 /// Where a sampler's samples come from.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum CursorSource {
-    /// Not sampling, or still choosing.
+    /// Not started, or still choosing.
     #[default]
     None,
     /// The compositor's cursor session.
@@ -239,6 +254,7 @@ impl CursorSampler {
         }
         let stop = Arc::new(StopSignal::new().map_err(|error| format!("Cursor sampling could not start: {error}"))?);
         self.stop = Some(Arc::clone(&stop));
+        self.source.store(CursorSource::None as u8, Ordering::SeqCst);
         let source = Arc::clone(&self.source);
         let keeper = Keeper::new(Arc::clone(&self.samples));
         let monitor = monitor.to_owned();
@@ -256,10 +272,11 @@ impl CursorSampler {
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
         }
-        self.source.store(CursorSource::None as u8, Ordering::SeqCst);
     }
 
-    /// Where the running sampler's samples come from.
+    /// Where the samples come from: the session, or polling once the sampler fell back (at the
+    /// start or later in the run). It stays as it ended after [`stop`](CursorSampler::stop), so
+    /// it can be read with the samples.
     pub fn source(&self) -> CursorSource {
         CursorSource::from_u8(self.source.load(Ordering::SeqCst))
     }
@@ -554,8 +571,8 @@ fn session_answered(entered: bool, pointer: Option<PointF>, output: RectF) -> bo
 
 /// Where the session's events put the pointer.
 struct Tracker {
-    /// The output's logical origin, added to the session's relative positions.
-    origin: PointF,
+    /// The output's logical box; its origin is added to the session's relative positions.
+    output: RectF,
     /// The pointer, relative to the output, as the session last put it (Hyprland starts at 0,0
     /// and never repeats itself, so an `enter` without a `position` means this one).
     relative: (i32, i32),
@@ -563,8 +580,25 @@ struct Tracker {
 }
 
 impl Tracker {
-    fn new(origin: PointF) -> Tracker {
-        Tracker { origin, relative: (0, 0), entered: false }
+    fn new(output: RectF) -> Tracker {
+        Tracker { output, relative: (0, 0), entered: false }
+    }
+
+    /// Where the session last put the pointer, globally.
+    fn position(&self) -> PointF {
+        PointF::new(self.output.x + f64::from(self.relative.0), self.output.y + f64::from(self.relative.1))
+    }
+
+    /// Whether `pointer` (from IPC, floored) agrees with what the session said: within a pixel
+    /// of its position while the pointer is on the output (the session truncates), off the
+    /// output after a `leave`.
+    fn agrees(&self, pointer: PointF) -> bool {
+        if self.entered {
+            let position = self.position();
+            (pointer.x - position.x).abs() <= 1.0 && (pointer.y - position.y).abs() <= 1.0
+        } else {
+            session_answered(false, Some(pointer), self.output)
+        }
     }
 
     /// Turns events from the session into samples at `now`: an `enter` or a `position` keeps
@@ -591,9 +625,41 @@ impl Tracker {
             }
         }
         if moved {
-            let (x, y) = self.relative;
-            keeper.offer(now, PointF::new(self.origin.x + f64::from(x), self.origin.y + f64::from(y)));
+            keeper.offer(now, self.position());
         }
+    }
+}
+
+/// When to ask IPC whether a silent session missed a move ([`Tracker::agrees`]).
+struct SilenceCheck {
+    /// When the next question is due.
+    due: i64,
+    /// Whether the last answer disagreed, with nothing from the session since.
+    suspect: bool,
+}
+
+impl SilenceCheck {
+    fn new(now: i64) -> SilenceCheck {
+        SilenceCheck { due: now + SILENCE_CHECK_US, suspect: false }
+    }
+
+    /// The session spoke at `now`: it is not silent.
+    fn heard(&mut self, now: i64) {
+        *self = SilenceCheck::new(now);
+    }
+
+    /// What IPC said at `now` (`None`: no answer, which proves nothing). `Err` once it disagreed
+    /// twice in a row: the session missed a move.
+    fn answer(&mut self, now: i64, agrees: Option<bool>) -> Result<(), ()> {
+        match agrees {
+            Some(false) if self.suspect => return Err(()),
+            Some(false) => {
+                self.suspect = true;
+                self.due = now + RECHECK_US;
+            }
+            _ => *self = SilenceCheck::new(now),
+        }
+        Ok(())
     }
 }
 
@@ -652,7 +718,7 @@ fn open_session(ipc: &[u8], monitor: &str) -> Result<Session, String> {
         state,
         source,
         session,
-        tracker: Tracker::new(PointF::new(layout.geometry.x, layout.geometry.y)),
+        tracker: Tracker::new(layout.geometry),
         initial,
     };
     if !session_answered(entered, initial, layout.geometry) {
@@ -663,18 +729,32 @@ fn open_session(ipc: &[u8], monitor: &str) -> Result<Session, String> {
 }
 
 impl Session {
-    /// Follows the session until stopped (`Ok`) or until the connection fails (`Err`, and the
-    /// sampler polls from then on). It blocks on the socket and the stop signal, waking for a
-    /// still pointer's repeat.
+    /// Follows the session until stopped (`Ok`), or until the connection fails or the session
+    /// is caught missing moves ([`SilenceCheck`]); then `Err`, and the sampler polls from then
+    /// on. It blocks on the socket and the stop signal, waking for a still pointer's repeat and
+    /// for the silence check.
     fn listen(&mut self, ipc: &[u8], stop: &StopSignal, keeper: &mut Keeper) -> Result<(), String> {
         // Off the output as it opened: where IPC put it, until the session speaks.
         if let Some(initial) = self.initial.take() {
             keeper.offer(monotonic_us(), initial);
         }
+        let mut silence = SilenceCheck::new(monotonic_us());
         let result = loop {
             let now = monotonic_us();
             let events = std::mem::take(&mut self.state.events);
+            if !events.is_empty() {
+                silence.heard(now);
+            }
             self.tracker.take(&events, ipc, now, keeper);
+            if silence.due <= now {
+                let pointer = query_cursor(ipc);
+                if silence.answer(now, pointer.map(|pointer| self.tracker.agrees(pointer))).is_err() {
+                    if let Some(pointer) = pointer {
+                        keeper.offer(now, pointer);
+                    }
+                    break Err("the cursor session missed moves IPC saw".into());
+                }
+            }
             if keeper.repeat_due().is_some_and(|due| due <= now) {
                 keeper.repeat(now);
             }
@@ -689,7 +769,8 @@ impl Session {
                 }
                 continue;
             };
-            let timeout = keeper.repeat_due().map(|due| due - monotonic_us());
+            let due = keeper.repeat_due().map_or(silence.due, |repeat| repeat.min(silence.due));
+            let timeout = Some(due - monotonic_us());
             let (stopped, readable) = wait(stop, Some(guard.connection_fd().as_raw_fd()), timeout);
             if stopped {
                 break Ok(());
@@ -790,7 +871,7 @@ mod tests {
     fn session_events_become_global_positions() {
         let ipc = b"/nonexistent/omareel-cursor-test.sock";
         let mut keeper = Keeper::new(Arc::default());
-        let mut tracker = Tracker::new(PointF::new(1920.0, 0.0));
+        let mut tracker = Tracker::new(RectF::new(1920.0, 0.0, 1280.0, 720.0));
         // An enter without a position: Hyprland's starting 0,0.
         tracker.take(&[SessionEvent::Enter], ipc, 10, &mut keeper);
         tracker.take(&[SessionEvent::Position(100, 50), SessionEvent::Position(101, 52)], ipc, 20, &mut keeper);
@@ -801,6 +882,41 @@ mod tests {
         tracker.take(&[SessionEvent::Enter], ipc, 300_000, &mut keeper);
         assert_eq!(kept(&keeper), [(10, 1920.0, 0.0), (20, 2021.0, 52.0), (300_000, 1925.0, 5.0)]);
         assert!(tracker.entered);
+    }
+
+    #[test]
+    fn ipc_agrees_with_the_session_within_a_pixel_or_off_the_output() {
+        let mut tracker = Tracker::new(RectF::new(1920.0, 0.0, 1280.0, 720.0));
+        let mut keeper = Keeper::new(Arc::default());
+        let ipc = b"/nonexistent/omareel-cursor-test.sock";
+        tracker.take(&[SessionEvent::Enter, SessionEvent::Position(100, 50)], ipc, 10, &mut keeper);
+        assert!(tracker.agrees(PointF::new(2020.0, 50.0)));
+        assert!(tracker.agrees(PointF::new(2021.0, 49.0)));
+        // A move the output never committed.
+        assert!(!tracker.agrees(PointF::new(2300.0, 50.0)));
+        tracker.take(&[SessionEvent::Leave], ipc, 20, &mut keeper);
+        assert!(tracker.agrees(PointF::new(100.0, 100.0)));
+        // Back on the output without an enter.
+        assert!(!tracker.agrees(PointF::new(2000.0, 100.0)));
+    }
+
+    #[test]
+    fn a_session_is_given_up_after_two_disagreements_in_a_row() {
+        let mut check = SilenceCheck::new(0);
+        assert_eq!(check.due, SILENCE_CHECK_US);
+        // Agreement, or no answer, waits another second.
+        assert_eq!(check.answer(1_000_000, Some(true)), Ok(()));
+        assert_eq!(check.due, 2_000_000);
+        assert_eq!(check.answer(2_000_000, None), Ok(()));
+        assert_eq!(check.due, 3_000_000);
+        // A disagreement is asked again soon; the session speaking in between clears it.
+        assert_eq!(check.answer(3_000_000, Some(false)), Ok(()));
+        assert_eq!(check.due, 3_000_000 + RECHECK_US);
+        check.heard(3_050_000);
+        assert!(!check.suspect);
+        assert_eq!(check.due, 4_050_000);
+        assert_eq!(check.answer(4_050_000, Some(false)), Ok(()));
+        assert_eq!(check.answer(4_150_000, Some(false)), Err(()));
     }
 
     #[test]

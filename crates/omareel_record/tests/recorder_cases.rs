@@ -285,7 +285,7 @@ fn recording_holds_hardware_cursors() {
     std::fs::set_permissions(&mock, std::os::unix::fs::PermissionsExt::from_mode(0o700)).unwrap();
     let runtime = scratch.0.join("run");
     std::fs::create_dir_all(&runtime).unwrap();
-    let marker = runtime.join("omareel/hardware-cursor-hold.json");
+    let marker = runtime.join("omareel/hardware-cursor-hold-test-instance.json");
     let mut environment = ScopedEnvironment::new();
     environment.set("PATH", &scratch.0);
     environment.set("XDG_RUNTIME_DIR", &runtime);
@@ -371,9 +371,10 @@ fn recording_holds_hardware_cursors() {
     // A recorder that died holding the setting: the next start puts it back.
     let mut exited = std::process::Command::new("/bin/sh").args(["-c", "exit 0"]).spawn().unwrap();
     exited.wait().unwrap();
+    let marker_of = |instance: &str| runtime.join(format!("omareel/hardware-cursor-hold-{instance}.json"));
     let abandoned = |previous: i32, instance: &str| {
         std::fs::write(
-            &marker,
+            marker_of(instance),
             format!("{{\"previous\": {previous}, \"pid\": {}, \"instance\": \"{instance}\"}}", exited.id()),
         )
         .unwrap();
@@ -398,14 +399,24 @@ fn recording_holds_hardware_cursors() {
     // From a Hyprland that is gone: a new one read its configuration afresh.
     abandoned(2, "previous-instance");
     assert!(!capture_exclusion::restore_abandoned_hardware_cursor());
-    assert!(read_marker().is_none());
-    // From another Hyprland that still runs: left for a start there.
+    assert!(!marker_of("previous-instance").exists());
+    assert!(calls().is_empty());
+    // From another Hyprland that still runs: left for a start there, and a hold on this one
+    // keeps a marker of its own beside it.
     std::fs::create_dir_all(runtime.join("hypr/other-instance")).unwrap();
     std::fs::write(runtime.join("hypr/other-instance/.socket.sock"), "").unwrap();
-    abandoned(2, "other-instance");
+    abandoned(3, "other-instance");
     assert!(!capture_exclusion::restore_abandoned_hardware_cursor());
-    assert!(read_marker().is_some());
     assert!(calls().is_empty());
+    environment.set("OMAREEL_TEST_CURSOR", "2");
+    let hold = HardwareCursorHold::new();
+    assert_eq!(read_marker().expect("this instance's marker").value("previous").to_int(-1), 2);
+    let other = std::fs::read_to_string(marker_of("other-instance")).expect("the other instance's marker");
+    assert!(other.contains("\"previous\": 3"), "{other}");
+    drop(hold);
+    assert!(read_marker().is_none());
+    assert!(marker_of("other-instance").exists());
+    calls();
     // A recorder start restores before it reads the setting.
     abandoned(2, "test-instance");
     environment.set("OMAREEL_TEST_CURSOR", "0");
@@ -419,6 +430,30 @@ fn recording_holds_hardware_cursors() {
             "-j getoption cursor:no_hardware_cursors",
         ]
     );
+    // Restoring waits for whoever holds the lock (a recorder taking its hold), then reads the
+    // marker as that left it.
+    if std::path::Path::new("/usr/bin/flock").exists() {
+        abandoned(2, "test-instance");
+        let lock = runtime.join("omareel/hardware-cursor-hold.lock");
+        let ready = scratch.file("locked");
+        let mut holder = std::process::Command::new("/usr/bin/flock")
+            .arg(&lock)
+            .args(["/bin/sh", "-c", &format!(": > '{ready}'; exec /usr/bin/sleep 0.6")])
+            .spawn()
+            .unwrap();
+        while !std::path::Path::new(&ready).exists() {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        // Meanwhile the "recorder" replaced the dead one's marker with its own live one.
+        let live = format!("{{\"previous\": 2, \"pid\": {}, \"instance\": \"test-instance\"}}", std::process::id());
+        std::fs::write(&marker, live).unwrap();
+        let started = Instant::now();
+        assert!(!capture_exclusion::restore_abandoned_hardware_cursor());
+        assert!(started.elapsed().as_millis() >= 400, "{:?}", started.elapsed());
+        holder.wait().unwrap();
+        assert!(read_marker().is_some());
+        assert!(calls().is_empty());
+    }
 }
 
 /// Environment variables set while the programs lock is held, put back when dropped.

@@ -27,7 +27,9 @@ This document is the frozen contract. Implementation runs are scoped to it.
   (`$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket.sock`) once for where the pointer
   went. Without the protocol, with `ecosystem:enforce_permissions` on, or when the session stays
   silent with the pointer on the output (no `cursorpos` permission), poll `j/cursorpos` at the
-  recording's frame rate (60–240 Hz). Store a position when it moved, and at least 1 sample /
+  recording's frame rate (60–240 Hz). Polling also takes over mid-recording when the session
+  misses moves: after each second without session events one `j/cursorpos` checks it, and two
+  disagreements 100 ms apart end the session. Store a position when it moved, and at least 1 sample /
   250 ms as a heartbeat.
 - **Buttons / scroll / keys:** libevdev on `/dev/input/event*` (user is in the `input` group on
   Omarchy). Open every device that has `EV_KEY` with `BTN_LEFT` or `EV_REL`/`REL_WHEEL` or

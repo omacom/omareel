@@ -1,6 +1,7 @@
 //! Runs the recorder's [`CursorSampler`] on one monitor until standard input closes, then prints
 //! where its samples came from and the samples, as one JSON object:
-//! `{"source": "session"|"polling"|"none", "seconds": s, "ipc_requests": n, "samples": [[monotonic_us, x, y], ...]}`,
+//! `{"first_source": ..., "source": "session"|"polling"|"none", "seconds": s, "ipc_requests": n,
+//! "samples": [[monotonic_us, x, y], ...]}` (`source` the last one, after any fallback),
 //! where `ipc_requests` counts what the sampler asked of Hyprland's IPC socket.
 //! `tests/tools/cursor-sampler-proof.py` drives it inside a nested Hyprland.
 //!
@@ -25,22 +26,25 @@ fn main() {
         }
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
-    eprintln!("cursor_probe: source {:?}", sampler.source());
-    let source = match sampler.source() {
+    let name = |source: CursorSource| match source {
         CursorSource::Session => "session",
         CursorSource::Polling => "polling",
         CursorSource::None => "none",
     };
+    let first = name(sampler.source());
+    eprintln!("cursor_probe: source {first}");
     let started = std::time::Instant::now();
     let _ = std::io::stdin().read_to_end(&mut Vec::new());
     sampler.stop();
+    // The sampler may have fallen back during the run; it keeps its last source after stop.
+    let source = name(sampler.source());
     let samples: Vec<String> = sampler
         .samples()
         .iter()
         .map(|sample| format!("[{}, {}, {}]", sample.monotonic_us, sample.logical_position.x, sample.logical_position.y))
         .collect();
     println!(
-        "{{\"source\": \"{source}\", \"seconds\": {}, \"ipc_requests\": {}, \"samples\": [{}]}}",
+        "{{\"first_source\": \"{first}\", \"source\": \"{source}\", \"seconds\": {}, \"ipc_requests\": {}, \"samples\": [{}]}}",
         started.elapsed().as_secs_f64(),
         cursor_sampler::ipc_request_count(),
         samples.join(", ")

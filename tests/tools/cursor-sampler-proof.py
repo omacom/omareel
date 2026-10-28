@@ -88,9 +88,29 @@ def probe_run(label, monitor, targets, settle=0.4):
     entry = {'label': label, 'no_hardware_cursors': setting, 'source': result['source'], 'samples': len(samples),
              'seconds': round(result['seconds'], 2), 'ipc_requests': result['ipc_requests'], 'stderr': err.strip(),
              'moves': rows, 'still_gap_ms': (largest_gap(samples, still_start, still_end) or 0) / 1000}
+    entry['first_source'] = result['first_source']
     report.setdefault('runs', []).append(entry)
     (root / f'probe-{label}.json').write_text(json.dumps(result))
     return entry
+
+
+def expect(entry, source, first_source=None, missing=(), max_latency_ms=200, quiet=True):
+    """Fails the proof unless the run used `source` (after starting with `first_source`), found
+    every move but the `missing` ones within `max_latency_ms`, kept a still pointer's samples at
+    most 300 ms apart, and, with `quiet`, asked IPC at most about once a second."""
+    label = entry['label']
+    assert entry['source'] == source, (label, entry)
+    assert entry['first_source'] == (first_source or source), (label, entry)
+    for index, row in enumerate(entry['moves']):
+        if index in missing:
+            assert row['latency_ms'] is None, (label, 'expected missing', row)
+        else:
+            assert row['latency_ms'] is not None and row['latency_ms'] <= max_latency_ms, (label, row)
+    assert 0 < entry['still_gap_ms'] <= 300, (label, entry['still_gap_ms'])
+    if quiet:
+        assert entry['ipc_requests'] <= 3 + entry['seconds'], (label, entry['ipc_requests'])
+    else:
+        assert entry['ipc_requests'] >= 40 * entry['seconds'], (label, entry['ipc_requests'])
 
 
 try:
@@ -102,7 +122,7 @@ try:
         for setting, label in ((1, 'software'), (0, 'hardware')):
             ctl('keyword', 'cursor:no_hardware_cursors', str(setting))
             time.sleep(0.2)
-            probe_run(label, name, targets)
+            expect(probe_run(label, name, targets), 'session')
         # Small moves over one surface (no cursor shape or focus change), hardware cursor.
         if os.environ.get('OMAREEL_APP'):
             layer = subprocess.Popen([os.environ['OMAREEL_APP'], '__layer-test', '--namespace', 'cursor-probe',
@@ -117,7 +137,7 @@ try:
                 time.sleep(0.2)
                 move(ox + 500, oy + 400)
                 time.sleep(0.3)
-                probe_run(label, name, inside, settle=0.15)
+                expect(probe_run(label, name, inside, settle=0.15), 'session')
             layer.terminate()
             layer.wait(timeout=5)
         # A second output to leave to: the session goes silent, IPC says where the pointer went.
@@ -127,17 +147,22 @@ try:
         report['second_monitor'] = {k: second[k] for k in ('x', 'y', 'width', 'height', 'scale')}
         ctl('keyword', 'cursor:no_hardware_cursors', '1')
         away = (second['x'] + 200, second['y'] + 200)
-        probe_run('leave', name, [(ox + 400, oy + 300), away, (ox + 600, oy + 500)])
-        # The pointer starting off the recorded output.
+        expect(probe_run('leave', name, [(ox + 400, oy + 300), away, (ox + 600, oy + 500)]), 'session')
+        # The pointer starting off the recorded output. Moves on the other output are not
+        # followed: the position IPC gave is kept until the pointer comes back.
         move(*away)
         time.sleep(0.2)
-        probe_run('start-away', name, [(second['x'] + 300, second['y'] + 250), (ox + 700, oy + 200)])
+        expect(probe_run('start-away', name, [(second['x'] + 300, second['y'] + 250), (ox + 700, oy + 200)]),
+               'session', missing=(0,))
         ctl('output', 'remove', 'CURSOR-PROBE-2')
         # Permissions enforced: the session is not tried, polling follows the pointer.
         ctl('keyword', 'ecosystem:enforce_permissions', '1')
         time.sleep(0.2)
-        probe_run('enforced', name, targets)
+        expect(probe_run('enforced', name, targets), 'polling', quiet=False)
         ctl('keyword', 'ecosystem:enforce_permissions', '0')
+        # A session that goes silent (moves the output never commits) is not provoked here: a
+        # nested output commits on every move, even with DPMS off. The unit tests cover the
+        # silence check that sends the sampler to polling then.
     elif args.mode == 'crash':
         first_monitor()
         app = os.environ['OMAREEL_APP']
@@ -147,7 +172,7 @@ try:
             time.sleep(0.3)
         ctl('keyword', 'cursor:no_hardware_cursors', '1')
         runtime = Path(os.environ['XDG_RUNTIME_DIR']) / 'omareel'
-        marker = runtime / 'hardware-cursor-hold.json'
+        marker = runtime / f"hardware-cursor-hold-{os.environ['HYPRLAND_INSTANCE_SIGNATURE']}.json"
         setting = lambda: json.loads(ctl('-j', 'getoption', 'cursor:no_hardware_cursors'))['int']
         record = [app, 'record', '--fullscreen', '--no-audio', '--no-open', '--dir', str(root / 'recordings')]
         result = subprocess.run(record, text=True, capture_output=True, timeout=60)
@@ -185,7 +210,8 @@ try:
         state = json.loads((Path(os.environ['XDG_RUNTIME_DIR']) / 'omareel/recording.json').read_text())
         bundle = Path(state['bundle'])
         report['held_setting'] = json.loads(ctl('-j', 'getoption', 'cursor:no_hardware_cursors'))
-        marker = Path(os.environ['XDG_RUNTIME_DIR']) / 'omareel/hardware-cursor-hold.json'
+        marker = (Path(os.environ['XDG_RUNTIME_DIR'])
+                  / f"omareel/hardware-cursor-hold-{os.environ['HYPRLAND_INSTANCE_SIGNATURE']}.json")
         report['marker_while_recording'] = json.loads(marker.read_text()) if marker.exists() else None
         moves = []
         for x, y in [(ox + 100, oy + 100), (ox + 800, oy + 450), (ox + 1500, oy + 800), (ox + 3, oy + 7)]:
@@ -210,6 +236,10 @@ try:
             report['moves'].append({'target': [x, y],
                                     'latency_ms': None if sample is None else (sample[0] - at) / 1000})
         report['largest_gap_ms'] = (largest_gap(samples, samples[0][0], samples[-1][0]) or 0) / 1000
+        assert report['held_setting']['int'] == 0 and report['restored_setting']['int'] == 1, report
+        assert report['marker_while_recording']['previous'] == 1 and not report['marker_after'], report
+        assert all(row['latency_ms'] is not None and row['latency_ms'] <= 200 for row in report['moves']), report
+        assert 0 < report['largest_gap_ms'] <= 300, report
 finally:
     (root / f'report-{args.mode}.json').write_text(json.dumps(report, indent=2))
     print(json.dumps(report, indent=2))
