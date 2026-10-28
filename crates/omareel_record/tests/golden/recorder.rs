@@ -462,6 +462,7 @@ fn input_log_txt() {
                     dy: object.value("dy").to_int(0),
                     key_code: object.value("code").to_int(0),
                     key_name: object.value("name").to_string_or(""),
+                    key_label: object.value("label").to_string_or(""),
                     modifiers: strings(object.value("mods")),
                 }
             })

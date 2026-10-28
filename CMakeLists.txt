@@ -27,9 +27,11 @@ if(OMAREEL_BUILD_HYPRLAND_PLUGIN)
     endif()
 endif()
 pkg_check_modules(TURBOJPEG REQUIRED IMPORTED_TARGET libturbojpeg)
-# libevdev is what omareel_record reads the input devices with; the screen capture's Wayland
-# client is Rust's own. libwayland-client is for the windows main.cpp commits itself.
+# libevdev is what omareel_record reads the input devices with, and libxkbcommon what it names
+# the keys with through the user's layout; the screen capture's Wayland client is Rust's own.
+# libwayland-client is for the windows main.cpp commits itself.
 pkg_check_modules(LIBEVDEV REQUIRED IMPORTED_TARGET libevdev)
+pkg_check_modules(XKBCOMMON REQUIRED IMPORTED_TARGET xkbcommon)
 pkg_check_modules(WAYLAND_CLIENT REQUIRED IMPORTED_TARGET wayland-client)
 qt_standard_project_setup()
 qt_policy(SET QTP0004 NEW)
@@ -48,7 +50,7 @@ target_include_directories(omareel_plumbing PUBLIC src/plumbing)
 target_link_libraries(omareel_plumbing
     PUBLIC Qt6::Core Qt6::Gui Qt6::Multimedia Qt6::Qml Qt6::Quick Qt6::OpenGL
     PRIVATE PkgConfig::TURBOJPEG)
-target_link_libraries(omareel_qt INTERFACE omareel_plumbing PkgConfig::LIBEVDEV)
+target_link_libraries(omareel_qt INTERFACE omareel_plumbing PkgConfig::LIBEVDEV PkgConfig::XKBCOMMON)
 
 add_library(omareel_render STATIC)
 qt_add_qml_module(omareel_ui STATIC
