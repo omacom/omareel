@@ -18,11 +18,17 @@ This document is the frozen contract. Implementation runs are scoped to it.
   bounded writer feeds the encoder without blocking display dispatch and crops regions while
   copying their rows. Generate protocol bindings at build time. The established recorder remains
   the explicit and automatic startup fallback.
-- **Cursor position:** poll the Hyprland IPC socket
-  `$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket.sock` with request `j/cursorpos`
-  (returns logical global coords). One request ≈ 6 µs; poll at 240 Hz on a dedicated thread.
-  Dedupe identical positions (only store when moved, but always store at least 1 sample / 250 ms
-  as a heartbeat).
+- **Cursor position:** on a dedicated thread with its own Wayland connection, listen to an
+  `ext-image-copy-capture-v1` pointer cursor session on the recorded output (positions only, no
+  cursor images). The compositor pushes `enter`/`leave`/`position` on monitor commits, in logical
+  coordinates relative to the output; add the output's logical origin for global coords. Hyprland
+  serves IPC on its main thread, so it is not polled while the session works. After `leave`, ask
+  `j/cursorpos` on the Hyprland IPC socket
+  (`$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket.sock`) once for where the pointer
+  went. Without the protocol, with `ecosystem:enforce_permissions` on, or when the session stays
+  silent with the pointer on the output (no `cursorpos` permission), poll `j/cursorpos` at the
+  recording's frame rate (60–240 Hz). Store a position when it moved, and at least 1 sample /
+  250 ms as a heartbeat.
 - **Buttons / scroll / keys:** libevdev on `/dev/input/event*` (user is in the `input` group on
   Omarchy). Open every device that has `EV_KEY` with `BTN_LEFT` or `EV_REL`/`REL_WHEEL` or
   keyboard keys. If no device can be opened, keep recording without click data and warn.
