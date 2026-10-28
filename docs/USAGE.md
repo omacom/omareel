@@ -221,6 +221,14 @@ clip, style, cursor, and zoom edits are stored in `project.json`.
 - `OMAREEL_NATIVE_CONVERSION=cpu` forces CPU colour conversion for native capture through ffmpeg. By default,
   the hardware conversion filter is exercised with a BGRA frame first and CPU conversion is used
   automatically when that exact conversion is unsupported.
+- `OMAREEL_EXPORT_ENCODER=nvenc|vaapi|x264` picks the MP4 export encoder (still falling back
+  to libx264 when it does not work). By default export uses NVENC, then VA-API on an Intel or AMD
+  render node (never NVIDIA's VA-API driver), then libx264, each GPU encoder probed first with
+  one frame at the export size. `OMAREEL_DISABLE_NVENC=1` skips NVENC.
+- `OMAREEL_EXPORT_DECODER=cuda|vaapi|software` picks how export decodes recordings. By default
+  it decodes with CUDA when NVIDIA's driver is loaded and in software otherwise; VA-API decoding
+  is opt-in because reading its frames back costs more than it saves. `--timing` reports the
+  decoder and encoder used.
 - `OMAREEL_NO_BAR=1` suppresses the recording bar.
 - `OMAREEL_SCREENSHOT=/path/out.png` makes `omareel edit` capture its own window with
   `QQuickWindow::grabWindow()` three seconds after loading, save the PNG, and quit. The launcher
