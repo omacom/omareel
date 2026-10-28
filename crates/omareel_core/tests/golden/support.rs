@@ -670,7 +670,7 @@ fn variant_prints_like_the_oracle() {
         assert_eq!(variant(cell), first[2 + i]);
     }
     assert_eq!(variant(&List(Vec::new())), first[6]);
-    let keys = ["Ctrl", "S", "H", "I"];
+    let keys = ["Ctrl", "S"];
     let pills = List(vec![map(vec![
         ("text", String(keys.join(" + "))),
         ("opacity", Double(1.0)),

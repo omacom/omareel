@@ -58,7 +58,6 @@ cursor.clickSound	"none"
 keystrokes.enabled	false
 keystrokes.position	"bottom-center"
 keystrokes.size	1
-keystrokes.showOnlyShortcuts	true
 keystrokes.holdMs	900
 audio.desktop	true
 audio.mic	true
@@ -150,7 +149,6 @@ cursor.clickSound	"none"
 keystrokes.enabled	false
 keystrokes.position	"bottom-center"
 keystrokes.size	1
-keystrokes.showOnlyShortcuts	true
 keystrokes.holdMs	900
 audio.desktop	true
 audio.mic	true
@@ -242,7 +240,6 @@ cursor.clickSound	"none"
 keystrokes.enabled	false
 keystrokes.position	"bottom-center"
 keystrokes.size	1
-keystrokes.showOnlyShortcuts	true
 keystrokes.holdMs	900
 audio.desktop	true
 audio.mic	true
@@ -334,7 +331,6 @@ cursor.clickSound	"none"
 keystrokes.enabled	false
 keystrokes.position	"bottom-center"
 keystrokes.size	1
-keystrokes.showOnlyShortcuts	true
 keystrokes.holdMs	900
 audio.desktop	true
 audio.mic	true
@@ -426,7 +422,6 @@ cursor.clickSound	"none"
 keystrokes.enabled	false
 keystrokes.position	"bottom-center"
 keystrokes.size	1
-keystrokes.showOnlyShortcuts	true
 keystrokes.holdMs	900
 audio.desktop	true
 audio.mic	true
@@ -518,7 +513,6 @@ cursor.clickSound	"none"
 keystrokes.enabled	false
 keystrokes.position	"bottom-center"
 keystrokes.size	1
-keystrokes.showOnlyShortcuts	true
 keystrokes.holdMs	900
 audio.desktop	true
 audio.mic	true
@@ -610,7 +604,6 @@ cursor.clickSound	"none"
 keystrokes.enabled	false
 keystrokes.position	"bottom-center"
 keystrokes.size	1
-keystrokes.showOnlyShortcuts	true
 keystrokes.holdMs	900
 audio.desktop	true
 audio.mic	true
@@ -690,7 +683,6 @@ cursor.clickSound	"none"
 keystrokes.enabled	false
 keystrokes.position	"bottom-center"
 keystrokes.size	1
-keystrokes.showOnlyShortcuts	true
 keystrokes.holdMs	900
 audio.desktop	true
 audio.mic	true

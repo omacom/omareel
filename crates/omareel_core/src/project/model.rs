@@ -39,7 +39,6 @@ pub struct Keystrokes {
     pub enabled: bool,
     pub position: String,
     pub size: f64,
-    pub show_only_shortcuts: bool,
     pub hold_ms: i32,
 }
 
@@ -49,7 +48,6 @@ impl Default for Keystrokes {
             enabled: false,
             position: "bottom-center".into(),
             size: 1.0,
-            show_only_shortcuts: true,
             hold_ms: 900,
         }
     }

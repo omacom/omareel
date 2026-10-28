@@ -23,7 +23,7 @@ ColumnLayout {
 
     EditorSwitch {
         text: "Show keystrokes"
-        description: "Display keys pressed during the recording"
+        description: "Display shortcuts and special keys; typing is never recorded"
         checked: root.settings.enabled
         onToggled: editor.setProjectValue("keystrokes.enabled", checked)
     }
@@ -33,12 +33,6 @@ ColumnLayout {
         enabled: root.settings.enabled
         opacity: enabled ? 1 : .42
         Behavior on opacity { NumberAnimation { duration: 160 } }
-        EditorSwitch {
-            text: "Shortcuts only"
-            description: "Hide plain letters and digits; keep shortcuts and editing keys"
-            checked: root.settings.showOnlyShortcuts
-            onToggled: editor.setProjectValue("keystrokes.showOnlyShortcuts", checked)
-        }
         // Preview of how a shortcut will look on the video.
         Rectangle {
             Layout.fillWidth: true

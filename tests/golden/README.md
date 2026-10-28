@@ -36,6 +36,17 @@ and `TMPDIR`, all siblings in one scratch directory; `TZ=UTC`, `LC_ALL=C`, `LANG
 is swapped in with a rename, so `expected/` is never half-written. Running it twice must leave
 `git status` clean.
 
+### Changed on purpose since the tag
+
+Regenerating from the tag undoes these; re-apply them by hand (from the Rust output) after any
+regeneration.
+
+- Keystrokes: the "Shortcuts only" switch (`keystrokes.showOnlyShortcuts`) is gone and plain
+  typing is always hidden, Shift+letter, US punctuation, space and keypad keys, Caps Lock and
+  Num Lock included (the recorder no longer keeps any). `project/` lost the `showOnlyShortcuts` key and field rows
+  everywhere; `keystroketrack/sample.txt` and the keystroke pills of `composition/editor.txt` and
+  `composition/exporter.txt` no longer show typing.
+
 The oracle's working directory is `$HOME` for every family, and its scratch files live under
 `$HOME/oracle-scratch/<family>/`. For the recording side it links what the app links: Qt
 Multimedia and its private headers (`QCameraDevicePrivate`), libevdev, libwayland-client and
@@ -363,8 +374,7 @@ for `ZoomSegment{id, start, end, level, automaticTarget = auto, target = (x, y)}
   `.stiffness`, `.damping`, `cursor.clickEffect` str, `cursor.clickShrink`,
   `cursor.rotateOnXMovementRatio`, `cursor.hideWhenIdleMs` int, `cursor.style` str,
   `cursor.ringColor` color, `cursor.clickSound` str; `keystrokes.enabled` bool,
-  `keystrokes.position` str, `keystrokes.size`, `keystrokes.showOnlyShortcuts` bool,
-  `keystrokes.holdMs` int; `audio.desktop` bool, `audio.mic` bool, `audio.volume`;
+  `keystrokes.position` str, `keystrokes.size`, `keystrokes.holdMs` int; `audio.desktop` bool, `audio.mic` bool, `audio.volume`;
   `camera.enabled` bool, `camera.position` str, `camera.size`, `camera.shape` str,
   `camera.radius`, `camera.flipHorizontal` bool, `camera.rotation` int, `camera.shadow.*` and
   `camera.border.*` as for the frame, `camera.scaleDuringZoom`, `camera.offset` (x y),
@@ -539,7 +549,8 @@ transition, speeds, inserted videos between and at the start, zero-length and in
 
 Inputs: `corpus/keystroketrack/cases.json`. `settings` are named `Keystrokes` values: each key
 given replaces the struct's default (enabled false, position `"bottom-center"`, size 1,
-showOnlyShortcuts true, holdMs 900), written straight into the struct (`Project::fromJson` would
+holdMs 900; `showOnlyShortcuts` is ignored since the switch was removed), written straight into
+the struct (`Project::fromJson` would
 keep holdMs within 100..5000; the track is tested beyond that, up to the int limits). `runs`
 pairs a log with the settings it is built with, in order. A log is
 `InputLog::load(<corpus>/<log>, 1000000, -1).events()`: `inputlog/fixture-input.jsonl`,
