@@ -7,14 +7,15 @@ use omareel_core::compat::qprocess::{Process, ProcessState};
 use omareel_core::compat::qstandardpaths;
 use omareel_record::capture::CaptureRegion;
 use omareel_record::capture_exclusion::{self, HardwareCursorHold};
-use omareel_record::recorder::audio::finish_audio_capture;
+use omareel_record::recorder::audio::{AudioCaptureStart, finish_audio_capture, first_sample_us};
 use omareel_record::recorder::{
     DiscardActions, GsrExitClassification, camera_capture_block, classify_gsr_exit, discard_timeline,
     even_capture_region, microphone_missing, microphone_peak_db,
 };
 use omareel_record::region_picker::{is_click_selection, parse_capture_options};
 use omareel_record::screen_capture::{
-    CaptureRingBookkeeping, Rect, Size, SlotState, capture_crop_rows, capture_frame_header, capture_stream_header,
+    CaptureRingBookkeeping, EncoderProbeResults, Rect, Size, SlotState, capture_crop_rows, capture_frame_header,
+    capture_stream_header, encoder_arguments,
 };
 use std::cell::RefCell;
 use std::sync::{Mutex, MutexGuard, PoisonError};
@@ -186,14 +187,10 @@ fn capture_stream_keeps_frame_times_and_colours() {
         stream.extend(capture_frame_header(time_us, frame.len() as i64));
         stream.extend(frame);
     }
+    // The arguments a recording without NVENC runs ffmpeg with.
+    let arguments = encoder_arguments(size, 60, &EncoderProbeResults::default(), None, None, &video).arguments;
     let mut encoder = Process::new();
-    encoder.start(
-        "ffmpeg",
-        &[
-            "-v", "error", "-f", "matroska", "-i", "pipe:0", "-c:v", "libx264", "-bf", "0", "-pix_fmt", "yuv420p",
-            "-fps_mode", "vfr", "-enc_time_base", "1/60", &video,
-        ],
-    );
+    encoder.start("ffmpeg", &arguments);
     assert!(encoder.wait_for_started(5000));
     encoder.write(&stream);
     encoder.close_write_channel();
@@ -221,6 +218,57 @@ fn capture_stream_keeps_frame_times_and_colours() {
     assert!(rgb.len() >= 3);
     let near = |value: u8, expected: i32| (i32::from(value) - expected).abs() <= 4;
     assert!(near(rgb[0], 10) && near(rgb[1], 50) && near(rgb[2], 200), "{},{},{}", rgb[0], rgb[1], rgb[2]);
+    // Converted with BT.709, and tagged so (players read untagged HD as BT.709 anyway).
+    let mut tags = Process::new();
+    tags.start(
+        "ffprobe",
+        &["-v", "error", "-select_streams", "v", "-show_entries", "stream=color_space,color_range", "-of", "csv=p=0", &video],
+    );
+    assert!(tags.wait_for_finished(10000));
+    assert_eq!(String::from_utf8_lossy(&tags.read_all_standard_output()).trim(), "tv,bt709");
+}
+
+#[test]
+fn killed_capture_encoder_leaves_a_playable_video() {
+    let _programs = programs();
+    if !have_ffmpeg() {
+        eprintln!("ffmpeg/ffprobe unavailable");
+        return;
+    }
+    let scratch = Scratch::new("killed-encoder");
+    let video = scratch.file("screen.mp4");
+    let size = Size::new(64, 32);
+    // Two seconds of a still screen (small frames), then the encoder is killed without warning.
+    let mut stream = capture_stream_header(size, 60);
+    for index in 0..120i64 {
+        let frame: Vec<u8> = (0..size.width * size.height).flat_map(|_| [0x40, 0x80, 0xc0, 0xff]).collect();
+        stream.extend(capture_frame_header(index * 1_000_000 / 60, frame.len() as i64));
+        stream.extend(frame);
+    }
+    let arguments = encoder_arguments(size, 60, &EncoderProbeResults::default(), None, None, &video).arguments;
+    let mut encoder = Process::new();
+    encoder.start("ffmpeg", &arguments);
+    assert!(encoder.wait_for_started(5000));
+    encoder.write(&stream);
+    while encoder.bytes_to_write() > 0 && encoder.wait_for_bytes_written(5000) {}
+    let packets = || {
+        let mut probe = Process::new();
+        probe.start(
+            "ffprobe",
+            &["-v", "error", "-count_packets", "-select_streams", "v", "-show_entries", "stream=nb_read_packets", "-of", "csv=p=0", &video],
+        );
+        probe.wait_for_finished(10000);
+        String::from_utf8_lossy(&probe.read_all_standard_output()).trim().parse::<i32>().unwrap_or(0)
+    };
+    // The first one-second fragment reaches the file once the second keyframe is encoded.
+    let started = Instant::now();
+    while packets() < 60 && started.elapsed().as_secs() < 10 {
+        encoder.wait_for_bytes_written(50);
+    }
+    encoder.kill();
+    assert!(encoder.wait_for_finished(5000));
+    let packets = packets();
+    assert!(packets >= 60, "{packets} packets survived");
 }
 
 #[test]
@@ -247,8 +295,9 @@ fn stuck_audio_capture_stops_quickly_and_keeps_its_audio() {
     let mut stuck = Process::new();
     assert!(deaf_recorder(&mut stuck));
     let output = scratch.file("screen.mp4");
+    let start = AudioCaptureStart { started: true, started_us: Some(0), realtime_offset_us: 0 };
     let started = Instant::now();
-    assert!(finish_audio_capture(&mut stuck, &screen, &audio, &output, 0, 0, 2000000));
+    assert!(finish_audio_capture(&mut stuck, &screen, &audio, &output, 0, &start, 2000000).muxed);
     assert!(started.elapsed().as_millis() < 5000, "{:?}", started.elapsed());
     assert_eq!(stuck.state(), ProcessState::NotRunning);
     let mut probe = Process::new();
@@ -260,8 +309,21 @@ fn stuck_audio_capture_stops_quickly_and_keeps_its_audio() {
     let mut silent = Process::new();
     assert!(deaf_recorder(&mut silent));
     let started = Instant::now();
-    assert!(!finish_audio_capture(&mut silent, &screen, &scratch.file("none.mka"), &scratch.file("silent.mp4"), 0, 0, 2000000));
+    assert!(!finish_audio_capture(&mut silent, &screen, &scratch.file("none.mka"), &scratch.file("silent.mp4"), 0, &start, 2000000).muxed);
     assert!(started.elapsed().as_millis() < 5000, "{:?}", started.elapsed());
+}
+
+#[test]
+fn audio_is_placed_by_its_first_sample() {
+    // What ffmpeg logs for a PulseAudio input: the wall-clock time of its first sample.
+    let log = "Input #0, pulse, from 'alsa_output.monitor':\n  Duration: N/A, start: 1761612345.678900, bitrate: 1536 kb/s\n\
+               Input #1, pulse, from 'mic':\n  Duration: N/A, start: 1761612345.900000, bitrate: 1536 kb/s\n";
+    let offset = 1_761_612_000_000_000;
+    let started_us = 345_600_000;
+    assert_eq!(first_sample_us(log, started_us, offset), Some(345_678_900));
+    // No start line, or one from a wall clock that jumped: none.
+    assert_eq!(first_sample_us("Input #0, pulse, from 'x':\n", started_us, offset), None);
+    assert_eq!(first_sample_us(log, started_us, offset - 60_000_000), None);
 }
 
 #[test]

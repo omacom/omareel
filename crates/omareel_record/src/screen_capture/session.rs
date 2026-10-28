@@ -22,6 +22,7 @@ use std::os::fd::{AsFd, AsRawFd, FromRawFd, OwnedFd};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::net::UnixStream;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
 use std::time::Instant;
 use wayland_client::backend::WaylandError;
@@ -185,26 +186,37 @@ delegate_noop!(State: ExtImageCopyCaptureManagerV1);
 delegate_noop!(State: ExtOutputImageCaptureSourceManagerV1);
 delegate_noop!(State: ExtImageCaptureSourceV1);
 
-/// `wl_display_connect(NULL)` as libwayland does it: the descriptor in `WAYLAND_SOCKET` (made
-/// close-on-exec and taken out of the environment), else the socket `WAYLAND_DISPLAY` names
-/// ("wayland-0" when unset), inside `XDG_RUNTIME_DIR` unless it is absolute.
-fn connect_display() -> Option<Connection> {
-    if let Some(socket) = std::env::var_os("WAYLAND_SOCKET") {
-        let text = String::from_utf8_lossy(socket.as_bytes()).into_owned();
-        // strtol: leading whitespace and a sign, then digits to the end.
-        let fd: i32 = text.trim_start().parse().ok()?;
-        // SAFETY: fcntl on whatever descriptor the variable names; a bad one fails.
-        unsafe {
-            let flags = libc::fcntl(fd, libc::F_GETFD);
-            if flags == -1 {
-                return None;
-            }
-            libc::fcntl(fd, libc::F_SETFD, flags | libc::FD_CLOEXEC);
+/// The descriptor `WAYLAND_SOCKET` hands this process, taken by the first connection that asks
+/// (made close-on-exec). libwayland also unsets the variable, but changing the environment
+/// while other threads may read it (the encoder probe spawns ffmpeg beside the setup) is a data
+/// race, so it is left set and only ever taken once.
+fn take_wayland_socket() -> Option<UnixStream> {
+    static TAKEN: AtomicBool = AtomicBool::new(false);
+    let socket = std::env::var_os("WAYLAND_SOCKET")?;
+    if TAKEN.swap(true, Ordering::SeqCst) {
+        return None;
+    }
+    let text = String::from_utf8_lossy(socket.as_bytes()).into_owned();
+    // strtol: leading whitespace and a sign, then digits to the end.
+    let fd: i32 = text.trim_start().parse().ok()?;
+    // SAFETY: fcntl on whatever descriptor the variable names; a bad one fails.
+    unsafe {
+        let flags = libc::fcntl(fd, libc::F_GETFD);
+        if flags == -1 {
+            return None;
         }
-        // SAFETY: libwayland unsets it before taking the descriptor; nothing else reads it.
-        unsafe { std::env::remove_var("WAYLAND_SOCKET") };
-        // SAFETY: the environment hands this descriptor to the program to own.
-        let stream = unsafe { UnixStream::from_raw_fd(fd) };
+        libc::fcntl(fd, libc::F_SETFD, flags | libc::FD_CLOEXEC);
+    }
+    // SAFETY: the environment hands this descriptor to the program to own, and only this call
+    // takes it.
+    Some(unsafe { UnixStream::from_raw_fd(fd) })
+}
+
+/// `wl_display_connect(NULL)` as libwayland does it: the descriptor in `WAYLAND_SOCKET` the first
+/// time ([`take_wayland_socket`]), else the socket `WAYLAND_DISPLAY` names ("wayland-0" when
+/// unset), inside `XDG_RUNTIME_DIR` unless it is absolute.
+fn connect_display() -> Option<Connection> {
+    if let Some(stream) = take_wayland_socket() {
         return Connection::from_socket(stream).ok();
     }
     let name = std::env::var_os("WAYLAND_DISPLAY").map(|value| value.as_bytes().to_vec()).unwrap_or(b"wayland-0".into());

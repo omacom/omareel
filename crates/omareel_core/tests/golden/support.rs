@@ -559,9 +559,21 @@ pub fn assert_same(name: &str, expected: &[u8], actual: &[u8]) {
     }
 }
 
-/// Compares a whole regenerated file with `expected/<relative>`.
+/// Whether the tests were started with `OMAREEL_GOLDEN_BLESS=1`. Read from the environment the
+/// process started with: the hermetic tests replace the live one.
+fn blessing() -> bool {
+    std::fs::read("/proc/self/environ")
+        .is_ok_and(|environ| environ.split(|&b| b == 0).any(|entry| entry == b"OMAREEL_GOLDEN_BLESS=1"))
+}
+
+/// Compares a whole regenerated file with `expected/<relative>`. With `OMAREEL_GOLDEN_BLESS=1`
+/// the file is rewritten instead, for a change that means to alter it (review the diff).
 #[track_caller]
 pub fn assert_golden(relative: &str, actual: &str) {
+    if blessing() {
+        std::fs::write(expected_path(relative), actual).expect("the golden file is writable");
+        return;
+    }
     assert_same(relative, &read_expected(relative), actual.as_bytes());
 }
 

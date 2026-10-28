@@ -440,6 +440,7 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
     let audio_video = format!("{bundle}/audio.mka");
     let mut audio_recorder = Process::new();
     let mut audio_started_us = 0i64;
+    let mut audio_start = None;
     let mut audio_active = false;
     let mut audio_muxed = !audio_requested;
     let mut microphone_peak = f64::NAN;
@@ -576,6 +577,7 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
         if let Some(us) = started.started_us {
             audio_started_us = us;
         }
+        audio_start = Some(started);
     }
     if options.countdown {
         let countdown_host_timer = Instant::now();
@@ -742,16 +744,18 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
         if !screen_capture.finish(&mut error) {
             capture_loop_failed = true;
         }
-        if audio_active {
-            audio_muxed = finish_audio_capture(
+        if let Some(start) = audio_start.filter(|_| audio_active) {
+            let mux = finish_audio_capture(
                 &mut audio_recorder,
                 &native_video,
                 &audio_video,
                 &video,
                 screen_capture.first_frame_us(),
-                audio_started_us,
+                &start,
                 screen_capture.video_duration_us(),
             );
+            audio_muxed = mux.muxed;
+            audio_started_us = mux.first_sample_us;
         }
         // A killed ffmpeg wrote no report.
         let audio_log = format!("{audio_video}.log");

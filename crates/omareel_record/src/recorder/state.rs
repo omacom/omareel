@@ -34,7 +34,7 @@ pub fn state_file_path() -> String {
 }
 
 /// The absolute directory of [`state_file_path`] (`QFileInfo(stateFilePath()).absolutePath()`).
-fn state_directory() -> String {
+pub fn state_directory() -> String {
     FileInfo::new(state_file_path()).absolute_path()
 }
 
@@ -279,10 +279,24 @@ fn file_size(path: &str) -> i64 {
     FileInfo::new(path).size()
 }
 
-/// `Recorder::stopExisting(cancel, &bundlePath, &error)`: signals the daemon and waits up to 20
-/// seconds (800 checks 25 ms apart) for it to go or for its state file to disappear, then says
-/// whether the bundle was finalized (`screen.mp4` and `capture.json` not empty, `input.jsonl` a
-/// file) or, after a discard, removed. A daemon that does not stop is killed with its ffmpeg and
+/// How much the bundle's files hold together, which grows while a stopping recorder saves.
+fn bundle_bytes(bundle: &str) -> u64 {
+    std::fs::read_dir(bundle)
+        .map(|entries| entries.flatten().filter_map(|entry| entry.metadata().ok()).map(|data| data.len()).sum())
+        .unwrap_or(0)
+}
+
+/// How long a stopping recorder may go without saving anything more before it is killed, and how
+/// long it may take in all.
+const STOP_STALL: std::time::Duration = std::time::Duration::from_secs(20);
+const STOP_LIMIT: std::time::Duration = std::time::Duration::from_secs(600);
+
+/// `Recorder::stopExisting(cancel, &bundlePath, &error)`: signals the daemon and waits (checking
+/// every 25 ms) for it to go or for its state file to disappear, then says whether the bundle was
+/// finalized (`screen.mp4` and `capture.json` not empty, `input.jsonl` a file) or, after a
+/// discard, removed. Finishing a long recording (draining the encoder, muxing the audio) can take
+/// a while, so the wait lasts as long as the bundle keeps growing: a daemon that saves nothing
+/// for [`STOP_STALL`], or is still going after [`STOP_LIMIT`], is killed with its ffmpeg and
 /// `__record-gsr` descendants.
 pub fn stop_existing(cancel: bool) -> StopOutcome {
     let state = read_state();
@@ -295,7 +309,10 @@ pub fn stop_existing(cancel: bool) -> StopOutcome {
     if let Err(error) = signal_existing(cancel) {
         return StopOutcome { code: 2, bundle_path: None, error };
     }
-    for _ in 0..800 {
+    let started = std::time::Instant::now();
+    let mut saved = bundle_bytes(&bundle);
+    let mut last_progress = started;
+    while last_progress.elapsed() < STOP_STALL && started.elapsed() < STOP_LIMIT {
         if !recorder_daemon_alive(pid) || !qdir::file_exists(&state_file_path()) {
             let bundle_path = Some(if cancel { String::new() } else { bundle.clone() });
             if cancel {
@@ -316,6 +333,11 @@ pub fn stop_existing(cancel: bool) -> StopOutcome {
             };
         }
         std::thread::sleep(std::time::Duration::from_millis(25));
+        let now_saved = bundle_bytes(&bundle);
+        if now_saved != saved {
+            saved = now_saved;
+            last_progress = std::time::Instant::now();
+        }
     }
     for child in process_descendants(pid) {
         let Ok(command) = qfile::read_all(format!("/proc/{child}/cmdline")) else { continue };
@@ -327,7 +349,7 @@ pub fn stop_existing(cancel: bool) -> StopOutcome {
     kill(pid, libc::SIGKILL);
     qfile::remove(&state_file_path());
     let timeout_message =
-        "Recorder did not stop within 20 seconds; force-killed the recorder and capture processes";
+        "Recorder stopped saving for 20 seconds; force-killed the recorder and capture processes";
     notify_stop_failure(&format!("{timeout_message}. The video may be incomplete."));
     StopOutcome { code: 2, bundle_path: None, error: timeout_message.into() }
 }
