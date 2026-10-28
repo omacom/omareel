@@ -48,6 +48,13 @@ pub fn self_view_host_path() -> String {
     state_directory() + "/selfview-host.json"
 }
 
+/// `hardware-cursor-hold.json` beside the state file: the `cursor:no_hardware_cursors` value a
+/// recording's `HardwareCursorHold` changed, kept while the hold lasts so that a start after a
+/// crash can put it back (`capture_exclusion::restore_abandoned_hardware_cursor`).
+pub fn hardware_cursor_hold_path() -> String {
+    state_directory() + "/hardware-cursor-hold.json"
+}
+
 /// `QJsonDocument::fromJson(bytes).object()`: an empty object for anything but an object.
 fn object_or_empty(bytes: &[u8]) -> Object {
     match qjson::from_json(bytes) {
@@ -283,7 +290,8 @@ fn file_size(path: &str) -> i64 {
 /// seconds (800 checks 25 ms apart) for it to go or for its state file to disappear, then says
 /// whether the bundle was finalized (`screen.mp4` and `capture.json` not empty, `input.jsonl` a
 /// file) or, after a discard, removed. A daemon that does not stop is killed with its ffmpeg and
-/// `__record-gsr` descendants.
+/// `__record-gsr` descendants, and the cursor setting it held is put back (up to a second for it
+/// to die first).
 pub fn stop_existing(cancel: bool) -> StopOutcome {
     let state = read_state();
     let pid = state.value("pid").to_variant_long_long();
@@ -326,6 +334,14 @@ pub fn stop_existing(cancel: bool) -> StopOutcome {
     }
     kill(pid, libc::SIGKILL);
     qfile::remove(&state_file_path());
+    // The killed daemon never dropped its hold on hardware cursors.
+    for _ in 0..40 {
+        if !process_alive(pid) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+    crate::capture_exclusion::restore_abandoned_hardware_cursor();
     let timeout_message =
         "Recorder did not stop within 20 seconds; force-killed the recorder and capture processes";
     notify_stop_failure(&format!("{timeout_message}. The video may be incomplete."));

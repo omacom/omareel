@@ -277,28 +277,42 @@ fn recording_holds_hardware_cursors() {
              case \"$*\" in\n \
              '-j getoption cursor:no_hardware_cursors') printf '{{\"option\": \"cursor:no_hardware_cursors\", \
              \"int\": %s, \"set\": false }}' \"$OMAREEL_TEST_CURSOR\";;\n \
-             eval*) exit \"${{OMAREEL_TEST_EVAL_EXIT:-0}}\";;\nesac\n"
+             eval*) printf '%s' \"${{OMAREEL_TEST_EVAL_REPLY:-ok}}\"; exit \"${{OMAREEL_TEST_EVAL_EXIT:-0}}\";;\n \
+             keyword*) printf ok; exit \"${{OMAREEL_TEST_KEYWORD_EXIT:-0}}\";;\nesac\n"
         ),
     )
     .unwrap();
     std::fs::set_permissions(&mock, std::os::unix::fs::PermissionsExt::from_mode(0o700)).unwrap();
-    let old_path = std::env::var_os("PATH");
-    // SAFETY: the programs lock keeps the other tests that start programs out meanwhile.
-    unsafe { std::env::set_var("PATH", &scratch.0) };
+    let runtime = scratch.0.join("run");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let marker = runtime.join("omareel/hardware-cursor-hold.json");
+    let mut environment = ScopedEnvironment::new();
+    environment.set("PATH", &scratch.0);
+    environment.set("XDG_RUNTIME_DIR", &runtime);
+    environment.set("HYPRLAND_INSTANCE_SIGNATURE", "test-instance");
     let calls = || {
         let lines: Vec<String> =
             std::fs::read_to_string(&log).unwrap_or_default().lines().map(str::to_owned).collect();
         let _ = std::fs::remove_file(&log);
         lines
     };
-    let set = |name: &str, value: &str| {
-        // SAFETY: as above.
-        unsafe { std::env::set_var(name, value) };
+    let read_marker = || {
+        let text = std::fs::read_to_string(&marker).ok()?;
+        Some(omareel_core::compat::qjson::object_from_json(text.as_bytes()).unwrap_or_default())
     };
 
-    // Hyprland's automatic choice is held at hardware and put back afterwards.
-    set("OMAREEL_TEST_CURSOR", "2");
-    drop(HardwareCursorHold::new());
+    // Hyprland's automatic choice is held at hardware and put back afterwards; the marker says
+    // what to put back while the hold lasts.
+    environment.set("OMAREEL_TEST_CURSOR", "2");
+    let hold = HardwareCursorHold::new();
+    let held = read_marker().expect("the hold's marker");
+    assert_eq!(held.value("previous").to_int(-1), 2);
+    assert_eq!(held.value("pid").to_variant_long_long(), i64::from(std::process::id()));
+    assert_eq!(held.value("instance").to_string_or(""), "test-instance");
+    // This process's own marker is not abandoned.
+    assert!(!capture_exclusion::restore_abandoned_hardware_cursor());
+    drop(hold);
+    assert!(read_marker().is_none());
     assert_eq!(
         calls(),
         [
@@ -308,12 +322,13 @@ fn recording_holds_hardware_cursors() {
         ]
     );
     // Hardware cursors already: nothing to change.
-    set("OMAREEL_TEST_CURSOR", "0");
+    environment.set("OMAREEL_TEST_CURSOR", "0");
     drop(HardwareCursorHold::new());
     assert_eq!(calls(), ["-j getoption cursor:no_hardware_cursors"]);
+    assert!(read_marker().is_none());
     // A hyprlang config takes keyword instead of eval.
-    set("OMAREEL_TEST_CURSOR", "1");
-    set("OMAREEL_TEST_EVAL_EXIT", "1");
+    environment.set("OMAREEL_TEST_CURSOR", "1");
+    environment.set("OMAREEL_TEST_EVAL_EXIT", "1");
     drop(HardwareCursorHold::new());
     assert_eq!(
         calls(),
@@ -325,15 +340,85 @@ fn recording_holds_hardware_cursors() {
             "keyword cursor:no_hardware_cursors 1",
         ]
     );
-    // SAFETY: as above.
-    unsafe {
-        match old_path {
-            Some(path) => std::env::set_var("PATH", path),
-            None => std::env::remove_var("PATH"),
-        }
-        std::env::remove_var("OMAREEL_TEST_CURSOR");
-        std::env::remove_var("OMAREEL_TEST_EVAL_EXIT");
-    }
+    // Hyprland 0.56 refuses eval under a hyprlang config with hyprctl's exit status still 0.
+    environment.set("OMAREEL_TEST_EVAL_EXIT", "0");
+    environment.set("OMAREEL_TEST_EVAL_REPLY", "eval is only supported with the lua config manager");
+    drop(HardwareCursorHold::new());
+    assert_eq!(
+        calls(),
+        [
+            "-j getoption cursor:no_hardware_cursors",
+            "eval hl.config({ cursor = { no_hardware_cursors = 0 } })",
+            "keyword cursor:no_hardware_cursors 0",
+            "eval hl.config({ cursor = { no_hardware_cursors = 1 } })",
+            "keyword cursor:no_hardware_cursors 1",
+        ]
+    );
+    environment.set("OMAREEL_TEST_EVAL_REPLY", "ok");
+    environment.set("OMAREEL_TEST_EVAL_EXIT", "1");
+    // A restore that fails keeps the marker; one that can't hold leaves none.
+    let hold = HardwareCursorHold::new();
+    environment.set("OMAREEL_TEST_KEYWORD_EXIT", "1");
+    drop(hold);
+    assert_eq!(read_marker().expect("kept for a retry").value("previous").to_int(-1), 1);
+    std::fs::remove_file(&marker).unwrap();
+    drop(HardwareCursorHold::new());
+    assert!(read_marker().is_none());
+    environment.set("OMAREEL_TEST_EVAL_EXIT", "0");
+    environment.set("OMAREEL_TEST_KEYWORD_EXIT", "0");
+    calls();
+
+    // A recorder that died holding the setting: the next start puts it back.
+    let mut exited = std::process::Command::new("/bin/sh").args(["-c", "exit 0"]).spawn().unwrap();
+    exited.wait().unwrap();
+    let abandoned = |previous: i32, instance: &str| {
+        std::fs::write(
+            &marker,
+            format!("{{\"previous\": {previous}, \"pid\": {}, \"instance\": \"{instance}\"}}", exited.id()),
+        )
+        .unwrap();
+    };
+    abandoned(2, "test-instance");
+    environment.set("OMAREEL_TEST_CURSOR", "0");
+    assert!(capture_exclusion::restore_abandoned_hardware_cursor());
+    assert!(read_marker().is_none());
+    assert_eq!(
+        calls(),
+        ["-j getoption cursor:no_hardware_cursors", "eval hl.config({ cursor = { no_hardware_cursors = 2 } })"]
+    );
+    // Nothing abandoned: no calls.
+    assert!(!capture_exclusion::restore_abandoned_hardware_cursor());
+    assert!(calls().is_empty());
+    // Changed since (by the user or a reload): only the marker goes.
+    abandoned(2, "test-instance");
+    environment.set("OMAREEL_TEST_CURSOR", "1");
+    assert!(!capture_exclusion::restore_abandoned_hardware_cursor());
+    assert!(read_marker().is_none());
+    assert_eq!(calls(), ["-j getoption cursor:no_hardware_cursors"]);
+    // From a Hyprland that is gone: a new one read its configuration afresh.
+    abandoned(2, "previous-instance");
+    assert!(!capture_exclusion::restore_abandoned_hardware_cursor());
+    assert!(read_marker().is_none());
+    // From another Hyprland that still runs: left for a start there.
+    std::fs::create_dir_all(runtime.join("hypr/other-instance")).unwrap();
+    std::fs::write(runtime.join("hypr/other-instance/.socket.sock"), "").unwrap();
+    abandoned(2, "other-instance");
+    assert!(!capture_exclusion::restore_abandoned_hardware_cursor());
+    assert!(read_marker().is_some());
+    assert!(calls().is_empty());
+    // A recorder start restores before it reads the setting.
+    abandoned(2, "test-instance");
+    environment.set("OMAREEL_TEST_CURSOR", "0");
+    drop(HardwareCursorHold::new());
+    assert!(read_marker().is_none());
+    assert_eq!(
+        calls(),
+        [
+            "-j getoption cursor:no_hardware_cursors",
+            "eval hl.config({ cursor = { no_hardware_cursors = 2 } })",
+            "-j getoption cursor:no_hardware_cursors",
+        ]
+    );
 }
 
 /// Environment variables set while the programs lock is held, put back when dropped.

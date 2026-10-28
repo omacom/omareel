@@ -6,10 +6,12 @@
 //!
 //! The reasons are the C++'s words exactly; the launcher shows them.
 
+use crate::recorder::state;
 use omareel_core::compat::qdir::{self, FileInfo};
 use omareel_core::compat::qfile;
-use omareel_core::compat::qjson::{self, Object, Value};
+use omareel_core::compat::qjson::{self, Format, Object, Value};
 use omareel_core::compat::qprocess::{ExitStatus, Process, ProcessError, ProcessState};
+use omareel_core::compat::qsavefile::SaveFile;
 use omareel_core::compat::qstring;
 
 /// `CaptureExclusion::Status`.
@@ -71,37 +73,126 @@ fn json_array(bytes: &[u8]) -> Vec<Value> {
 }
 
 /// `setNoHardwareCursors`: `cursor:no_hardware_cursors` set through `hyprctl eval` (Lua
-/// configurations), and through `hyprctl keyword` when that fails.
+/// configurations), and through `hyprctl keyword` when that fails. Hyprland answers `ok` when it
+/// took the value; a refusal comes back with hyprctl's exit status 0 all the same (0.56 answers
+/// `eval` under a hyprlang configuration with "eval is only supported with the lua config
+/// manager"), so anything but `ok` is a failure.
 fn set_no_hardware_cursors(value: i32) -> bool {
+    let accepted = |answer: Answer| answer.ok && answer.reply == "ok";
     let eval = format!("hl.config({{ cursor = {{ no_hardware_cursors = {value} }} }})");
-    let mut ok = hyprctl(&["eval", &eval]).ok;
-    if !ok {
-        ok = hyprctl(&["keyword", "cursor:no_hardware_cursors", &value.to_string()]).ok;
+    accepted(hyprctl(&["eval", &eval])) || accepted(hyprctl(&["keyword", "cursor:no_hardware_cursors", &value.to_string()]))
+}
+
+/// `cursor:no_hardware_cursors` as `hyprctl -j getoption` gives it, `None` when it can't be read
+/// or is not an `int`.
+fn no_hardware_cursors() -> Option<i32> {
+    let answer = hyprctl(&["-j", "getoption", "cursor:no_hardware_cursors"]);
+    let option = json_object(&answer.output);
+    if !answer.ok || !option.contains("int") {
+        return None;
     }
-    ok
+    Some(option.value("int").to_int(0))
+}
+
+/// Writes the hold's marker ([`state::hardware_cursor_hold_path`]) through a `QSaveFile`, so it
+/// appears whole or not at all: the value to put back, the process holding it, and the Hyprland
+/// instance it was changed on. False when it could not be written.
+fn write_hold_marker(previous: i32) -> bool {
+    let path = state::hardware_cursor_hold_path();
+    qdir::mkpath(&FileInfo::new(path.clone()).absolute_path());
+    let mut marker = Object::new();
+    marker.insert("previous", previous);
+    marker.insert("pid", i64::from(std::process::id()));
+    marker.insert("instance", hyprland_instance());
+    let mut file = SaveFile::new(path);
+    if !file.open() {
+        return false;
+    }
+    file.write(Value::Object(marker).to_json(Format::Indented).as_bytes());
+    file.commit()
+}
+
+/// `$HYPRLAND_INSTANCE_SIGNATURE`, the instance `hyprctl` talks to.
+fn hyprland_instance() -> String {
+    std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE")
+        .map(|value| qstring::from_utf8(value.as_encoded_bytes()))
+        .unwrap_or_default()
+}
+
+/// Puts back the `cursor:no_hardware_cursors` value of a hold whose recorder is gone (killed, or
+/// crashed before its hold was dropped), and says whether it did. The marker is left alone while
+/// its process is a live recorder daemon or is this process (whose hold is still to be dropped),
+/// and while it names another Hyprland instance that is still running; it is removed once the
+/// value is back, when the setting no longer holds the 0 the recorder set (the user or a reload
+/// changed it since), and when its instance is gone (a new Hyprland read its configuration
+/// afresh). Launcher and recorder starts call it, and `omareel stop` after killing a daemon.
+pub fn restore_abandoned_hardware_cursor() -> bool {
+    let path = state::hardware_cursor_hold_path();
+    let Ok(bytes) = qfile::read_all(&path) else { return false };
+    let marker = json_object(&bytes);
+    let pid = marker.value("pid").to_variant_long_long();
+    if pid == i64::from(std::process::id()) || state::recorder_daemon_alive(pid) {
+        return false;
+    }
+    let instance = marker.value("instance").to_string_or("");
+    if instance != hyprland_instance() {
+        let runtime = std::env::var_os("XDG_RUNTIME_DIR").unwrap_or_default();
+        let socket = std::path::Path::new(&runtime).join("hypr").join(&instance).join(".socket.sock");
+        if !instance.is_empty() && socket.exists() {
+            return false;
+        }
+        qfile::remove(&path);
+        return false;
+    }
+    let previous = marker.value("previous").to_int(-1);
+    match no_hardware_cursors() {
+        // Hyprland did not answer: try again at the next start.
+        None => false,
+        Some(0) if previous > 0 => {
+            let restored = set_no_hardware_cursors(previous);
+            if restored {
+                qfile::remove(&path);
+            }
+            restored
+        }
+        Some(_) => {
+            qfile::remove(&path);
+            false
+        }
+    }
 }
 
 /// `HardwareCursorHold`: Hyprland draws a software cursor into the frame itself, so screen
 /// capture records it, and by default it uses one on NVIDIA whenever a monitor has VRR on.
 /// Holding hardware cursors for the recording keeps the pointer out of `screen.mp4`; the
 /// user's setting comes back when the hold is dropped.
+///
+/// A process that dies holding it never drops it, so the user's value is also written to a
+/// marker in the runtime directory before the setting changes, and removed once it is back; the
+/// next start puts back what a dead recorder left ([`restore_abandoned_hardware_cursor`]).
 #[derive(Debug)]
 pub struct HardwareCursorHold {
     previous: i32,
 }
 
 impl HardwareCursorHold {
-    /// Reads `cursor:no_hardware_cursors`; a value other than 0 is set to 0 and remembered.
+    /// Puts back what an abandoned hold left, then reads `cursor:no_hardware_cursors`; a value
+    /// other than 0 is set to 0 and remembered (in the marker too when it is one the drop puts
+    /// back: a negative value never was).
     pub fn new() -> HardwareCursorHold {
+        restore_abandoned_hardware_cursor();
         let mut hold = HardwareCursorHold { previous: -1 };
-        let answer = hyprctl(&["-j", "getoption", "cursor:no_hardware_cursors"]);
-        let option = json_object(&answer.output);
-        if !answer.ok || !option.contains("int") {
+        let Some(previous) = no_hardware_cursors() else { return hold };
+        if previous == 0 {
             return hold;
         }
-        let previous = option.value("int").to_int(0);
-        if previous != 0 && set_no_hardware_cursors(0) {
+        // Written first, so no moment has the setting changed and nothing to restore it from.
+        // A marker that can't be written leaves the hold as it was before markers.
+        let marked = previous > 0 && write_hold_marker(previous);
+        if set_no_hardware_cursors(0) {
             hold.previous = previous;
+        } else if marked {
+            qfile::remove(&state::hardware_cursor_hold_path());
         }
         hold
     }
@@ -115,8 +206,9 @@ impl Default for HardwareCursorHold {
 
 impl Drop for HardwareCursorHold {
     fn drop(&mut self) {
-        if self.previous >= 0 {
-            set_no_hardware_cursors(self.previous);
+        // A failed restore keeps the marker, for the next start to retry.
+        if self.previous >= 0 && set_no_hardware_cursors(self.previous) {
+            qfile::remove(&state::hardware_cursor_hold_path());
         }
     }
 }
