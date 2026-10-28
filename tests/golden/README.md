@@ -43,8 +43,10 @@ regeneration.
 
 - Keystrokes: the "Shortcuts only" switch (`keystrokes.showOnlyShortcuts`) is gone and plain
   typing is always hidden, Shift+letter, US punctuation, space and keypad keys, Caps Lock and
-  Num Lock included (the recorder no longer keeps any). `project/` lost the `showOnlyShortcuts` key and field rows
-  everywhere; `keystroketrack/sample.txt` and the keystroke pills of `composition/editor.txt` and
+  Num Lock included (the recorder no longer keeps any). In logs without labels "alt" makes a
+  shortcut only while Left Alt (code 56) is down, since the old recorder also named AltGr "alt".
+  `project/` lost the `showOnlyShortcuts` key and field rows everywhere;
+  `keystroketrack/sample.txt` and the keystroke pills of `composition/editor.txt` and
   `composition/exporter.txt` no longer show typing.
 
 The oracle's working directory is `$HOME` for every family, and its scratch files live under

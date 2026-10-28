@@ -7,10 +7,16 @@
 //! shortcuts (keys pressed with Ctrl, Alt or Super held, and those modifiers themselves) and keys
 //! that type no text (Enter, Escape, Tab, arrows, function and media keys...) are, Shift with
 //! any of these included. Shift, AltGr and Caps Lock alone count as typing, since they choose
-//! what is typed. What is typing is decided by the user's layout ([`crate::keymap`]), read from
-//! Hyprland when the listener starts, and a key kept carries what that layout prints on it as
-//! its label next to libevdev's name of its scancode (`libevdev_event_code_get_name`). Without
-//! a layout the listener decides by those names, as for a US keyboard.
+//! what is typed. What is typing is decided by the keyboards' layouts ([`crate::keymap`]), read from
+//! Hyprland when the listener starts and followed through its layout switches, and a key kept
+//! carries what the main keyboard's layout prints on it as its label next to libevdev's name of
+//! its scancode (`libevdev_event_code_get_name`). Without a layout (Hyprland does not answer, or
+//! a keymap does not compile) the listener decides by those names, as for a US keyboard, with
+//! Right Alt as AltGr.
+//!
+//! The modifiers held are shared by every device, so the events read together are handled in
+//! the order they happened, not device by device: a Ctrl let go on one keyboard just before a
+//! letter on another must not make that letter a shortcut.
 //!
 //! Events are timed by the kernel when it queued them (`CLOCK_MONOTONIC`, the recorder's clock),
 //! not when they were read, unless a device will not take that clock.
@@ -19,12 +25,15 @@
 
 use crate::capture::{DeviceEvent, DeviceEventKind};
 use crate::keymap::{self, Key, Layout};
-use crate::recorder::monotonic_us;
+use crate::recorder::{environment_variable, monotonic_us};
 use omareel_core::compat::qdir::{self, Filters, SortFlags};
 use omareel_core::compat::qlog;
 use omareel_core::keystroke_track::{is_typing_key_name, makes_shortcut};
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_uint};
+use std::io::Read;
+use std::os::fd::AsRawFd;
+use std::os::unix::net::UnixStream;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::JoinHandle;
@@ -45,7 +54,10 @@ unsafe extern "C" {
     fn libevdev_set_clock_id(dev: *mut Libevdev, clock: c_int) -> c_int;
 }
 
+const LIBEVDEV_READ_FLAG_SYNC: c_uint = 1;
 const LIBEVDEV_READ_FLAG_NORMAL: c_uint = 2;
+/// `libevdev_next_event`'s answer for a `SYN_DROPPED`, then for each event of the resync.
+const LIBEVDEV_READ_STATUS_SYNC: c_int = 1;
 
 /// The event types and codes of `linux/input-event-codes.h` the listener asks about.
 pub mod codes {
@@ -121,6 +133,13 @@ impl Keyboard {
     /// A keyboard with nothing held, read through `layout`, or by US key names without one.
     pub fn new(layout: Option<Layout>) -> Keyboard {
         Keyboard { layout, ..Keyboard::default() }
+    }
+
+    /// Follows a Hyprland layout switch to the layout described as `name`.
+    fn follow_layout(&mut self, name: &str) {
+        if let Some(layout) = &mut self.layout {
+            layout.follow_layout(name);
+        }
     }
 
     /// What the key `code` is ([`Layout::key`], which the press or release then updates); without
@@ -318,18 +337,106 @@ impl Drop for EvdevListener {
     }
 }
 
-/// The keyboard layout Hyprland has (an empty set of names, libxkbcommon's defaults, when it
-/// does not answer); `None`, with a warning, when libxkbcommon cannot compile it.
+/// The keyboard layouts Hyprland has ([`Layout::for_keyboards`]); `None`, with a warning, when
+/// Hyprland does not say (a guessed layout could take AltGr for Alt) or a keymap does not compile.
 fn hyprland_layout() -> Option<Layout> {
-    let names = keymap::hyprland_keyboard().unwrap_or_default();
-    let layout = Layout::new(&names);
+    let Some(keyboards) = keymap::hyprland_keyboards() else {
+        qlog::warning("Hyprland did not list its keyboards; recording keys by their US names");
+        return None;
+    };
+    let layout = Layout::for_keyboards(&keyboards);
     if layout.is_none() {
+        let names = &keyboards.main;
         qlog::warning(&format!(
-            "Could not compile the keyboard layout \"{}\" (variant \"{}\", options \"{}\"); recording keys by their US names",
-            names.layout, names.variant, names.options
+            "Could not compile the keyboard layouts (main \"{}\", variant \"{}\", options \"{}\", {} more); recording keys by their US names",
+            names.layout,
+            names.variant,
+            names.options,
+            keyboards.others.len()
         ));
     }
     layout
+}
+
+/// Hyprland's event socket (`$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock`),
+/// non-blocking, for its layout switches; `None` when it cannot be reached.
+fn hyprland_events() -> Option<UnixStream> {
+    let runtime = environment_variable("XDG_RUNTIME_DIR");
+    let signature = environment_variable("HYPRLAND_INSTANCE_SIGNATURE");
+    if runtime.is_empty() || signature.is_empty() {
+        return None;
+    }
+    let socket = UnixStream::connect(format!("{runtime}/hypr/{signature}/.socket2.sock")).ok()?;
+    socket.set_nonblocking(true).ok()?;
+    Some(socket)
+}
+
+/// Reads what the event socket has, follows each `activelayout` event in it and keeps a partial
+/// last line in `pending`; false when the socket has closed or failed.
+fn read_hyprland_events(socket: &mut UnixStream, pending: &mut Vec<u8>, keyboard: &mut Keyboard) -> bool {
+    let mut buffer = [0u8; 4096];
+    let open = loop {
+        match socket.read(&mut buffer) {
+            Ok(0) => break false,
+            Ok(read) => pending.extend_from_slice(&buffer[..read]),
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => break true,
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(_) => break false,
+        }
+    };
+    while let Some(end) = pending.iter().position(|&b| b == b'\n') {
+        let line: Vec<u8> = pending.drain(..=end).collect();
+        if let Some(layout) = keymap::active_layout_event(&String::from_utf8_lossy(&line[..end])) {
+            keyboard.follow_layout(layout);
+        }
+    }
+    open
+}
+
+/// An event read from a device, waiting to be handled in time order.
+#[derive(Clone, Copy, Debug)]
+struct Queued {
+    time: i64,
+    keyboard_device: bool,
+    kind: u16,
+    code: u16,
+    value: i32,
+}
+
+/// [`device_event`] of each queued event in the order they happened (a stable sort, so events
+/// of one device at the same time keep their order), and what was kept of them.
+fn handle_in_time_order(queued: &mut [Queued], keyboard: &mut Keyboard) -> Vec<DeviceEvent> {
+    queued.sort_by_key(|event| event.time);
+    queued
+        .iter()
+        .filter_map(|event| device_event(event.keyboard_device, event.kind, event.code, event.value, event.time, keyboard))
+        .collect()
+}
+
+/// Reads every event `device` has queued into `queued`. After a `SYN_DROPPED` (the device's
+/// buffer overflowed) it reads the resync too, which carries the key releases that were lost:
+/// without them a dropped Ctrl release would make every later key a shortcut.
+fn drain(device: &Device, queued: &mut Vec<Queued>) {
+    // SAFETY: an all-zero input_event is valid.
+    let mut event: libc::input_event = unsafe { std::mem::zeroed() };
+    let mut flag = LIBEVDEV_READ_FLAG_NORMAL;
+    loop {
+        // SAFETY: a device libevdev made and a place for the event.
+        let status = unsafe { libevdev_next_event(device.evdev, flag, &mut event) };
+        if status == LIBEVDEV_READ_STATUS_SYNC && flag == LIBEVDEV_READ_FLAG_NORMAL {
+            flag = LIBEVDEV_READ_FLAG_SYNC;
+            continue;
+        }
+        if status == -libc::EAGAIN && flag == LIBEVDEV_READ_FLAG_SYNC {
+            flag = LIBEVDEV_READ_FLAG_NORMAL;
+            continue;
+        }
+        if status != 0 && status != LIBEVDEV_READ_STATUS_SYNC {
+            break;
+        }
+        let time = event_time(device, &event);
+        queued.push(Queued { time, keyboard_device: device.keyboard, kind: event.type_, code: event.code, value: event.value });
+    }
 }
 
 /// When an event happened, in `CLOCK_MONOTONIC` microseconds: its own time when the device
@@ -342,33 +449,57 @@ fn event_time(device: &Device, event: &libc::input_event) -> i64 {
     }
 }
 
-/// `EvdevListener::run`: reads the keyboard layout, then polls every device (100 ms at a time)
-/// and drains each that is ready while libevdev hands out events normally; gives the devices
-/// back when stopped. Events queued while the layout is read wait in the devices.
+/// How many times a round of reading polls the devices again without waiting, for events that
+/// arrived on other devices while it read.
+const EXTRA_POLLS: usize = 4;
+
+/// `EvdevListener::run`: reads the keyboard layouts, then polls every device (100 ms at a time)
+/// and Hyprland's event socket. Each round reads every ready device, polls again without waiting
+/// for stragglers, and handles what it read in time order ([`handle_in_time_order`]); layout
+/// switches from the socket are followed as they come. Gives the devices back when stopped.
+/// Events queued while the layouts are read wait in the devices.
 fn run(devices: Vec<Device>, running: &AtomicBool, events: &Mutex<Vec<DeviceEvent>>) -> Vec<Device> {
     let mut descriptors: Vec<libc::pollfd> =
         devices.iter().map(|device| libc::pollfd { fd: device.fd, events: libc::POLLIN, revents: 0 }).collect();
     let mut keyboard = Keyboard::new(if devices.iter().any(|device| device.keyboard) { hyprland_layout() } else { None });
+    let mut socket = if keyboard.layout.is_some() { hyprland_events() } else { None };
+    if let Some(socket) = &socket {
+        descriptors.push(libc::pollfd { fd: socket.as_raw_fd(), events: libc::POLLIN, revents: 0 });
+    }
+    let mut pending = Vec::new();
+    let mut queued = Vec::new();
     while running.load(Ordering::SeqCst) {
-        // SAFETY: the pollfds of open devices.
+        // SAFETY: the pollfds of open devices and the socket (or -1, which poll skips).
         let ready = unsafe { libc::poll(descriptors.as_mut_ptr(), descriptors.len() as libc::nfds_t, 100) };
         if ready <= 0 {
             continue;
         }
-        for (descriptor, device) in descriptors.iter().zip(&devices) {
-            if descriptor.revents & libc::POLLIN == 0 {
-                continue;
+        if let (Some(stream), Some(descriptor)) = (&mut socket, descriptors.get_mut(devices.len())) {
+            if descriptor.revents != 0 && !read_hyprland_events(stream, &mut pending, &mut keyboard) {
+                descriptor.fd = -1;
+                socket = None;
             }
-            // SAFETY: an all-zero input_event is valid.
-            let mut event: libc::input_event = unsafe { std::mem::zeroed() };
-            // SAFETY: a device libevdev made and a place for the event.
-            while unsafe { libevdev_next_event(device.evdev, LIBEVDEV_READ_FLAG_NORMAL, &mut event) } == 0 {
-                let time = event_time(device, &event);
-                let output = device_event(device.keyboard, event.type_, event.code, event.value, time, &mut keyboard);
-                if let Some(output) = output {
-                    events.lock().unwrap_or_else(PoisonError::into_inner).push(output);
+        }
+        for round in 0..=EXTRA_POLLS {
+            let mut any = false;
+            for (descriptor, device) in descriptors.iter().zip(&devices) {
+                if descriptor.revents & libc::POLLIN != 0 {
+                    drain(device, &mut queued);
+                    any = true;
                 }
             }
+            if !any || round == EXTRA_POLLS {
+                break;
+            }
+            // SAFETY: the pollfds of the open devices only.
+            if unsafe { libc::poll(descriptors.as_mut_ptr(), devices.len() as libc::nfds_t, 0) } <= 0 {
+                break;
+            }
+        }
+        let kept = handle_in_time_order(&mut queued, &mut keyboard);
+        queued.clear();
+        if !kept.is_empty() {
+            events.lock().unwrap_or_else(PoisonError::into_inner).extend(kept);
         }
     }
     devices
@@ -532,6 +663,35 @@ mod tests {
         assert_eq!(typist.shown(&[KEY_LEFTCTRL, KEY_LEFTSHIFT], KEY_Q).0, "A");
         assert_eq!(typist.shown(&[KEY_LEFTCTRL], KEY_A).0, "Q");
         assert_eq!(typist.shown(&[KEY_LEFTCTRL], KEY_1).0, "&");
+    }
+
+    #[test]
+    fn events_read_together_are_handled_in_time_order() {
+        let key = |time, code, value| Queued { time, keyboard_device: true, kind: EV_KEY, code, value };
+        // Read device by device: keyboard B (Ctrl down at 10, up at 20) after keyboard A's
+        // letter at 30. In device order the letter would see Ctrl still held.
+        let mut queued = vec![key(30, KEY_A, 1), key(31, KEY_A, 0), key(10, KEY_LEFTCTRL, 1), key(20, KEY_LEFTCTRL, 0)];
+        let kept = handle_in_time_order(&mut queued, &mut Keyboard::new(layout("us", "")));
+        let codes: Vec<(i32, DeviceEventKind, i64)> = kept.iter().map(|event| (event.key_code, event.kind, event.monotonic_us)).collect();
+        assert_eq!(codes, [(29, DeviceEventKind::KeyDown, 10), (29, DeviceEventKind::KeyUp, 20)]);
+        // With Ctrl really held across the letter, it is a shortcut.
+        let mut queued = vec![key(30, KEY_A, 1), key(31, KEY_A, 0), key(10, KEY_LEFTCTRL, 1), key(40, KEY_LEFTCTRL, 0)];
+        let kept = handle_in_time_order(&mut queued, &mut Keyboard::new(None));
+        assert_eq!(kept.iter().map(|event| event.monotonic_us).collect::<Vec<_>>(), [10, 30, 31, 40]);
+    }
+
+    #[test]
+    fn a_second_keyboard_with_another_layout_types_no_shortcuts() {
+        let keyboards = keymap::Keyboards {
+            main: KeyboardNames { layout: "us".into(), ..KeyboardNames::default() },
+            others: vec![KeyboardNames { layout: "fr".into(), ..KeyboardNames::default() }],
+        };
+        let mut typist = Typist::new(Layout::for_keyboards(&keyboards));
+        keeps_shortcuts_only(&mut typist);
+        // Right Alt is AltGr on the French keyboard: AltGr+0 ("@") stays out.
+        assert!(!typist.kept(&[KEY_RIGHTALT], KEY_0));
+        assert!(!typist.kept(&[], KEY_RIGHTALT));
+        assert!(typist.kept(&[KEY_LEFTALT], KEY_0));
     }
 
     #[test]

@@ -104,10 +104,16 @@ type no text (Enter, Escape, Tab, Backspace, Delete, arrows, Home/End/Page Up/Pa
 Insert, media keys...), with or without Shift. Plain typing, Shift+letter included, is dropped
 when it is read and never reaches the bundle, so passwords typed while recording are not saved; a
 key up is kept only after its key down was. `code` and `name` are the evdev scancode and its
-libevdev name (a US key); `label` is what the active Hyprland layout prints on the key at its base
-level (AZERTY's `KEY_Q` is "A"), written when libxkbcommon could compile that layout. What types
-text is decided by that layout too; without it, by the US names. Older bundles may have plain
-typing and no `label`; the keystroke overlay hides their typing and names keys by `name`.
+libevdev name (a US key); `label` is what the main keyboard's active Hyprland layout prints on the
+key at its base level (AZERTY's `KEY_Q` is "A"), following Hyprland's layout switches. What is
+typing is decided by every keyboard's keymap Hyprland lists, all their layouts at once: a key is
+typing if it types or picks text in any of them, and a modifier only if it is that modifier in
+all of them (Right Alt in "us,fr" is neither Alt nor a shortcut). When Hyprland does not list its
+keyboards or a keymap does not compile, nothing is labelled and the US names decide, with Right
+Alt as AltGr. Events read together from several devices are handled in time order, and a
+`SYN_DROPPED` resync is read so lost key releases are not missed. Older bundles may have plain
+typing and no `label`; the keystroke overlay hides their typing and names keys by `name`, and
+takes their "alt" as Alt only while Left Alt is down (the old recorder named AltGr "alt" too).
 Move samples before the first frame or after stop are still stored (trimmed on load).
 
 ### Webcam capture

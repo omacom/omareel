@@ -192,15 +192,26 @@ fn key_label(name: &str) -> String {
     words.join(" ")
 }
 
+/// The evdev code of Left Alt.
+const KEY_LEFTALT: i32 = 56;
+
 /// Whether a key down is plain typing, which the pills never show: a typing key
 /// ([`is_text_label`] by the label, else [`is_typing_key_name`] by the name) without Ctrl, Alt
-/// or Super held. The
-/// recorder no longer keeps any; recordings from before it stopped can have them.
-fn is_plain_typing(event: &InputEvent) -> bool {
-    if makes_shortcut(&event.modifiers) {
-        return false;
+/// or Super held. The recorder no longer keeps any; recordings from before it stopped can have
+/// them. Those (the key downs without a label) named Right Alt "alt" too, though on many layouts
+/// it is AltGr, which types; so there "alt" makes a shortcut only while Left Alt is known to be
+/// down (`left_alt_down`), from its own key down and up in the log.
+fn is_plain_typing(event: &InputEvent, left_alt_down: bool) -> bool {
+    if event.key_label.is_empty() {
+        let shortcut = event.modifiers.iter().any(|modifier| match modifier.as_str() {
+            "ctrl" | "meta" => true,
+            "alt" => left_alt_down,
+            _ => false,
+        });
+        !shortcut && is_typing_key_name(&event.key_name)
+    } else {
+        !makes_shortcut(&event.modifiers) && is_text_label(&event.key_label)
     }
-    if event.key_label.is_empty() { is_typing_key_name(&event.key_name) } else { is_text_label(&event.key_label) }
 }
 
 impl KeystrokeTrack {
@@ -212,11 +223,15 @@ impl KeystrokeTrack {
         if !settings.enabled {
             return track;
         }
+        let mut left_alt_down = false;
         for event in events {
+            if event.key_code == KEY_LEFTALT && matches!(event.kind, InputKind::KeyDown | InputKind::KeyUp) {
+                left_alt_down = event.kind == InputKind::KeyDown;
+            }
             if event.kind != InputKind::KeyDown
                 || (event.key_name.is_empty() && event.key_label.is_empty())
                 || is_modifier(event)
-                || is_plain_typing(event)
+                || is_plain_typing(event, left_alt_down)
             {
                 continue;
             }
@@ -309,6 +324,10 @@ mod tests {
         InputEvent { key_label: key_label.into(), ..key_down(time, 0, key_name, modifiers) }
     }
 
+    fn key_up(time: f64, key_code: i32) -> InputEvent {
+        InputEvent { time, kind: InputKind::KeyUp, key_code, ..InputEvent::default() }
+    }
+
     // tests/test_keystroketrack.cpp, with F5 where the plain K it had is now hidden as typing.
     #[test]
     fn groups_consecutive_keys_and_fades_from_last_key() {
@@ -358,11 +377,35 @@ mod tests {
             key_down(1.2, 57, "KEY_SPACE", &["shift"]),
             key_down(1.3, 79, "KEY_KP1", &[]),
             key_down(1.4, 15, "KEY_TAB", &["shift"]),
+            key_down(1.45, 56, "KEY_LEFTALT", &["alt"]),
             key_down(1.5, 30, "KEY_A", &["alt"]),
+            key_up(1.55, 56),
             key_down(1.6, 57, "KEY_SPACE", &["meta"]),
         ];
         let track = KeystrokeTrack::build(&events, &settings);
         assert_eq!(track.sample(1.6)[0].keys, ["Shift", "Tab", "Alt", "A", "Super", "Space"]);
+    }
+
+    // Not in the C++ tests: the old recorder named Right Alt "alt" too, so AltGr typing in an
+    // older recording looks like Alt; "alt" is only trusted while Left Alt is down.
+    #[test]
+    fn altgr_typing_in_older_recordings_is_hidden() {
+        let settings = Keystrokes { enabled: true, ..Keystrokes::default() };
+        let events = [
+            // AZERTY AltGr+0 is "@", AltGr+E "€".
+            key_down(1.0, 100, "KEY_RIGHTALT", &["alt"]),
+            key_down(1.1, 11, "KEY_0", &["alt"]),
+            key_down(1.2, 18, "KEY_E", &["alt"]),
+            key_up(1.3, 100),
+            // Alt from a log that starts with it already down is not trusted either.
+            key_down(1.4, 30, "KEY_A", &["alt"]),
+            // Alt+Tab is shown whichever Alt it is: Tab types nothing.
+            key_down(1.5, 15, "KEY_TAB", &["alt"]),
+            key_down(1.6, 56, "KEY_LEFTALT", &["alt"]),
+            key_down(1.7, 33, "KEY_F", &["alt"]),
+        ];
+        let track = KeystrokeTrack::build(&events, &settings);
+        assert_eq!(track.sample(1.7)[0].keys, ["Alt", "Tab", "Alt", "F"]);
     }
 
     // Not in the C++ tests: the layout's label wins over the scancode's name.
@@ -408,31 +451,33 @@ mod tests {
 
     #[test]
     fn plain_typing_is_a_text_key_without_ctrl_alt_or_super() {
-        assert!(is_plain_typing(&key_down(0.0, 0, "KEY_A", &[])));
-        assert!(is_plain_typing(&key_down(0.0, 0, "KEY_1", &[])));
-        assert!(is_plain_typing(&key_down(0.0, 0, "ª", &[])));
-        assert!(is_plain_typing(&key_down(0.0, 0, "KEY_A", &["shift"])));
-        assert!(is_plain_typing(&key_down(0.0, 0, "KEY_-", &[])));
-        assert!(is_plain_typing(&key_down(0.0, 0, "Ⓐ", &[])));
-        assert!(is_plain_typing(&key_down(0.0, 0, "𐐀", &[])));
-        assert!(is_plain_typing(&key_down(0.0, 0, "KEY_SEMICOLON", &["shift"])));
-        assert!(is_plain_typing(&key_down(0.0, 0, "KEY_KP0", &[])));
-        assert!(is_plain_typing(&key_down(0.0, 0, "KEY_A", &["hyper"])));
-        assert!(!is_plain_typing(&key_down(0.0, 0, "KEY_A", &["ctrl"])));
-        assert!(!is_plain_typing(&key_down(0.0, 0, "KEY_A", &["shift", "alt"])));
-        assert!(!is_plain_typing(&key_down(0.0, 0, "KEY_A", &["meta"])));
-        assert!(!is_plain_typing(&key_down(0.0, 0, "KEY_ENTER", &[])));
-        assert!(!is_plain_typing(&key_down(0.0, 0, "KEY_KPENTER", &[])));
-        assert!(is_plain_typing(&key_down(0.0, 0, "KEY_CAPSLOCK", &[])));
-        assert!(!is_plain_typing(&key_down(0.0, 0, "KEY_CAPSLOCK", &["ctrl"])));
-        assert!(!is_plain_typing(&key_down(0.0, 0, "KEY_LEFTALT", &[])));
-        assert!(!is_plain_typing(&key_down(0.0, 0, "KEY_KP", &[])));
-        assert!(!is_plain_typing(&key_down(0.0, 0, "\u{0}", &[])));
-        assert!(is_plain_typing(&labelled(0.0, "KEY_Q", "A", &["shift"])));
-        assert!(is_plain_typing(&labelled(0.0, "KEY_ENTER", "é", &[])));
-        assert!(!is_plain_typing(&labelled(0.0, "KEY_A", "Enter", &[])));
-        assert!(!is_plain_typing(&labelled(0.0, "KEY_SPACE", "Space", &[])));
-        assert!(!is_plain_typing(&labelled(0.0, "KEY_Q", "A", &["ctrl"])));
+        assert!(is_plain_typing(&key_down(0.0, 0, "KEY_A", &[]), false));
+        assert!(is_plain_typing(&key_down(0.0, 0, "KEY_1", &[]), false));
+        assert!(is_plain_typing(&key_down(0.0, 0, "ª", &[]), false));
+        assert!(is_plain_typing(&key_down(0.0, 0, "KEY_A", &["shift"]), false));
+        assert!(is_plain_typing(&key_down(0.0, 0, "KEY_-", &[]), false));
+        assert!(is_plain_typing(&key_down(0.0, 0, "Ⓐ", &[]), false));
+        assert!(is_plain_typing(&key_down(0.0, 0, "𐐀", &[]), false));
+        assert!(is_plain_typing(&key_down(0.0, 0, "KEY_SEMICOLON", &["shift"]), false));
+        assert!(is_plain_typing(&key_down(0.0, 0, "KEY_KP0", &[]), false));
+        assert!(is_plain_typing(&key_down(0.0, 0, "KEY_A", &["hyper"]), false));
+        assert!(!is_plain_typing(&key_down(0.0, 0, "KEY_A", &["ctrl"]), false));
+        assert!(is_plain_typing(&key_down(0.0, 0, "KEY_A", &["shift", "alt"]), false), "alt may be AltGr");
+        assert!(!is_plain_typing(&key_down(0.0, 0, "KEY_A", &["shift", "alt"]), true));
+        assert!(!is_plain_typing(&key_down(0.0, 0, "KEY_A", &["meta"]), false));
+        assert!(!is_plain_typing(&key_down(0.0, 0, "KEY_ENTER", &[]), false));
+        assert!(!is_plain_typing(&key_down(0.0, 0, "KEY_KPENTER", &[]), false));
+        assert!(is_plain_typing(&key_down(0.0, 0, "KEY_CAPSLOCK", &[]), false));
+        assert!(!is_plain_typing(&key_down(0.0, 0, "KEY_CAPSLOCK", &["ctrl"]), false));
+        assert!(!is_plain_typing(&key_down(0.0, 0, "KEY_LEFTALT", &[]), false));
+        assert!(!is_plain_typing(&key_down(0.0, 0, "KEY_KP", &[]), false));
+        assert!(!is_plain_typing(&key_down(0.0, 0, "\u{0}", &[]), false));
+        assert!(is_plain_typing(&labelled(0.0, "KEY_Q", "A", &["shift"]), false));
+        assert!(is_plain_typing(&labelled(0.0, "KEY_ENTER", "é", &[]), false));
+        assert!(!is_plain_typing(&labelled(0.0, "KEY_A", "Enter", &[]), false));
+        assert!(!is_plain_typing(&labelled(0.0, "KEY_SPACE", "Space", &[]), false));
+        assert!(!is_plain_typing(&labelled(0.0, "KEY_Q", "A", &["ctrl"]), false));
+        assert!(!is_plain_typing(&labelled(0.0, "KEY_Q", "A", &["alt"]), false), "a labelled alt is Alt");
     }
 
     #[test]
