@@ -636,7 +636,7 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
             if native_capture { screen_capture.first_frame_us() } else { first_frame_timestamp(&timestamp_path) };
         debug_start_stage("first_frame", daemon_start_us, &format!("first_frame_us={first_us}"));
     }
-    if let Err(warning) = cursor_sampler.start() {
+    if let Err(warning) = cursor_sampler.start(&region.monitor_name, options.fps) {
         warn(&warning);
     }
     if let Err(warning) = evdev_listener.start() {

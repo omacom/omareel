@@ -48,6 +48,27 @@ pub fn self_view_host_path() -> String {
     state_directory() + "/selfview-host.json"
 }
 
+/// `hardware-cursor-hold-<instance>.json` beside the state file: the `cursor:no_hardware_cursors`
+/// value a recording's `HardwareCursorHold` changed on that Hyprland instance, kept while the
+/// hold lasts so that a start after a crash can put it back
+/// (`capture_exclusion::restore_abandoned_hardware_cursor`). One per instance, so recordings on
+/// two compositors never overwrite each other's. Characters a file name should not hold become
+/// `_`; an empty instance is `none`.
+pub fn hardware_cursor_hold_path(instance: &str) -> String {
+    let name: String = instance
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.') { c } else { '_' })
+        .collect();
+    let name = if name.is_empty() || name.chars().all(|c| c == '.') { "none".to_owned() } else { name };
+    format!("{}/hardware-cursor-hold-{name}.json", state_directory())
+}
+
+/// `hardware-cursor-hold.lock` beside the state file: the file every process `flock`s while it
+/// restores, takes or gives back a hold.
+pub fn hardware_cursor_hold_lock_path() -> String {
+    state_directory() + "/hardware-cursor-hold.lock"
+}
+
 /// `QJsonDocument::fromJson(bytes).object()`: an empty object for anything but an object.
 fn object_or_empty(bytes: &[u8]) -> Object {
     match qjson::from_json(bytes) {
@@ -279,6 +300,7 @@ fn file_size(path: &str) -> i64 {
     FileInfo::new(path).size()
 }
 
+<<<<<<< HEAD
 /// How much the bundle's files hold together, which grows while a stopping recorder saves.
 fn bundle_bytes(bundle: &str) -> u64 {
     std::fs::read_dir(bundle)
@@ -298,6 +320,14 @@ const STOP_LIMIT: std::time::Duration = std::time::Duration::from_secs(600);
 /// a while, so the wait lasts as long as the bundle keeps growing: a daemon that saves nothing
 /// for [`STOP_STALL`], or is still going after [`STOP_LIMIT`], is killed with its ffmpeg and
 /// `__record-gsr` descendants.
+=======
+/// `Recorder::stopExisting(cancel, &bundlePath, &error)`: signals the daemon and waits up to 20
+/// seconds (800 checks 25 ms apart) for it to go or for its state file to disappear, then says
+/// whether the bundle was finalized (`screen.mp4` and `capture.json` not empty, `input.jsonl` a
+/// file) or, after a discard, removed. A daemon that does not stop is killed with its ffmpeg and
+/// `__record-gsr` descendants, and the cursor setting it held is put back (up to a second for it
+/// to die first).
+>>>>>>> origin/fix/cursor-session
 pub fn stop_existing(cancel: bool) -> StopOutcome {
     let state = read_state();
     let pid = state.value("pid").to_variant_long_long();
@@ -348,6 +378,14 @@ pub fn stop_existing(cancel: bool) -> StopOutcome {
     }
     kill(pid, libc::SIGKILL);
     qfile::remove(&state_file_path());
+    // The killed daemon never dropped its hold on hardware cursors.
+    for _ in 0..40 {
+        if !process_alive(pid) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+    crate::capture_exclusion::restore_abandoned_hardware_cursor();
     let timeout_message =
         "Recorder stopped saving for 20 seconds; force-killed the recorder and capture processes";
     notify_stop_failure(&format!("{timeout_message}. The video may be incomplete."));
