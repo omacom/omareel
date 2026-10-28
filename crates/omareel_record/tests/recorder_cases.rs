@@ -14,7 +14,8 @@ use omareel_record::recorder::{
 };
 use omareel_record::region_picker::{is_click_selection, parse_capture_options};
 use omareel_record::screen_capture::{
-    CaptureRingBookkeeping, Rect, Size, SlotState, capture_crop_rows, capture_frame_header, capture_stream_header,
+    CaptureRingBookkeeping, EncoderProbeResults, Rect, Size, SlotState, capture_crop_rows, capture_frame_header,
+    capture_stream_header, encoder_arguments,
 };
 use std::cell::RefCell;
 use std::sync::{Mutex, MutexGuard, PoisonError};
@@ -186,14 +187,10 @@ fn capture_stream_keeps_frame_times_and_colours() {
         stream.extend(capture_frame_header(time_us, frame.len() as i64));
         stream.extend(frame);
     }
+    // The arguments a recording without NVENC runs ffmpeg with.
+    let arguments = encoder_arguments(size, 60, &EncoderProbeResults::default(), None, None, &video).arguments;
     let mut encoder = Process::new();
-    encoder.start(
-        "ffmpeg",
-        &[
-            "-v", "error", "-f", "matroska", "-i", "pipe:0", "-c:v", "libx264", "-bf", "0", "-pix_fmt", "yuv420p",
-            "-fps_mode", "vfr", "-enc_time_base", "1/60", &video,
-        ],
-    );
+    encoder.start("ffmpeg", &arguments);
     assert!(encoder.wait_for_started(5000));
     encoder.write(&stream);
     encoder.close_write_channel();
@@ -221,6 +218,57 @@ fn capture_stream_keeps_frame_times_and_colours() {
     assert!(rgb.len() >= 3);
     let near = |value: u8, expected: i32| (i32::from(value) - expected).abs() <= 4;
     assert!(near(rgb[0], 10) && near(rgb[1], 50) && near(rgb[2], 200), "{},{},{}", rgb[0], rgb[1], rgb[2]);
+    // Converted with BT.709, and tagged so (players read untagged HD as BT.709 anyway).
+    let mut tags = Process::new();
+    tags.start(
+        "ffprobe",
+        &["-v", "error", "-select_streams", "v", "-show_entries", "stream=color_space,color_range", "-of", "csv=p=0", &video],
+    );
+    assert!(tags.wait_for_finished(10000));
+    assert_eq!(String::from_utf8_lossy(&tags.read_all_standard_output()).trim(), "tv,bt709");
+}
+
+#[test]
+fn killed_capture_encoder_leaves_a_playable_video() {
+    let _programs = programs();
+    if !have_ffmpeg() {
+        eprintln!("ffmpeg/ffprobe unavailable");
+        return;
+    }
+    let scratch = Scratch::new("killed-encoder");
+    let video = scratch.file("screen.mp4");
+    let size = Size::new(64, 32);
+    // Two seconds of a still screen (small frames), then the encoder is killed without warning.
+    let mut stream = capture_stream_header(size, 60);
+    for index in 0..120i64 {
+        let frame: Vec<u8> = (0..size.width * size.height).flat_map(|_| [0x40, 0x80, 0xc0, 0xff]).collect();
+        stream.extend(capture_frame_header(index * 1_000_000 / 60, frame.len() as i64));
+        stream.extend(frame);
+    }
+    let arguments = encoder_arguments(size, 60, &EncoderProbeResults::default(), None, None, &video).arguments;
+    let mut encoder = Process::new();
+    encoder.start("ffmpeg", &arguments);
+    assert!(encoder.wait_for_started(5000));
+    encoder.write(&stream);
+    while encoder.bytes_to_write() > 0 && encoder.wait_for_bytes_written(5000) {}
+    let packets = || {
+        let mut probe = Process::new();
+        probe.start(
+            "ffprobe",
+            &["-v", "error", "-count_packets", "-select_streams", "v", "-show_entries", "stream=nb_read_packets", "-of", "csv=p=0", &video],
+        );
+        probe.wait_for_finished(10000);
+        String::from_utf8_lossy(&probe.read_all_standard_output()).trim().parse::<i32>().unwrap_or(0)
+    };
+    // The first one-second fragment reaches the file once the second keyframe is encoded.
+    let started = Instant::now();
+    while packets() < 60 && started.elapsed().as_secs() < 10 {
+        encoder.wait_for_bytes_written(50);
+    }
+    encoder.kill();
+    assert!(encoder.wait_for_finished(5000));
+    let packets = packets();
+    assert!(packets >= 60, "{packets} packets survived");
 }
 
 #[test]
