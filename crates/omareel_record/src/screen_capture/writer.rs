@@ -10,8 +10,10 @@
 //! compositor only sends frames when the screen changes). The first frame's presentation time goes
 //! into the timestamp file. A failure stops the writer and is kept for `captureFrame` to report.
 //!
-//! The encoder's input is an [`EncoderSink`] ([`FdSink`] for ffmpeg's pipe, as the C++ has it)
-//! and the slots' pixels a [`SlotMemory`], so the writer can be driven without a compositor.
+//! Frames go to a [`FrameOutput`]: the Matroska stream to ffmpeg ([`writer_loop`]), whose input is
+//! an [`EncoderSink`] ([`FdSink`] for ffmpeg's pipe) reading the slots' pixels from a
+//! [`SlotMemory`], so the writer can be driven without a compositor; or the VA-API encoder, which
+//! takes the slots' dmabufs by index ([`run_writer`]).
 
 use super::{CaptureRingBookkeeping, CaptureRowCopy, Size, SlotState, capture_frame_header, capture_stream_header};
 use omareel_core::compat::qsavefile::SaveFile;
@@ -103,8 +105,9 @@ pub fn write_all<S: EncoderSink + ?Sized>(sink: &mut S, bytes: &[u8], abort: &At
 /// The capture slots' pixels, `stride * height` bytes each. A slot is only read while the ring
 /// says it is being written, and only filled while it is capturing.
 pub trait SlotMemory: Send + Sync {
-    /// Calls `read` with slot `index`'s bytes.
-    fn with_slot(&self, index: usize, read: &mut dyn FnMut(&[u8]));
+    /// Calls `read` with slot `index`'s bytes; false when they can't be read (and `read` isn't
+    /// called).
+    fn with_slot(&self, index: usize, read: &mut dyn FnMut(&[u8])) -> bool;
 }
 
 /// Slots in one block of memory the caller owns, such as the shared-memory pool the compositor
@@ -130,11 +133,13 @@ impl RawSlotMemory {
 }
 
 impl SlotMemory for RawSlotMemory {
-    fn with_slot(&self, index: usize, read: &mut dyn FnMut(&[u8])) {
-        if index < self.slots {
-            // SAFETY: `new`'s contract covers every slot below `slots`.
-            read(unsafe { std::slice::from_raw_parts(self.base.add(index * self.slot_bytes), self.slot_bytes) });
+    fn with_slot(&self, index: usize, read: &mut dyn FnMut(&[u8])) -> bool {
+        if index >= self.slots {
+            return false;
         }
+        // SAFETY: `new`'s contract covers every slot below `slots`.
+        read(unsafe { std::slice::from_raw_parts(self.base.add(index * self.slot_bytes), self.slot_bytes) });
+        true
     }
 }
 
@@ -327,15 +332,70 @@ fn realtime_us() -> i64 {
     value.tv_sec * 1_000_000 + value.tv_nsec / 1000
 }
 
+/// Where the writer puts frames: the Matroska stream piped to ffmpeg ([`writer_loop`]), or the
+/// GPU encoder (`super::gpu`).
+pub trait FrameOutput {
+    /// Before the first frame.
+    fn begin(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+    /// Slot `index`'s frame at `frame_index` on the encoder's 1/fps grid.
+    fn write(&mut self, index: usize, frame_index: i64) -> Result<(), String>;
+    /// After the last frame of a writer that was neither aborted nor failed.
+    fn end(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+/// The Matroska stream ffmpeg reads: the header, then each frame cropped through the row copies.
+struct MatroskaOutput<'a, S: EncoderSink + ?Sized, M: SlotMemory + ?Sized> {
+    fps: f64,
+    header: Vec<u8>,
+    rows: &'a [CaptureRowCopy],
+    cropped: Vec<u8>,
+    memory: &'a M,
+    sink: &'a mut S,
+    abort: &'a AtomicBool,
+}
+
+impl<S: EncoderSink + ?Sized, M: SlotMemory + ?Sized> FrameOutput for MatroskaOutput<'_, S, M> {
+    fn begin(&mut self) -> Result<(), String> {
+        write_all(self.sink, &self.header, self.abort)
+    }
+
+    fn write(&mut self, index: usize, frame_index: i64) -> Result<(), String> {
+        let MatroskaOutput { fps, rows, cropped, memory, sink, abort, .. } = self;
+        let mut result = Ok(());
+        let read = memory.with_slot(index, &mut |bytes: &[u8]| {
+            let Some(first) = rows.first() else { return };
+            let output: &[u8] = if rows.len() > 1 {
+                for row in rows.iter() {
+                    let (from, to, count) =
+                        (row.source_offset as usize, row.destination_offset as usize, row.bytes as usize);
+                    cropped[to..to + count].copy_from_slice(&bytes[from..from + count]);
+                }
+                cropped
+            } else {
+                &bytes[first.source_offset as usize..(first.source_offset + first.bytes) as usize]
+            };
+            let frame_header = capture_frame_header((frame_index as f64 * 1e6 / *fps).round() as i64, output.len() as i64);
+            result = write_all(*sink, &frame_header, abort).and_then(|()| write_all(*sink, output, abort));
+        });
+        if !read {
+            return Err("A captured frame could not be read".into());
+        }
+        result
+    }
+}
+
 /// `ScreenCapture::Private::writerLoop`, run on the writer thread until the queue is stopped
-/// ([`FrameQueue::stop_writer`]) or a write fails.
+/// ([`FrameQueue::stop_writer`]) or a write fails: the Matroska stream to ffmpeg.
 pub fn writer_loop<S: EncoderSink + ?Sized, M: SlotMemory + ?Sized>(
     queue: &FrameQueue,
     config: &WriterConfig,
     memory: &M,
     sink: &mut S,
 ) {
-    let fps = f64::from(config.fps);
     let rows = &config.crop_rows;
     let mut cropped = Vec::new();
     if rows.len() > 1 {
@@ -344,34 +404,29 @@ pub fn writer_loop<S: EncoderSink + ?Sized, M: SlotMemory + ?Sized>(
             0u8,
         );
     }
-    {
-        let header = capture_stream_header(config.encoded_size, config.fps);
-        if let Err(error) = write_all(sink, &header, &queue.writer_abort) {
-            queue.fail(None, error, true);
-            return;
-        }
-    }
-    let mut write_frame = |index: usize, frame_index: i64| -> Result<(), String> {
-        let mut result = Ok(());
-        memory.with_slot(index, &mut |bytes: &[u8]| {
-            let Some(first) = rows.first() else { return };
-            let output: &[u8] = if rows.len() > 1 {
-                for row in rows {
-                    let (from, to, count) =
-                        (row.source_offset as usize, row.destination_offset as usize, row.bytes as usize);
-                    cropped[to..to + count].copy_from_slice(&bytes[from..from + count]);
-                }
-                &cropped
-            } else {
-                &bytes[first.source_offset as usize..(first.source_offset + first.bytes) as usize]
-            };
-            let frame_header =
-                capture_frame_header((frame_index as f64 * 1e6 / fps).round() as i64, output.len() as i64);
-            result = write_all(sink, &frame_header, &queue.writer_abort)
-                .and_then(|()| write_all(sink, output, &queue.writer_abort));
-        });
-        result
+    let mut output = MatroskaOutput {
+        fps: f64::from(config.fps),
+        header: capture_stream_header(config.encoded_size, config.fps),
+        rows,
+        cropped,
+        memory,
+        sink,
+        abort: &queue.writer_abort,
     };
+    run_writer(queue, config, &mut output);
+}
+
+/// The writer's loop over any [`FrameOutput`]: each queued frame at its tick on the encoder's
+/// 1/fps grid, skipping a frame that lands on the tick before it, the last frame written kept in
+/// its slot so it can be written again at the stop time, the first frame's presentation time
+/// in the timestamp file. A failure is kept for `capture_frame` to report.
+pub fn run_writer<O: FrameOutput + ?Sized>(queue: &FrameQueue, config: &WriterConfig, output: &mut O) {
+    let fps = f64::from(config.fps);
+    if let Err(error) = output.begin() {
+        queue.fail(None, error, true);
+        return;
+    }
+    let mut write_frame = |index: usize, frame_index: i64| output.write(index, frame_index);
     // The compositor only sends frames when the screen changes, so the last one written stays in
     // its slot until the next replaces it. At stop it is written again at the stop time, or a
     // recording that ends on a still screen would end at its last change.
@@ -428,26 +483,31 @@ pub fn writer_loop<S: EncoderSink + ?Sized, M: SlotMemory + ?Sized>(
         queue.last_frame_index.store(frame_index, Ordering::Relaxed);
         queue.frames.fetch_add(1, Ordering::Relaxed);
     }
-    if held_index < 0 {
-        return;
-    }
-    let stop_us = queue.lock().stop_us;
-    let first_us = queue.first_us.load(Ordering::Relaxed);
-    let stop_index = if stop_us > 0 { ((stop_us - first_us) as f64 * fps / 1e6).round() as i64 } else { -1 };
-    let mut padded = Ok(());
-    if stop_index > queue.last_frame_index.load(Ordering::Relaxed)
-        && !queue.writer_abort.load(Ordering::Relaxed)
-        && !queue.writer_failed.load(Ordering::Relaxed)
-    {
-        padded = write_frame(held_index as usize, stop_index);
-        if padded.is_ok() {
-            queue.last_frame_index.store(stop_index, Ordering::Relaxed);
+    if held_index >= 0 {
+        let stop_us = queue.lock().stop_us;
+        let first_us = queue.first_us.load(Ordering::Relaxed);
+        let stop_index = if stop_us > 0 { ((stop_us - first_us) as f64 * fps / 1e6).round() as i64 } else { -1 };
+        let mut padded = Ok(());
+        if stop_index > queue.last_frame_index.load(Ordering::Relaxed)
+            && !queue.writer_abort.load(Ordering::Relaxed)
+            && !queue.writer_failed.load(Ordering::Relaxed)
+        {
+            padded = write_frame(held_index as usize, stop_index);
+            if padded.is_ok() {
+                queue.last_frame_index.store(stop_index, Ordering::Relaxed);
+            }
+        }
+        let mut shared = queue.lock();
+        shared.ring.release(held_index);
+        if let Err(error) = padded {
+            shared.writer_error = error;
+            queue.writer_failed.store(true, Ordering::Relaxed);
         }
     }
-    let mut shared = queue.lock();
-    shared.ring.release(held_index);
-    if let Err(error) = padded {
-        shared.writer_error = error;
-        queue.writer_failed.store(true, Ordering::Relaxed);
+    if queue.writer_abort.load(Ordering::Relaxed) || queue.writer_failed.load(Ordering::Relaxed) {
+        return;
+    }
+    if let Err(error) = output.end() {
+        queue.fail(None, error, true);
     }
 }

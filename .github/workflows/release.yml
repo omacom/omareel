@@ -48,7 +48,7 @@ jobs:
           pacman -S --noconfirm --needed
           git cmake ninja pkgconf wayland wayland-protocols rust corrosion
           qt6-base qt6-declarative qt6-multimedia qt6-svg qt6-shadertools
-          layer-shell-qt libevdev libjpeg-turbo ffmpeg slurp xdg-desktop-portal
+          layer-shell-qt libevdev libjpeg-turbo ffmpeg libva libdrm mesa slurp xdg-desktop-portal
           gpu-screen-recorder hicolor-icon-theme
 
       # The capture-exclusion plugin compiles against the compositor headers and
