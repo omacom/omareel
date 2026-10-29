@@ -25,10 +25,13 @@ ColumnLayout {
         if (path) editor.setProjectValue(path, value, true)
         editor.endCoalescedEdit()
     }
-    function wallpaperEntries() {
+    // Every wallpaper, flattened. Reading editor.wallpaperGroups converts the whole list again,
+    // so it is read once per change, not in the loops or in each binding that needs it.
+    readonly property var wallpapers: wallpaperEntries(editor.wallpaperGroups)
+    function wallpaperEntries(groups) {
         const result = []
-        for (let groupIndex = 0; groupIndex < editor.wallpaperGroups.length; ++groupIndex) {
-            const group = editor.wallpaperGroups[groupIndex]
+        for (let groupIndex = 0; groupIndex < groups.length; ++groupIndex) {
+            const group = groups[groupIndex]
             for (let wallpaperIndex = 0; wallpaperIndex < group.wallpapers.length; ++wallpaperIndex) {
                 const wallpaper = group.wallpapers[wallpaperIndex]
                 result.push({theme: group.label, file: wallpaper.file, path: wallpaper.path,
@@ -38,14 +41,14 @@ ColumnLayout {
         return result
     }
     function visibleWallpapers() {
-        const all = wallpaperEntries()
+        const all = wallpapers
         const count = showAllWallpapers ? all.length : Math.min(11, all.length)
         const result = all.slice(0, count)
         result.push({picker: true})
         return result
     }
     function hiddenWallpaperCount() {
-        return Math.max(0, wallpaperEntries().length - 11)
+        return Math.max(0, wallpapers.length - 11)
     }
     function gradientMatches(colours) {
         const stops = background.gradient.stops

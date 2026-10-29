@@ -42,8 +42,13 @@ Item {
         id: backgroundImage
         anchors.fill: parent
         visible: (root.settings.type === "image" || root.settings.type === "wallpaper") && source.toString() !== ""
-        source: root.settings.resolvedImage || ""
+        // Unsized, sourceSize would be 0x0, which loads the whole image.
+        source: width > 0 && height > 0 ? root.settings.resolvedImage || "" : ""
         fillMode: Image.PreserveAspectCrop
+        // Decode at the size drawn (in 256 px steps, so resizing the window rarely reloads it),
+        // not the wallpaper's own: a 5K WebP is 80 MB of pixels.
+        sourceSize: Qt.size(Math.ceil(width * Screen.devicePixelRatio / 256) * 256,
+                            Math.ceil(height * Screen.devicePixelRatio / 256) * 256)
         asynchronous: false
         layer.enabled: root.settings.blur > 0 && !root.softwareRendering
         layer.effect: MultiEffect {

@@ -526,6 +526,9 @@ const PREVIEW_STATS_TIMER: i32 = 4;
 const FINISH_LOADING_CALL: i32 = 0;
 const ADVANCE_CLIP_CALL: i32 = 1;
 
+/// The threads that build wallpaper picker thumbnails.
+const WALLPAPER_THUMBNAIL_WORKERS: usize = 2;
+
 fn player_index(player: Player) -> i32 {
     match player {
         Player::Screen => SCREEN,
@@ -841,8 +844,8 @@ impl qobject::Editor {
         let start_worker = {
             let Ok(mut state) = queue.state.lock() else { return };
             state.0.push_back((path, thumbnail));
-            let limit = std::thread::available_parallelism().map_or(1, usize::from);
-            let start = state.1 < limit;
+            // Two decoders: one per core held a whole wallpaper's pixels on every thread at once.
+            let start = state.1 < WALLPAPER_THUMBNAIL_WORKERS;
             if start {
                 state.1 += 1;
             }
@@ -859,6 +862,12 @@ impl qobject::Editor {
                         let job = state.0.pop_front();
                         if job.is_none() {
                             state.1 -= 1;
+                            // The decoders' freed pixels stay in this thread's malloc arena
+                            // otherwise, hundreds of MB for a theme's worth of 8K wallpapers.
+                            #[cfg(target_env = "gnu")]
+                            unsafe {
+                                libc::malloc_trim(0);
+                            }
                         }
                         job
                     }
