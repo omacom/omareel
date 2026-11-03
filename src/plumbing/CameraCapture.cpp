@@ -357,6 +357,8 @@ QStringList Omareel::cameraEncoderArguments(const CameraRawFrame &format, bool n
                         "-color_range", "tv",
                         // Frames keep the times they were captured at; gaps stay gaps.
                         "-fps_mode", "vfr", "-enc_time_base", "1/90000", "-video_track_timescale", "90000",
+                        // Flush even tiny still-camera fragments to disk before a crash.
+                        "-flush_packets", "1",
                         // Fragmented, so a recorder that dies leaves every finished fragment playable.
                         "-movflags", "+frag_keyframe+empty_moov+default_base_moof", path};
     return args;
