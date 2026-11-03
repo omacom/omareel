@@ -135,10 +135,10 @@ impl Keyboard {
         Keyboard { layout, ..Keyboard::default() }
     }
 
-    /// Follows a Hyprland layout switch to the layout described as `name`.
-    fn follow_layout(&mut self, name: &str) {
+    /// Follows a layout switch from the main keyboard used for labels.
+    fn follow_layout(&mut self, keyboard: &str, name: &str) {
         if let Some(layout) = &mut self.layout {
-            layout.follow_layout(name);
+            layout.follow_keyboard_layout(keyboard, name);
         }
     }
 
@@ -386,8 +386,8 @@ fn read_hyprland_events(socket: &mut UnixStream, pending: &mut Vec<u8>, keyboard
     };
     while let Some(end) = pending.iter().position(|&b| b == b'\n') {
         let line: Vec<u8> = pending.drain(..=end).collect();
-        if let Some(layout) = keymap::active_layout_event(&String::from_utf8_lossy(&line[..end])) {
-            keyboard.follow_layout(layout);
+        if let Some((name, layout)) = keymap::active_layout_event(&String::from_utf8_lossy(&line[..end])) {
+            keyboard.follow_layout(name, layout);
         }
     }
     open
@@ -701,5 +701,36 @@ mod tests {
         assert_eq!(typist.shown(&[KEY_CAPSLOCK], KEY_C), ("C".to_owned(), vec!["ctrl".to_owned()]));
         let mut compose = Typist::new(layout("us", "compose:caps"));
         assert!(!compose.kept(&[], KEY_CAPSLOCK), "Compose starts typing");
+    }
+
+    #[test]
+    fn layout_events_only_change_the_main_keyboards_labels() {
+        use std::io::Write;
+        let names = keymap::keyboards_from_devices(br#"{"keyboards":[
+            {"name":"main-kbd","layout":"us,fr","main":true},
+            {"name":"second-kbd","layout":"us,fr"}
+        ]}"#).unwrap();
+        let mut typist = Typist::new(Some(Layout::for_keyboards(&names).expect("keymaps compile")));
+        let (mut reader, mut sender) = UnixStream::pair().unwrap();
+        reader.set_nonblocking(true).unwrap();
+        let mut pending = Vec::new();
+        sender.write_all(b"activelayout>>second-kbd,French\n").unwrap();
+        assert!(read_hyprland_events(&mut reader, &mut pending, &mut typist.0));
+        assert_eq!(typist.shown(&[KEY_LEFTCTRL], KEY_Q).0, "Q");
+
+        // A main-keyboard event can span socket reads and must still switch it.
+        sender.write_all(b"activelayout>>main-kbd,Fre").unwrap();
+        assert!(read_hyprland_events(&mut reader, &mut pending, &mut typist.0));
+        assert_eq!(typist.shown(&[KEY_LEFTCTRL], KEY_Q).0, "Q");
+        sender.write_all(b"nch\n").unwrap();
+        assert!(read_hyprland_events(&mut reader, &mut pending, &mut typist.0));
+        assert_eq!(typist.shown(&[KEY_LEFTCTRL], KEY_Q).0, "A");
+
+        sender.write_all(b"activelayout>>second-kbd,English (US)\n").unwrap();
+        assert!(read_hyprland_events(&mut reader, &mut pending, &mut typist.0));
+        assert_eq!(typist.shown(&[KEY_LEFTCTRL], KEY_Q).0, "A");
+        sender.write_all(b"activelayout>>main-kbd,English (US)\n").unwrap();
+        assert!(read_hyprland_events(&mut reader, &mut pending, &mut typist.0));
+        assert_eq!(typist.shown(&[KEY_LEFTCTRL], KEY_Q).0, "Q");
     }
 }
