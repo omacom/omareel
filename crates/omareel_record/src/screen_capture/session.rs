@@ -52,6 +52,13 @@ use wayland_protocols::ext::image_copy_capture::v1::client::{
     ext_image_copy_capture_session_v1::{self, ExtImageCopyCaptureSessionV1},
 };
 
+/// The in-process VA-API path bypasses ffmpeg's argument selection, so it must
+/// respect the same CPU-conversion override before allocating GPU-only buffers.
+fn use_vaapi(is_nvidia: bool, capture_encoder: &str, native_encoder: &str, native_conversion: &str) -> bool {
+    !is_nvidia && capture_encoder != "ffmpeg" && native_encoder != "lossless"
+        && !native_conversion.eq_ignore_ascii_case("cpu")
+}
+
 /// `ScreenCaptureConfig`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ScreenCaptureConfig {
@@ -500,9 +507,12 @@ impl ScreenCapture {
         let linear = modifiers.contains(&gpu::MOD_LINEAR);
         let implicit = modifiers.is_empty() || modifiers == [gpu::MOD_INVALID];
         let mut made: Option<(Vec<gpu::Buffer>, Option<gpu::Encoder>)> = None;
-        let vaapi = !device.is_nvidia()
-            && environment("OMAREEL_CAPTURE_ENCODER") != "ffmpeg"
-            && environment("OMAREEL_NATIVE_ENCODER") != "lossless";
+        let vaapi = use_vaapi(
+            device.is_nvidia(),
+            &environment("OMAREEL_CAPTURE_ENCODER"),
+            &environment("OMAREEL_NATIVE_ENCODER"),
+            &environment("OMAREEL_NATIVE_CONVERSION"),
+        );
         if vaapi {
             let plain: Vec<u64> = modifiers.iter().copied().filter(|&modifier| gpu::plain_modifier(modifier)).collect();
             let mut attempts = Vec::new();
@@ -914,6 +924,9 @@ impl ScreenCapture {
             encoder.input = None;
         }
         let Some(mut encoder) = self.encoder.take().filter(|encoder| encoder.pid > 1) else {
+            if self.frames.writer_failed() {
+                *error = self.frames.writer_error();
+            }
             return !self.frames.writer_failed();
         };
         let exit = wait_for_encoder(&mut encoder, if drain { 15000 } else { 1000 });
@@ -1038,5 +1051,49 @@ impl ScreenCapture {
 impl Drop for ScreenCapture {
     fn drop(&mut self) {
         self.cleanup();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use super::super::writer::FrameOutput;
+
+    #[test]
+    fn cpu_conversion_override_disables_in_process_vaapi() {
+        assert!(use_vaapi(false, "", "", ""));
+        for conversion in ["cpu", "CPU", "Cpu"] {
+            assert!(!use_vaapi(false, "", "", conversion));
+        }
+        assert!(!use_vaapi(true, "", "", ""));
+        assert!(!use_vaapi(false, "ffmpeg", "", ""));
+        assert!(!use_vaapi(false, "", "lossless", ""));
+    }
+
+    #[test]
+    fn stopping_in_process_encoder_reports_its_finish_error() {
+        struct FailingFinish;
+        impl FrameOutput for FailingFinish {
+            fn write(&mut self, _: usize, _: i64) -> Result<(), String> {
+                unreachable!("this test only flushes the encoder");
+            }
+            fn end(&mut self) -> Result<(), String> {
+                Err("Could not write the video trailer: no space left on device".into())
+            }
+        }
+        let mut capture = ScreenCapture::new();
+        let frames = Arc::clone(&capture.frames);
+        capture.writer = Some(std::thread::spawn(move || {
+            let config = WriterConfig {
+                fps: 30,
+                timestamp_path: String::new(),
+                encoded_size: Size::new(16, 16),
+                crop_rows: Vec::new(),
+            };
+            run_writer(&frames, &config, &mut FailingFinish);
+        }));
+        let mut error = String::new();
+        assert!(!capture.stop_encoder(true, &mut error));
+        assert_eq!(error, "Could not write the video trailer: no space left on device");
     }
 }
