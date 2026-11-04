@@ -409,6 +409,8 @@ fn run_record(program: &str, arguments: &[String], cancel: &AtomicBool) -> Optio
 impl cxx_qt::Initialize for qobject::Launcher {
     /// `Launcher::Launcher`, after the members LauncherBase holds and its connections.
     fn initialize(mut self: Pin<&mut Self>) {
+        // A recorder that was killed mid-recording left hardware cursors held on.
+        capture_exclusion::restore_abandoned_hardware_cursor();
         let exclusion = capture_exclusion::ensure_loaded(&qobject::application_dir_path().to_string());
         if !exclusion.loaded {
             let screens = usize::try_from(self.screen_count()).unwrap_or(0);
