@@ -1,15 +1,17 @@
 //! The encoder probe of `ScreenCapture.cpp`: whether ffmpeg can encode with NVENC
 //! (`preferredEncoderAvailable`) and convert BGRA frames on the GPU (`gpuConversionAvailable`),
 //! asked once per ffmpeg binary and NVIDIA driver and remembered in
-//! `$XDG_CACHE_HOME/omareel/encoder-probe.json` (`encoderProbeResults`), so a recording does not
-//! wait for the probes every time.
+//! `$XDG_RUNTIME_DIR/omareel/encoder-probe.json` (`encoderProbeResults`), so a recording does not
+//! wait for the probes every time. The runtime directory is a tmpfs, so the probes run again once
+//! per login, beside the capture setup, and nothing is written to disk for them.
 
 use omareel_core::compat::qdir::{self, FileInfo};
 use omareel_core::compat::qjson::{self, Format, Object, Value};
 use omareel_core::compat::qprocess::Process;
 use omareel_core::compat::qsavefile::SaveFile;
-use omareel_core::compat::qstandardpaths::{self, Location};
+use omareel_core::compat::qstandardpaths;
 use omareel_core::compat::{qfile, qstring};
+use crate::recorder::state::state_directory;
 
 /// `EncoderProbeResults`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -102,9 +104,10 @@ pub fn encoder_probe_key() -> Object {
     key
 }
 
-/// `encoderProbeCachePath`: `omareel/encoder-probe.json` in the generic cache directory.
+/// `encoderProbeCachePath`: `encoder-probe.json` beside the recorder's state file, in the
+/// runtime directory.
 pub fn encoder_probe_cache_path() -> String {
-    qdir::file_path(&qstandardpaths::writable_location(Location::GenericCache), "omareel/encoder-probe.json")
+    qdir::file_path(&state_directory(), "encoder-probe.json")
 }
 
 /// `QJsonDocument::fromJson(bytes).object()` of the cache file, if it can be read.

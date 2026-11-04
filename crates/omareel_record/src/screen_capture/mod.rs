@@ -477,8 +477,9 @@ pub fn encoder_arguments(
     // Debug aid: OMAREEL_NATIVE_ENCODER=lossless stores the raw capture losslessly so capture
     // problems can be told apart from encoder artefacts.
     let lossless = native_encoder == Some("lossless");
-    // Small captures (regions, windows) are cheap enough to store losslessly, and NVENC's lossy
-    // modes smear high-contrast edges into visible macroblocks at these sizes.
+    // Small captures (regions, windows) are cheap enough to store losslessly (after the 4:2:0
+    // conversion, which still softens coloured edges), and NVENC's lossy modes smear
+    // high-contrast edges into visible macroblocks at these sizes.
     let small_frame = megapixels < 1.5;
     let gop = fps.to_string();
     if lossless {
@@ -527,11 +528,23 @@ pub fn encoder_arguments(
         );
     }
     if !use_gpu_conversion && !lossless {
-        push(&mut arguments, &["-pix_fmt", "yuv420p"]);
+        // swscale converts RGB with the BT.601 matrix unless told otherwise, while players read
+        // untagged HD video as BT.709, so reds and greens drifted. Convert with BT.709 and say so.
+        push(&mut arguments, &["-vf", "scale=out_color_matrix=bt709:out_range=tv", "-pix_fmt", "yuv420p"]);
+        push(&mut arguments, &["-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709"]);
+        push(&mut arguments, &["-color_range", "tv"]);
     }
     // Frames keep the times they were captured at, on a 1/fps time base. Gaps stay gaps.
     let time_base = format!("1/{fps}");
-    push(&mut arguments, &["-fps_mode", "vfr", "-enc_time_base", &time_base, "-movflags", "+faststart", output_path]);
+    push(&mut arguments, &["-fps_mode", "vfr", "-enc_time_base", &time_base]);
+    // Fragmented, so a recording whose encoder dies (a crash, an OOM kill, a power cut) is still
+    // playable up to its last fragment; a plain MP4 is unreadable without the index written at
+    // the end. No +faststart: it rewrites the whole file after encoding, which can outlast the
+    // wait in `stop_encoder` on a long recording, and the editor reads the file locally anyway.
+    // A still screen makes fragments small enough to sit in ffmpeg's output buffer, so each
+    // packet is flushed as it is written.
+    push(&mut arguments, &["-flush_packets", "1", "-movflags", "+frag_keyframe+empty_moov+default_base_moof"]);
+    push(&mut arguments, &[output_path]);
     EncoderArguments { conversion: conversion.to_owned(), arguments }
 }
 

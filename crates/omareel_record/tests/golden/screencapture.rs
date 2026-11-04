@@ -251,7 +251,7 @@ fn encoder_probe_txt() {
     set_times(&ffmpeg, 1700000000, 0);
     let cache = format!("{scratch}/cache");
     let mut environment = ScopedEnvironment::new(&h);
-    environment.set("XDG_CACHE_HOME", &cache);
+    environment.set("XDG_RUNTIME_DIR", &cache);
     environment.set("PATH", &bin);
     let driver = encoder_probe_key().value("driver").to_string_or("");
     let preferred_probe = [
