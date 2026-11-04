@@ -533,6 +533,42 @@ private slots:
         QCOMPARE(packed.pixels, expected);
     }
 
+    void killedCameraEncoderKeepsCompletedFragments()
+    {
+        if (!haveFfmpeg()) QSKIP("ffmpeg is not installed");
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const QString path = directory.filePath(QStringLiteral("camera.mp4"));
+        const CameraRawFrame packed = packCameraFrame(nv12Frame(QSize(64, 48), 80));
+        QVERIFY(!packed.pixels.isEmpty());
+        QProcess process;
+        process.start(QStringLiteral("ffmpeg"), cameraEncoderArguments(packed, false, path));
+        QVERIFY(process.waitForStarted(5000));
+        process.write(cameraStreamHeader(packed));
+        // Several seconds of a still camera produce tiny fragments. Keep stdin open:
+        // closing it would flush ffmpeg normally and hide buffering regressions.
+        for (int index = 0; index < 180; ++index) {
+            process.write(cameraFrameHeader(qint64(index) * 33333, packed.pixels.size()));
+            process.write(packed.pixels);
+        }
+        QElapsedTimer timer;
+        timer.start();
+        while (timer.elapsed() < 5000 && process.state() != QProcess::NotRunning) {
+            process.waitForReadyRead(10);
+            QFile file(path);
+            if (!file.open(QIODevice::ReadOnly)) continue;
+            int fragments = 0;
+            for (const auto &box : topLevelBoxes(file.readAll())) fragments += box.first == "moof";
+            if (fragments >= 2) break;
+        }
+        process.kill();
+        QVERIFY(process.waitForFinished(5000));
+        bool ok = false;
+        const int survived = run("ffprobe", {"-v", "error", "-count_frames", "-select_streams", "v:0",
+            "-show_entries", "stream=nb_read_frames", "-of", "csv=p=0", path}, &ok).trimmed().toInt();
+        QVERIFY2(ok && survived >= 30, qPrintable(QStringLiteral("Only %1 camera frames survived the encoder crash").arg(survived)));
+    }
+
     void cameraJpegDecodesDirectlyToYuv()
     {
         QImage source(16, 8, QImage::Format_RGB32);
