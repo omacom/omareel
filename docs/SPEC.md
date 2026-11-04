@@ -38,7 +38,7 @@ This document is the frozen contract. Implementation runs are scoped to it.
   accent `#7aa2f7`.
 - Runtime deps: `gpu-screen-recorder`, `ffmpeg`, `slurp`, `hyprctl`, `jq` (optional),
   `omarchy-notification-send` (optional). Build deps: qt6-base, qt6-declarative, qt6-multimedia,
-  qt6-svg, qt6-shadertools, libevdev, libjpeg-turbo, cmake, ninja.
+  qt6-svg, qt6-shadertools, libevdev, libxkbcommon, libjpeg-turbo, cmake, ninja.
 
 ## 1. CLI
 
@@ -90,13 +90,30 @@ input.jsonl         one event per line, monotonic us, already converted to VIDEO
                     {"t":...,"k":"d","b":"left"|"right"|"middle","x":..,"y":..}   button down
                     {"t":...,"k":"u","b":"left",...}                            button up
                     {"t":...,"k":"s","dx":0,"dy":-1,"x":..,"y":..}                 scroll (wheel steps)
-                    {"t":...,"k":"kd","code":30,"name":"KEY_A","mods":["ctrl"]}   key down (no text)
-                    {"t":...,"k":"ku","code":30}
+                    {"t":...,"k":"kd","code":16,"name":"KEY_Q","label":"A","mods":["ctrl"]}   key down
+                    {"t":...,"k":"ku","code":16}
 project.json        editor state, see §3. Created on first open with defaults + auto zooms.
 thumb.jpg           first-frame thumbnail for launcher.
 ```
 
-`t` in input.jsonl is **raw monotonic us**; the reader subtracts `first_frame_us`.
+`t` in input.jsonl is **raw monotonic us**; the reader subtracts `first_frame_us`. Device events
+carry the kernel's own `CLOCK_MONOTONIC` time of the event, not the time it was read.
+
+Keys are only shortcuts: modifier keys, keys pressed with Ctrl, Alt or Super held, and keys that
+type no text (Enter, Escape, Tab, Backspace, Delete, arrows, Home/End/Page Up/Page Down, F-keys,
+Insert, media keys...), with or without Shift. Plain typing, Shift+letter included, is dropped
+when it is read and never reaches the bundle, so passwords typed while recording are not saved; a
+key up is kept only after its key down was. `code` and `name` are the evdev scancode and its
+libevdev name (a US key); `label` is what the main keyboard's active Hyprland layout prints on the
+key at its base level (AZERTY's `KEY_Q` is "A"), following Hyprland's layout switches. What is
+typing is decided by every keyboard's keymap Hyprland lists, all their layouts at once: a key is
+typing if it types or picks text in any of them, and a modifier only if it is that modifier in
+all of them (Right Alt in "us,fr" is neither Alt nor a shortcut). When Hyprland does not list its
+keyboards or a keymap does not compile, nothing is labelled and the US names decide, with Right
+Alt as AltGr. Events read together from several devices are handled in time order, and a
+`SYN_DROPPED` resync is read so lost key releases are not missed. Older bundles may have plain
+typing and no `label`; the keystroke overlay hides their typing and names keys by `name`, and
+takes their "alt" as Alt only while Left Alt is down (the old recorder named AltGr "alt" too).
 Move samples before the first frame or after stop are still stored (trimmed on load).
 
 ### Webcam capture

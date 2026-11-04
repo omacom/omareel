@@ -62,7 +62,6 @@ fn defaults_and_round_trip() {
     assert!(!original.keystrokes.enabled);
     assert_eq!(original.keystrokes.position, "bottom-center");
     assert!(qcompare(original.keystrokes.size, 1.0));
-    assert!(original.keystrokes.show_only_shortcuts);
     assert_eq!(original.keystrokes.hold_ms, 900);
     assert_eq!(original.export_settings.height, 1080);
     assert_eq!(original.export_settings.quality, "social");
@@ -176,6 +175,20 @@ fn inserted_videos_stay_inside_the_bundle() {
     assert_eq!(guarded.clips.len(), 2);
     assert!(guarded.clips[1].is_media());
     assert_eq!(guarded.clips[1].fit, "fit");
+}
+
+// Not in the C++ tests: the "Shortcuts only" switch is gone, and projects that still have it
+// load as before and are saved without it.
+#[test]
+fn ignores_the_old_shortcuts_only_switch() {
+    let loaded = Project::from_json(&object(
+        r#"{"keystrokes": {"enabled": true, "showOnlyShortcuts": false, "holdMs": 1200}}"#,
+    ));
+    assert!(loaded.keystrokes.enabled);
+    assert_eq!(loaded.keystrokes.hold_ms, 1200);
+    let keystrokes = loaded.to_json().value("keystrokes").to_object();
+    assert!(!keystrokes.contains("showOnlyShortcuts"));
+    assert_eq!(keystrokes.value("holdMs").to_int(0), 1200);
 }
 
 #[test]

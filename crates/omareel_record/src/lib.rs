@@ -11,7 +11,8 @@
 //! [`recorder::daemon`], starting and stopping it in [`recorder::start`]), [`cli`] the recording
 //! commands of `main.cpp`, [`region_picker`] is `RegionPicker.cpp`, [`capture_exclusion`]
 //! `CaptureExclusion.cpp`, [`camera`] the pure part of `CameraCapture.cpp`, [`screen_capture`]
-//! `ScreenCapture.cpp`, [`evdev_listener`] `EvdevListener.cpp`, [`cursor_sampler`]
+//! `ScreenCapture.cpp`, [`evdev_listener`] `EvdevListener.cpp` (with [`keymap`], the keyboard
+//! layout it names keys by, which the C++ did not have), [`cursor_sampler`]
 //! `CursorSampler.cpp`, and [`recording_bar`] and [`launcher`] the decisions inside
 //! `RecordingBar.cpp` and `Launcher.cpp`.
 
@@ -21,6 +22,7 @@ pub mod capture_exclusion;
 pub mod cli;
 pub mod cursor_sampler;
 pub mod evdev_listener;
+pub mod keymap;
 pub mod launcher;
 pub mod recorder;
 pub mod recording_bar;

@@ -104,7 +104,6 @@ fn dump_project(out: &mut Text, p: &Project) {
     field(out, "keystrokes.enabled", boolean(k.enabled).into());
     field(out, "keystrokes.position", quote(&k.position));
     field(out, "keystrokes.size", num(k.size));
-    field(out, "keystrokes.showOnlyShortcuts", boolean(k.show_only_shortcuts).into());
     field(out, "keystrokes.holdMs", k.hold_ms.to_string());
     field(out, "audio.desktop", boolean(p.audio.desktop).into());
     field(out, "audio.mic", boolean(p.audio.mic).into());

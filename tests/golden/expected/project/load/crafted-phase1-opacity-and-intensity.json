@@ -118,7 +118,6 @@
         "enabled": false,
         "holdMs": 900,
         "position": "bottom-center",
-        "showOnlyShortcuts": true,
         "size": 1
     },
     "name": "Recording 01",

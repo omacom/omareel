@@ -22,9 +22,6 @@ fn keystrokes_from_json(o: &Value) -> Keystrokes {
     if o.contains("size") {
         k.size = o.value("size").to_double(0.0);
     }
-    if o.contains("showOnlyShortcuts") {
-        k.show_only_shortcuts = o.value("showOnlyShortcuts").to_bool(false);
-    }
     if o.contains("holdMs") {
         k.hold_ms = o.value("holdMs").to_int(0);
     }
@@ -32,9 +29,10 @@ fn keystrokes_from_json(o: &Value) -> Keystrokes {
 }
 
 /// `single-characters.jsonl` names keys `"\ud800"` and `"KEY_\udc00"`, which the port's JSON
-/// parser reads as U+FFFD (a Rust string cannot hold a lone surrogate). Both are single UTF-16
-/// units that are not letters or digits, so they are kept and labelled the same way, and the
-/// golden's `\u{d800}` and `\u{dc00}` cells (in 124 rows) are compared as U+FFFD.
+/// parser reads as U+FFFD (a Rust string cannot hold a lone surrogate). Both are one character
+/// without a shortcut modifier, so they are plain typing and hidden, as U+FFFD is; a golden
+/// regenerated from the tag would have them in `\u{d800}` and `\u{dc00}` cells, which are
+/// compared as U+FFFD.
 #[test]
 fn sample_txt() {
     let cases = read_json("keystroketrack/cases.json");

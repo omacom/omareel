@@ -27,6 +27,9 @@ pub struct InputEvent {
     pub dy: f64,
     pub key_code: i32,
     pub key_name: String,
+    /// What the recording keyboard's layout prints on the key (a key down's `label`); empty in
+    /// recordings from before the recorder read the layout, or when it could not.
+    pub key_label: String,
     pub modifiers: Vec<String>,
 }
 
@@ -78,6 +81,7 @@ impl InputLog {
                 dy: object.value("dy").to_double(0.0),
                 key_code: object.value("code").to_int(0),
                 key_name: object.value("name").to_string_or(""),
+                key_label: object.value("label").to_string_or(""),
                 modifiers: object.value("mods").to_array().iter().map(|m| m.to_string_or("")).collect(),
             });
         }
@@ -149,6 +153,23 @@ mod tests {
         std::fs::write(&path, "{\"t\":1}\n\n{\"t\":2\n").unwrap();
         assert_eq!(InputLog::load(&path, 0, -1.0).unwrap_err(), "Invalid JSON on line 3: unterminated object");
         assert_eq!(InputLog::load(dir.join("missing"), 0, -1.0).unwrap_err(), "No such file or directory");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_key_down_may_carry_its_layout_label() {
+        let dir = std::env::temp_dir().join(format!("omareel-inputlog-label-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("input.jsonl");
+        std::fs::write(
+            &path,
+            "{\"t\":1,\"k\":\"kd\",\"code\":16,\"name\":\"KEY_Q\",\"label\":\"A\",\"mods\":[\"ctrl\"]}\n\
+             {\"t\":2,\"k\":\"kd\",\"code\":30,\"name\":\"KEY_A\",\"mods\":[\"ctrl\"]}\n",
+        )
+        .unwrap();
+        let log = InputLog::load(&path, 0, -1.0).unwrap();
+        assert_eq!((log.events()[0].key_name.as_str(), log.events()[0].key_label.as_str()), ("KEY_Q", "A"));
+        assert_eq!(log.events()[1].key_label, "");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

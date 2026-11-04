@@ -129,7 +129,9 @@ started (CXX-Qt 0.10, Qt 6.11):
   `ext-image-copy-capture-v1` protocols from `wayland-protocols` (the same XML as
   `/usr/share/wayland-protocols`). The encoder is spawned with `posix_spawnp` as before.
 - Input devices are read through libevdev itself (a few `extern "C"` declarations), so key names
-  are libevdev's. CMake links libevdev to `omareel_qt` for it.
+  are libevdev's. CMake links libevdev to `omareel_qt` for it. Since the port, keys are also
+  labelled through the Hyprland layout with libxkbcommon (`omareel_record::keymap`, linked the
+  same way), and plain typing is no longer recorded.
 - `compat::qprocess::start_detached` is `QProcess::startDetached`: a grandchild in a session of
   its own, made with `CLONE_VFORK` children as Qt's vfork does; with plain `fork` every
   detached start of the daemon or a notification copied the process's page tables and

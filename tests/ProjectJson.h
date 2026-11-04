@@ -47,7 +47,7 @@ inline QJsonObject defaults(const QString &name, double duration)
             {"rotateOnXMovementRatio", 0.5}, {"hideWhenIdleMs", QJsonValue(QJsonValue::Null)},
             {"style", "light-arrow"}, {"ringColor", "#7aa2f7"}, {"clickSound", "none"}}},
         {"keystrokes", QJsonObject{{"enabled", false}, {"position", "bottom-center"}, {"size", 1.0},
-            {"showOnlyShortcuts", true}, {"holdMs", 900}}},
+            {"holdMs", 900}}},
         {"audio", QJsonObject{{"desktop", true}, {"mic", true}, {"volume", 1.0}}},
         {"camera", QJsonObject{{"enabled", false}, {"position", "bottom-right"}, {"size", 0.25},
             {"shape", "round"}, {"radius", 16.0}, {"flipHorizontal", false}, {"rotation", 0},
