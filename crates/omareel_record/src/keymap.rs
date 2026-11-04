@@ -137,6 +137,8 @@ use keysyms::*;
 /// The keymap names of a keyboard, and which of its layouts is active and which locks are on.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct KeyboardNames {
+    /// Hyprland's device name, also carried by its `activelayout` events.
+    pub name: String,
     pub rules: String,
     pub model: String,
     pub layout: String,
@@ -179,6 +181,7 @@ pub fn keyboards_from_devices(json: &[u8]) -> Option<Keyboards> {
             let keyboard = keyboard.to_object();
             let text = |key: &str| keyboard.value(key).to_string_or("");
             let names = KeyboardNames {
+                name: text("name"),
                 rules: text("rules"),
                 model: text("model"),
                 layout: text("layout"),
@@ -215,10 +218,10 @@ pub fn hyprland_keyboards() -> Option<Keyboards> {
     hyprctl(&["devices", "-j"]).and_then(|json| keyboards_from_devices(&json))
 }
 
-/// The layout description of a Hyprland `activelayout>>KEYBOARD,LAYOUT` event line (the
-/// keyboard's name has no comma; the description may).
-pub fn active_layout_event(line: &str) -> Option<&str> {
-    line.strip_prefix("activelayout>>")?.split_once(',').map(|(_, layout)| layout)
+/// The keyboard name and layout description of a Hyprland
+/// `activelayout>>KEYBOARD,LAYOUT` event (the description may contain commas).
+pub fn active_layout_event(line: &str) -> Option<(&str, &str)> {
+    line.strip_prefix("activelayout>>")?.split_once(',')
 }
 
 /// What a key is under the layout.
@@ -239,6 +242,7 @@ pub struct Key {
 
 /// The keyboards' compiled keymaps and the state of the keyboard through the main one.
 pub struct Layout {
+    main_keyboard_name: String,
     context: *mut XkbContext,
     keymap: *mut XkbKeymap,
     state: *mut XkbState,
@@ -307,7 +311,7 @@ impl Layout {
             }
             return None;
         }
-        let result = Layout { context, keymap, state, others };
+        let result = Layout { main_keyboard_name: keyboards.main.name.clone(), context, keymap, state, others };
         let names = &keyboards.main;
         let active = names.active_layout.or_else(|| result.layout_named(&names.active_keymap)).unwrap_or(0);
         // SAFETY: a live keymap.
@@ -337,6 +341,15 @@ impl Layout {
             // SAFETY: a NUL-terminated string when not null.
             !layout.is_null() && unsafe { CStr::from_ptr(layout) }.to_bytes() == name.as_bytes()
         })
+    }
+
+    /// Applies a compositor layout switch only to the keyboard used for labels.
+    /// An unnamed keyboard cannot be matched safely to a compositor event.
+    pub fn follow_keyboard_layout(&mut self, keyboard: &str, name: &str) -> bool {
+        if self.main_keyboard_name.is_empty() || self.main_keyboard_name != keyboard {
+            return false;
+        }
+        self.follow_layout(name)
     }
 
     /// Switches to the main keymap's layout described as `name` (a Hyprland `activelayout`
@@ -705,6 +718,7 @@ mod tests {
             {"name": "kbd-2", "rules": "evdev", "model": "pc105", "layout": "us,fr", "variant": ",azerty",
              "options": "compose:caps", "active_layout_index": 0}]}"#;
         let main = KeyboardNames {
+            name: "kbd".into(),
             rules: "evdev".into(),
             model: "pc105".into(),
             layout: "us,fr".into(),
@@ -717,6 +731,7 @@ mod tests {
         };
         // The other keymaps, once each: the two US ones are one keymap, kbd-2 is the main one's.
         let us = KeyboardNames {
+            name: "power-button".into(),
             layout: "us".into(),
             active_layout: Some(0),
             active_keymap: "English (US)".into(),
@@ -731,7 +746,7 @@ mod tests {
         assert_eq!(keyboards_from_devices(b"not json"), None);
         assert_eq!(
             active_layout_event("activelayout>>kbd,English (US, intl., with dead keys)"),
-            Some("English (US, intl., with dead keys)")
+            Some(("kbd", "English (US, intl., with dead keys)"))
         );
         assert_eq!(active_layout_event("activelayoutv2>>kbd,French"), None);
         assert_eq!(active_layout_event("workspace>>2"), None);
