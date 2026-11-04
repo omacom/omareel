@@ -1,8 +1,9 @@
 //! camera: `camera` against the pure parts of `CameraCapture.cpp` (README "camera"):
 //! `stableCameraPath` and `cameraNodePath` over fake `/dev` and `/sys` trees, `cameraIdNode`,
-//! `cameraFrameDeadlineUs`, `FirstFrameTimestamp`'s file, the format choice and
-//! `cameraDeviceForPath`. The oracle built its cameras with Qt's private `QCameraDevicePrivate`;
-//! here they are the plain data the Qt side will pass in.
+//! `FirstFrameTimestamp`'s file, the format choice and `cameraDeviceForPath`. (The oracle's
+//! `cameraFrameDeadlineUs` rows are left unchecked: the camera encoder no longer paces frames.)
+//! The oracle built its cameras with Qt's private `QCameraDevicePrivate`; here they are the plain
+//! data the Qt side will pass in.
 
 use crate::hermetic::*;
 use crate::replay::octal_mode;
@@ -110,17 +111,6 @@ fn camera_id_node_txt() {
     }
     out.row(["<bytes \\xff/dev/video3>".to_owned(), quote(&camera_id_node(b"\xff/dev/video3"))]);
     assert_golden("camera/camera-id-node.txt", &out.into_string());
-}
-
-#[test]
-fn camera_frame_deadline_txt() {
-    let mut out = Text::new();
-    for first in [0, 1, 123_456_789, -1_000_000, 1i64 << 52] {
-        for frame in [0, 1, 2, 3, 29, 30, 31, 240, 108_000, -1, -2, -31, 1_000_000_000, 9_000_000_000_000i64] {
-            out.row([first.to_string(), frame.to_string(), camera_frame_deadline_us(first, frame).to_string()]);
-        }
-    }
-    assert_golden("camera/camera-frame-deadline.txt", &out.into_string());
 }
 
 #[test]

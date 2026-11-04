@@ -1,11 +1,11 @@
 //! The pure part of `CameraCapture.cpp`: which path settings keep for a camera
 //! (`stableCameraPath`), which `/dev/videoN` node a path or a Qt camera id names, which of a
-//! camera's formats the recorder picks (`selectedFormat`, `cameraCanRecord`), the frame deadlines
-//! of the 30 fps camera encoder, and the first-frame timestamp file (`FirstFrameTimestamp`).
+//! camera's formats the recorder picks (`selectedFormat`, `cameraCanRecord`), and the first-frame
+//! timestamp file (`FirstFrameTimestamp`).
 //!
 //! Cameras are plain data here: the Qt side passes the facts of each `QCameraDevice` and
 //! `QCameraFormat` in ([`CameraDevice`], [`CameraFormat`]). The capture itself (the `QCamera`,
-//! the frame packing and the ffmpeg encoder) stays in C++.
+//! the frame times, the frame packing and the ffmpeg encoder) stays in C++.
 
 use omareel_core::compat::qdir::{self, FileInfo, Filters, SortFlags};
 use omareel_core::compat::qsavefile::SaveFile;
@@ -171,11 +171,6 @@ pub fn camera_device_for_path<'a>(devices: &'a [CameraDevice], path: &str) -> Op
         return None;
     }
     devices.iter().find(|device| camera_id_node(&device.id) == node)
-}
-
-/// `cameraFrameDeadlineUs`: when frame `frame_number` of the 30 fps camera recording is due.
-pub fn camera_frame_deadline_us(first_frame_us: i64, frame_number: i64) -> i64 {
-    first_frame_us + frame_number * 1_000_000 / 30
 }
 
 /// `FirstFrameTimestamp`: writes the camera's first frame time, once, to the `.ts` file beside
