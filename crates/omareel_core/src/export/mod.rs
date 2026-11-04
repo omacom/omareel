@@ -16,11 +16,12 @@
 pub mod composition;
 pub mod decoder;
 pub mod encoder_pipe;
+pub mod hardware;
 pub mod plan;
 
 use crate::clip_timeline::ClipTimeline;
 use crate::compat::qdir::{self, FileInfo};
-use crate::compat::qnumber::{self, number_f64};
+use crate::compat::qnumber::number_f64;
 use crate::compat::qprocess::Process;
 use crate::compat::qround::q_round;
 use crate::compat::qtemporaryfile::TemporaryFile;
@@ -36,7 +37,7 @@ use crate::zoom_timeline;
 use composition::{CompositionState, Sources};
 use decoder::FfmpegDecoder;
 use encoder_pipe::{FINISH_TIMEOUT_MS, STALL_TIMEOUT_MS, finish_encoder_pipe, write_encoder_frame};
-use plan::MediaInfo;
+use plan::{MediaInfo, VideoEncoder};
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
@@ -110,6 +111,8 @@ struct DecodeShared {
     ready: Condvar,
     space: Condvar,
     stop: AtomicBool,
+    /// How the recording was last decoded, for `--timing`.
+    acceleration: Mutex<&'static str>,
 }
 
 struct EncodeQueue {
@@ -118,6 +121,8 @@ struct EncodeQueue {
     start_ok: bool,
     closing: bool,
     error: String,
+    /// The encoder ffmpeg runs, for `--timing`.
+    encoder: String,
 }
 
 struct EncodeShared {
@@ -401,6 +406,7 @@ impl ExportJob {
                     start_ok: false,
                     closing: false,
                     error: String::new(),
+                    encoder: String::new(),
                 }),
                 ready: Condvar::new(),
                 space: Condvar::new(),
@@ -414,6 +420,7 @@ impl ExportJob {
                 ready: Condvar::new(),
                 space: Condvar::new(),
                 stop: AtomicBool::new(false),
+                acceleration: Mutex::new(""),
             }),
             decode_thread: None,
         })
@@ -472,7 +479,7 @@ impl ExportJob {
     }
 
     /// Once the renderer is ready: the temporary files, the encoder's arguments (with the audio
-    /// mix and the NVENC probe), the encode thread for MP4 (waiting until ffmpeg has started)
+    /// mix and the encoder probes), the encode thread for MP4 (waiting until ffmpeg has started)
     /// and the decode thread. `software_rendering` frames come top-down; OpenGL's are flipped.
     pub fn start(&mut self, software_rendering: bool) -> Result<(), String> {
         self.software_rendering = software_rendering;
@@ -496,7 +503,8 @@ impl ExportJob {
             encoded_file.close();
         }
         let project = &self.project;
-        let mut encoder_args: Vec<String> = Vec::new();
+        // Each encoder to try, with its whole command line.
+        let mut encoders: Vec<(&'static str, Vec<String>)> = Vec::new();
         let use_source_audio = !gif && self.media.audio && (project.audio.desktop || project.audio.mic);
         let click_times = if !gif && project.cursor.click_sound == "soft" {
             plan::click_output_times(&self.input, &project.clips)
@@ -509,10 +517,8 @@ impl ExportJob {
                 return Err(raw_file.error_string());
             }
         } else {
-            encoder_args = [
-                "-y",
-                "-v",
-                "error",
+            // The inputs and the audio, the same whichever encoder runs.
+            let mut encoder_args: Vec<String> = [
                 "-f",
                 "rawvideo",
                 "-pix_fmt",
@@ -604,9 +610,6 @@ impl ExportJob {
             } else {
                 encoder_args.push("-an".into());
             }
-            if !software_rendering {
-                encoder_args.extend(["-vf".into(), "vflip".into()]);
-            }
             let quality = plan::normalized_quality(if self.options.quality.is_empty() {
                 &project.export_settings.quality
             } else {
@@ -616,38 +619,28 @@ impl ExportJob {
                 (f64::from(self.width) * f64::from(self.height) * f64::from(self.fps) * plan::bitrate_multiplier(&quality))
                     .floor(),
             );
-            let (codec, preset) = if std::env::var_os("OMAREEL_DISABLE_NVENC").is_none() && plan::nvenc_works() {
-                ("h264_nvenc", "p5")
-            } else {
-                ("libx264", "medium")
-            };
-            encoder_args.extend([
-                "-c:v".into(),
-                codec.into(),
-                "-preset".into(),
-                preset.into(),
-                "-b:v".into(),
-                qnumber::number_i64(bitrate),
-                "-maxrate".into(),
-                qnumber::number_i64(cpp::int64_cast(bitrate as f64 * 1.2)),
-                "-bufsize".into(),
-                qnumber::number_i64(bitrate.wrapping_mul(2)),
-                "-profile:v".into(),
-                "high".into(),
-            ]);
-            encoder_args.extend([
-                "-pix_fmt".into(),
-                "yuv420p".into(),
-                "-movflags".into(),
-                "+faststart".into(),
-                self.encoded_path.clone(),
-            ]);
+            // The first GPU encoder that encodes a frame of this size, then libx264 in case it
+            // still will not start.
+            let choice = std::env::var("OMAREEL_EXPORT_ENCODER").unwrap_or_default();
+            let nvenc_disabled = std::env::var_os("OMAREEL_DISABLE_NVENC").is_some();
+            let candidates = plan::video_encoders(&choice, nvenc_disabled, hardware::vaapi_device());
+            let hardware_encoder = candidates.iter().find(|encoder| {
+                **encoder != VideoEncoder::X264 && plan::encoder_works(encoder, self.width, self.height, bitrate)
+            });
+            for encoder in hardware_encoder.into_iter().chain([&VideoEncoder::X264]) {
+                let mut args: Vec<String> = ["-y", "-v", "error"].map(String::from).into();
+                args.extend(encoder.device_arguments());
+                args.extend(encoder_args.iter().cloned());
+                args.extend(encoder.video_arguments(!software_rendering, bitrate));
+                args.extend(["-movflags".into(), "+faststart".into(), self.encoded_path.clone()]);
+                encoders.push((encoder.name(), args));
+            }
         }
 
         if !gif {
             let shared = Arc::clone(&self.encode);
             let cancelled = Arc::clone(&self.cancelled);
-            self.encode_thread = Some(std::thread::spawn(move || encode_thread(encoder_args, &shared, &cancelled)));
+            self.encode_thread = Some(std::thread::spawn(move || encode_thread(encoders, &shared, &cancelled)));
             let queue = lock(&self.encode.queue);
             let queue = self.encode.ready.wait_while(queue, |q| !q.started).unwrap_or_else(PoisonError::into_inner);
             if !queue.start_ok {
@@ -894,7 +887,8 @@ impl ExportJob {
         let per_frame = |ns: i64| number_f64(ns as f64 / divisor, 'f', 3);
         format!(
             "\nTiming ({} frames):\n  decode wait:  {} ms/frame\n  upload:       {} ms/frame\n  render:       {} ms/frame\n  \
-             readback:     {} ms/frame\n  encode write: {} ms/frame\n  total:        {} s ({} frames/s)\n",
+             readback:     {} ms/frame\n  encode write: {} ms/frame\n  total:        {} s ({} frames/s)\n  \
+             decoder:      {}\n  encoder:      {}\n",
             self.total_frames,
             per_frame(self.decode_ns),
             per_frame(upload_ns),
@@ -903,6 +897,8 @@ impl ExportJob {
             per_frame(self.encode.write_ns.load(Ordering::SeqCst)),
             number_f64(seconds, 'f', 3),
             number_f64(f64::from(self.total_frames) / cpp::max(0.001, seconds), 'f', 1),
+            lock(&self.decode.acceleration),
+            if self.gif { "gif".to_owned() } else { lock(&self.encode.queue).encoder.clone() },
         )
     }
 }
@@ -921,13 +917,26 @@ impl Drop for ExportJob {
     }
 }
 
-/// The encode thread: starts the encoder, then writes each queued frame until told to close
-/// (then finishes the file) or to stop. ffmpeg is killed if it is still running at the end.
-fn encode_thread(args: Vec<String>, shared: &EncodeShared, cancelled_flag: &AtomicBool) {
+/// The encoders to try, by name with their ffmpeg arguments.
+type Encoders = std::vec::IntoIter<(&'static str, Vec<String>)>;
+
+/// Starts the next of `encoders` and notes its name; false when there is none or it did not
+/// start.
+fn start_encoder(process: &mut Process, encoders: &mut Encoders, shared: &EncodeShared) -> bool {
+    let Some((name, args)) = encoders.next() else { return false };
+    lock(&shared.queue).encoder = name.to_owned();
+    process.start("ffmpeg", &args);
+    process.wait_for_started(10000)
+}
+
+/// The encode thread: starts the first of `encoders`, then writes each queued frame until told
+/// to close (then finishes the file) or to stop. ffmpeg is killed if it is still running at the
+/// end.
+fn encode_thread(encoders: Vec<(&'static str, Vec<String>)>, shared: &EncodeShared, cancelled_flag: &AtomicBool) {
     let mut process = Process::new();
     let cancelled = || shared.abort.load(Ordering::SeqCst) || cancelled_flag.load(Ordering::SeqCst);
-    process.start("ffmpeg", &args);
-    let started = process.wait_for_started(10000);
+    let mut encoders = encoders.into_iter();
+    let started = start_encoder(&mut process, &mut encoders, shared);
     {
         let mut queue = lock(&shared.queue);
         queue.started = true;
@@ -938,7 +947,7 @@ fn encode_thread(args: Vec<String>, shared: &EncodeShared, cancelled_flag: &Atom
     }
     shared.ready.notify_all();
     if started {
-        encode_frames(&mut process, shared, cancelled_flag, &cancelled);
+        encode_frames(&mut process, &mut encoders, shared, cancelled_flag, &cancelled);
     }
     if process.state() != crate::compat::qprocess::ProcessState::NotRunning {
         process.kill();
@@ -948,7 +957,14 @@ fn encode_thread(args: Vec<String>, shared: &EncodeShared, cancelled_flag: &Atom
     shared.space.notify_all();
 }
 
-fn encode_frames(process: &mut Process, shared: &EncodeShared, cancelled_flag: &AtomicBool, cancelled: &dyn Fn() -> bool) {
+fn encode_frames(
+    process: &mut Process,
+    encoders: &mut Encoders,
+    shared: &EncodeShared,
+    cancelled_flag: &AtomicBool,
+    cancelled: &dyn Fn() -> bool,
+) {
+    let mut sent_frame = false;
     loop {
         let bytes = {
             let queue = lock(&shared.queue);
@@ -973,7 +989,31 @@ fn encode_frames(process: &mut Process, shared: &EncodeShared, cancelled_flag: &
         };
         shared.space.notify_one();
         let write_timer = Instant::now();
-        if let Err(pipe_error) = write_encoder_frame(process, (*bytes).as_ref(), cancelled, STALL_TIMEOUT_MS) {
+        let mut written = write_encoder_frame(process, (*bytes).as_ref(), cancelled, STALL_TIMEOUT_MS);
+        // An encoder that exits before taking the first frame could not start here (a device
+        // that will not open, a driver that refuses): the next one gets the frame instead. One
+        // that is still running has stalled, and is not replaced.
+        while let Err(pipe_error) = &written {
+            let exited = process.state() == crate::compat::qprocess::ProcessState::NotRunning
+                || process.wait_for_finished(1000);
+            if sent_frame || cancelled() || !exited {
+                break;
+            }
+            let failed = lock(&shared.queue).encoder.clone();
+            let details = qstring::from_utf8(&process.read_all_standard_error());
+            let details = qstring::trimmed(&details);
+            let reason = if details.is_empty() { pipe_error.as_str() } else { details };
+            if !start_encoder(process, encoders, shared) {
+                break;
+            }
+            crate::compat::qlog::warning(&format!(
+                "Export: {failed} failed ({reason}); encoding with {}",
+                lock(&shared.queue).encoder
+            ));
+            written = write_encoder_frame(process, (*bytes).as_ref(), cancelled, STALL_TIMEOUT_MS);
+        }
+        sent_frame = true;
+        if let Err(pipe_error) = written {
             let mut queue = lock(&shared.queue);
             queue.error = pipe_error;
             shared.abort.store(true, Ordering::SeqCst);
@@ -1023,6 +1063,7 @@ fn decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &AtomicBoo
             work.camera_decode_width,
             work.camera_decode_height,
             camera_scaled,
+            !camera.colour_tagged,
             &mut camera_error,
         ) {
             let mut queue = lock(&shared.queue);
@@ -1055,6 +1096,7 @@ fn decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &AtomicBoo
                     width,
                     height,
                     true,
+                    false,
                     &mut decode_error,
                 )
             } else {
@@ -1066,6 +1108,7 @@ fn decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &AtomicBoo
                     work.decode_width,
                     work.decode_height,
                     work.decode_width != work.media.width || work.decode_height != work.media.height,
+                    !work.media.colour_tagged,
                     &mut decode_error,
                 )
             };
@@ -1078,6 +1121,9 @@ fn decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &AtomicBoo
         let shown = if clip.is_media() { &mut insert_decoded } else { &mut decoded };
         if let Some(next) = decoder.read_frame(&mut decode_error) {
             *shown = Some(image(next, decoder.width(), decoder.height()));
+            if !clip.is_media() {
+                *lock(&shared.acceleration) = decoder.acceleration();
+            }
         } else if shown.is_none() {
             push_error(
                 shared,
@@ -1107,6 +1153,7 @@ fn decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &AtomicBoo
                     work.camera_decode_width,
                     work.camera_decode_height,
                     camera_scaled,
+                    !camera.colour_tagged,
                     &mut decode_error,
                 ) {
                     push_error(shared, decode_error);

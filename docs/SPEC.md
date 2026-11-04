@@ -268,8 +268,9 @@ masking on the GPU. A precise 60 Hz timer samples playback position for composit
 camera correction seeks only when drift exceeds 250 ms.
 
 Exporter pipeline (`crates/omareel_qt/cpp/Exporter`, over `crates/omareel_core/src/export`):
-- Decode: `ffmpeg -hwaccel cuda|auto -i screen.mp4 -vf select+fps -f rawvideo -pix_fmt rgba -`
-  read frames sequentially for the clip ranges (seek with `-ss` per clip).
+- Decode: `ffmpeg [-hwaccel cuda] -i screen.mp4 -vf select+fps -f rawvideo -pix_fmt rgba -`
+  read frames sequentially for the clip ranges (seek with `-ss` per clip). Tagged files convert
+  with their own matrix; untagged recordings are BT.601 (`setparams=colorspace=bt470bg`).
 - For each output frame i at output time `T = i / fps`, map to source time via the clip list
   (`speed` respected), set `FrameSource` image, set `time`, render offscreen, `grabToImage`,
   write RGBA to encoder stdin.
@@ -477,7 +478,9 @@ Export:
 ```
 MP4: height 720 | 1080 | 2160, fps 60/50/30/25/24/20/10, quality studio|social|web-high|web-low
      bitrate = floor(w*h*fps*m), m: web-low .0075, web-high .0175, social .05, studio .3
-     h264_nvenc -b:v <bitrate> -maxrate <bitrate*1.2> -bufsize <bitrate*2> -profile high, fallback libx264
+     h264_nvenc -b:v <bitrate> -maxrate <bitrate*1.2> -bufsize <bitrate*2> -profile high, then
+     h264_vaapi -rc_mode VBR (same rates, non-NVIDIA render node), fallback libx264; RGB converted
+     with BT.709 limited range and tagged bt709/bt709/bt709/tv
 GIF: height 480 | 720 | 1080, fps 50/30/25/20/15/10, quality studio (palettegen/paletteuse) |
      social (plain gif encoder), loop on/off, then gifsicle --optimize=3 --lossy=30 if installed.
 Defaults: MP4 { fps 60, quality social, height 1080 }  GIF { fps 15, quality studio, height 480 }

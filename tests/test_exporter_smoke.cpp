@@ -121,6 +121,8 @@ private slots:
         QTest::newRow("cancel-full-queue") << QByteArray("stalled");
         QTest::newRow("cancel-finalization") << QByteArray("finalizing");
         QTest::newRow("silent-encoder-failure") << QByteArray("failed");
+        // Falls back to libx264 where VA-API is there to fail; plain libx264 elsewhere.
+        QTest::newRow("gpu-encoder-start-failure") << QByteArray("vaapi-fails");
     }
 
     void backpressure()
@@ -167,7 +169,8 @@ private slots:
                        + quote(shim) + QStringLiteral(" \"$@\"\n")).toUtf8());
         wrapper.close();
         QVERIFY(wrapper.setPermissions(QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner));
-        const QList<QByteArray> names{"PATH", "OMAREEL_DISABLE_NVENC", "OMAREEL_TEST_ENCODER_MODE", "OMAREEL_TEST_REAL_FFMPEG"};
+        const QList<QByteArray> names{"PATH", "OMAREEL_DISABLE_NVENC", "OMAREEL_TEST_ENCODER_MODE", "OMAREEL_TEST_REAL_FFMPEG",
+                                      "OMAREEL_EXPORT_ENCODER"};
         QList<QByteArray> previous;
         for (const auto &name : names) previous << qgetenv(name.constData());
         const auto restore = qScopeGuard([&] {
@@ -180,6 +183,7 @@ private slots:
         qputenv("OMAREEL_DISABLE_NVENC", "1");
         qputenv("OMAREEL_TEST_ENCODER_MODE", mode);
         qputenv("OMAREEL_TEST_REAL_FFMPEG", ffmpeg.toUtf8());
+        if (mode == "vaapi-fails") qputenv("OMAREEL_EXPORT_ENCODER", "vaapi");
 
         const QString output = temporary.filePath(QStringLiteral("out.mp4"));
         QFile sentinel(output);
@@ -200,10 +204,10 @@ private slots:
         QElapsedTimer elapsed;
         elapsed.start();
         exporter.exportBundle({bundle, output, 30, 1280, QStringLiteral("web-low"), 0, 0});
-        if (mode == "slow") {
+        if (mode == "slow" || mode == "vaapi-fails") {
             QVERIFY2(finished.count() == 1, failed.isEmpty() ? "No completion" : qPrintable(failed.first().first().toString()));
             QVERIFY(failed.isEmpty());
-            QVERIFY(elapsed.elapsed() >= 1000);
+            if (mode == "slow") QVERIFY(elapsed.elapsed() >= 1000);
             QProcess probe;
             probe.start(QStringLiteral("ffprobe"), {QStringLiteral("-v"), QStringLiteral("error"),
                 QStringLiteral("-count_frames"), QStringLiteral("-select_streams"), QStringLiteral("v:0"),

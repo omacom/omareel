@@ -1,6 +1,6 @@
 //! What `Exporter.cpp` computes before it renders: the recording's ffprobe summary, the output
-//! size, the quality and bitrate tables, the audio `filter_complex`, the NVENC probe and the GIF
-//! palette pass's arguments.
+//! size, the quality and bitrate tables, the audio `filter_complex`, the video encoder (which,
+//! its arguments and its probe) and the GIF palette pass's arguments.
 
 use crate::compat::geometry::RectF;
 use crate::compat::qjson;
@@ -25,11 +25,13 @@ pub struct MediaInfo {
     pub duration: f64,
     pub fps: f64,
     pub audio: bool,
+    /// The video says which matrix converts it to RGB.
+    pub colour_tagged: bool,
 }
 
 impl Default for MediaInfo {
     fn default() -> MediaInfo {
-        MediaInfo { width: 0, height: 0, duration: 0.0, fps: 30.0, audio: false }
+        MediaInfo { width: 0, height: 0, duration: 0.0, fps: 30.0, audio: false, colour_tagged: false }
     }
 }
 
@@ -59,7 +61,7 @@ pub fn probe(path: &str) -> (MediaInfo, String) {
             "-v",
             "error",
             "-show_entries",
-            "stream=codec_type,width,height,r_frame_rate:format=duration",
+            "stream=codec_type,width,height,r_frame_rate,color_space:format=duration",
             "-of",
             "json",
             path,
@@ -82,6 +84,8 @@ pub fn probe(path: &str) -> (MediaInfo, String) {
             result.width = stream.value("width").to_int(0);
             result.height = stream.value("height").to_int(0);
             result.fps = rate_value(&stream.value("r_frame_rate").to_string_or(""));
+            let colour_space = stream.value("color_space").to_string_or("");
+            result.colour_tagged = !colour_space.is_empty() && colour_space != "unknown";
         } else if kind == Some("audio") {
             result.audio = true;
         }
@@ -214,27 +218,113 @@ pub fn audio_filter(segments: &[String], volume: f64, clicks: &[f64], click_inpu
     filter
 }
 
-/// Whether ffmpeg can encode one frame with NVENC here.
-pub fn nvenc_works() -> bool {
+/// A video encoder export can use.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum VideoEncoder {
+    /// NVIDIA's `h264_nvenc`.
+    Nvenc,
+    /// `h264_vaapi` on a render node such as `/dev/dri/renderD128`.
+    Vaapi(String),
+    /// `libx264`, which needs no GPU.
+    X264,
+}
+
+/// RGB to Y'CbCr with BT.709's matrix in limited range. swscale's default is BT.601, which
+/// players do not assume for HD video: reds came out visibly off.
+const BT709_CONVERSION: &str = "scale=out_color_matrix=bt709:out_range=tv";
+/// The frames say so, and so does the file. ffmpeg takes the encoder's tags from the frames,
+/// and only the matrix and range would get there by themselves.
+const BT709_FRAMES: &str = "setparams=colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv";
+const BT709_TAGS: [&str; 8] =
+    ["-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv"];
+
+impl VideoEncoder {
+    /// ffmpeg's name for it.
+    pub fn name(&self) -> &'static str {
+        match self {
+            VideoEncoder::Nvenc => "h264_nvenc",
+            VideoEncoder::Vaapi(_) => "h264_vaapi",
+            VideoEncoder::X264 => "libx264",
+        }
+    }
+
+    /// Options before the inputs: the device VA-API encodes on.
+    pub fn device_arguments(&self) -> Vec<String> {
+        match self {
+            VideoEncoder::Vaapi(device) => vec!["-vaapi_device".into(), device.clone()],
+            _ => Vec::new(),
+        }
+    }
+
+    /// The video options for RGBA frames, flipped first when `flip` (OpenGL's come bottom up),
+    /// at `bitrate` bits per second: converted to 4:2:0 with BT.709 on the CPU (then uploaded,
+    /// for VA-API), encoded at the High profile, and tagged BT.709.
+    pub fn video_arguments(&self, flip: bool, bitrate: i64) -> Vec<String> {
+        let vaapi = matches!(self, VideoEncoder::Vaapi(_));
+        let mut filter = format!(
+            "{}{BT709_CONVERSION},format={},{BT709_FRAMES}",
+            if flip { "vflip," } else { "" },
+            if vaapi { "nv12" } else { "yuv420p" }
+        );
+        if vaapi {
+            filter += ",hwupload";
+        }
+        let mut args: Vec<String> = vec!["-vf".into(), filter, "-c:v".into(), self.name().into()];
+        args.extend(
+            match self {
+                VideoEncoder::Nvenc => ["-preset", "p5"],
+                VideoEncoder::Vaapi(_) => ["-rc_mode", "VBR"],
+                VideoEncoder::X264 => ["-preset", "medium"],
+            }
+            .map(String::from),
+        );
+        args.extend([
+            "-b:v".into(),
+            qnumber::number_i64(bitrate),
+            "-maxrate".into(),
+            qnumber::number_i64(cpp::int64_cast(bitrate as f64 * 1.2)),
+            "-bufsize".into(),
+            qnumber::number_i64(bitrate.wrapping_mul(2)),
+            "-profile:v".into(),
+            "high".into(),
+        ]);
+        args.extend(BT709_TAGS.map(String::from));
+        args
+    }
+}
+
+/// The encoders to try, best first: NVENC unless `nvenc_disabled` (`OMAREEL_DISABLE_NVENC`),
+/// VA-API on `vaapi_device` when there is one, and libx264. `choice` (`OMAREEL_EXPORT_ENCODER`)
+/// "nvenc", "vaapi" or "x264" keeps only that one and libx264.
+pub fn video_encoders(choice: &str, nvenc_disabled: bool, vaapi_device: Option<String>) -> Vec<VideoEncoder> {
+    let mut encoders = Vec::new();
+    if !nvenc_disabled && matches!(choice, "nvenc" | "") {
+        encoders.push(VideoEncoder::Nvenc);
+    }
+    if let Some(device) = vaapi_device.filter(|_| matches!(choice, "vaapi" | "")) {
+        encoders.push(VideoEncoder::Vaapi(device));
+    }
+    encoders.push(VideoEncoder::X264);
+    encoders
+}
+
+/// Whether ffmpeg can encode one `width` x `height` RGBA frame with `encoder` the way export
+/// will, at `bitrate`.
+pub fn encoder_works(encoder: &VideoEncoder, width: i32, height: i32, bitrate: i64) -> bool {
+    let mut args: Vec<String> = vec!["-v".into(), "error".into()];
+    args.extend(encoder.device_arguments());
+    args.extend([
+        "-f".into(),
+        "lavfi".into(),
+        "-i".into(),
+        format!("color=size={width}x{height}:rate=1,format=rgba"),
+        "-frames:v".into(),
+        "1".into(),
+    ]);
+    args.extend(encoder.video_arguments(false, bitrate));
+    args.extend(["-f".into(), "null".into(), "-".into()]);
     let mut process = Process::new();
-    process.start(
-        "ffmpeg",
-        &[
-            "-v",
-            "error",
-            "-f",
-            "lavfi",
-            "-i",
-            "color=size=256x256:rate=1",
-            "-frames:v",
-            "1",
-            "-c:v",
-            "h264_nvenc",
-            "-f",
-            "null",
-            "-",
-        ],
-    );
+    process.start("ffmpeg", &args);
     process.wait_for_finished(15000) && process.exit_code() == 0
 }
 
@@ -387,5 +477,110 @@ mod tests {
             "-loop", "0", "/out.gif"]);
         assert_eq!(&gif_arguments(4, 2, 1, "r", "social", true, false, "o")[12..], ["r", "-loop", "-1", "o"]);
         assert_eq!(&gif_arguments(4, 2, 1, "r", "social", false, false, "o")[13..], ["-vf", "vflip", "-loop", "-1", "o"]);
+    }
+
+    #[test]
+    fn encoders_go_nvenc_vaapi_x264() {
+        let intel = || Some("/dev/dri/renderD128".to_string());
+        let vaapi = VideoEncoder::Vaapi("/dev/dri/renderD128".into());
+        assert_eq!(video_encoders("", false, intel()), [VideoEncoder::Nvenc, vaapi.clone(), VideoEncoder::X264]);
+        assert_eq!(video_encoders("", true, intel()), [vaapi.clone(), VideoEncoder::X264]);
+        assert_eq!(video_encoders("", false, None), [VideoEncoder::Nvenc, VideoEncoder::X264]);
+        assert_eq!(video_encoders("vaapi", false, intel()), [vaapi, VideoEncoder::X264]);
+        assert_eq!(video_encoders("vaapi", false, None), [VideoEncoder::X264]);
+        assert_eq!(video_encoders("nvenc", false, intel()), [VideoEncoder::Nvenc, VideoEncoder::X264]);
+        assert_eq!(video_encoders("nvenc", true, intel()), [VideoEncoder::X264]);
+        assert_eq!(video_encoders("x264", false, intel()), [VideoEncoder::X264]);
+    }
+
+    #[test]
+    fn encoders_convert_with_bt709_and_say_so() {
+        let tags = ["-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv"];
+        let rate = ["-b:v", "1000", "-maxrate", "1200", "-bufsize", "2000", "-profile:v", "high"];
+        let x264 = VideoEncoder::X264.video_arguments(true, 1000);
+        assert_eq!(&x264[..2], ["-vf",
+            "vflip,scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,\
+             setparams=colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv"]);
+        assert_eq!(&x264[2..6], ["-c:v", "libx264", "-preset", "medium"]);
+        assert_eq!(&x264[6..14], rate);
+        assert_eq!(&x264[14..], tags);
+        let nvenc = VideoEncoder::Nvenc.video_arguments(false, 1000);
+        assert_eq!(&nvenc[..2], ["-vf",
+            "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,\
+             setparams=colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv"]);
+        assert_eq!(&nvenc[2..6], ["-c:v", "h264_nvenc", "-preset", "p5"]);
+        assert_eq!(&nvenc[14..], tags);
+        let vaapi = VideoEncoder::Vaapi("/dev/dri/renderD129".into());
+        assert_eq!(vaapi.device_arguments(), ["-vaapi_device", "/dev/dri/renderD129"]);
+        assert!(VideoEncoder::X264.device_arguments().is_empty());
+        let args = vaapi.video_arguments(true, 1000);
+        assert_eq!(&args[..2], ["-vf",
+            "vflip,scale=out_color_matrix=bt709:out_range=tv,format=nv12,\
+             setparams=colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv,hwupload"]);
+        assert_eq!(&args[2..6], ["-c:v", "h264_vaapi", "-rc_mode", "VBR"]);
+        assert_eq!(&args[6..14], rate);
+        assert_eq!(&args[14..], tags);
+    }
+
+    /// ffmpeg's answer for a colour sent through `encoder` the way export sends frames, read
+    /// back with the file's tags: its RGB, or `None` when the encoder is not there.
+    fn round_trip(encoder: &VideoEncoder, colour: &str, path: &str) -> Option<[u8; 3]> {
+        let mut args: Vec<String> = ["-y", "-v", "error"].map(String::from).into();
+        args.extend(encoder.device_arguments());
+        args.extend(["-f", "lavfi", "-i", &format!("color=c={colour}:size=256x144:rate=30,format=rgba"), "-frames:v", "5"]
+            .map(String::from));
+        args.extend(encoder.video_arguments(false, 1_000_000));
+        args.push(path.into());
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        if !crate::compat::qprocess::run("ffmpeg", &args, 30000)?.succeeded() {
+            return None;
+        }
+        let decoded = crate::compat::qprocess::run(
+            "ffmpeg",
+            &["-v", "error", "-i", path, "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+            30000,
+        )?;
+        let centre = (72 * 256 + 128) * 3;
+        Some([decoded.stdout[centre], decoded.stdout[centre + 1], decoded.stdout[centre + 2]])
+    }
+
+    #[test]
+    fn exported_colours_come_back_as_rendered() {
+        use crate::compat::qstandardpaths::find_executable;
+        if find_executable("ffmpeg").is_empty() || find_executable("ffprobe").is_empty() {
+            eprintln!("ffmpeg/ffprobe unavailable");
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!("omareel-export-colour-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut encoders = vec![VideoEncoder::X264];
+        // The GPU encoders this machine has: they have to agree too.
+        let device = crate::export::hardware::vaapi_device();
+        for encoder in video_encoders("", false, device) {
+            if encoder != VideoEncoder::X264 && encoder_works(&encoder, 256, 144, 1_000_000) {
+                encoders.push(encoder);
+            }
+        }
+        for encoder in &encoders {
+            let path = dir.join(format!("{}.mp4", encoder.name())).to_string_lossy().into_owned();
+            for (colour, rgb) in [("0xff0000", [255, 0, 0]), ("0x00ff00", [0, 255, 0]), ("0x0000ff", [0, 0, 255]),
+                                  ("0xff8020", [255, 128, 32]), ("0x808080", [128, 128, 128])] {
+                let Some(got) = round_trip(encoder, colour, &path) else {
+                    panic!("{} could not encode {colour}", encoder.name());
+                };
+                // Within a couple of code values: BT.601 instead turns red into (255, 23, 0).
+                assert!(got.iter().zip(rgb).all(|(a, b)| (i32::from(*a) - b).abs() <= 3),
+                        "{}: {colour} came back as {got:?}", encoder.name());
+            }
+            let probe = crate::compat::qprocess::run(
+                "ffprobe",
+                &["-v", "error", "-select_streams", "v:0", "-show_entries",
+                  "stream=pix_fmt,color_space,color_primaries,color_transfer,color_range", "-of", "compact=p=0:nk=1", &path],
+                15000,
+            )
+            .unwrap();
+            assert_eq!(String::from_utf8_lossy(&probe.stdout).trim(), "yuv420p|tv|bt709|bt709|bt709", "{}", encoder.name());
+        }
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

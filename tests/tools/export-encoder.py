@@ -20,5 +20,10 @@ elif mode == "failed":
     sys.exit(7)
 elif mode == "slow":
     os.execv(ffmpeg, [ffmpeg, "-readrate", os.environ.get("OMAREEL_TEST_READRATE", "0.5"), *sys.argv[1:]])
+elif mode == "vaapi-fails":
+    # A VA-API encoder that passed its probe but will not start; any other encodes for real.
+    if "h264_vaapi" in sys.argv:
+        sys.exit("simulated VA-API failure")
+    os.execv(ffmpeg, [ffmpeg, *sys.argv[1:]])
 else:
     sys.exit("Unknown test encoder mode: " + mode)
