@@ -5,6 +5,7 @@ import ctypes
 import json
 import os
 from pathlib import Path
+import shlex
 import signal
 import subprocess
 import time
@@ -61,7 +62,7 @@ hl.config({
   ecosystem = { enforce_permissions = false },
 })
 hl.on("hyprland.start", function()
-  hl.exec_cmd(""" + json.dumps('/usr/bin/env > ' + str(root / 'nested.env')) + """)
+  hl.exec_cmd(""" + json.dumps('/usr/bin/env > ' + shlex.quote(str(root / 'nested.env')), ensure_ascii=False) + """)
 end)
 """)
 
