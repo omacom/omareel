@@ -318,6 +318,15 @@ int main(int argc, char **argv)
         std::fprintf(stderr, "omareel: could not exec gpu-screen-recorder: %s\n", std::strerror(errno));
         return 127;
     }
+    // The recorder daemon shows nothing, so it has no display connection: its screen capture
+    // opens the only one it needs.
+    if (argc > 1 && std::strcmp(argv[1], "__record-daemon") == 0) {
+        QCoreApplication app(argc, argv);
+        app.setApplicationName(QStringLiteral("omareel"));
+        app.setOrganizationName(QStringLiteral("omareel"));
+        app.setApplicationVersion(QStringLiteral(OMAREEL_VERSION));
+        return omareel::record::daemonMain(app.arguments().mid(2));
+    }
     const bool exporting = argc > 1 && QByteArray(argv[1]) == "export";
     const bool layerTest = argc > 1 && QByteArray(argv[1]) == "__layer-test";
     const bool windowTest = argc > 1 && QByteArray(argv[1]) == "__window-test";
@@ -381,7 +390,6 @@ int main(int argc, char **argv)
     }
     const QString command = args[1];
     if (layerTest || windowTest) return runCaptureTestClient(app, args, layerTest);
-    if (command == QLatin1String("__record-daemon")) return omareel::record::daemonMain(args.mid(2));
     if (command == QLatin1String("__selfview-ipc")) return omareel::record::selfViewIpc(args.mid(2));
     if (command == QLatin1String("__record-bar-ipc")) return omareel::record::recordBarIpc(args.mid(2));
     if (command == QLatin1String("__record-bar")) {

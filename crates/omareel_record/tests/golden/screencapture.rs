@@ -251,7 +251,7 @@ fn encoder_probe_txt() {
     set_times(&ffmpeg, 1700000000, 0);
     let cache = format!("{scratch}/cache");
     let mut environment = ScopedEnvironment::new(&h);
-    environment.set("XDG_CACHE_HOME", &cache);
+    environment.set("XDG_RUNTIME_DIR", &cache);
     environment.set("PATH", &bin);
     let driver = encoder_probe_key().value("driver").to_string_or("");
     let preferred_probe = [
@@ -418,8 +418,9 @@ fn encoder_probe_txt() {
 struct TestSlots(Vec<Mutex<Vec<u8>>>);
 
 impl SlotMemory for TestSlots {
-    fn with_slot(&self, index: usize, read: &mut dyn FnMut(&[u8])) {
+    fn with_slot(&self, index: usize, read: &mut dyn FnMut(&[u8])) -> bool {
         read(&self.0[index].lock().unwrap_or_else(PoisonError::into_inner));
+        true
     }
 }
 
