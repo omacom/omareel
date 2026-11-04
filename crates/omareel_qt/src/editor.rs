@@ -862,18 +862,21 @@ impl qobject::Editor {
                         let job = state.0.pop_front();
                         if job.is_none() {
                             state.1 -= 1;
-                            // The decoders' freed pixels stay in this thread's malloc arena
-                            // otherwise, hundreds of MB for a theme's worth of 8K wallpapers.
-                            #[cfg(target_env = "gnu")]
-                            unsafe {
-                                libc::malloc_trim(0);
-                            }
                         }
                         job
                     }
                     Err(_) => None,
                 };
-                let Some((path, thumbnail)) = job else { break };
+                let Some((path, thumbnail)) = job else {
+                    // The decoders' freed pixels stay in this thread's malloc arena otherwise,
+                    // hundreds of MB for a theme's worth of 8K wallpapers. Outside the lock, which
+                    // the GUI thread takes to queue more.
+                    #[cfg(target_env = "gnu")]
+                    unsafe {
+                        libc::malloc_trim(0);
+                    }
+                    break;
+                };
                 qobject::generate_wallpaper_thumbnail(&qstring(&path), &qstring(&thumbnail));
                 let _ = thread.queue(move |editor| {
                     editor.edit(|document| document.wallpaper_thumbnail_ready(&thumbnail));
