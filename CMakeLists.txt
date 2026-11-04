@@ -32,6 +32,9 @@ pkg_check_modules(TURBOJPEG REQUIRED IMPORTED_TARGET libturbojpeg)
 # libwayland-client is for the windows main.cpp commits itself.
 pkg_check_modules(LIBEVDEV REQUIRED IMPORTED_TARGET libevdev)
 pkg_check_modules(XKBCOMMON REQUIRED IMPORTED_TARGET xkbcommon)
+# The screen capture's GPU side (crates/omareel_record/csrc): GBM buffers, VA-API encoding through
+# FFmpeg's libraries. Cargo builds it; the executable links what it calls.
+pkg_check_modules(GPU_CAPTURE REQUIRED IMPORTED_TARGET gbm libdrm libva libavcodec libavformat libavfilter libavutil)
 pkg_check_modules(WAYLAND_CLIENT REQUIRED IMPORTED_TARGET wayland-client)
 qt_standard_project_setup()
 qt_policy(SET QTP0004 NEW)
@@ -50,7 +53,7 @@ target_include_directories(omareel_plumbing PUBLIC src/plumbing)
 target_link_libraries(omareel_plumbing
     PUBLIC Qt6::Core Qt6::Gui Qt6::Multimedia Qt6::Qml Qt6::Quick Qt6::OpenGL
     PRIVATE PkgConfig::TURBOJPEG)
-target_link_libraries(omareel_qt INTERFACE omareel_plumbing PkgConfig::LIBEVDEV PkgConfig::XKBCOMMON)
+target_link_libraries(omareel_qt INTERFACE omareel_plumbing PkgConfig::LIBEVDEV PkgConfig::XKBCOMMON PkgConfig::GPU_CAPTURE)
 
 add_library(omareel_render STATIC)
 qt_add_qml_module(omareel_ui STATIC

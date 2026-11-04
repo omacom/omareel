@@ -193,6 +193,14 @@ bool EditorShims::generateWallpaperThumbnail(const QString &wallpaperPath, const
     if (QFileInfo(thumbnailPath).isFile()) return true;
     QImageReader reader(wallpaperPath);
     reader.setAutoTransform(true);
+    // Decode only as large as the thumbnail needs: a full-size wallpaper is 50-100 MB of pixels,
+    // and JPEG and WebP can decode straight to a smaller size.
+    QSize stored = reader.size();
+    if (stored.isValid()) {
+        QSize target(400, 240);
+        if (reader.transformation() & QImageIOHandler::TransformationRotate90) target.transpose();
+        reader.setScaledSize(stored.scaled(target, Qt::KeepAspectRatioByExpanding).boundedTo(stored));
+    }
     QImage image = reader.read();
     if (image.isNull()) return false;
     image = image.scaled(QSize(400, 240), Qt::KeepAspectRatioByExpanding,

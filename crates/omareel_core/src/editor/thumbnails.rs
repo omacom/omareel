@@ -327,7 +327,8 @@ pub struct WallpaperGroup {
 pub(crate) struct WallpaperCache {
     pub valid: bool,
     pub groups: Vec<WallpaperGroup>,
-    pub pending: HashSet<String>,
+    /// The thumbnails asked for, each once: one that fails is not asked for again.
+    pub requested: HashSet<String>,
 }
 
 impl Document {
@@ -538,10 +539,11 @@ impl Document {
                     file: file.file_name(),
                     path: file.absolute_file_path(),
                     url: qurl::from_local_file(&file.absolute_file_path()),
-                    thumbnail_url: qurl::from_local_file(if ready { &thumbnail } else { path }),
+                    // Not the wallpaper itself while it waits: the picker would decode the
+                    // whole image (up to 8K) for a 400 px tile.
+                    thumbnail_url: if ready { qurl::from_local_file(&thumbnail) } else { String::new() },
                 });
-                if !ready && !cache.pending.contains(&thumbnail) {
-                    cache.pending.insert(thumbnail.clone());
+                if !ready && cache.requested.insert(thumbnail.clone()) {
                     self.emit(Effect::GenerateWallpaperThumbnail { path: path.clone(), thumbnail });
                 }
             }
@@ -554,9 +556,8 @@ impl Document {
 
     /// A picker thumbnail [`Effect::GenerateWallpaperThumbnail`] asked for was written (or
     /// failed).
-    pub fn wallpaper_thumbnail_ready(&mut self, thumbnail: &str) {
+    pub fn wallpaper_thumbnail_ready(&mut self, _thumbnail: &str) {
         let mut cache = self.wallpapers.borrow_mut();
-        cache.pending.remove(thumbnail);
         cache.valid = false;
         drop(cache);
         self.emit(Effect::WallpapersChanged);
