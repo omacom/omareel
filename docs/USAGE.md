@@ -97,8 +97,13 @@ The bubble is 160 px by default and starts at the saved position (bottom-right i
 Native capture omits both the self-view and recording bar. The recording bar can hide or show
 the self-view while recording; a standby bubble hides during recordings that do not adopt it.
 
-The native backend is selected automatically when its display protocol is available. It uses four
-shared-memory capture slots and a bounded encoder queue, and crops regions on its writer thread.
+The native backend is selected automatically when its display protocol is available. It has the
+compositor render frames into dmabufs on its GPU and, except on NVIDIA, crops, converts and encodes
+them there with VA-API, so captured frames never reach the CPU. On NVIDIA, or when VA-API can't
+import the buffers, linear dmabufs are read back by Omareel and encoded by ffmpeg (NVENC or
+libx264). Shared-memory capture, which makes the compositor read every frame back on its render
+thread, is the last resort. Recordings are fragmented MP4, playable up to the last second even if
+the recorder is killed.
 Set `OMAREEL_CAPTURE=native` to require this selection or `OMAREEL_CAPTURE=gsr` to force the
 fallback backend for one invocation. The same values may be stored as `captureBackend` in the
 settings file. The fallback cannot omit overlays placed inside its capture area.
@@ -204,7 +209,12 @@ clip, style, cursor, and zoom edits are stored in `project.json`.
 - `OMAREEL_CAPTURE=native` selects the native screen capture backend when supported.
 - `OMAREEL_PLUGIN_PATH` selects the capture-exclusion plugin file. An explicit missing path
   forces overlay fallback placement.
-- `OMAREEL_NATIVE_CONVERSION=cpu` forces CPU colour conversion for native capture. By default,
+- `OMAREEL_CAPTURE_BUFFERS=shm` makes native capture use shared memory instead of dmabufs.
+- `OMAREEL_CAPTURE_ENCODER=ffmpeg` makes native capture read dmabufs back for ffmpeg instead of
+  encoding them with VA-API.
+- `OMAREEL_CAPTURE_QP=N` sets the VA-API capture encoder's constant quantiser (0–51; 18 by
+  default, 12 below 1.5 megapixels).
+- `OMAREEL_NATIVE_CONVERSION=cpu` forces CPU colour conversion for native capture through ffmpeg. By default,
   the hardware conversion filter is exercised with a BGRA frame first and CPU conversion is used
   automatically when that exact conversion is unsupported.
 - `OMAREEL_NO_BAR=1` suppresses the recording bar.

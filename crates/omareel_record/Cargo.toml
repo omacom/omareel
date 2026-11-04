@@ -16,3 +16,8 @@ omareel_core = { path = "../omareel_core" }
 # The capture's own Wayland connection, with the pure-Rust backend (no libwayland).
 wayland-client = "0.31"
 wayland-protocols = { version = "0.32", features = ["client", "staging"] }
+
+# csrc/gpu_capture.c: GBM buffers and VA-API encoding through FFmpeg's libraries.
+[build-dependencies]
+cc = "1"
+pkg-config = "0.3"

@@ -9,6 +9,7 @@
 //! fill it, and queues it for the writer with its presentation time.
 
 pub mod encoder;
+pub mod gpu;
 pub mod probe;
 pub mod session;
 pub mod writer;
@@ -18,7 +19,9 @@ pub use probe::{
     encoder_probe_results,
 };
 pub use session::{ScreenCapture, ScreenCaptureConfig, is_supported};
-pub use writer::{EncoderSink, FdSink, FrameQueue, RawSlotMemory, SlotMemory, WriterConfig, writer_loop};
+pub use writer::{
+    EncoderSink, FdSink, FrameOutput, FrameQueue, RawSlotMemory, SlotMemory, WriterConfig, run_writer, writer_loop,
+};
 
 /// `QSize`, as far as the capture uses it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
