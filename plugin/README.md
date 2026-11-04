@@ -16,7 +16,7 @@ cmake -S plugin -B /tmp/omareel-nested/plugin-build -G Ninja
 cmake --build /tmp/omareel-nested/plugin-build
 ```
 
-The application remains C++17; this Hyprland 0.56.2 plugin requires C++26 and a
+The application remains C++17; this Hyprland 0.57 plugin requires C++26 and a
 compiler compatible with the compositor. Headers default to `/usr/include/hyprland`.
 A private include-directory symlink takes precedence over stale copies under
 `/usr/local/include`. `OMAREEL_HYPRLAND_HEADERS` selects another matching header
@@ -32,41 +32,46 @@ dialog; refusal leaves the application in fallback mode.
 
 ## Hooks and state
 
-This implementation is tied to Hyprland commit
-`efb50993780079460b0cbed1363e2166a2de1d9f`. References below are relative to that
-source tree (the development checkout is `/tmp/hyprland-src`).
+Each build loads only on the Hyprland commit it was compiled against. The code
+follows Hyprland 0.57.1 (`acc1aa0bfd4bd575dcb0f76c35ccf12b660a1ab9`; 0.57.0 has the
+same interfaces). References below are relative to that source tree.
 
-* `src/render/Renderer.cpp:935`: hook `IHyprRenderer::renderLayer` to omit matching
-  layers, including popups, when that monitor's `needsACopyFB()` is true.
-* `src/render/OpenGL.cpp:2533`: hook `saveBufferForMirror`, call the original,
+* `src/render/Renderer.cpp:1016`: hook `IHyprRenderer::renderLayer` to omit matching
+  layers, including popups, when that monitor's `needsACopyFB()` is true or the
+  render context is a workspace capture (`m_renderingCapture`).
+* `src/render/OpenGL.cpp:2391`: hook `saveBufferForMirror`, call the original,
   then draw visible TOP and OVERLAY surfaces immediately into the restored main
   framebuffer. Layer ordering and popup traversal follow
-  `src/render/Renderer.cpp:1233` and `src/render/Renderer.cpp:1007`. Geometry,
-  subsurfaces, clipping, and fade alpha follow `src/render/Renderer.cpp:957`.
-  Blur is disabled for these display-only surfaces.
-* `src/render/OpenGL.cpp:799` and `src/render/OpenGL.cpp:808` place this draw
-  between capture-copy and display-blit. `src/render/gl/GLFramebuffer.cpp:91`
-  does not restore draw buffers. The hook saves their complete GL state,
-  selects only `GL_COLOR_ATTACHMENT0`, and restores it afterwards. Thus the
-  MRT attachment created at `src/render/OpenGL.cpp:760` stays clean too.
+  `src/render/Renderer.cpp:1337` and `src/render/Renderer.cpp:1091`. Geometry,
+  subsurfaces, clipping, fade alpha and visibility (mapped, accepting input,
+  alpha above zero) follow `renderLayer`. Blur is disabled for these display-only
+  surfaces.
+* `src/render/OpenGL.cpp:834` and `:887` place this draw between capture-copy and
+  the final-shader display blit. `src/render/gl/GLFramebuffer.cpp:48` gives a
+  framebuffer with a mirror texture two draw buffers, and binding it again does
+  not reset them. The hook saves their complete GL state, selects only
+  `GL_COLOR_ATTACHMENT0`, and restores it afterwards, so the mirror attachment
+  stays clean too.
 
-Two necessary implementation details differ from the initial design:
+Hyprland's own `no_screen_share` rule still draws a black box over the layer in
+monitor captures (`src/managers/screenshare/ScreenshareFrame.cpp:272`); only
+workspace captures omit it (`src/render/Context.cpp:37`).
 
-* `m_fakeFrame` is private (`src/render/OpenGL.hpp:303`, `:319`). The layer hook
-  uses `needsACopyFB()` alone. Consequently compositor snapshots taken while
+Two necessary implementation details:
+
+* The render context's `fakeFrame` is not passed to `renderLayer`, so the layer
+  hook uses `needsACopyFB()` alone. Consequently compositor snapshots taken while
   that predicate is true also omit matching layers. Omareel applies `no_anim`
   before mapping its bar/self-view; the countdown shares the bar namespace.
-  This avoids the unmap snapshot created at `src/desktop/view/LayerSurface.cpp:247`.
+  This avoids the unmap snapshot created at `src/desktop/view/LayerSurface.cpp:270`.
   The app disables its retired named rules before installing new animation rules:
-  Lua updates merge effects on existing names (`src/config/lua/bindings/LuaBindingsConfigRules.cpp:1301`).
-* `end()` enables the private `m_applyFinalShader` flag before copying. Immediate
-  surface drawing with that flag set crashes on textures without an image
-  description (`src/render/OpenGL.cpp:1523`). A narrowly scoped, typed member
-  accessor temporarily disables this flag for the overlay draw, then restores
-  it for the display blit. This uses C++ explicit template instantiation,
-  without offsets or redefining `private`. Draw buffers, monitor transforms,
-  clipping, UV state, and nearest-neighbour state are restored by a scope guard.
-  Damage, final damage, and the render pass are not modified.
+  Lua updates merge effects on existing names.
+* Immediate surface drawing with the final screen shader enabled dereferences
+  the texture's image description, which surface textures can lack. `end()` only
+  enables `ctx.m_gl.applyFinalShader` after the mirror copy, but the hook clears
+  it for its draw anyway and restores it. Draw buffers are restored by a scope
+  guard, and the render data (clipping, UVs, filtering) by the context's
+  `saveDrawState()`. Damage, final damage, and the render pass are not modified.
 
 Hyprland's `CFunctionHook` only patches x86-64 code; on any other architecture
 `hook()` returns false (`src/plugins/HookSystem.cpp:147`). On aarch64 the plugin
@@ -77,7 +82,7 @@ original. PC-relative instructions are refused rather than relocated. A `bti c`
 or `paciasp` landing pad stays where it is and the instruction after it moves;
 for `paciasp` the return address is authenticated before the hook and signed
 again for the original, and a BTI-guarded page stays guarded. In Omarchy's
-aarch64 0.56.2 build both functions start with `stp x29, x30, [sp, #-N]!`.
+aarch64 0.56.2 and 0.57.1 builds both functions start with `stp x29, x30, [sp, #-N]!`.
 `test_arm64hook` runs under ctest on aarch64. From x86-64 it can be built with
 clang against an Arch Linux ARM sysroot and run with `qemu-aarch64-static -cpu max`,
 which enforces BTI and PAC.

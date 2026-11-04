@@ -1,6 +1,7 @@
 #include <hyprland/src/plugins/PluginAPI.hpp>
 #include <hyprland/src/render/OpenGL.hpp>
 #include <hyprland/src/render/Renderer.hpp>
+#include <hyprland/src/render/Context.hpp>
 #include <hyprland/src/desktop/view/LayerSurface.hpp>
 #include <hyprland/src/desktop/view/Popup.hpp>
 #include <hyprland/src/desktop/view/WLSurface.hpp>
@@ -65,38 +66,30 @@ class RenderHook {
 };
 RenderHook layerHook;
 RenderHook mirrorHook;
-SP<SHyprCtlCommand> command;
+SP<IPC::Socket1::SCommand> command;
 std::vector<std::string> prefixes{"omareel-"};
-using LayerFn = void (*)(Render::IHyprRenderer*, PHLLS, PHLMONITOR, const Time::steady_tp&, bool, bool);
-using MirrorFn = bool (*)(Render::GL::CHyprOpenGLImpl*, const CBox&);
-
-// end() enables the final-output shader before the mirror hook. Surface textures can
-// have no image description, and OpenGL.cpp:1523 dereferences it in that mode.
-// A typed member pointer keeps this narrowly scoped access checked by the compiler;
-// no hard-coded offsets or global redefinition of private are used.
-struct FinalShaderMember {
-    using Type = bool Render::GL::CHyprOpenGLImpl::*;
-    friend Type finalShaderMember(FinalShaderMember);
-};
-template <typename Tag, typename Tag::Type Member> struct MemberAccess {
-    friend typename Tag::Type finalShaderMember(Tag) { return Member; }
-};
-template struct MemberAccess<FinalShaderMember, &Render::GL::CHyprOpenGLImpl::m_applyFinalShader>;
+using LayerFn = void (*)(Render::IHyprRenderer*, Render::CRenderContext&, PHLLS, PHLMONITOR, const Time::steady_tp&, bool, bool, bool);
+using MirrorFn = bool (*)(Render::GL::CHyprOpenGLImpl*, Render::CRenderContext&, const CBox&);
 
 bool matches(const PHLLS& layer) {
     return layer && std::ranges::any_of(prefixes, [&](const auto& prefix) { return layer->m_namespace.starts_with(prefix); });
 }
 
-void renderLayer(Render::IHyprRenderer* renderer, PHLLS layer, PHLMONITOR monitor,
-                 const Time::steady_tp& when, bool popups, bool lockscreen) {
-    // m_fakeFrame is private in 0.56.2; snapshots on a captured monitor omit these layers too.
-    if (matches(layer) && monitor && monitor->needsACopyFB())
-        return;
-    reinterpret_cast<LayerFn>(layerHook.original())(renderer, layer, monitor, when, popups, lockscreen);
+// What renderLayer draws on a monitor: mapped, not fading out, not fully transparent.
+bool shown(const PHLLS& layer) {
+    return layer->mapped() && layer->acceptsInput() && layer->alphaNonZero();
 }
 
-void drawLayer(const PHLLS& layer, const PHLMONITOR& monitor, bool popups) {
-    if (!matches(layer) || !layer->visible() || !layer->wlSurface() || !layer->wlSurface()->resource())
+void renderLayer(Render::IHyprRenderer* renderer, Render::CRenderContext& ctx, PHLLS layer, PHLMONITOR monitor,
+                 const Time::steady_tp& when, bool popups, bool lockscreen, bool workspaceScene) {
+    // Snapshots on a captured monitor omit these layers too, as do workspace captures.
+    if (matches(layer) && (ctx.m_renderingCapture || (monitor && monitor->needsACopyFB())))
+        return;
+    reinterpret_cast<LayerFn>(layerHook.original())(renderer, ctx, layer, monitor, when, popups, lockscreen, workspaceScene);
+}
+
+void drawLayer(Render::CRenderContext& ctx, const PHLLS& layer, const PHLMONITOR& monitor, bool popups) {
+    if (!matches(layer) || !shown(layer) || !layer->wlSurface() || !layer->wlSurface()->resource())
         return;
     // Never paint an ordinary layer over the session lock.
     if (g_pSessionLockManager->isSessionLocked() && !layer->m_ruleApplicator->aboveLock().valueOrDefault())
@@ -112,34 +105,34 @@ void drawLayer(const PHLLS& layer, const PHLMONITOR& monitor, bool popups) {
     data.blur = false;
     data.clipBox = CBox{0, 0, monitor->m_size.x, monitor->m_size.y}.scale(monitor->m_scale).round();
     const auto draw = [&](SP<CWLSurfaceResource> surface, const Vector2D& offset, bool main) {
-        if (!layer->visible() || !surface || !surface->m_current.texture || surface->m_current.size.x < 1 || surface->m_current.size.y < 1)
+        if (!surface || !surface->m_current.texture || surface->m_current.size.x < 1 || surface->m_current.size.y < 1)
             return;
         data.localPos = offset;
         data.texture = surface->m_current.texture;
         data.surface = surface;
         data.mainSurface = main;
-        g_pHyprRenderer->draw(data, g_pHyprRenderer->m_renderData.damage);
+        g_pHyprRenderer->draw(ctx, data, ctx.m_data.damage);
         ++data.surfaceCounter;
     };
     if (!popups) {
         layer->wlSurface()->resource()->breadthfirst([&](SP<CWLSurfaceResource> surface, const Vector2D& offset, void*) {
             draw(surface, offset, surface == layer->wlSurface()->resource());
         }, nullptr);
-    } else if (layer->m_popupHead) {
+    } else if (layer->popupHead()) {
         data.squishOversized = false;
         data.dontRound = true;
         data.popup = true;
         data.discardMode &= ~DISCARD_ALPHA;
-        layer->m_popupHead->breadthfirst([&](WP<Desktop::View::CPopup> popup, void*) {
-            if (popup && popup->aliveAndVisible())
+        layer->popupHead()->breadthfirst([&](WP<Desktop::View::CPopup> popup, void*) {
+            if (popup && popup->mapped() && popup->resource() && popup->alphaNonZero() && popup->acceptsInput())
                 draw(popup->wlSurface()->resource(), popup->coordsRelativeToParent(), false);
         }, nullptr);
     }
 }
 
-bool saveMirror(Render::GL::CHyprOpenGLImpl* gl, const CBox& box) {
-    const bool result = reinterpret_cast<MirrorFn>(mirrorHook.original())(gl, box);
-    const auto monitor = g_pHyprRenderer->m_renderData.pMonitor.lock();
+bool saveMirror(Render::GL::CHyprOpenGLImpl* gl, Render::CRenderContext& ctx, const CBox& box) {
+    const bool result = reinterpret_cast<MirrorFn>(mirrorHook.original())(gl, ctx, box);
+    const auto monitor = ctx.m_data.pMonitor.lock();
     if (!monitor)
         return result;
     // bind() only binds the framebuffer and viewport; draw-buffer state belongs to the FB.
@@ -153,31 +146,22 @@ bool saveMirror(Render::GL::CHyprOpenGLImpl* gl, const CBox& box) {
     }
     const GLenum displayOnly = GL_COLOR_ATTACHMENT0;
     glDrawBuffers(1, &displayOnly);
-    auto& finalShader = gl->*finalShaderMember(FinalShaderMember{});
-    const bool savedFinalShader = finalShader;
-    auto& renderData = g_pHyprRenderer->m_renderData;
-    const auto savedClip = renderData.clipBox;
-    const auto savedNearest = renderData.useNearestNeighbor;
-    const auto savedUVTop = renderData.primarySurfaceUVTopLeft;
-    const auto savedUVBottom = renderData.primarySurfaceUVBottomRight;
-    finalShader = false;
-    // end() has enabled monitor transforms for its final blit; surface drawing uses the scene state.
-    g_pHyprRenderer->pushMonitorTransformEnabled(false);
+    // end() enables the final-output shader only after the mirror copy, but never let a surface
+    // texture without an image description reach it.
+    const bool savedFinalShader = ctx.m_gl.applyFinalShader;
+    // Surface drawing changes the clip box, UVs and filtering; the scope puts them back.
+    const auto drawState = ctx.saveDrawState();
+    ctx.m_gl.applyFinalShader = false;
     Hyprutils::Utils::CScopeGuard restore([&] {
-        g_pHyprRenderer->popMonitorTransformEnabled();
-        finalShader = savedFinalShader;
-        renderData.clipBox = savedClip;
-        renderData.useNearestNeighbor = savedNearest;
-        renderData.primarySurfaceUVTopLeft = savedUVTop;
-        renderData.primarySurfaceUVBottomRight = savedUVBottom;
+        ctx.m_gl.applyFinalShader = savedFinalShader;
         glDrawBuffers(count, buffers.data());
     });
     for (const auto plane : {ZWLR_LAYER_SHELL_V1_LAYER_TOP, ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY})
         for (const auto& weak : monitor->m_layerSurfaceLayers[plane])
-            drawLayer(weak.lock(), monitor, false);
+            drawLayer(ctx, weak.lock(), monitor, false);
     for (const auto& plane : monitor->m_layerSurfaceLayers)
         for (const auto& weak : plane)
-            drawLayer(weak.lock(), monitor, true);
+            drawLayer(ctx, weak.lock(), monitor, true);
     return result;
 }
 
@@ -202,7 +186,7 @@ std::string status() {
         for (const auto& plane : monitor->m_layerSurfaceLayers)
             for (const auto& weak : plane) {
                 const auto layer = weak.lock();
-                if (matches(layer) && layer->visible()) ++excluded;
+                if (matches(layer) && shown(layer)) ++excluded;
             }
         if (!first) result += ",";
         first = false;
@@ -229,9 +213,9 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE owner) {
         layerHook.remove();
         throw std::runtime_error("omareel-capture-exclude: could not hook saveBufferForMirror: " + mirrorHook.error());
     }
-    command = HyprlandAPI::registerHyprCtlCommand(handle, {"omareel-exclude", false,
-        [](eHyprCtlOutputFormat, std::string request) {
-            std::istringstream input(request);
+    command = HyprlandAPI::registerHyprCtlCommand(handle, {"omareel-exclude", IPC::Socket1::COMMAND_MATCH_PREFIX,
+        [](const IPC::Socket1::SRequest& request) -> IPC::Socket1::SResponse {
+            std::istringstream input(request.command);
             std::string name, action, prefix, extra;
             input >> name >> action >> prefix >> extra;
             if (action == "status" && prefix.empty()) return status();
