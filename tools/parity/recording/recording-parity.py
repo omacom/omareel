@@ -250,7 +250,7 @@ def record_case(name, side, start_args, stop_side=None, env_extra=None, stop='--
     stop_names = Names(stop_side, directory / 'rec')
     result = {}
     # Both sides start with the pointer in the same place, wherever the last run left it.
-    ctl('dispatch', 'movecursor', '800', '450')
+    ctl('dispatch', 'hl.dsp.cursor.move({ x = 800, y = 450 })')
     time.sleep(0.1)
     t0 = time.time()
     t0_us = time.monotonic_ns() // 1000
@@ -387,7 +387,7 @@ def both_flags_while_recording():
 
 def move_cursor():
     for x, y in ((200, 150), (400, 300), (600, 200)):
-        ctl('dispatch', 'movecursor', str(x), str(y))
+        ctl('dispatch', f'hl.dsp.cursor.move({{ x = {x}, y = {y} }})')
         time.sleep(0.25)
 
 # ------------------------------------------------------------------------------------------

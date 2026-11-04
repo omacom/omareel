@@ -51,21 +51,19 @@ for name in ('omarchy-notification-send', 'omarchy-shell'):
     stub.chmod(0o755)
 env['PATH'] = str(stubs) + ':' + env['PATH']
 env['OMAREEL_DEBUG'] = '0'
-conf = root / 'hyprland.conf'
-conf.write_text("monitor = ,1600x900,auto," + os.environ.get("OMAREEL_NESTED_SCALE", "1") + """
-misc {
-    disable_hyprland_logo = true
-}
-debug {
-    disable_logs = false
-}
-animations {
-    enabled = false
-}
-ecosystem {
-    enforce_permissions = false
-}
-""" + 'exec-once = /usr/bin/env > ' + str(root / 'nested.env') + '\n')
+conf = root / 'hyprland.lua'
+conf.write_text('hl.monitor({ output = "", mode = "1600x900", position = "auto", scale = '
+                + os.environ.get("OMAREEL_NESTED_SCALE", "1") + ' })\n' + """
+hl.config({
+  misc = { disable_hyprland_logo = true },
+  debug = { disable_logs = false },
+  animations = { enabled = false },
+  ecosystem = { enforce_permissions = false },
+})
+hl.on("hyprland.start", function()
+  hl.exec_cmd(""" + json.dumps('/usr/bin/env > ' + str(root / 'nested.env')) + """)
+end)
+""")
 
 process = None
 body = None

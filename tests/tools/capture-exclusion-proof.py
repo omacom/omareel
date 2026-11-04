@@ -150,17 +150,17 @@ try:
         for scope in ('omareel-selfview', 'omareel-record-bar'):
             ctl('eval', f"hl.layer_rule({{name='{scope}-private',match={{namespace='{scope}'}},no_screen_share=true}})")
     if args.mode == 'hygiene':
-        ctl('keyword', 'render:keep_unmodified_copy', '1')
+        ctl('eval', 'hl.config({ render = { keep_unmodified_copy = 1 } })')
         report['mrt_option'] = ctl('getoption', 'render:keep_unmodified_copy')
-    ctl('dispatch', 'workspace', '1')
+    ctl('dispatch', 'hl.dsp.focus({ workspace = 1 })')
     green = spawn(app, '__window-test', '--color', '#228844', *(['--animate'] if args.mode == 'hygiene' else []))
     time.sleep(.5)
 
     if args.mode in ('pixels', 'hygiene', 'overlays'):
-        ctl('dispatch', 'workspace', '2')
+        ctl('dispatch', 'hl.dsp.focus({ workspace = 2 })')
         blue = spawn(app, '__window-test', '--color', '#2266cc')
         time.sleep(.4)
-        ctl('dispatch', 'workspace', '1')
+        ctl('dispatch', 'hl.dsp.focus({ workspace = 1 })')
         (root / 'move-trigger').write_text('')
         moving = layer('omareel-selfview' if args.mode == 'overlays' else 'omareel-test',
                        *(['--move-to', '900,550', 'after', '60000', '--move-trigger', str(root / 'move-trigger')] if args.mode == 'pixels' else []))
@@ -184,7 +184,7 @@ try:
         pause_until(start + (2 if args.mode == 'overlays' else 1.5))
         if args.mode != 'hygiene':
             report['switch_us'] = time.monotonic_ns() // 1000
-            ctl('dispatch', 'workspace', '2')
+            ctl('dispatch', 'hl.dsp.focus({ workspace = 2 })')
         if args.mode == 'pixels':
             pause_until(start + 2.5)
             report['move_after_record_ready_seconds'] = time.monotonic() - start
@@ -215,8 +215,8 @@ try:
         if args.mode == 'fallback-two':
             ctl('output', 'create', 'wayland')
             time.sleep(.5)
-            ctl('dispatch', 'focusmonitor', 'WAYLAND-1')
-            ctl('dispatch', 'movecursor', '800 450')
+            ctl('dispatch', 'hl.dsp.focus({ monitor = "WAYLAND-1" })')
+            ctl('dispatch', 'hl.dsp.cursor.move({ x = 800, y = 450 })')
             time.sleep(.1)
         prefs = Path(os.environ['XDG_CONFIG_HOME']) / 'omareel/settings.json'
         prefs.parent.mkdir(parents=True, exist_ok=True)
@@ -247,7 +247,7 @@ try:
             assert {'omareel-selfview', 'omareel-record-bar'} <= set(scopes(report['during_layers'][recorded]))
             screenshot('actual-overlays-during')
             pause_until(capture_start + 2)
-            ctl('dispatch', 'workspace', '2')
+            ctl('dispatch', 'hl.dsp.focus({ workspace = 2 })')
             spawn(app, '__window-test', '--color', '#2266cc')
             pause_until(capture_start + 6)
         metadata = stop_record(bundle)

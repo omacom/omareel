@@ -2,7 +2,7 @@
 """Cursor sampler checks. Invoke through nested-hyprland.sh, never directly.
 
   probe     the sampler alone (examples/cursor_probe), with hardware and software cursors,
-            moving the pointer with `hyprctl dispatch movecursor`, onto a second (headless)
+            moving the pointer with `hl.dsp.cursor.move`, onto a second (headless)
             output and back, then with permissions enforced (polling fallback)
   record    a short fullscreen recording with the built omareel, checking input.jsonl
   crash     a recorder killed while it holds hardware cursors, and the next start restoring
@@ -52,7 +52,7 @@ def first_monitor():
 def move(x, y):
     """Moves the pointer and says when (CLOCK_MONOTONIC, as the samples)."""
     before = monotonic_us()
-    ctl('dispatch', 'movecursor', str(x), str(y))
+    ctl('dispatch', f'hl.dsp.cursor.move({{ x = {x}, y = {y} }})')
     return before
 
 
@@ -120,7 +120,7 @@ try:
         report['monitor'] = first['name']
         targets = [(ox + 100, oy + 100), (ox + 800, oy + 450), (ox + 1500, oy + 800), (ox + 3, oy + 7)]
         for setting, label in ((1, 'software'), (0, 'hardware')):
-            ctl('keyword', 'cursor:no_hardware_cursors', str(setting))
+            ctl('eval', f'hl.config({{ cursor = {{ no_hardware_cursors = {setting} }} }})')
             time.sleep(0.2)
             expect(probe_run(label, name, targets), 'session')
         # Small moves over one surface (no cursor shape or focus change), hardware cursor.
@@ -133,7 +133,7 @@ try:
             time.sleep(0.3)
             inside = [(ox + 500 + 7 * i, oy + 400 + 3 * i) for i in range(1, 9)]
             for setting, label in ((0, 'hardware-over-surface'), (1, 'software-over-surface')):
-                ctl('keyword', 'cursor:no_hardware_cursors', str(setting))
+                ctl('eval', f'hl.config({{ cursor = {{ no_hardware_cursors = {setting} }} }})')
                 time.sleep(0.2)
                 move(ox + 500, oy + 400)
                 time.sleep(0.3)
@@ -145,7 +145,7 @@ try:
         time.sleep(0.5)
         second = next(m for m in monitors() if m['name'] == 'CURSOR-PROBE-2')
         report['second_monitor'] = {k: second[k] for k in ('x', 'y', 'width', 'height', 'scale')}
-        ctl('keyword', 'cursor:no_hardware_cursors', '1')
+        ctl('eval', 'hl.config({ cursor = { no_hardware_cursors = 1 } })')
         away = (second['x'] + 200, second['y'] + 200)
         expect(probe_run('leave', name, [(ox + 400, oy + 300), away, (ox + 600, oy + 500)]), 'session')
         # The pointer starting off the recorded output. Moves on the other output are not
@@ -156,10 +156,10 @@ try:
                'session', missing=(0,))
         ctl('output', 'remove', 'CURSOR-PROBE-2')
         # Permissions enforced: the session is not tried, polling follows the pointer.
-        ctl('keyword', 'ecosystem:enforce_permissions', '1')
+        ctl('eval', 'hl.config({ ecosystem = { enforce_permissions = true } })')
         time.sleep(0.2)
         expect(probe_run('enforced', name, targets), 'polling', quiet=False)
-        ctl('keyword', 'ecosystem:enforce_permissions', '0')
+        ctl('eval', 'hl.config({ ecosystem = { enforce_permissions = false } })')
         # A session that goes silent (moves the output never commits) is not provoked here: a
         # nested output commits on every move, even with DPMS off. The unit tests cover the
         # silence check that sends the sampler to polling then.
@@ -170,7 +170,7 @@ try:
         if plugin.exists():
             ctl('plugin', 'load', str(plugin))
             time.sleep(0.3)
-        ctl('keyword', 'cursor:no_hardware_cursors', '1')
+        ctl('eval', 'hl.config({ cursor = { no_hardware_cursors = 1 } })')
         runtime = Path(os.environ['XDG_RUNTIME_DIR']) / 'omareel'
         marker = runtime / f"hardware-cursor-hold-{os.environ['HYPRLAND_INSTANCE_SIGNATURE']}.json"
         setting = lambda: json.loads(ctl('-j', 'getoption', 'cursor:no_hardware_cursors'))['int']
@@ -202,7 +202,7 @@ try:
         if plugin.exists():
             report['plugin_load'] = ctl('plugin', 'load', str(plugin)).strip()
             time.sleep(0.3)
-        ctl('keyword', 'cursor:no_hardware_cursors', '1')
+        ctl('eval', 'hl.config({ cursor = { no_hardware_cursors = 1 } })')
         report['setting_before'] = json.loads(ctl('-j', 'getoption', 'cursor:no_hardware_cursors'))
         result = subprocess.run([app, 'record', '--fullscreen', '--no-audio', '--no-open', '--dir',
                                  str(root / 'recordings')], text=True, capture_output=True, timeout=60)
