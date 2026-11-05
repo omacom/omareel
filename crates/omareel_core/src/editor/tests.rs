@@ -1025,6 +1025,34 @@ fn frame_steps_move_the_paused_player() {
 // History, coalescing and the dirty flag.
 
 #[test]
+fn unchanged_trims_preserve_redo_and_saved_state() {
+    for reset in [false, true] {
+        let world = World::new("editor-unchanged-trim");
+        let mut qt = world.open(&world.bundle("editor.omareel"));
+        let id = qt.clip_id(0);
+        assert!(qt.run(|d| d.trim_clip(&id, 0.25, 1.75)));
+        qt.run(Document::undo);
+        assert!(qt.run(Document::save_now));
+        let before = qt.document.project().clone();
+        let steps = qt.undo_steps();
+        qt.effects.clear();
+
+        // A handle dragged past the source bounds, or Reset trims on an
+        // already whole clip, does not create a new edit.
+        assert!(qt.run(|d| if reset { d.reset_clip_trims(&id) } else { d.trim_clip(&id, -1.0, 3.0) }));
+        assert_eq!(qt.document.project(), &before);
+        assert_eq!(qt.undo_steps(), steps);
+        assert!(!qt.document.dirty());
+        assert!(qt.document.can_redo());
+        assert!(qt.effects.is_empty());
+
+        qt.run(Document::redo);
+        assert_eq!(qt.document.project().clips[0].in_, 0.25);
+        assert_eq!(qt.document.project().clips[0].out, 1.75);
+    }
+}
+
+#[test]
 fn coalesced_edits_make_one_undo_step() {
     let world = World::new("editor-coalesce");
     let mut qt = world.open(&world.bundle("editor.omareel"));
