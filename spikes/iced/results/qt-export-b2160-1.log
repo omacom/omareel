@@ -1,0 +1,11 @@
+Failed to open VDPAU backend libvdpau_nvidia.so: cannot open shared object file: No such file or directory
+Exporting 1/600Exporting 10/600Exporting 20/600Exporting 30/600Exporting 40/600Exporting 50/600Exporting 60/600Exporting 70/600Exporting 80/600Exporting 90/600Exporting 100/600Exporting 110/600Exporting 120/600Exporting 130/600Exporting 140/600Exporting 150/600Exporting 160/600Exporting 170/600Exporting 180/600Exporting 190/600Exporting 200/600Exporting 210/600Exporting 220/600Exporting 230/600Exporting 240/600Exporting 250/600Exporting 260/600Exporting 270/600Exporting 280/600Exporting 290/600Exporting 300/600Exporting 310/600Exporting 320/600Exporting 330/600Exporting 340/600Exporting 350/600Exporting 360/600Exporting 370/600Exporting 380/600Exporting 390/600Exporting 400/600Exporting 410/600Exporting 420/600Exporting 430/600Exporting 440/600Exporting 450/600Exporting 460/600Exporting 470/600Exporting 480/600Exporting 490/600Exporting 500/600Exporting 510/600Exporting 520/600Exporting 530/600Exporting 540/600Exporting 550/600Exporting 560/600Exporting 570/600Exporting 580/600Exporting 590/600Exporting 600/600  Finishing encoding...
+Timing (600 frames):
+  decode wait:  4.566 ms/frame
+  upload:       0.471 ms/frame
+  render:       10.588 ms/frame
+  readback:     1.396 ms/frame
+  encode write: 7.086 ms/frame
+  total:        11.603 s (51.7 frames/s)
+
+/home/ryan/.cache/omareel-spikes/scratch-iced/results/qt-b2160.mp4

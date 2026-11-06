@@ -1,0 +1,25 @@
+[package]
+name = "omareel-iced-spike"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "omareel's preview, export and recording bar drawn with iced 0.14 and a custom wgpu pipeline"
+
+# Its own workspace: not part of omareel's build.
+[workspace]
+
+[dependencies]
+omareel_core = { path = "../../crates/omareel_core" }
+# iced 0.14.0 is the latest release and has everything the spike needs (the shader widget with
+# shader::Pipeline, iced::wgpu, cosmic-text through iced::advanced). web-colors blends in sRGB
+# space, as Qt Quick does.
+iced = { version = "=0.14.0", default-features = false, features = ["wgpu", "wayland", "web-colors", "tokio", "crisp", "advanced"] }
+# wlr-layer-shell for iced (waycrate's exwlshelleventloop), built on iced 0.14.
+iced_layershell = "=0.19.1"
+bytemuck = { version = "1", features = ["derive"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+resvg = "0.45"
+pollster = "0.4"
+
+[profile.release]
+debug = "line-tables-only"

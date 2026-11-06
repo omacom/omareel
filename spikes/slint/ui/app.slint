@@ -1,0 +1,179 @@
+// The spike's three top-level windows: the editor preview, the export's offscreen scene, and
+// the recording bar.
+
+import { Button, Slider } from "std-widgets.slint";
+import { Composition, Comp } from "composition.slint";
+export { Comp, CameraShape, FullFrame, Corner, KeysPosition, CursorStyle, ShadowSettings, BorderSettings,
+    FrameSettings, CameraSettings, CursorSettings, KeystrokeSettings, CropRect, ZoomState, LayoutState,
+    CursorState, RippleState, PillState } from "composition.slint";
+
+// The editor's preview pane (PreviewPane.qml) with a transport row under it.
+export component PreviewWindow inherits Window {
+    title: "omareel Slint spike";
+    preferred-width: 1600px;
+    preferred-height: 900px;
+    background: #16161e;
+    in property <int> output-width: 1280;
+    in property <int> output-height: 720;
+    // The tallest the canvas gets (620 px, as in the Qt editor); 0 for no limit.
+    in property <length> canvas-limit: 620px;
+    in property <bool> playing;
+    in property <float> duration: 10;
+    in property <float> position;
+    in property <string> time-text;
+    // Keeps the window rendering every frame while playing (the Rust side advances the playhead
+    // in the rendering notifier, just before each frame is drawn).
+    in property <bool> animate;
+    in property <bool> canvas-shadow: true;
+    in property <length> canvas-radius: 0;
+    callback toggle-play();
+    callback seek(float);
+    callback seek-finished();
+
+    VerticalLayout {
+        Rectangle {
+            vertical-stretch: 1;
+            background: #1a1b26;
+            area := Rectangle {
+                x: 32px;
+                y: 28px;
+                width: parent.width - 64px;
+                height: parent.height - 56px;
+                property <length> limit: root.canvas-limit > 0 ? root.canvas-limit : self.height;
+                property <length> canvas-height: min(self.height, self.limit, self.width * root.output-height / max(1, root.output-width));
+                Composition {
+                    height: area.canvas-height;
+                    width: self.height * root.output-width / max(1, root.output-height);
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                    // Square corners, as the Qt editor shows (QML's clip ignores the radius): a
+                    // radius with clip makes Slint draw the whole composition into a layer
+                    // every frame. SPIKE_EXPERIMENT=canvasradius puts it back.
+                    border-radius: root.canvas-radius;
+                    drop-shadow-blur: root.canvas-shadow ? 30px : 0;
+                    drop-shadow-offset-y: 14px;
+                    drop-shadow-color: root.canvas-shadow ? #0008 : transparent;
+                }
+            }
+            // Ticks every frame while playing.
+            Rectangle {
+                width: 1px;
+                height: 1px;
+                background: transparent;
+                opacity: root.animate ? mod(animation-tick() / 1ms, 2) : 0;
+            }
+        }
+        Rectangle {
+            height: 56px;
+            background: #1f2030;
+            HorizontalLayout {
+                padding-left: 16px;
+                padding-right: 16px;
+                spacing: 12px;
+                alignment: stretch;
+                Button {
+                    text: root.playing ? "Pause" : "Play";
+                    width: 90px;
+                    clicked => { root.toggle-play(); }
+                }
+                scrub := Slider {
+                    horizontal-stretch: 1;
+                    minimum: 0;
+                    maximum: root.duration;
+                    value: root.position;
+                    changed(value) => { root.seek(value); }
+                    released(value) => { root.seek-finished(); }
+                }
+                Text {
+                    text: root.time-text;
+                    color: #c0caf5;
+                    font-family: Comp.mono-family;
+                    font-size: 15px;
+                    vertical-alignment: center;
+                    width: 180px;
+                }
+            }
+        }
+    }
+    forward-focus: keys;
+    keys := FocusScope {
+        key-pressed(event) => {
+            if (event.text == " ") {
+                root.toggle-play();
+                return accept;
+            }
+            reject
+        }
+    }
+}
+
+// The export's scene: the composition filling an offscreen window of the output's size.
+export component ExportScene inherits Window {
+    background: black;
+    Composition {
+        width: parent.width;
+        height: parent.height;
+    }
+}
+
+// The recording bar (RecordingBar.qml, reduced): a pill with the elapsed time and a stop button.
+export component RecordingBar inherits Window {
+    in property <string> elapsed: "00:00";
+    in property <bool> blink;
+    callback stop();
+    background: transparent;
+    width: 220px;
+    height: 52px;
+    Rectangle {
+        x: 4px;
+        y: 4px;
+        width: parent.width - 8px;
+        height: parent.height - 8px;
+        border-radius: self.height / 2;
+        background: #1a1b26f0;
+        border-width: 1px;
+        border-color: #ffffff22;
+        HorizontalLayout {
+            padding-left: 16px;
+            padding-right: 6px;
+            spacing: 10px;
+            alignment: stretch;
+            VerticalLayout {
+                alignment: center;
+                Rectangle {
+                    width: 12px;
+                    height: 12px;
+                    border-radius: 6px;
+                    background: #f7768e;
+                    opacity: root.blink ? 1 : 0.35;
+                    animate opacity { duration: 400ms; }
+                }
+            }
+            Text {
+                text: root.elapsed;
+                color: #c0caf5;
+                font-family: Comp.mono-family;
+                font-size: 17px;
+                font-weight: 600;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+            stop-area := TouchArea {
+                width: 72px;
+                clicked => { root.stop(); }
+                Rectangle {
+                    y: 4px;
+                    height: parent.height - 8px;
+                    border-radius: self.height / 2;
+                    background: stop-area.pressed ? #c64f62 : stop-area.has-hover ? #e86a80 : #f7768e;
+                    Text {
+                        text: "Stop";
+                        color: #1a1b26;
+                        font-size: 14px;
+                        font-weight: 700;
+                    }
+                }
+            }
+        }
+    }
+}

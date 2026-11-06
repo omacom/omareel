@@ -1,0 +1,64 @@
+// The recording bar, as in ../ui/app.slint (layer-shika compiles it at run time with the
+// Slint interpreter, so it cannot share the main crate's compiled components).
+
+// The recording bar (RecordingBar.qml, reduced): a pill with the elapsed time and a stop button.
+export component RecordingBar inherits Window {
+    in property <string> elapsed: "00:00";
+    in property <bool> blink;
+    callback stop();
+    background: transparent;
+    width: 220px;
+    height: 52px;
+    Rectangle {
+        x: 4px;
+        y: 4px;
+        width: parent.width - 8px;
+        height: parent.height - 8px;
+        border-radius: self.height / 2;
+        background: #1a1b26f0;
+        border-width: 1px;
+        border-color: #ffffff22;
+        HorizontalLayout {
+            padding-left: 16px;
+            padding-right: 6px;
+            spacing: 10px;
+            alignment: stretch;
+            VerticalLayout {
+                alignment: center;
+                Rectangle {
+                    width: 12px;
+                    height: 12px;
+                    border-radius: 6px;
+                    background: #f7768e;
+                    opacity: root.blink ? 1 : 0.35;
+                    animate opacity { duration: 400ms; }
+                }
+            }
+            Text {
+                text: root.elapsed;
+                color: #c0caf5;
+                font-family: "monospace";
+                font-size: 17px;
+                font-weight: 600;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+            stop-area := TouchArea {
+                width: 72px;
+                clicked => { root.stop(); }
+                Rectangle {
+                    y: 4px;
+                    height: parent.height - 8px;
+                    border-radius: self.height / 2;
+                    background: stop-area.pressed ? #c64f62 : stop-area.has-hover ? #e86a80 : #f7768e;
+                    Text {
+                        text: "Stop";
+                        color: #1a1b26;
+                        font-size: 14px;
+                        font-weight: 700;
+                    }
+                }
+            }
+        }
+    }
+}

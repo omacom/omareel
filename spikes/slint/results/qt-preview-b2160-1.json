@@ -1,0 +1,57 @@
+{
+ "frames": {
+  "window_s": 9.49,
+  "commits": 564,
+  "fps": 59.35,
+  "frame_ms_median": 16.76,
+  "frame_ms_p95": 17.07,
+  "frame_ms_max": 33.92,
+  "missed_vsyncs": 5
+ },
+ "sample": {
+  "wall_s": 8.02,
+  "cpu_percent": 21.5,
+  "children_cpu_percent": 0.0,
+  "rss_peak_mb": 630.2,
+  "tree_rss_peak_mb": 630.2,
+  "gpu_busy_percent": {
+   "render": 9.0,
+   "copy": 0.0,
+   "video": 72.6,
+   "video-enhance": 0.0
+  },
+  "loadavg": [
+   "2.91",
+   "2.29",
+   "1.22"
+  ]
+ },
+ "app": {
+  "seconds": 10,
+  "fps_per_second": [
+   59.0,
+   60.5,
+   60.0,
+   60.1,
+   5.0,
+   116.1,
+   36.0,
+   85.0,
+   60.1,
+   60.1
+  ],
+  "average_frame_cost_ms": [
+   0.003,
+   0.002,
+   0.002,
+   0.004,
+   0.005,
+   0.002,
+   0.003,
+   0.002,
+   0.004,
+   0.003
+  ],
+  "dropped": 80
+ }
+}

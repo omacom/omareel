@@ -1,0 +1,20 @@
+{
+ "wall_s": 9.54,
+ "cpu_percent": 20.6,
+ "children_cpu_percent": 2.6,
+ "children": 1,
+ "rss_peak_mb": 649.1,
+ "tree_rss_peak_mb": 649.1,
+ "gpu_busy_percent": {
+  "drm-engine-render": 9.2,
+  "drm-engine-copy": 0.0,
+  "drm-engine-video": 68.4,
+  "drm-engine-video-enhance": 0.0
+ },
+ "gpu_resident_peak_mb": 686.6,
+ "loadavg": [
+  "4.50",
+  "10.17",
+  "11.95"
+ ]
+}
