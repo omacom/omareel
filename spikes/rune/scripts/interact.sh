@@ -9,20 +9,20 @@ mkdir -p "$out"
 "$spike" preview "$bundle" > "$out/preview.log" 2>&1 &
 preview=$!
 sleep 3
-grim -o SPIKE "$out/1-paused.png"
+grim -o "${NESTED_OUTPUT_NAME:-SPIKE}" "$out/1-paused.png"
 "$pointer" 35 1051            # Play
 sleep 2.5
-grim -o SPIKE "$out/2-playing.png"
+grim -o "${NESTED_OUTPUT_NAME:-SPIKE}" "$out/2-playing.png"
 "$pointer" 35 1051            # Pause
 sleep 0.5
 "$pointer" 1260 1051          # the scrub bar, about 6 s in
 sleep 1.5
-grim -o SPIKE "$out/3-scrubbed.png"
+grim -o "${NESTED_OUTPUT_NAME:-SPIKE}" "$out/3-scrubbed.png"
 kill "$preview" 2>/dev/null; wait "$preview" 2>/dev/null
 "$spike" bar > "$out/bar.log" 2>&1 &
 bar=$!
 sleep 2
-grim -o SPIKE "$out/4-bar.png"
+grim -o "${NESTED_OUTPUT_NAME:-SPIKE}" "$out/4-bar.png"
 hyprctl layers > "$out/layers.txt"
 "$pointer" 1022 38            # Stop
 sleep 1

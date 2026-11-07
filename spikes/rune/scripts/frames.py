@@ -9,6 +9,8 @@ Takes the longest run of commits without a gap over 250 ms (the playback), skips
 of it (default 0.5) and measures the next `seconds` (default 10). When the log holds the Rune
 spike's "spike: measured playback starts" line, only commits after it count: the spike's paused
 window before playback commits a frame every 30 to 50 ms, which would otherwise join the run.
+Only commits with a buffer attached since the surface's last commit count: NVIDIA's Vulkan WSI
+(wp_fifo_v1) follows each frame's commit with a second, empty one.
 """
 import json
 import re
@@ -16,15 +18,22 @@ import sys
 
 # libwayland prints "[1234567.890]" (ms) or, since 1.23, "[HH:MM:SS.mmm]".
 pattern = re.compile(r'^\[\s*(?:(\d+):(\d+):(\d+\.\d+)|(\d+\.\d+))\].*-> (wl_surface[#@]\d+)\.commit\(\)')
+attach = re.compile(r'-> (wl_surface[#@]\d+)\.attach\(wl_buffer')
+attached = set()
 commits = {}
 lines = open(sys.argv[1], errors='replace').read().splitlines()
 marker = next((i for i, line in enumerate(lines) if 'spike: measured playback starts' in line), None)
 if marker is not None:
     lines = lines[marker:]
 for line in lines:
-    m = pattern.match(line)
-    if not m:
+    a = attach.search(line)
+    if a:
+        attached.add(a.group(1))
         continue
+    m = pattern.match(line)
+    if not m or m.group(5) not in attached:
+        continue
+    attached.discard(m.group(5))
     if m.group(4):
         t = float(m.group(4)) / 1000.0
     else:

@@ -12,6 +12,8 @@ per engine, as a share of the window.
 import json
 import os
 import sys
+import shutil
+import subprocess
 import time
 
 TICK = os.sysconf('SC_CLK_TCK')
@@ -83,9 +85,47 @@ def gpu_ns(pid):
     return total
 
 
+def nvidia_start(seconds):
+    """NVIDIA's driver reports no drm-engine-* in fdinfo: sample nvidia-smi over the window
+    instead, per process (pmon) and for the whole GPU (dmon), once a second."""
+    if not shutil.which('nvidia-smi'):
+        return None
+    count = str(max(1, int(seconds)))
+    run = lambda *a: subprocess.Popen(['nvidia-smi', *a, '-s', 'u', '-d', '1', '-c', count],
+                                      stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    return run('pmon'), run('dmon')
+
+
+def nvidia_finish(procs, pids):
+    """Means over the samples: pmon's sm/dec for `pids` (summed per sample; '-' counts as 0) and
+    dmon's sm/dec for the whole GPU (everything on it, the compositors included)."""
+    pmon, dmon = procs
+    num = lambda v: float(v) if v.replace('.', '', 1).isdigit() else 0.0
+    mean = lambda xs: round(sum(xs) / len(xs), 1) if xs else None
+    per = {}  # pid -> [(sm, dec)] in sample order
+    for line in pmon.communicate(timeout=30)[0].splitlines():
+        f = line.split()
+        if not line.startswith('#') and len(f) >= 7 and f[1].isdigit() and int(f[1]) in pids:
+            per.setdefault(int(f[1]), []).append((num(f[3]), num(f[6])))
+    whole = []
+    for line in dmon.communicate(timeout=30)[0].splitlines():
+        f = line.split()
+        if not line.startswith('#') and len(f) >= 5:
+            whole.append((num(f[1]), num(f[4])))
+    n = max((len(s) for s in per.values()), default=0)
+    sm = [sum(s[i][0] for s in per.values() if i < len(s)) for i in range(n)]
+    dec = [sum(s[i][1] for s in per.values() if i < len(s)) for i in range(n)]
+    return {
+        'process': {'render': mean(sm), 'video': mean(dec)},
+        'whole_gpu': {'render': mean([w[0] for w in whole]), 'video': mean([w[1] for w in whole])},
+        'samples': n,
+    }
+
+
 def main():
     pid, seconds, out = int(sys.argv[1]), float(sys.argv[2]), sys.argv[3]
     start = time.monotonic()
+    nvidia = nvidia_start(seconds) if not gpu_ns(pid) else None
     cpu0 = {p: cpu_seconds(p) or 0.0 for p in [pid] + descendants(pid)}
     gpu0 = gpu_ns(pid)
     peak, tree_peak = 0.0, 0.0
@@ -112,6 +152,11 @@ def main():
         'gpu_busy_percent': {k: round((gpu1.get(k, 0) - gpu0.get(k, 0)) / (wall * 1e9) * 100, 1) for k in gpu1},
         'loadavg': open('/proc/loadavg').read().split()[:3],
     }
+    if nvidia:
+        smi = nvidia_finish(nvidia, set(procs))
+        result['gpu_busy_percent'] = smi['process']
+        result['gpu_whole_percent'] = smi['whole_gpu']
+        result['gpu_source'] = f"nvidia-smi pmon/dmon, {smi['samples']} samples"
     with open(out, 'w') as f:
         json.dump(result, f, indent=1)
     print(json.dumps(result))

@@ -81,7 +81,9 @@ for n in $(seq 1 "$runs"); do
         fi
         if [[ "$what" == variants ]]; then
             for v in $variants; do
-                quiet; rune_preview "$bundle" "$n" "$v" --decode "${v%%-*}" --upload "${v#*-}"
+                # <decode>-<upload>[-<decode height>], e.g. software-surface-1080
+                IFS=- read -r decode upload height <<< "$v"
+                quiet; rune_preview "$bundle" "$n" "$v" --decode "$decode" --upload "$upload" ${height:+--decode-height "$height"}
             done
         fi
         if [[ "$what" == export || "$what" == all ]]; then

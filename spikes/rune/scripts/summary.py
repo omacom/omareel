@@ -26,19 +26,20 @@ def cell(values, digits=1):
     return text
 
 
-def gpu(sample, engine='render'):
-    busy = sample.get('gpu_busy_percent') or {}
+def gpu(sample, engine='render', key='gpu_busy_percent'):
+    busy = sample.get(key) or {}
     return busy.get(engine)
 
 
 print('## Preview\n')
-print('| | frames/s | frame ms median | p95 | max | missed vsyncs | dropped (app) | CPU % | decoder CPU % | RSS MB | GPU render % | GPU video % | UI-thread frame ms | load |')
-print('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|')
+print('| | frames/s | frame ms median | p95 | max | missed vsyncs | dropped (app) | CPU % | decoder CPU % | RSS MB | GPU render % | GPU video % | whole GPU % (nvidia-smi) | UI-thread frame ms | load |')
+print('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|')
 for bundle in ('b1080', 'b2160'):
     for app, pattern in (('Rune (VA-API, NV12 surface)', f'rune-vaapi-surface-preview-{bundle}-[0-9].json'),
                          ('Qt', f'qt-preview-{bundle}-[0-9].json'),
                          ('Rune (software, NV12 surface)', f'rune-software-surface-preview-{bundle}-[0-9].json'),
-                         ('Rune (software, RGBA pixels)', f'rune-software-pixels-preview-{bundle}-[0-9].json')):
+                         ('Rune (software, RGBA pixels)', f'rune-software-pixels-preview-{bundle}-[0-9].json'),
+                         ('Rune (software, NV12 surface, decoded at 1080)', f'rune-software-surface-1080-preview-{bundle}-[0-9].json')):
         rs = runs(pattern)
         if not rs:
             continue
@@ -47,7 +48,7 @@ for bundle in ('b1080', 'b2160'):
         print(f"| {app} {bundle[1:]}p ({len(rs)}) | {cell([x['fps'] for x in f])} | {cell([x['frame_ms_median'] for x in f], 2)} | "
               f"{cell([x['frame_ms_p95'] for x in f], 2)} | {cell([x['frame_ms_max'] for x in f])} | {cell([x['missed_vsyncs'] for x in f], 0)} | "
               f"{cell([r['app'].get('dropped') for r in rs], 0)} | {cell([x['cpu_percent'] for x in s])} | {cell([x['children_cpu_percent'] for x in s])} | "
-              f"{cell([x['rss_peak_mb'] for x in s], 0)} | {cell([gpu(x) for x in s])} | {cell([gpu(x, 'video') for x in s])} | "
+              f"{cell([x['rss_peak_mb'] for x in s], 0)} | {cell([gpu(x) for x in s])} | {cell([gpu(x, 'video') for x in s])} | {cell([gpu(x, key='gpu_whole_percent') for x in s])} | "
               f"{cell([r['app'].get('frame_cpu_ms_median') for r in rs], 2)} | {', '.join(x['loadavg'][0] for x in s)} |")
 
 print('\n## Export (600 frames, 1920x1080, quality social)\n')
