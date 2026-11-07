@@ -1,4 +1,4 @@
-# GPU UI spikes: GPUI, iced and Slint against Qt Quick
+# GPU UI spikes: GPUI, iced, Slint and Rune against Qt Quick
 
 Each spike built what `SPEC.md` asks over `omareel_core`:
 
@@ -17,6 +17,30 @@ Each part was measured against the Qt build. The three toolkit reports have the 
 - Each spike measured its own Qt baseline in the same session. The three Qt export baselines agree within 4%.
 - GPUI's runs were taken under more machine load than the others: export at load 6–9.
 - Nothing was measured on n1x (aarch64, NVIDIA).
+
+## Added November 2026: Rune
+
+A fourth spike, `rune/REPORT.md`, built the same program with Rune (anomalyco/rune, two weeks
+old, pre-release), plus an editor slice (inspector and timeline) to see where the interface could
+go. It was measured on Hyprland 0.57 with master's `h264_vaapi` export, so its numbers compare
+with its own Qt baseline, not with the table below.
+
+| | Qt Quick | Rune |
+|---|---|---|
+| Preview 1080p fps, p95 frame ms, missed vsyncs | 59.5, 16.9, 0 | 59.6, 17.0, 1 |
+| Preview 4K fps, p95 frame ms | 59.7, 17.0 | 59.5, 17.4 |
+| UI-thread ms per frame (1080p / 4K) | – | 0.78 / 3.2 |
+| Preview GPU render engine % (1080p / 4K) | 7.5 / 6.0 | 44.8 / 31.0 |
+| Preview CPU, app + decoders (1080p / 4K, % of a core) | 15 / 21 (decode on the GPU) | 32 / 107 (VA-API through ffmpeg, NV12) |
+| Preview RSS (1080p / 4K, MB) | 332 / 529 | 226 / 298 |
+| Export fps (1080p / 4K bundle) | 105.6 / **57.3** | **113.1** / 54.0 |
+| Export without a display | software renderer, 43 fps | same GPU path |
+| Layer-shell bar, offscreen render, blur | LayerShellQt, QQuickRenderControl, MultiEffect | all built in |
+
+Verdict: not now. Rune has the best UI-thread cost, memory, headless export and agent tooling of
+any toolkit tried, the same 60 frames/s pacing as Qt, and its motion made the editor slice the
+most convincing UI the spikes produced. Its GPU cost (6× Qt's), CPU-only video upload off macOS
+and its age keep it from replacing Qt Quick today. Re-run it against a newer `dev` in a few months.
 
 ## Results
 

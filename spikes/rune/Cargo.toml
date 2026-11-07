@@ -1,0 +1,31 @@
+[package]
+name = "omareel-rune-spike"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "omareel's preview, export and recording bar drawn with Rune over omareel_core"
+
+# Its own workspace: not part of omareel's build.
+[workspace]
+
+[dependencies]
+omareel_core = { path = "../../crates/omareel_core" }
+# Rune is pre-release and asks apps to pin a rev of `dev` (never rewritten). This is dev on
+# 2026-11-06.
+rune = { git = "https://github.com/anomalyco/rune", rev = "8ee30954add065098f043335ece9d9ea0914d21d" }
+# Rune's components (buttons, switches, segmented controls), for the editor slice.
+rune-kit = { git = "https://github.com/anomalyco/rune", rev = "8ee30954add065098f043335ece9d9ea0914d21d" }
+# Rune's own wgpu, for the export's offscreen target and readback.
+wgpu = { version = "~30.0.1", default-features = false, features = ["std", "vulkan", "wgsl"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+libc = "0.2"
+# spike-pointer, the test helper that clicks through wlr-virtual-pointer (from the Slint spike).
+wayland-client = "0.31"
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+
+[profile.release]
+debug = "line-tables-only"
+# Rune's own release settings: incremental, 16 codegen units. Without them a one-line change
+# rebuilds in 48 s; with them in a few seconds.
+incremental = true
+codegen-units = 16
