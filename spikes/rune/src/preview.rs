@@ -158,7 +158,15 @@ impl Preview {
         self.origin = position;
         self.playing = true;
         self.clock = None;
-        self.restart_decoders(position);
+        // A paused decoder already holds the frames after the one on screen: play on from it
+        // rather than starting ffmpeg again (which costs a few hundred ms, more with VA-API).
+        self.document.set_output_position(position);
+        let source = self.document.source_position();
+        let warm = self.pending_seek.is_none()
+            && self.screen.as_ref().is_some_and(|s| !s.finished && s.current_time.is_some_and(|c| (c - source).abs() <= 1.5 / s.fps));
+        if !warm {
+            self.restart_decoders(position);
+        }
     }
 
     fn show(video: &Video, frame: video::Frame) {

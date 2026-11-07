@@ -35,10 +35,13 @@ with its own Qt baseline, not with the table below.
 | Preview RSS (1080p / 4K, MB) | 332 / 529 | 226 / 298 |
 | Export fps (1080p / 4K bundle) | 105.6 / **57.3** | **113.1** / 54.0 |
 | Export without a display | software renderer, 43 fps | same GPU path |
+| Editor launch to window / to video showing | 0.58 s / 0.73 s | **0.24 s / 0.35 s** |
+| Play to motion / seek to frame | 91 ms / **14 ms** | 97 ms / 92 ms (ffmpeg per seek) |
+| Idle while paused: CPU, commits, RSS (app / with decoders) | 0 %, 0/s, 310 / 310 MB | 0.6 %, 0/s, 201 / 502 MB |
 | Layer-shell bar, offscreen render, blur | LayerShellQt, QQuickRenderControl, MultiEffect | all built in |
 
-Verdict: not now. Rune has the best UI-thread cost, memory, headless export and agent tooling of
-any toolkit tried, the same 60 frames/s pacing as Qt, and its motion made the editor slice the
+Verdict: not now. Rune has the fastest launch (half Qt's), the best UI-thread cost, memory,
+headless export and agent tooling of any toolkit tried, the same 60 frames/s pacing as Qt, and its motion made the editor slice the
 most convincing UI the spikes produced. Its GPU cost (6× Qt's), CPU-only video upload off macOS
 and its age keep it from replacing Qt Quick today. Re-run it against a newer `dev` in a few months.
 

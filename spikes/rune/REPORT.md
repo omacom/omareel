@@ -180,6 +180,43 @@ the earlier spikes' libx264 numbers). Wall time of the whole command, both with 
   capture of the camera and Rune applies a real Gaussian (64 px): the same look, different pixels
   (`images/export-morph-qt-vs-rune.png`: Qt top, Rune bottom).
 
+### Launch and responsiveness
+
+`scripts/launch.py`, in the nested Hyprland on the 1920x1080@60 headless output, 6 launches of
+each app opening a copy of the 1080p bundle (the first, least warm, reported apart). Times come
+from the app's own Wayland log (its first committed buffer, the button events it received) and
+from quarter-size `grim` screenshots of the middle of the preview every 15–25 ms, which bounds the
+resolution of the screenshot-timed rows. Seeks and Play are clicked through `spike-pointer`, both
+apps at the same points in the recording (seek to 2.0 s, then 7.7 s; Play from 2.0 s).
+
+| | Qt `omareel edit` | Rune `editor` | Rune `preview` |
+|---|---|---|---|
+| Launch to first frame on screen | 0.58 s (first 0.59) | **0.24 s** (0.24) | 0.23 s (0.24) |
+| Launch to the video showing | 0.73 s (first 0.74) | **0.35 s** (0.33) | 0.34 s (0.34) |
+| Click to the next frame (any visible answer) | 1.1 ms | 0.5 ms | 0.5 ms |
+| Play to motion, median (range) | 91 ms (87–107) | 97 ms (34–135) | 117 ms (37–162) |
+| Seek on the timeline to its frame, median (max) | **14 ms** (20) | 92 ms (118) | 95 ms (114) |
+| Idle, paused: CPU % / GPU render % / commits a second | 0 / 0 / 0 | 0.6 / 0 / 0 | 0.6 / 0 / 0 |
+| Idle RSS, app / with its decoders (MB) | 310 / 310 | **201** / 502 | 199 / 504 |
+
+- **Rune opens in less than half Qt's time**: a window in 0.24 s against 0.58, the video in
+  0.35 s against 0.73. Qt loads its QML, the editor's full interface (wallpaper grid, timeline
+  thumbnails) and fades in over 160 ms; the Rune slice draws less, so part of the gap is scope,
+  and the first frame alone is 0.24 s against 0.58: a gap a user feels on every open.
+- **Both answer a click within a frame**, and neither draws anything while paused: Rune's "an idle
+  window draws nothing" holds (0 commits a second).
+- **Play** is a tie once the spike reuses the paused decoder (it used to start ffmpeg again on
+  every Play: 260–460 ms). Rune's spread is wider; Qt's pipeline adds a steady ~5 frames.
+- **Seeking is where Qt wins, 14 ms against 92**, and it is the spike's video design, not Rune:
+  every seek starts a new ffmpeg process (omareel_core's decoder is the ffmpeg CLI on a pipe),
+  which opens the file and decodes from the last keyframe. Qt seeks inside its in-process
+  decoder. A Rune omareel would need in-process decoding (libav through `ffmpeg-next`, or
+  GStreamer) with a decoder kept open, the same piece that would give it zero-copy frames.
+- **Memory while paused**: the Rune app itself is a third smaller than Qt's, but its paused ffmpeg
+  decoders hold another 300 MB (frames decoded ahead, for an instant Play). Stopping them after a
+  few idle seconds would trade that for a cold Play (~150–300 ms); in-process decoding would make
+  the trade unnecessary.
+
 ### Diagnostics left in
 
 `--timing` (export stages), `--gpu-timing` (a timestamp query around each export frame's pass;
@@ -187,7 +224,8 @@ with `--png <frames>` it also prints those frames' instances and layer targets),
 `SPIKE_EXPERIMENT=noblur,noshadow,noclip,nocamera,nokeys,nobg` (parts of the scene taken away;
 in the preview also `nocomp`, `novideo`, `nocanvasshadow`, `nocanvasclip`, `nowaker`),
 `SPIKE_VIEW=fill<n>|video|cursor|stage|clip` (the export draws a test scene to price a
-primitive) and `SPIKE_DEBUG=1` (poll and pill logging). The GPU findings above come from them.
+primitive) and `SPIKE_DEBUG=1` (poll and pill logging). `scripts/launch.py` measures launch and
+responsiveness (see above); its usage is in its header. The GPU findings above come from them.
 
 ### Build and size
 
@@ -300,8 +338,9 @@ $B bar                                     # the pill at the top; Stop exits
 **Not now; watch it.** Rune is the most interesting toolkit the spikes have tried, and the one
 whose strengths line up with how omareel is written:
 
-- **What it is better at than Qt Quick here:** the UI thread (under 1 ms a frame at 1080p) with
-  the same 60 frames/s pacing, memory, an export
+- **What it is better at than Qt Quick here:** launch (the editor's video on screen in 0.35 s
+  against 0.73), the UI thread (under 1 ms a frame at 1080p) with the same 60 frames/s pacing,
+  memory, an export
   that runs without a display and is faster at 1080p, layer-shell and offscreen rendering built
   in, views in plain type-checked Rust, and above all **headless rendering, scripted input,
   video recording and element trees of the real app**: what omareel's agents need to check their
@@ -312,7 +351,9 @@ whose strengths line up with how omareel is written:
   1. **GPU cost**: 6× Qt's render-engine time for the same preview, structurally (no opaque pass
      or partial redraw). On a laptop that is battery.
   2. **Video on Linux** is bytes through the CPU: Rune's zero-copy video import exists only on
-     macOS, so 4K still costs about a core where Qt decodes into GPU memory.
+     macOS, so 4K still costs about a core where Qt decodes into GPU memory, and the spike's
+     ffmpeg-per-seek decoding makes seeks 92 ms against Qt's 14. In-process decoding is the
+     fix for both, and it is omareel's to write whichever toolkit it uses.
   3. **Maturity**: two weeks old, pre-release, `dev`-only, ~100 commits a day, bugs like
      `Tx::quit` in overlays and a README behind its code. Built for Mac first (players,
      recorders, pacing, present timestamps are macOS-only).
