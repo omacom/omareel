@@ -1,5 +1,6 @@
 //! Clicks in the nested compositor through wlr-virtual-pointer, for testing the bar's Stop button
-//! and the preview's controls: `spike-pointer <x> <y> [click|move] [<width> <height>]`.
+//! and the preview's controls: `spike-pointer <x> <y> [click|move] [<width> <height>]`, or
+//! `spike-pointer <x> <y> drag <x2> <y2> [<width> <height>]` (press, move there in steps, release).
 
 use wayland_client::globals::{GlobalListContents, registry_queue_init};
 use wayland_client::protocol::{wl_pointer, wl_registry, wl_seat};
@@ -46,7 +47,9 @@ fn main() {
     let number = |i: usize, default: u32| args.get(i).and_then(|v| v.parse().ok()).unwrap_or(default);
     let (x, y) = (number(1, 0), number(2, 0));
     let click = args.get(3).is_none_or(|a| a == "click");
-    let (width, height) = (number(4, 1920), number(5, 1080));
+    let drag = args.get(3).is_some_and(|a| a == "drag");
+    let to = (number(4, x), number(5, y));
+    let (width, height) = if drag { (number(6, 1920), number(7, 1080)) } else { (number(4, 1920), number(5, 1080)) };
     let connection = Connection::connect_to_env().expect("Wayland");
     let (globals, mut queue) = registry_queue_init::<State>(&connection).expect("registry");
     let qh = queue.handle();
@@ -58,7 +61,21 @@ fn main() {
     pointer.frame();
     queue.roundtrip(&mut State).expect("roundtrip");
     std::thread::sleep(std::time::Duration::from_millis(60));
-    if click {
+    if drag {
+        pointer.button(millis(), 0x110, wl_pointer::ButtonState::Pressed);
+        pointer.frame();
+        queue.roundtrip(&mut State).expect("roundtrip");
+        for step in 1..=20u32 {
+            std::thread::sleep(std::time::Duration::from_millis(16));
+            let lerp = |a: u32, b: u32| (a as i64 + (b as i64 - a as i64) * step as i64 / 20) as u32;
+            pointer.motion_absolute(millis(), lerp(x, to.0), lerp(y, to.1), width, height);
+            pointer.frame();
+            queue.roundtrip(&mut State).expect("roundtrip");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(60));
+        pointer.button(millis(), 0x110, wl_pointer::ButtonState::Released);
+        pointer.frame();
+    } else if click {
         pointer.button(millis(), 0x110, wl_pointer::ButtonState::Pressed);
         pointer.frame();
         queue.roundtrip(&mut State).expect("roundtrip");

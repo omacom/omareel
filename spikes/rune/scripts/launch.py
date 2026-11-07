@@ -4,7 +4,8 @@ tests/tools/nested-hyprland.sh after in-nested.sh's output setup (`in-nested.sh 
 
 launch.py <out.json> <runs> <play x,y> <seek y,x1,x2> -- <command...>
 
-Each run starts the command with WAYLAND_DEBUG=client and screenshots the SPIKE output with grim
+Each run starts the command with WAYLAND_DEBUG=client and screenshots the SPIKE output (or
+in-nested.sh's NESTED_OUTPUT_NAME) with grim
 (a quarter-scale PPM, about every 15 ms) until the preview shows the video, then:
 - window_s: launch until the app commits its first frame with a buffer (wl_surface.attach of a
   wl_buffer, then commit, in its WAYLAND_DEBUG log);
@@ -45,7 +46,7 @@ shots = tempfile.mkdtemp(prefix='launch-', dir=os.environ.get('XDG_RUNTIME_DIR',
 
 
 def grab(path):
-    subprocess.run(['grim', '-o', 'SPIKE', '-s', '0.25', '-t', 'ppm', path], check=False,
+    subprocess.run(['grim', '-o', os.environ.get('NESTED_OUTPUT_NAME', 'SPIKE'), '-s', '0.25', '-t', 'ppm', path], check=False,
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
@@ -278,6 +279,8 @@ for n in range(runs):
         'idle_rss_mb': idle.get('rss_peak_mb'),
         'idle_tree_rss_mb': idle.get('tree_rss_peak_mb'),
         'idle_gpu_render_percent': (idle.get('gpu_busy_percent') or {}).get('render'),
+        # With nvidia-smi (no fdinfo engine times): the whole GPU, compositors included.
+        'idle_gpu_whole_percent': (idle.get('gpu_whole_percent') or {}).get('render'),
         'idle_commits_per_s': round((commits_after - commits_before) / (t1 - t0), 2),
         'click_ms': clicks,
         'play_ms': plays,
@@ -306,7 +309,7 @@ summary = {
     'runs': results,
     'first': results[0] if results else None,
     'warm_median': {k: median(k) for k in ('window_s', 'video_s', 'idle_cpu_percent', 'idle_rss_mb', 'idle_tree_rss_mb',
-                                           'idle_gpu_render_percent', 'idle_commits_per_s')},
+                                           'idle_gpu_render_percent', 'idle_gpu_whole_percent', 'idle_commits_per_s')},
     'click_ms_median': round(statistics.median(clicks), 1) if clicks else None,
     'click_ms_max': max(clicks) if clicks else None,
     'play_ms': pooled('play_ms'),
