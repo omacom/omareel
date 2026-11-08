@@ -361,6 +361,10 @@ pub struct Audio {
     sink: Option<Child>,
     stop: Arc<AtomicBool>,
     gain: Arc<std::sync::atomic::AtomicU32>,
+    /// Set once the first samples went to the sink.
+    ready: Arc<AtomicBool>,
+    /// How long the sink holds samples before they sound.
+    pub latency: f64,
     /// What it plays, to notice when an edit changes it.
     pub segments: Vec<AudioSegment>,
     /// The output time it starts at.
@@ -445,7 +449,8 @@ impl Audio {
         };
         let stop = Arc::new(AtomicBool::new(false));
         let gain = Arc::new(std::sync::atomic::AtomicU32::new((volume as f32).to_bits()));
-        let (thread_stop, thread_gain) = (stop.clone(), gain.clone());
+        let ready = Arc::new(AtomicBool::new(false));
+        let (thread_stop, thread_gain, thread_ready) = (stop.clone(), gain.clone(), ready.clone());
         let summary: Vec<String> = segments.iter().map(|s| format!("{}@{:.3}+{:.3}x{}{}", if s.path.is_empty() { "silence" } else { std::path::Path::new(&s.path).file_name().and_then(|n| n.to_str()).unwrap_or("?") }, s.start, s.length, s.speed, if s.muted { " muted" } else { "" })).collect();
         eprintln!("audio: start at output {output_start:.3} ({sink:?}, volume {volume:.2}): {}", summary.join(", "));
         if std::env::var_os("OMAREEL_AUDIO_LOG").is_some() {
@@ -480,6 +485,7 @@ impl Audio {
                     if writer.write_all(&buffer[..n]).is_err() {
                         break;
                     }
+                    thread_ready.store(true, Ordering::Release);
                 }
                 let _ = writer.flush();
                 if std::env::var_os("OMAREEL_AUDIO_LOG").is_some() {
@@ -487,7 +493,13 @@ impl Audio {
                 }
             })
             .ok()?;
-        Some(Audio { ffmpeg: Some(ffmpeg), sink: sink_child, stop, gain, segments, output_start })
+        let latency = if *sink == AudioSink::Speakers { 0.04 } else { 0.0 };
+        Some(Audio { ffmpeg: Some(ffmpeg), sink: sink_child, stop, gain, ready, latency, segments, output_start })
+    }
+
+    /// Whether the first samples are on their way to the sink.
+    pub fn ready(&self) -> bool {
+        self.ready.load(Ordering::Acquire)
     }
 
     /// The volume, at once (0 to 1).

@@ -119,6 +119,8 @@ pub struct Preview {
     /// The sound while playing, and the output time its plan ends at.
     audio: Option<video::Audio>,
     audio_end: f64,
+    /// When the sound was started for a clock that waits for it.
+    audio_wait: Option<f64>,
     audio_sink: video::AudioSink,
     last_restart: Instant,
     started: Instant,
@@ -202,6 +204,7 @@ impl Preview {
         self.active_clip = self.document.set_output_position(t);
         if self.playing {
             self.audio = None;
+            self.audio_wait = None;
             self.clock = None;
             self.origin = t;
         }
@@ -238,6 +241,7 @@ impl Preview {
         self.playing = false;
         self.clock = None;
         self.audio = None;
+        self.audio_wait = None;
         self.next = None;
     }
 
@@ -457,6 +461,7 @@ impl Preview {
         self.origin = output;
         self.clock = None;
         self.audio = None;
+            self.audio_wait = None;
     }
 
     /// The frame about to be built: the playhead, the composition and the pictures. True when
@@ -471,6 +476,7 @@ impl Preview {
                 self.origin = target;
                 self.clock = None;
                 self.audio = None;
+            self.audio_wait = None;
             }
             self.restart_decoders(target);
         }
@@ -489,13 +495,27 @@ impl Preview {
             && self.pending_seek.is_none()
             && (media_clip || self.screen.as_ref().is_some_and(|s| s.current_time.is_some() || !s.starved(-1.0)))
         {
-            self.clock = Some((self.origin, self.now));
-            self.document.set_output_position(self.origin);
-            self.start_audio();
-            if self.measure.is_some() && self.measure_started.is_none() {
-                self.measure_started = Some(Instant::now());
-                // scripts/frames.py measures the window's commits from this line on.
-                eprintln!("spike: measured playback starts");
+            // The sound starts with the picture: its ffmpeg needs a moment for its first
+            // samples, so the clock waits for them (at most 0.3 s), then for the sink's latency.
+            if self.audio_wait.is_none() {
+                self.document.set_output_position(self.origin);
+                self.start_audio();
+                self.audio_wait = Some(self.now);
+            }
+            let waited = self.audio_wait.map_or(0.0, |at| self.now - at);
+            if rune::is_headless() || self.audio.as_ref().is_none_or(video::Audio::ready) || waited > 0.3 {
+                let latency = self.audio.as_ref().map_or(0.0, |a| a.latency);
+                self.clock = Some((self.origin, self.now + latency));
+                self.audio_wait = None;
+                self.document.set_output_position(self.origin);
+                if std::env::var_os("OMAREEL_PLAYBACK_LOG").is_some() {
+                    eprintln!("playback: clock starts at output {:.3} after waiting {:.0} ms for the sound", self.origin, waited * 1000.0);
+                }
+                if self.measure.is_some() && self.measure_started.is_none() {
+                    self.measure_started = Some(Instant::now());
+                    // scripts/frames.py measures the window's commits from this line on.
+                    eprintln!("spike: measured playback starts");
+                }
             }
         }
         if let Some((origin, since)) = self.clock {
@@ -557,6 +577,10 @@ impl Preview {
             }
         }
         self.stats.skipped += skipped;
+        if self.playing && std::env::var_os("OMAREEL_PLAYBACK_LOG").is_some() {
+            let shown = self.screen.as_ref().and_then(|s| s.current_time).unwrap_or(-1.0);
+            eprintln!("playback: t={:.3} output={:.3} clip={} source={:.3} shown={:.3}", self.now, self.document.output_position(), self.active_clip, source, shown);
+        }
         self.frame = FrameState::preview(&composition);
         if self.measure_started.is_some() {
             self.stats.poll_started.push(started);
@@ -837,6 +861,7 @@ pub fn run(options: Options) -> Result<(), String> {
                 next: None,
                 audio: None,
                 audio_end: 0.0,
+                audio_wait: None,
                 audio_sink: video::AudioSink::from_env(rune::is_headless()),
                 last_restart: Instant::now(),
                 started: Instant::now(),
