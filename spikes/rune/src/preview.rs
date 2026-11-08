@@ -489,6 +489,7 @@ pub fn run(options: Options) -> Result<(), String> {
     };
     let media_screen = new_video();
     let media_camera = new_video();
+    let media_insert = new_video();
     let canvas_limit = options.canvas_height;
     let measure = options.measure;
     let stats_path = options.stats.clone();
@@ -532,7 +533,7 @@ pub fn run(options: Options) -> Result<(), String> {
                 now: 0.0,
                 document,
                 settings,
-                media: Media { screen: media_screen, camera: media_camera, background, cursors },
+                media: Media { screen: media_screen, camera: media_camera, insert: media_insert, background, cursors },
                 frame: FrameState::default(),
                 upload,
                 decode,

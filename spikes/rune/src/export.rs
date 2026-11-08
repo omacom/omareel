@@ -16,12 +16,16 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
+#[derive(Clone, Default)]
 pub struct Options {
     pub bundle: String,
     pub output: String,
     pub quality: String,
     pub width: i32,
     pub fps: i32,
+    /// A GIF's own frame rate and width (`--gif-fps`, `--gif-width`; the editor's dialog).
+    pub gif_fps: i32,
+    pub gif_width: i32,
     pub timing: bool,
     pub gpu_timing: bool,
     /// Writes these frames as PNG next to the output, for looking at.
@@ -63,9 +67,107 @@ struct Readback {
     submission: Option<wgpu::SubmissionIndex>,
 }
 
+/// `omareel export`: the arguments as `exportCommand` (src/main.cpp) reads them, the progress
+/// on stderr as it prints it, and the output's path on stdout. Returns the exit status.
+pub fn command(arguments: &[String]) -> i32 {
+    let usage = |error: &str| {
+        let _ = std::io::Write::write_all(&mut std::io::stderr(), omareel_core::cli::usage_text(error).as_bytes());
+        omareel_core::cli::usage_status(error)
+    };
+    let absolute = |path: &str| omareel_core::compat::qdir::FileInfo::new(path).absolute_file_path();
+    let Some(bundle) = arguments.first() else { return usage("export requires a bundle") };
+    let mut options = Options { bundle: absolute(bundle), ..Default::default() };
+    let mut i = 1;
+    while i < arguments.len() {
+        let arg = arguments[i].as_str();
+        match arg {
+            "-o" | "--fps" | "--width" | "--quality" | "--gif-fps" | "--gif-width" | "--png" => {
+                i += 1;
+                let Some(value) = arguments.get(i) else { return usage(&format!("{arg} requires a value")) };
+                // QString::toInt: 0 for anything that is not a whole number.
+                let int = || value.trim().parse::<i32>().unwrap_or(0);
+                match arg {
+                    "-o" => options.output = absolute(value),
+                    "--fps" => options.fps = int(),
+                    "--width" => options.width = int(),
+                    "--quality" => options.quality = value.clone(),
+                    "--gif-fps" => options.gif_fps = int(),
+                    "--gif-width" => options.gif_width = int(),
+                    // The spike's own: write these frames as PNG beside the output.
+                    _ => options.png_frames = value.split(',').filter_map(|f| f.parse().ok()).collect(),
+                }
+            }
+            "--timing" => options.timing = true,
+            "--gpu-timing" => options.gpu_timing = true,
+            _ => return usage(&format!("unknown export option {arg}")),
+        }
+        i += 1;
+    }
+    if options.output.is_empty() {
+        return usage("export requires -o <file>");
+    }
+    let lower = options.output.to_lowercase();
+    if !lower.ends_with(".mp4") && !lower.ends_with(".gif") {
+        return usage("export output must end in .mp4 or .gif");
+    }
+    if options.fps < 0 || options.width < 0 || options.gif_fps < 0 || options.gif_width < 0 {
+        return usage("frame rate and size options must be positive");
+    }
+    const QUALITIES: [&str; 8] = ["low", "medium", "high", "best", "web-low", "web-high", "social", "studio"];
+    if !options.quality.is_empty() && !QUALITIES.contains(&options.quality.as_str()) {
+        return usage(&format!("invalid quality {}", options.quality));
+    }
+    let result = export(&options, Arc::new(AtomicBool::new(false)), &mut |frame, total| {
+        if frame == total || frame == 1 || frame % 10 == 0 {
+            eprint!("\rExporting {frame}/{total}");
+        }
+        if frame == total {
+            eprint!("  Finishing encoding...");
+        }
+    });
+    match result {
+        Ok(path) => {
+            eprintln!();
+            println!("{path}");
+            0
+        }
+        Err(error) => {
+            eprintln!("\nomareel: {error}");
+            1
+        }
+    }
+}
+
+/// `omareel probe <bundle>`: the bundle's summary on stdout (`crates/omareel_qt/src/cli.rs`).
+pub fn probe_command(arguments: &[String]) -> i32 {
+    if arguments.len() != 1 {
+        let _ = std::io::Write::write_all(&mut std::io::stderr(), omareel_core::cli::usage_text("probe requires a bundle").as_bytes());
+        return omareel_core::cli::usage_status("probe requires a bundle");
+    }
+    let bundle = omareel_core::compat::qdir::FileInfo::new(arguments[0].as_str()).absolute_file_path();
+    match omareel_core::probe::run(&bundle) {
+        Ok(summary) => {
+            print!("{summary}");
+            0
+        }
+        Err(error) => {
+            let _ = std::io::Write::write_all(&mut std::io::stderr(), omareel_core::cli::usage_text(&error).as_bytes());
+            omareel_core::cli::usage_status(&error)
+        }
+    }
+}
+
+/// The spike's original entry point (a bare `-o`), kept for the measurement scripts.
+#[allow(dead_code)]
 pub fn run(options: Options) -> Result<(), String> {
+    export(&options, Arc::new(AtomicBool::new(false)), &mut |_, _| {}).map(|_| ())
+}
+
+/// Exports `options.bundle` to `options.output` on this thread: `progress(frame, total)` after
+/// each frame is handed over (Exporter's `progress`), stopping with "Export cancelled" once
+/// `cancelled` is set. Returns the output's absolute path (Exporter's `finished`).
+pub fn export(options: &Options, cancelled: Arc<AtomicBool>, progress: &mut dyn FnMut(i32, i32)) -> Result<String, String> {
     let total_timer = Instant::now();
-    let cancelled = Arc::new(AtomicBool::new(false));
     let mut job = ExportJob::prepare(
         &ExportOptions {
             bundle_path: options.bundle.clone(),
@@ -73,8 +175,9 @@ pub fn run(options: Options) -> Result<(), String> {
             fps: options.fps,
             width: options.width,
             quality: options.quality.clone(),
+            gif_fps: options.gif_fps,
+            gif_width: options.gif_width,
             timing: options.timing,
-            ..Default::default()
         },
         cancelled,
     )?;
@@ -102,7 +205,9 @@ pub fn run(options: Options) -> Result<(), String> {
         (set, resolve, read, count)
     });
     let info = gpu.adapter.get_info();
-    eprintln!("export: {width}x{height}, {} frames, on {} ({:?})", job.total_frames(), info.name, info.backend);
+    if options.timing {
+        eprintln!("export: {width}x{height}, {} frames, on {} ({:?})", job.total_frames(), info.name, info.backend);
+    }
 
     let state = job.state().clone();
     let mut settings = Settings::new(
@@ -111,6 +216,8 @@ pub fn run(options: Options) -> Result<(), String> {
         state.capture_scale,
         state.camera_available.then_some((state.camera_source_width, state.camera_source_height)),
     );
+    settings.output_height = height as f32;
+    let flip_camera = settings.camera_flip;
     let experiment = comp::apply_experiments(&mut settings);
     let cache = rune::ImageCache::new(Arc::new(|| {}));
     let background_path = if experiment.contains("nobg") { String::new() } else { job.background_image() };
@@ -125,7 +232,14 @@ pub fn run(options: Options) -> Result<(), String> {
     }
     let screen = Pixels::new();
     let camera = Pixels::new();
-    let media = Media { screen: Video::Pixels(screen.clone()), camera: Video::Pixels(camera.clone()), background, cursors };
+    let insert = Pixels::new();
+    let media = Media {
+        screen: Video::Pixels(screen.clone()),
+        camera: Video::Pixels(camera.clone()),
+        insert: Video::Pixels(insert.clone()),
+        background,
+        cursors,
+    };
     let size = (width as f32, height as f32);
     let scene = Scene { settings, media, frame: FrameState::default(), size };
     let mut rt = Runtime::new(scene, view, size, Env::new(true, 1.0));
@@ -169,6 +283,7 @@ pub fn run(options: Options) -> Result<(), String> {
     // when the job holds no other reference.
     let mut last_screen: Option<std::sync::Weak<Vec<u8>>> = None;
     let mut last_camera: Option<std::sync::Weak<Vec<u8>>> = None;
+    let mut last_insert: Option<std::sync::Weak<Vec<u8>>> = None;
     let own = |pixels: Arc<Vec<u8>>| Arc::try_unwrap(pixels).unwrap_or_else(|shared| shared.as_ref().clone());
     let (mut upload_ns, mut render_ns, mut readback_ns, mut build_ns) = (0u128, 0u128, 0u128, 0u128);
     let mut error: Option<String> = None;
@@ -221,7 +336,16 @@ pub fn run(options: Options) -> Result<(), String> {
         }
         if let Some(image) = images.camera.filter(|i| last_camera.as_ref().is_none_or(|last| last.as_ptr() != Arc::as_ptr(&i.pixels))) {
             last_camera = Some(Arc::downgrade(&image.pixels));
-            camera.set(image.width as u32, image.height as u32, own(image.pixels));
+            let mut bytes = own(image.pixels);
+            if flip_camera {
+                // CameraOverlay.qml's mirror (its Scale -1 about the centre, before the turn).
+                mirror_rows(&mut bytes, image.width as usize);
+            }
+            camera.set(image.width as u32, image.height as u32, bytes);
+        }
+        if let Some(image) = images.insert.filter(|i| last_insert.as_ref().is_none_or(|last| last.as_ptr() != Arc::as_ptr(&i.pixels))) {
+            last_insert = Some(Arc::downgrade(&image.pixels));
+            insert.set(image.width as u32, image.height as u32, own(image.pixels));
         }
         upload_ns += started.elapsed().as_nanos();
 
@@ -266,7 +390,13 @@ pub fn run(options: Options) -> Result<(), String> {
         if readbacks[slot].submission.is_some() {
             // The ring is full: the oldest frame goes to the encoder first.
             let (oldest, oldest_frame) = pending.pop_front().expect("pending readback");
-            let bytes = take(&mut readbacks[oldest], &mut readback_ns)?;
+            let bytes = match take(&mut readbacks[oldest], &mut readback_ns) {
+                Ok(bytes) => bytes,
+                Err(e) => {
+                    error = Some(e);
+                    break;
+                }
+            };
             maybe_png(&options, oldest_frame, &bytes, width, height);
             if let Err(e) = write(&mut job, bytes) {
                 error = Some(e);
@@ -284,6 +414,7 @@ pub fn run(options: Options) -> Result<(), String> {
         readbacks[slot].submission = Some(renderer.submit(&gpu.queue, encoder));
         pending.push_back((slot, frame));
         render_ns += started.elapsed().as_nanos();
+        progress(frame + 1, total);
     }
     if let Some((set, resolve, read, count)) = &timestamps {
         let mut encoder = gpu.device.create_command_encoder(&Default::default());
@@ -305,7 +436,13 @@ pub fn run(options: Options) -> Result<(), String> {
     job.finish_decoder();
     if error.is_none() {
         while let Some((slot, frame)) = pending.pop_front() {
-            let bytes = take(&mut readbacks[slot], &mut readback_ns)?;
+            let bytes = match take(&mut readbacks[slot], &mut readback_ns) {
+                Ok(bytes) => bytes,
+                Err(e) => {
+                    error = Some(e);
+                    break;
+                }
+            };
             maybe_png(&options, frame, &bytes, width, height);
             if let Err(e) = write(&mut job, bytes) {
                 error = Some(e);
@@ -334,9 +471,22 @@ pub fn run(options: Options) -> Result<(), String> {
         );
     }
     let seconds = total_timer.elapsed().as_secs_f64();
-    eprintln!("exported {} frames in {seconds:.2} s ({:.1} frames/s) to {}", total, f64::from(total) / seconds, options.output);
+    if options.timing {
+        eprintln!("exported {} frames in {seconds:.2} s ({:.1} frames/s) to {}", total, f64::from(total) / seconds, options.output);
+    }
     drop(cache);
-    Ok(())
+    Ok(omareel_core::compat::qdir::FileInfo::new(options.output.as_str()).absolute_file_path())
+}
+
+/// Flips tightly packed RGBA rows `width` pixels wide left to right.
+fn mirror_rows(bytes: &mut [u8], width: usize) {
+    if width == 0 {
+        return;
+    }
+    for row in bytes.chunks_exact_mut(width * 4) {
+        let pixels: &mut [[u8; 4]] = row.as_chunks_mut::<4>().0;
+        pixels.reverse();
+    }
 }
 
 fn maybe_png(options: &Options, frame: i32, bytes: &[u8], width: u32, height: u32) {

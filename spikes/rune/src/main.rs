@@ -5,7 +5,9 @@
 //!
 //!   omareel-rune-spike [-- <Rune flags>]      the launcher
 //!   omareel-rune-spike edit <bundle>          the editor
-//!   omareel-rune-spike export <bundle> -o <out.mp4> [...]
+//!   omareel-rune-spike export <bundle> -o <out.mp4|out.gif> [--fps n] [--width px] [--quality q]
+//!                                       [--gif-fps n] [--gif-width px] [--timing]  as `omareel export`
+//!   omareel-rune-spike probe <bundle>         as `omareel probe`
 //!   omareel-rune-spike record [...]           as `omareel record`
 //!   omareel-rune-spike __record-daemon|__record-bar|__record-gsr|__selfview-ipc|__record-bar-ipc ...
 //!                                             the recording's own processes (started by the above)
@@ -15,7 +17,7 @@
 //!   omareel-rune-spike setup <bundle>
 //!   omareel-rune-spike preview <bundle> [--upload surface|pixels] [--decode vaapi|software] [--canvas-height <pt>]
 //!                                       [--decode-height <px>] [--measure <s>] [--stats <json>]
-//!   omareel-rune-spike export <bundle> -o <out.mp4> [--quality social] [--width <px>] [--timing] [--png <frame,...>]
+//!   omareel-rune-spike export <bundle> ... [--gpu-timing] [--png <frame,...>]
 //!   omareel-rune-spike editor <bundle> [preview flags] [-- <Rune flags: --snap out.png, --script s.json --video out.mp4, --tree t.json>]
 //!   omareel-rune-spike bar
 
@@ -69,16 +71,9 @@ fn main() {
         Some("__record-bar") => recording_bar::run(&args[2..]),
         Some("edit") if args.len() > 2 => preview::run(preview::Options::editor(&args[2])),
         Some("setup") if args.len() > 2 => setup::run(&args[2]),
-        Some("export") if args.len() > 2 => export::run(export::Options {
-            bundle: args[2].clone(),
-            output: value(&args, "-o").unwrap_or("out.mp4").to_owned(),
-            quality: value(&args, "--quality").unwrap_or("").to_owned(),
-            width: value(&args, "--width").and_then(|v| v.parse().ok()).unwrap_or(0),
-            fps: value(&args, "--fps").and_then(|v| v.parse().ok()).unwrap_or(0),
-            timing: args.iter().any(|a| a == "--timing"),
-            gpu_timing: args.iter().any(|a| a == "--gpu-timing"),
-            png_frames: value(&args, "--png").map(|v| v.split(',').filter_map(|f| f.parse().ok()).collect()).unwrap_or_default(),
-        }),
+        // As `omareel export` (src/main.cpp's exportCommand) and `omareel probe`.
+        Some("export") => std::process::exit(export::command(&args[2..])),
+        Some("probe") => std::process::exit(export::probe_command(&args[2..])),
         Some(mode @ ("preview" | "editor")) if args.len() > 2 => preview::run(preview::Options {
             editor: mode == "editor",
             // Rune's own flags follow `--`: `--snap out.png`, `--script s.json --video out.mp4`, ...

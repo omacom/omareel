@@ -54,14 +54,24 @@ pub enum CursorStyle {
 pub enum BackgroundFill {
     None,
     Solid(Color),
-    /// CSS-style angle in degrees and up to 8 stops (Rune's limit; omareel's presets have 2–10).
-    Gradient(f32, Vec<(f32, Color)>),
+    /// Background.qml's Canvas gradient, rasterised on the CPU with its own geometry (the line
+    /// spans the canvas diagonal), any number of stops and Qt's interpolation in encoded sRGB.
+    /// The colour underneath shows where the stops are translucent.
+    Gradient(Pixels, Color),
 }
 
 /// The project's settings the composition reads, and the recording's facts.
 #[derive(Clone)]
 pub struct Settings {
     pub background: BackgroundFill,
+    /// `background.blur` 0..100 (the image's MultiEffect blur, `blurMax` 64 px).
+    pub background_blur: f32,
+    /// `zoomStyle.motionBlur` 0..1 (the stage's MultiEffect blur while the zoom moves).
+    pub motion_blur: f32,
+    /// The composition's height in output pixels: the MultiEffect radii (shadow and blur
+    /// `blurMax`) are in these pixels, not in the 1080-high `ref` units. The editor's
+    /// composition is 720 high (`Document::output_height`); an export sets its own.
+    pub output_height: f32,
     pub frame_padding: f32,
     pub frame_radius: f32,
     pub frame_shadow: ShadowSettings,
@@ -74,6 +84,7 @@ pub struct Settings {
     pub camera_size: f32,
     pub camera_radius: f32,
     pub camera_rotation: i32,
+    pub camera_flip: bool,
     pub camera_shadow: ShadowSettings,
     pub camera_border: Border,
     pub camera_scale_during_zoom: f32,
@@ -87,6 +98,8 @@ pub struct Settings {
     pub keys_x: u8,
     pub keys_top: bool,
     pub keys_size: f32,
+    /// `theme.font.subtitle`: the "+" between keys.
+    pub keys_plus_size: f32,
     pub theme_background: Color,
     pub theme_foreground: Color,
     pub source_width: f32,
@@ -99,13 +112,15 @@ pub struct Settings {
 impl Settings {
     pub fn new(project: &Project, source: (i32, i32), capture_scale: f64, camera_source: Option<(i32, i32)>) -> Settings {
         let bg = &project.background;
+        let base = if bg.color.is_valid() { color(&bg.color) } else { rgb(0x1a1b26) };
         let background = if bg.type_ == "none" {
             BackgroundFill::None
-        } else if bg.type_ == "gradient" && bg.gradient.stops.len() >= 2 {
-            let stops: Vec<(f32, Color)> = bg.gradient.stops.iter().take(8).map(|s| (s.position as f32, color(&s.color))).collect();
-            BackgroundFill::Gradient(bg.gradient.angle as f32, stops)
+        } else if bg.type_ == "gradient" && !bg.gradient.stops.is_empty() {
+            let stops: Vec<(f64, QColor)> = bg.gradient.stops.iter().map(|s| (s.position, s.color.clone())).collect();
+            let aspect = omareel_core::editor::aspect_ratio(project, source.0, source.1);
+            BackgroundFill::Gradient(gradient_pixels(bg.gradient.angle, &stops, aspect, 640), base)
         } else {
-            BackgroundFill::Solid(if bg.color.is_valid() { color(&bg.color) } else { rgb(0x1a1b26) })
+            BackgroundFill::Solid(base)
         };
         let camera = &project.camera;
         let cursor = &project.cursor;
@@ -113,6 +128,9 @@ impl Settings {
         let (theme_background, theme_foreground) = omareel_core::theme::render_colors();
         Settings {
             background,
+            background_blur: bg.blur as f32,
+            motion_blur: project.zoom_style.motion_blur as f32,
+            output_height: 720.0,
             frame_padding: project.frame.padding as f32,
             frame_radius: project.frame.radius as f32,
             frame_shadow: project.frame.shadow.clone(),
@@ -129,6 +147,7 @@ impl Settings {
             camera_size: camera.size as f32,
             camera_radius: camera.radius as f32,
             camera_rotation: camera.rotation,
+            camera_flip: camera.flip_horizontal,
             camera_shadow: camera.shadow.clone(),
             camera_border: camera.border.clone(),
             camera_scale_during_zoom: camera.scale_during_zoom as f32,
@@ -152,6 +171,7 @@ impl Settings {
             },
             keys_top: keys.position.starts_with("top"),
             keys_size: keys.size as f32,
+            keys_plus_size: subtitle_font_size(),
             theme_background: color(&theme_background),
             theme_foreground: color(&theme_foreground),
             source_width: source.0 as f32,
@@ -211,6 +231,8 @@ impl Video {
 pub struct Media {
     pub screen: Video,
     pub camera: Video,
+    /// An inserted video (MediaLayer.qml), while one plays.
+    pub insert: Video,
     pub background: Option<Image>,
     pub cursors: [Image; 3],
 }
@@ -229,6 +251,10 @@ pub fn cursor_images(cache: &rune::ImageCache, size_pt: f32, scale: f32) -> [Ima
 #[derive(Clone, Default)]
 pub struct FrameState {
     pub zoom: [f32; 3],
+    /// How fast the zoom centre moves (the stage's motion blur).
+    pub zoom_velocity: f32,
+    /// The inserted video on screen, if any (`comp.media`).
+    pub media: MediaState,
     pub camera_full: f32,
     pub bubble: f32,
     /// x, y, scale, opacity, rotation (degrees); and visible.
@@ -243,6 +269,8 @@ impl FrameState {
     pub fn preview(c: &omareel_core::editor::PreviewComposition) -> FrameState {
         FrameState {
             zoom: [c.zoom.scale as f32, c.zoom.cx as f32, c.zoom.cy as f32],
+            zoom_velocity: c.zoom.velocity as f32,
+            media: MediaState { active: c.media.active, ready: c.media.ready, fit: MediaFit::parse(&c.media.fit), width: c.media.width, height: c.media.height },
             camera_full: c.layout.camera_full as f32,
             bubble: c.layout.bubble as f32,
             cursor: [c.cursor.x as f32, c.cursor.y as f32, c.cursor.scale as f32, c.cursor.opacity as f32, c.cursor.rotation as f32],
@@ -256,6 +284,8 @@ impl FrameState {
     pub fn export(c: &omareel_core::export::composition::CompositionState) -> FrameState {
         FrameState {
             zoom: [c.zoom.scale as f32, c.zoom.cx as f32, c.zoom.cy as f32],
+            zoom_velocity: c.zoom.velocity as f32,
+            media: MediaState { active: c.media.active, ready: c.media.ready, fit: MediaFit::parse(&c.media.fit), width: c.media.width, height: c.media.height },
             camera_full: c.layout.camera_full as f32,
             bubble: c.layout.bubble as f32,
             cursor: [c.cursor.x as f32, c.cursor.y as f32, c.cursor.scale as f32, c.cursor.opacity as f32, c.cursor.rotation as f32],
@@ -267,17 +297,144 @@ impl FrameState {
     }
 }
 
-/// MultiEffect's shadow (`shadowBlur = min(1, blur / 64)` of `blurMax` 32 px) as a CSS box shadow.
-fn shadow(s: &ShadowSettings, scale: f32, fade: f32) -> Shadow {
+/// `comp.media`: an inserted video on screen.
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub struct MediaState {
+    pub active: bool,
+    /// The preview holds the layer back until the clip's first frame is there.
+    pub ready: bool,
+    pub fit: MediaFit,
+    pub width: i32,
+    pub height: i32,
+}
+
+/// MediaLayer.qml's `fit`: "fit" shows all of it over a blurred copy, "fill" covers the
+/// canvas, "framed" sits in the project's frame over the background.
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub enum MediaFit {
+    #[default]
+    Fit,
+    Fill,
+    Framed,
+}
+
+impl MediaFit {
+    pub fn parse(fit: &str) -> MediaFit {
+        match fit {
+            "fill" => MediaFit::Fill,
+            "framed" => MediaFit::Framed,
+            _ => MediaFit::Fit,
+        }
+    }
+}
+
+/// `theme.font.subtitle` (shell.toml's `[font]`), read once.
+fn subtitle_font_size() -> f32 {
+    static SIZE: std::sync::OnceLock<f32> = std::sync::OnceLock::new();
+    *SIZE.get_or_init(|| {
+        let theme = omareel_core::theme::Theme::new(None);
+        theme.palette.font_sizes.iter().find(|(k, _)| *k == "subtitle").map_or(13.0, |(_, v)| *v as f32)
+    })
+}
+
+/// Background.qml's Canvas gradient as RGBA pixels `width` wide at `aspect` (width / height):
+/// the gradient line runs through the centre along (angle - 90°) and spans the canvas's
+/// diagonal, stops sort by position and pad at the ends, and colours interpolate in
+/// premultiplied encoded sRGB as QPainter's gradients do. Rune scales the image to the canvas;
+/// a linear gradient sampled on a grid and interpolated bilinearly is the same gradient.
+/// Results are cached (the editor asks again on every edit).
+pub fn gradient_pixels(angle: f64, stops: &[(f64, QColor)], aspect: f64, width: u32) -> Pixels {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    static CACHE: Mutex<Option<HashMap<String, Pixels>>> = Mutex::new(None);
+    let aspect = if aspect.is_finite() && aspect > 0.0 { aspect } else { 16.0 / 9.0 };
+    let key = format!(
+        "{angle:.4}|{aspect:.5}|{width}|{}",
+        stops.iter().map(|(p, c)| format!("{p:.5}{}", c.name_argb())).collect::<Vec<_>>().join(",")
+    );
+    let mut cache = CACHE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let cache = cache.get_or_insert_with(HashMap::new);
+    if let Some(p) = cache.get(&key) {
+        return p.clone();
+    }
+    let mut sorted: Vec<(f64, [f64; 4])> = stops
+        .iter()
+        .map(|(p, c)| {
+            let a = c.alpha() as f64 / 255.0;
+            // Premultiplied, encoded.
+            (p.clamp(0.0, 1.0), [c.red() as f64 / 255.0 * a, c.green() as f64 / 255.0 * a, c.blue() as f64 / 255.0 * a, a])
+        })
+        .collect();
+    sorted.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let w = width.max(2);
+    let h = ((f64::from(w) / aspect).round() as u32).clamp(2, 4096);
+    let (cw, ch) = (aspect, 1.0);
+    let a = (angle - 90.0).to_radians();
+    let radius = (cw * cw + ch * ch).sqrt() / 2.0;
+    let (dx, dy) = (a.cos() * radius, a.sin() * radius);
+    let (x0, y0) = (cw / 2.0 - dx, ch / 2.0 - dy);
+    let (vx, vy) = (2.0 * dx, 2.0 * dy);
+    let len2 = (vx * vx + vy * vy).max(1e-12);
+    let sample = |t: f64| -> [f64; 4] {
+        if sorted.is_empty() {
+            return [0.0; 4];
+        }
+        if t <= sorted[0].0 {
+            return sorted[0].1;
+        }
+        for pair in sorted.windows(2) {
+            let ((p0, c0), (p1, c1)) = (pair[0], pair[1]);
+            if t <= p1 {
+                let f = if p1 > p0 { (t - p0) / (p1 - p0) } else { 1.0 };
+                return std::array::from_fn(|i| c0[i] + (c1[i] - c0[i]) * f);
+            }
+        }
+        sorted[sorted.len() - 1].1
+    };
+    let mut rgba = vec![0u8; (w * h * 4) as usize];
+    for y in 0..h {
+        let py = (f64::from(y) + 0.5) / f64::from(h) * ch;
+        for x in 0..w {
+            let px = (f64::from(x) + 0.5) / f64::from(w) * cw;
+            let t = ((px - x0) * vx + (py - y0) * vy) / len2;
+            let c = sample(t);
+            let alpha = c[3];
+            let un = |v: f64| if alpha > 0.0 { (v / alpha * 255.0).round().clamp(0.0, 255.0) as u8 } else { 0 };
+            let i = ((y * w + x) * 4) as usize;
+            rgba[i] = un(c[0]);
+            rgba[i + 1] = un(c[1]);
+            rgba[i + 2] = un(c[2]);
+            rgba[i + 3] = (alpha * 255.0).round() as u8;
+        }
+    }
+    let pixels = Pixels::new();
+    pixels.set(w, h, rgba);
+    if cache.len() > 64 {
+        cache.clear();
+    }
+    cache.insert(key, pixels.clone());
+    pixels
+}
+
+/// MultiEffect's shadow (`shadowBlur = min(1, blur / 64)` of `blurMax` 32 output pixels) as a
+/// CSS box shadow. `r` scales the offset (1080-high `ref` units to points) and `px` the blur
+/// (output pixels to points).
+fn shadow(s: &ShadowSettings, r: f32, px: f32, fade: f32) -> Shadow {
     let angle = (s.angle as f32).to_radians();
     Shadow {
-        x: angle.cos() * s.distance as f32 * scale,
-        y: angle.sin() * s.distance as f32 * scale,
-        blur: (s.blur as f32 / 64.0).min(1.0) * 32.0 * scale,
+        x: angle.cos() * s.distance as f32 * r,
+        y: angle.sin() * s.distance as f32 * r,
+        blur: (s.blur as f32 / 64.0).min(1.0) * 32.0 * px,
         spread: 0.0,
         color: BLACK.alpha(s.intensity as f32 * fade),
         inset: false,
     }
+}
+
+/// MultiEffect's `blur` (0..1) at `blur_max` output pixels as a Gaussian sigma in points. The
+/// radius MultiEffect reaches is about two and a half standard deviations.
+fn effect_sigma(blur: f32, blur_max: f32, px: f32) -> f32 {
+    blur.clamp(0.0, 1.0) * blur_max * px / 2.5
 }
 
 fn border_color(b: &Border, fade: f32) -> Color {
@@ -293,6 +450,8 @@ fn place(x: f32, y: f32, w: f32, h: f32) -> El {
 /// `instant`: every change lands at once (playback, export); otherwise an edit springs.
 pub fn composition(s: &Settings, m: &Media, f: &FrameState, w: f32, h: f32, instant: bool) -> El {
     let r = h / 1080.0;
+    // Points per output pixel, for MultiEffect's pixel radii.
+    let px = h / s.output_height.max(1.0);
     let no_background = matches!(s.background, BackgroundFill::None);
     let pad = if no_background { 0.0 } else { w.min(h) * s.frame_padding };
     let (avail_w, avail_h) = (w - 2.0 * pad, h - 2.0 * pad);
@@ -303,7 +462,10 @@ pub fn composition(s: &Settings, m: &Media, f: &FrameState, w: f32, h: f32, inst
     let cursor_ref = (if s.capture_scale > 0.0 { s.capture_scale } else { 1.0 }) * video_w / (s.source_width * s.crop[2]).max(1.0);
     let camera_shown = s.camera_available && f.camera_visible;
     let camera_full = if camera_shown { f.camera_full } else { 0.0 };
-    let covered = camera_full >= 1.0;
+    let media_active = f.media.active;
+    // Once the camera or an inserted video covers the canvas, nothing beneath needs drawing.
+    let screen_covered = camera_full >= 1.0 || media_active;
+    let background_covered = camera_full >= 1.0 || (media_active && f.media.ready && f.media.fit != MediaFit::Framed);
     let (fx, fy) = ((w - video_w) / 2.0, (h - video_h) / 2.0);
 
     // Rune blends every quad and has no opaque pass, so nothing hidden is drawn: the black
@@ -312,73 +474,131 @@ pub fn composition(s: &Settings, m: &Media, f: &FrameState, w: f32, h: f32, inst
     if instant {
         root = root.instant_changes();
     }
-    if covered || no_background {
+    if background_covered || no_background {
         root = root.fill(BLACK);
     }
-    if !covered && !no_background {
-        root = root.child(background(s, m, w, h));
+    if !background_covered && !no_background {
+        root = root.child(background(s, m, w, h, px));
     }
-    if !covered {
+    if !screen_covered {
         let [scale, cx, cy] = f.zoom;
         let mut stage = place(0.0, 0.0, w, h).key("stage");
         if (scale - 1.0).abs() > 1e-4 {
             stage = stage.scale(scale).origin((fx + cx * video_w) / w, (fy + cy * video_h) / h);
         }
-        stage = rounded_frame(stage, s, m, fx, fy, video_w, video_h, r, no_background);
+        stage = rounded_frame(stage, s, &m.screen, fx, fy, video_w, video_h, s.crop, r, px, no_background, "frame");
         stage = stage.child(cursor_overlay(s, m, f, fx, fy, video_w, video_h, cursor_ref));
+        // Composition.qml's stage layer: a blur while the zoom moves.
+        if s.motion_blur > 0.0 && f.zoom_velocity > 0.01 {
+            stage = stage.blur(effect_sigma((f.zoom_velocity * 0.32).min(1.0) * s.motion_blur, 32.0, px));
+        }
         root = root.child(stage);
     }
-    if camera_shown && (camera_full > 0.0 || f.bubble > 0.0) {
+    if camera_shown && !media_active && (camera_full > 0.0 || f.bubble > 0.0) {
         root = camera_overlay(root, s, m, f, w, h, camera_full);
     }
-    if s.keys_enabled && !f.pills.is_empty() && !covered {
+    if media_active {
+        root = root.child(media_layer(s, m, f, w, h, pad, r, px));
+    }
+    if s.keys_enabled && !f.pills.is_empty() && !screen_covered {
         root = root.child(keystrokes(s, &f.pills, w, h, r).dim(1.0 - camera_full));
     }
     root
 }
 
-/// Background.qml: a colour or gradient, or the wallpaper covering the canvas.
-fn background(s: &Settings, m: &Media, w: f32, h: f32) -> El {
+/// Background.qml: a colour or gradient, or the image (wallpaper or file) covering the canvas,
+/// blurred by `background.blur`.
+fn background(s: &Settings, m: &Media, w: f32, h: f32, px: f32) -> El {
     let mut bg = place(0.0, 0.0, w, h).key("background");
     match &s.background {
         BackgroundFill::Solid(c) if m.background.is_none() => bg = bg.fill(*c),
         BackgroundFill::Solid(_) => {}
-        // Background.qml's canvas gradient runs along (angle - 90°), as CSS does for `angle`.
-        BackgroundFill::Gradient(angle, stops) => bg = bg.linear_gradient(angle.to_radians(), stops),
+        BackgroundFill::Gradient(pixels, under) => {
+            bg = bg.fill(*under).child(place(0.0, 0.0, w, h).key("background-gradient").pixels(pixels));
+        }
         BackgroundFill::None => {}
     }
-    if let Some(image) = &m.background {
-        bg = bg.child(place(0.0, 0.0, w, h).pixels_fit(image.pixels(), SurfaceFit::Fill));
+    if let (Some(image), false) = (&m.background, matches!(s.background, BackgroundFill::Gradient(..))) {
+        let mut picture = place(0.0, 0.0, w, h).key("background-image").pixels_fit(image.pixels(), SurfaceFit::Fill);
+        if s.background_blur > 0.0 {
+            picture = picture.blur(effect_sigma(s.background_blur / 100.0, 64.0, px));
+        }
+        bg = bg.child(picture);
     }
     bg
 }
 
-/// RoundedFrame.qml: the shadow-casting shape, the border, and the video masked to the radius.
+/// RoundedFrame.qml: the shadow-casting shape, the border, and the video masked to the radius,
+/// showing `crop` (x, y, w, h) of `video`.
 #[allow(clippy::too_many_arguments)]
-fn rounded_frame(stage: El, s: &Settings, m: &Media, x: f32, y: f32, w: f32, h: f32, r: f32, unframed: bool) -> El {
+fn rounded_frame(stage: El, s: &Settings, video: &Video, x: f32, y: f32, w: f32, h: f32, crop: [f32; 4], r: f32, px: f32, unframed: bool, key: &str) -> El {
     let bw = if !unframed && s.frame_border.enabled { s.frame_border.width as f32 * r } else { 0.0 };
     let outer = if unframed { 0.0 } else { s.frame_radius * r + bw };
     let inner = if unframed { 0.0 } else { s.frame_radius * r };
     // QML's shadow-casting shape is black under the video; Rune's shadow needs no fill, and the
     // video covers the shape, so it stays transparent.
-    let mut shape = place(x - bw, y - bw, w + 2.0 * bw, h + 2.0 * bw).key("frame-shadow").radius(outer);
+    let mut shape = place(x - bw, y - bw, w + 2.0 * bw, h + 2.0 * bw).key(format!("{key}-shadow")).radius(outer);
     if s.frame_shadow.enabled && !unframed {
-        shape = shape.box_shadow(shadow(&s.frame_shadow, r, 1.0));
+        shape = shape.box_shadow(shadow(&s.frame_shadow, r, px, 1.0));
     }
     let mut stage = stage.child(shape);
     if !unframed && s.frame_border.enabled {
-        stage = stage.child(place(x - bw, y - bw, w + 2.0 * bw, h + 2.0 * bw).key("frame-border").radius(outer).fill(border_color(&s.frame_border, 1.0)));
+        stage = stage.child(place(x - bw, y - bw, w + 2.0 * bw, h + 2.0 * bw).key(format!("{key}-border")).radius(outer).fill(border_color(&s.frame_border, 1.0)));
     }
-    let [cx, cy, cw, ch] = s.crop;
+    let [cx, cy, cw, ch] = crop;
     let full_crop = cx == 0.0 && cy == 0.0 && cw == 1.0 && ch == 1.0;
-    let video = if full_crop {
+    let picture = if full_crop {
         // The surface clips itself to its corner radius.
-        m.screen.draw(place(x, y, w, h).radius(inner), SurfaceFit::Fill)
+        video.draw(place(x, y, w, h).radius(inner), SurfaceFit::Fill)
     } else {
         let (vw, vh) = (w / cw.max(0.0001), h / ch.max(0.0001));
-        place(x, y, w, h).clip_rounded(inner).child(m.screen.draw(place(-cx * vw, -cy * vh, vw, vh), SurfaceFit::Fill))
+        place(x, y, w, h).clip_rounded(inner).child(video.draw(place(-cx * vw, -cy * vh, vw, vh), SurfaceFit::Fill))
     };
-    stage.child(video.key("frame-video"))
+    stage.child(picture.key(format!("{key}-video")))
+}
+
+/// MediaLayer.qml: an inserted video, fitted, filling or framed.
+#[allow(clippy::too_many_arguments)]
+fn media_layer(s: &Settings, m: &Media, f: &FrameState, w: f32, h: f32, padding: f32, r: f32, px: f32) -> El {
+    let media = f.media;
+    let fit = media.fit;
+    let aspect = media.width.max(1) as f32 / media.height.max(1) as f32;
+    let canvas_aspect = w / h.max(1.0);
+    let bw = if fit == MediaFit::Framed && s.frame_border.enabled { s.frame_border.width as f32 * r } else { 0.0 };
+    let (area_w, area_h) = if fit == MediaFit::Framed { (w - 2.0 * padding - 2.0 * bw, h - 2.0 * padding - 2.0 * bw) } else { (w, h) };
+    let contained_w = area_w.min(area_h * aspect).max(1.0);
+    let mut layer = place(0.0, 0.0, w, h).key("media-layer");
+    if fit == MediaFit::Fit {
+        layer = layer.child(blurred_backdrop(&m.insert, aspect, w, h, r, "media-backdrop"));
+    }
+    let (fw, fh) = if fit == MediaFit::Fill { (w, h) } else { (contained_w, contained_w / aspect) };
+    let crop = if fit != MediaFit::Fill {
+        [0.0, 0.0, 1.0, 1.0]
+    } else if aspect > canvas_aspect {
+        let visible = canvas_aspect / aspect;
+        [(1.0 - visible) / 2.0, 0.0, visible, 1.0]
+    } else {
+        let visible = aspect / canvas_aspect;
+        [0.0, (1.0 - visible) / 2.0, 1.0, visible]
+    };
+    layer = rounded_frame(layer, s, &m.insert, (w - fw) / 2.0, (h - fh) / 2.0, fw, fh, crop, r, px, fit != MediaFit::Framed, "media");
+    // The preview holds the layer back until the clip's first frame.
+    if media.ready { layer } else { layer.dim(0.0) }
+}
+
+/// BlurredBackdrop.qml: a heavily blurred, darkened copy of `video` covering the canvas. QML
+/// captures the source into a 24x24 texture and blurs that (blurMax 64); Rune blurs the
+/// subtree on the GPU at its largest radius.
+fn blurred_backdrop(video: &Video, source_aspect: f32, w: f32, h: f32, r: f32, key: &str) -> El {
+    let cover_w = w.max(h * source_aspect) * 1.2;
+    let cover_h = cover_w / source_aspect.max(0.01);
+    let sigma = if NO_BLUR.load(std::sync::atomic::Ordering::Relaxed) { 0.0 } else { 64.0 * r };
+    place(0.0, 0.0, w, h)
+        .key(key.to_owned())
+        .clip_soft(0.0)
+        .child(place(0.0, 0.0, w, h).fill(rgb(0x0b0b0e)))
+        .child(video.draw(place((w - cover_w) / 2.0, (h - cover_h) / 2.0, cover_w, cover_h), SurfaceFit::Fill).blur(sigma))
+        .child(place(0.0, 0.0, w, h).fill(BLACK.alpha(0.22)))
 }
 
 /// CursorOverlay.qml: click ripples and the pointer, over the frame.
@@ -467,17 +687,13 @@ fn camera_overlay(mut root: El, s: &Settings, m: &Media, f: &FrameState, out_w: 
     // BlurredBackdrop.qml, over the whole canvas behind the square. QML captures the camera into a
     // 24x24 texture and blurs that with MultiEffect (blurMax 64); Rune blurs the subtree on the
     // GPU, at its largest radius (64 device pixels).
+    // Mirror: the surface flips at draw time (the export flips its pixels as it gets them).
+    if let Video::Surface(surface) = &m.camera {
+        surface.set_mirrored(s.camera_flip);
+    }
     if square_mode && full > 0.0 {
-        let fade = full * full;
-        let cover_w = out_w.max(out_h * (w / h.max(1.0))) * 1.2;
-        let cover_h = cover_w / (w / h.max(1.0)).max(0.01);
-        let backdrop = place(0.0, 0.0, out_w, out_h)
-            .key("camera-backdrop")
-            .clip_soft(0.0)
-            .child(place(0.0, 0.0, out_w, out_h).fill(rgb(0x0b0b0e)))
-            .child(m.camera.draw(place((out_w - cover_w) / 2.0, (out_h - cover_h) / 2.0, cover_w, cover_h), SurfaceFit::Fill).blur(if NO_BLUR.load(std::sync::atomic::Ordering::Relaxed) { 0.0 } else { 64.0 * r }))
-            .child(place(0.0, 0.0, out_w, out_h).fill(BLACK.alpha(0.22)))
-            .dim(fade * presence);
+        // Fades faster than the camera shrinks, so a morph does not wash the screen out.
+        let backdrop = blurred_backdrop(&m.camera, w / h.max(1.0), out_w, out_h, r, "camera-backdrop").dim(full * full * presence);
         root = root.child(backdrop);
     }
 
@@ -488,7 +704,7 @@ fn camera_overlay(mut root: El, s: &Settings, m: &Media, f: &FrameState, out_w: 
         shape = shape.fill(BLACK);
     }
     if s.camera_shadow.enabled {
-        shape = shape.box_shadow(shadow(&s.camera_shadow, r, 1.0 - full));
+        shape = shape.box_shadow(shadow(&s.camera_shadow, r, out_h / s.output_height.max(1.0), 1.0 - full));
     }
     camera = camera.child(shape);
     if s.camera_border.enabled {
@@ -527,7 +743,7 @@ fn keystrokes(s: &Settings, pills: &[KeystrokePill], w: f32, h: f32, r: f32) -> 
         let mut caps = row().h(52.0 * unit).px(12.0 * unit).gap(6.0 * unit).items_center();
         for (k, key) in pill.keys.iter().enumerate() {
             if k > 0 {
-                caps = caps.child(text("+").font(mono(14.0 * unit, 400.0)).color(fg.alpha(0.65)));
+                caps = caps.child(text("+").font(mono(s.keys_plus_size * unit, 400.0)).color(fg.alpha(0.65)));
             }
             caps = caps.child(
                 row()
