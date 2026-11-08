@@ -15,7 +15,8 @@ omareel_core = { path = "../../crates/omareel_core" }
 omareel_record = { path = "../../crates/omareel_record" }
 # Rune is pre-release and asks apps to pin a rev of `dev` (never rewritten). This is dev on
 # 2026-11-06.
-rune = { git = "https://github.com/anomalyco/rune", rev = "8ee30954add065098f043335ece9d9ea0914d21d" }
+# native-file-dialog: the editor's Open and Save dialogs (the XDG portal's FileChooser on Linux).
+rune = { git = "https://github.com/anomalyco/rune", rev = "8ee30954add065098f043335ece9d9ea0914d21d", features = ["native-file-dialog"] }
 # Rune's components (buttons, switches, segmented controls), for the editor slice.
 rune-kit = { git = "https://github.com/anomalyco/rune", rev = "8ee30954add065098f043335ece9d9ea0914d21d" }
 # Rune's own wgpu, for the export's offscreen target and readback.
