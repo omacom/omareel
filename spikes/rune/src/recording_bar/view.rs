@@ -465,7 +465,7 @@ pub fn bubble(view: &BubbleView, _: &mut Cx<BubbleView>) -> El {
     if !caption.is_empty() {
         root = root.child(
             el().key("caption").absolute(10.0, 0.0).size(side - 20.0, side).center().child(
-                text(caption).font(label(style.caption, 400.0)).color(ui.foreground).align(rune::Align::Center).wrap(),
+                text(caption).w(side - 20.0).font(label(style.caption, 400.0)).color(ui.foreground).align(rune::Align::Center).wrap(),
             ),
         );
     }
