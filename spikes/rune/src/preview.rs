@@ -77,6 +77,13 @@ struct Stats {
     starved: u64,
 }
 
+/// Decoders started ahead for the clip after the active one.
+struct Prewarm {
+    clip: i32,
+    screen: Stream,
+    camera: Option<Stream>,
+}
+
 pub struct Preview {
     pub(crate) mode: Mode,
     pub(crate) document: Document,
@@ -105,6 +112,16 @@ pub struct Preview {
     clock: Option<(f64, f64)>,
     origin: f64,
     pending_seek: Option<f64>,
+    /// The clip the decoders play (`m_activeClip`).
+    pub(crate) active_clip: i32,
+    /// The next clip's decoders, started before a cut that jumps.
+    next: Option<Prewarm>,
+    /// The sound while playing, and the output time its plan ends at.
+    audio: Option<video::Audio>,
+    audio_end: f64,
+    /// When the sound was started for a clock that waits for it.
+    audio_wait: Option<f64>,
+    audio_sink: video::AudioSink,
     last_restart: Instant,
     started: Instant,
     measure: Option<f64>,
@@ -118,73 +135,255 @@ pub struct Preview {
 }
 
 impl Preview {
-    fn restart_decoders(&mut self, output_time: f64) {
-        self.document.set_output_position(output_time);
-        let source = self.document.source_position();
-        let duration = self.document.source_duration();
+    /// A screen decoder from `source` for the clip at `clip` (its speed picks how many frames a
+    /// second are worth decoding: at 4× a 60 fps recording shows 15 of its frames a second, 60
+    /// on screen).
+    fn screen_stream(&self, clip: i32, source: f64) -> Stream {
         let (w, h) = self.screen_size;
         let ahead = if w * h > 2_500_000 { 4 } else { 8 };
-        self.screen = Some(Stream::start(StreamSpec {
+        let speed = self.document.project().clips.get(clip.max(0) as usize).map_or(1.0, |c| c.speed).max(0.01);
+        let fps = self.document.fps();
+        Stream::start(StreamSpec {
             path: self.document.video_path(),
             start: source,
-            end: duration,
-            fps: self.document.fps(),
+            end: self.document.source_duration(),
+            fps: (60.0 / speed).min(fps).max(1.0),
             width: w,
             height: h,
             ahead,
             upload: self.upload,
             decode: self.decode.clone(),
             color: self.screen_color,
-        }));
-        self.camera = None;
-        if let Some(sync) = self.document.camera_sync(source) {
-            let (cw, ch) = (self.document.camera_source_width() as u32, self.document.camera_source_height() as u32);
-            let camera = self.document.recording().camera;
-            self.camera = Some(Stream::start(StreamSpec {
-                path: &self.camera_path,
-                start: sync.target_ms as f64 / 1000.0,
-                end: camera.map_or(duration, |c| c.duration),
-                fps: camera.map_or(30.0, |c| c.fps),
-                width: cw,
-                height: ch,
-                ahead: 6,
-                upload: self.upload,
-                // The camera is small; software decoding keeps the video engine for the screen.
-                decode: Decode::Software,
-                color: self.camera_color,
-            }));
+        })
+    }
+
+    /// The camera's decoder for the screen at `source`, when there is a camera.
+    fn camera_stream(&self, source: f64) -> Option<Stream> {
+        let sync = self.document.camera_sync(source)?;
+        let (cw, ch) = (self.document.camera_source_width() as u32, self.document.camera_source_height() as u32);
+        let camera = self.document.recording().camera;
+        Some(Stream::start(StreamSpec {
+            path: &self.camera_path,
+            start: sync.target_ms as f64 / 1000.0,
+            end: camera.map_or(self.document.source_duration(), |c| c.duration),
+            fps: camera.map_or(30.0, |c| c.fps),
+            width: cw,
+            height: ch,
+            ahead: 6,
+            upload: self.upload,
+            // The camera is small; software decoding keeps the video engine for the screen.
+            decode: Decode::Software,
+            color: self.camera_color,
+        }))
+    }
+
+    fn restart_decoders(&mut self, output_time: f64) {
+        self.active_clip = self.document.set_output_position(output_time);
+        self.next = None;
+        if self.document.clip_is_media(self.active_clip) {
+            // An inserted video plays in its own player; the recording's decoders rest.
+            self.screen = None;
+            self.camera = None;
+        } else {
+            let source = self.document.source_position();
+            self.screen = Some(self.screen_stream(self.active_clip, source));
+            self.camera = self.camera_stream(source);
         }
         self.last_restart = Instant::now();
     }
 
+    /// `Editor::seek`: to `output_time` inside the playback range, ending a scrub. While playing
+    /// the clock and the sound start again from there.
     pub(crate) fn seek(&mut self, output_time: f64) {
-        let t = output_time.clamp(0.0, self.document.duration());
-        self.pending_seek = Some(t);
-        self.document.set_output_position(t);
-    }
-
-    pub(crate) fn toggle(&mut self) {
-        if self.playing {
-            self.playing = false;
-            self.clock = None;
+        if self.document.project().clips.is_empty() {
             return;
         }
-        let mut position = self.document.output_position();
-        if position >= self.document.duration() - 0.01 {
-            position = 0.0;
+        self.scrubbing = false;
+        let t = self.document.clamp_playback_position(output_time);
+        self.pending_seek = Some(t);
+        self.active_clip = self.document.set_output_position(t);
+        if self.playing {
+            self.audio = None;
+            self.audio_wait = None;
+            self.clock = None;
+            self.origin = t;
         }
+    }
+
+    /// `Editor::play`: from the range's start when outside it, from the start at the end.
+    pub(crate) fn play(&mut self) {
+        if self.playing || self.document.project().clips.is_empty() {
+            return;
+        }
+        self.end_scrub();
+        if let Some(target) = self.document.play_start_seek() {
+            self.seek(target);
+        }
+        let position = self.document.output_position();
         self.origin = position;
         self.playing = true;
         self.clock = None;
+        self.active_clip = self.document.set_output_position(position);
         // A paused decoder already holds the frames after the one on screen: play on from it
         // rather than starting ffmpeg again (which costs a few hundred ms, more with VA-API).
-        self.document.set_output_position(position);
         let source = self.document.source_position();
         let warm = self.pending_seek.is_none()
+            && !self.document.clip_is_media(self.active_clip)
             && self.screen.as_ref().is_some_and(|s| !s.finished && s.current_time.is_some_and(|c| (c - source).abs() <= 1.5 / s.fps));
         if !warm {
+            self.pending_seek = None;
             self.restart_decoders(position);
         }
+    }
+
+    /// `Editor::pause`.
+    pub(crate) fn pause(&mut self) {
+        self.playing = false;
+        self.clock = None;
+        self.audio = None;
+        self.audio_wait = None;
+        self.next = None;
+    }
+
+    pub(crate) fn toggle(&mut self) {
+        if self.playing { self.pause() } else { self.play() }
+    }
+
+    /// `Editor::beginScrub`: pauses; seeks are spaced while the pointer moves.
+    pub(crate) fn begin_scrub(&mut self) {
+        if self.document.project().clips.is_empty() {
+            return;
+        }
+        self.pause();
+        self.scrubbing = true;
+    }
+
+    /// `Editor::scrubTo`.
+    pub(crate) fn scrub_to(&mut self, output_time: f64) {
+        if self.document.project().clips.is_empty() {
+            return;
+        }
+        if !self.scrubbing {
+            self.begin_scrub();
+        }
+        let t = self.document.clamp_playback_position(output_time);
+        self.active_clip = self.document.set_output_position(t);
+        self.pending_seek = Some(t);
+    }
+
+    /// `Editor::endScrub`.
+    pub(crate) fn end_scrub(&mut self) {
+        self.scrubbing = false;
+    }
+
+    /// `Editor::stepFrames`: pause, then a frame (at the recording's rate) either way.
+    pub(crate) fn step_frames(&mut self, frames: i32) {
+        self.pause();
+        let target = self.document.step_target(frames);
+        self.seek(target);
+    }
+
+    /// `Editor::seekBoundary`: the start or the end.
+    pub(crate) fn seek_boundary(&mut self, direction: i32) {
+        let target = self.document.boundary_target(direction);
+        self.seek(target);
+    }
+
+    /// The sound from output time `from`: each clip's span at its speed, silence for inserted
+    /// videos without sound, up to the playback range's end, two minutes or 32 clips at a time.
+    pub(crate) fn audio_plan(&self, from: f64) -> Vec<video::AudioSegment> {
+        let document = &self.document;
+        let (first, clip_start) = document.clip_for_output(from);
+        if first < 0 {
+            return Vec::new();
+        }
+        let end = if document.has_playback_range() { document.playback_range().1 } else { document.duration() };
+        let (_, screen_muted) = document.screen_audio();
+        let screen_path = if document.has_audio() { document.video_path().to_owned() } else { String::new() };
+        let mut segments = Vec::new();
+        let mut output = clip_start;
+        for (i, clip) in document.project().clips.iter().enumerate().skip(first as usize) {
+            if output >= end - 0.0005 || segments.len() >= 32 || output - from > 120.0 {
+                break;
+            }
+            let speed = clip.speed.max(0.01);
+            let mut start = clip.in_;
+            if i == first as usize {
+                start = (clip.in_ + (from - clip_start) * speed).clamp(clip.in_, clip.out);
+            }
+            let segment_output = if i == first as usize { from } else { output };
+            let mut length = clip.out - start;
+            length = length.min((end - segment_output) * speed).max(0.0);
+            output += (clip.out - clip.in_) / speed;
+            if length <= 0.0005 {
+                continue;
+            }
+            let (path, muted) = if clip.is_media() {
+                let has = document.inserts().get(&clip.media).is_some_and(|info| info.audio);
+                (if has { omareel_core::compat::qdir::file_path(document.bundle_path(), &clip.media) } else { String::new() }, false)
+            } else {
+                (screen_path.clone(), screen_muted)
+            };
+            segments.push(video::AudioSegment { path, start, length, speed, muted });
+        }
+        segments
+    }
+
+    /// Starts the sound at the playhead (when the clock starts).
+    fn start_audio(&mut self) {
+        let position = self.document.output_position();
+        let (volume, _) = self.document.screen_audio();
+        self.audio = video::Audio::start(self.audio_plan(position), position, volume, &self.audio_sink);
+        self.audio_end = position + self.audio.as_ref().map_or(0.0, |a| a.segments.iter().map(video::AudioSegment::output_length).sum());
+    }
+
+    /// After an edit while playing: the sound starts again where what it plays changed; a
+    /// volume change applies at once.
+    pub(crate) fn audio_edited(&mut self) {
+        if !self.playing || self.clock.is_none() {
+            return;
+        }
+        let (volume, _) = self.document.screen_audio();
+        let position = self.document.output_position();
+        let plan = self.audio_plan(position);
+        let same = match &self.audio {
+            Some(audio) => {
+                // What remains of the running plan, from the playhead.
+                let mut running = self.audio_plan_from(audio, position);
+                running.truncate(plan.len());
+                running.len() == plan.len()
+                    && running.iter().zip(&plan).all(|(a, b)| a.path == b.path && a.muted == b.muted && (a.speed - b.speed).abs() < 1e-9 && (a.start - b.start).abs() < 0.02 && (a.length - b.length).abs() < 0.02)
+            }
+            None => plan.is_empty() || plan.iter().all(|s| s.path.is_empty() || s.muted),
+        };
+        if same {
+            if let Some(audio) = &self.audio {
+                audio.set_volume(volume);
+            }
+        } else {
+            self.audio = None;
+            self.start_audio();
+        }
+    }
+
+    /// The running plan's segments from output time `at` on (the first cut at `at`).
+    fn audio_plan_from(&self, audio: &video::Audio, at: f64) -> Vec<video::AudioSegment> {
+        let mut output = audio.output_start;
+        let mut rest = Vec::new();
+        for segment in &audio.segments {
+            let length = segment.output_length();
+            if output + length > at + 0.0005 {
+                let mut s = segment.clone();
+                if at > output {
+                    let cut = (at - output) * s.speed;
+                    s.start += cut;
+                    s.length -= cut;
+                }
+                rest.push(s);
+            }
+            output += length;
+        }
+        rest
     }
 
     fn show(video: &Video, frame: video::Frame) {
@@ -202,17 +401,82 @@ impl Preview {
         }
     }
 
+    /// While playing, the clip after the active one, when it doesn't carry on where this one
+    /// ends: its decoders start a second before the cut, so the cut shows at once.
+    fn prewarm(&mut self, output: f64) {
+        let next_index = self.active_clip + 1;
+        if self.next.as_ref().is_some_and(|n| n.clip == next_index) {
+            return;
+        }
+        let clips = &self.document.project().clips;
+        let (Some(current), Some(next)) = (clips.get(self.active_clip.max(0) as usize), clips.get(next_index as usize)) else { return };
+        if next.is_media() || self.carries_on(self.active_clip, next_index) {
+            return;
+        }
+        let clip_end = self.clip_output_start(next_index);
+        if clip_end - output > 1.0 || clip_end - output < 0.0 {
+            return;
+        }
+        let _ = current;
+        let source = next.in_;
+        let screen = self.screen_stream(next_index, source);
+        let camera = self.camera_stream(source);
+        self.next = Some(Prewarm { clip: next_index, screen, camera });
+    }
+
+    /// Whether clip `b` continues clip `a`'s footage, so the decoder runs on through the cut.
+    fn carries_on(&self, a: i32, b: i32) -> bool {
+        let clips = &self.document.project().clips;
+        match (clips.get(a.max(0) as usize), clips.get(b.max(0) as usize)) {
+            (Some(a), Some(b)) => !a.is_media() && !b.is_media() && (b.in_ - a.out).abs() < 0.001,
+            _ => false,
+        }
+    }
+
+    fn clip_output_start(&self, index: i32) -> f64 {
+        self.document.project().clips.iter().take(index.max(0) as usize).map(|c| (c.out - c.in_) / c.speed.max(0.01)).sum()
+    }
+
+    /// The playhead entered clip `index` while playing: its decoders take over (prewarmed ones,
+    /// the running ones when the footage carries on, else new ones while the clock waits).
+    fn enter_clip(&mut self, index: i32, output: f64) {
+        let previous = self.active_clip;
+        self.active_clip = index;
+        if self.document.clip_is_media(index) {
+            self.screen = None;
+            self.camera = None;
+            self.next = None;
+            return;
+        }
+        if self.carries_on(previous, index) && self.screen.is_some() {
+            return;
+        }
+        if let Some(next) = self.next.take().filter(|n| n.clip == index) {
+            self.screen = Some(next.screen);
+            self.camera = next.camera;
+            return;
+        }
+        // Nothing ready: start the decoders and hold the clock (and the sound) for them.
+        self.restart_decoders(output);
+        self.origin = output;
+        self.clock = None;
+        self.audio = None;
+            self.audio_wait = None;
+    }
+
     /// The frame about to be built: the playhead, the composition and the pictures. True when
     /// anything the view shows changed.
     fn step(&mut self) -> bool {
         let started = Instant::now();
         if let Some(target) = self.pending_seek
-            && (self.last_restart.elapsed().as_secs_f64() > 0.035 || self.screen.is_none())
+            && (self.last_restart.elapsed().as_secs_f64() > 0.035 || self.screen.is_none() || !self.scrubbing)
         {
             self.pending_seek = None;
             if self.playing {
                 self.origin = target;
                 self.clock = None;
+                self.audio = None;
+            self.audio_wait = None;
             }
             self.restart_decoders(target);
         }
@@ -223,24 +487,65 @@ impl Preview {
             && self.stats.frames.is_empty()
         {
             let _ = seconds;
-            self.toggle();
+            self.play();
         }
-        if self.playing && self.clock.is_none() && self.screen.as_ref().is_some_and(|s| s.current_time.is_some() || !s.starved(-1.0)) {
-            self.clock = Some((self.origin, self.now));
-            if self.measure.is_some() && self.measure_started.is_none() {
-                self.measure_started = Some(Instant::now());
-                // scripts/frames.py measures the window's commits from this line on.
-                eprintln!("spike: measured playback starts");
+        let media_clip = self.document.clip_is_media(self.active_clip);
+        if self.playing
+            && self.clock.is_none()
+            && self.pending_seek.is_none()
+            && (media_clip || self.screen.as_ref().is_some_and(|s| s.current_time.is_some() || !s.starved(-1.0)))
+        {
+            // The sound starts with the picture: its ffmpeg needs a moment for its first
+            // samples, so the clock waits for them (at most 0.3 s), then for the sink's latency.
+            if self.audio_wait.is_none() {
+                self.document.set_output_position(self.origin);
+                self.start_audio();
+                self.audio_wait = Some(self.now);
+            }
+            let waited = self.audio_wait.map_or(0.0, |at| self.now - at);
+            if rune::is_headless() || self.audio.as_ref().is_none_or(video::Audio::ready) || waited > 0.3 {
+                let latency = self.audio.as_ref().map_or(0.0, |a| a.latency);
+                self.clock = Some((self.origin, self.now + latency));
+                self.audio_wait = None;
+                self.document.set_output_position(self.origin);
+                if std::env::var_os("OMAREEL_PLAYBACK_LOG").is_some() {
+                    eprintln!("playback: clock starts at output {:.3} after waiting {:.0} ms for the sound", self.origin, waited * 1000.0);
+                }
+                if self.measure.is_some() && self.measure_started.is_none() {
+                    self.measure_started = Some(Instant::now());
+                    // scripts/frames.py measures the window's commits from this line on.
+                    eprintln!("spike: measured playback starts");
+                }
             }
         }
         if let Some((origin, since)) = self.clock {
             let mut output = origin + (self.now - since).max(0.0);
-            if output >= self.document.duration() {
-                output = self.document.duration();
-                self.playing = false;
-                self.clock = None;
+            // The end of the playback range, or of the timeline: pause there.
+            let end = if self.document.has_playback_range() { self.document.playback_range().1 } else { self.document.duration() };
+            let stop = output >= end - 0.0005;
+            if stop {
+                output = end;
             }
-            self.document.set_output_position(output);
+            let index = self.document.set_output_position(output);
+            if stop {
+                self.pause();
+                // Qt seeks to the range's end, which clamps a millisecond inside it.
+                let t = self.document.clamp_playback_position(output);
+                self.document.set_output_position(t);
+                self.pending_seek = Some(t);
+            } else {
+                if index != self.active_clip {
+                    self.enter_clip(index, output);
+                }
+                if self.clock.is_some() {
+                    self.prewarm(output);
+                    // The sound covers two minutes at a time.
+                    if self.audio.is_some() && output > self.audio_end - 0.5 && self.audio_end < end - 0.01 {
+                        self.audio = None;
+                        self.start_audio();
+                    }
+                }
+            }
         }
         let source = self.document.source_position();
         let composition = self.document.preview_composition(false, "");
@@ -272,6 +577,10 @@ impl Preview {
             }
         }
         self.stats.skipped += skipped;
+        if self.playing && std::env::var_os("OMAREEL_PLAYBACK_LOG").is_some() {
+            let shown = self.screen.as_ref().and_then(|s| s.current_time).unwrap_or(-1.0);
+            eprintln!("playback: t={:.3} output={:.3} clip={} source={:.3} shown={:.3}", self.now, self.document.output_position(), self.active_clip, source, shown);
+        }
         self.frame = FrameState::preview(&composition);
         if self.measure_started.is_some() {
             self.stats.poll_started.push(started);
@@ -330,13 +639,14 @@ fn on_key(s: &mut Preview, key: &KeyEvent, tx: &mut Tx) -> bool {
             tx.wake_after(Duration::ZERO);
             true
         }
-        Key::Left => {
-            s.seek(s.document.output_position() - 5.0);
-            tx.wake_after(Duration::ZERO);
-            true
-        }
-        Key::Right => {
-            s.seek(s.document.output_position() + 5.0);
+        // Main.qml: arrows step a frame, with Shift a second.
+        Key::Left | Key::Right => {
+            let direction = if matches!(key.key, Key::Left) { -1 } else { 1 };
+            if key.mods.shift {
+                s.seek(s.document.output_position() + f64::from(direction));
+            } else {
+                s.step_frames(direction);
+            }
             tx.wake_after(Duration::ZERO);
             true
         }
@@ -384,9 +694,196 @@ pub(crate) fn pane(s: &Preview, cx: &mut Cx<Preview>, margin_x: f32, margin_y: f
             canvas = canvas.shadow(14.0, 40.0, ui.shadow);
         }
         // While playing, every value comes from omareel_core; paused, an edit springs.
-        pane_el = pane_el.child(canvas.child(comp::composition(&s.settings, &s.media, &s.frame, canvas_w, canvas_h, s.playing || s.scrubbing)));
+        canvas = canvas.child(comp::composition(&s.settings, &s.media, &s.frame, canvas_w, canvas_h, s.playing || s.scrubbing));
+        if s.mode == Mode::Editor {
+            canvas = pane_overlays(s, canvas, canvas_w, canvas_h);
+        }
+        pane_el = pane_el.child(canvas);
     }
     pane_el
+}
+
+/// PreviewPane.qml's `scaled` geometry in canvas points: the video's frame inside the padding
+/// (without the border, as the QML has it) and the zoom's origin.
+struct PaneGeometry {
+    frame_x: f32,
+    frame_y: f32,
+    video_w: f32,
+    video_h: f32,
+    origin_x: f32,
+    origin_y: f32,
+    scale: f32,
+}
+
+fn pane_geometry(s: &Preview, w: f32, h: f32) -> PaneGeometry {
+    let project = s.document.project();
+    let no_background = project.background.type_ == "none";
+    let pad = if no_background { 0.0 } else { w.min(h) * project.frame.padding as f32 };
+    let aspect = (s.document.source_width() as f32 * project.crop.width as f32) / (s.document.source_height() as f32 * project.crop.height as f32).max(1.0);
+    let video_w = if no_background { w } else { (w - 2.0 * pad).min((h - 2.0 * pad) * aspect) };
+    let video_h = if no_background { h } else { video_w / aspect.max(0.0001) };
+    let (frame_x, frame_y) = ((w - video_w) / 2.0, (h - video_h) / 2.0);
+    let [scale, cx, cy] = s.frame.zoom;
+    PaneGeometry { frame_x, frame_y, video_w, video_h, origin_x: frame_x + cx * video_w, origin_y: frame_y + cy * video_h, scale: scale.max(0.0001) }
+}
+
+/// The preview's own controls over the composition (PreviewPane.qml): picking a zoom's point,
+/// the manual point's marker, the crop rectangle and its corners, and the notices on top.
+fn pane_overlays(s: &Preview, mut canvas: El, w: f32, h: f32) -> El {
+    let ui = &s.ui;
+    let g = pane_geometry(s, w, h);
+    let selected = s.document.selected_zoom_id().to_owned();
+    if let Some(zoom) = s.document.project().zooms.iter().find(|z| z.id == selected && !z.automatic_target) {
+        let tx = g.frame_x + zoom.target.x as f32 * g.video_w;
+        let ty = g.frame_y + zoom.target.y as f32 * g.video_h;
+        let x = g.origin_x + g.scale * (tx - g.origin_x);
+        let y = g.origin_y + g.scale * (ty - g.origin_y);
+        canvas = canvas.child(
+            el().key("zoom-target-marker")
+                .absolute(x - 9.0, y - 9.0)
+                .size(18.0, 18.0)
+                .radius(9.0)
+                .fill(ui.accent_soft)
+                .border(2.0, ui.accent)
+                .inert()
+                .child(el().absolute(7.0, 7.0).size(4.0, 4.0).radius(2.0).fill(ui.accent)),
+        );
+    }
+    if s.edit.timeline.crop_mode {
+        canvas = canvas.child(crop_rect(s, w, h));
+    }
+    if s.document.picking_zoom_target() {
+        canvas = canvas.child(
+            el().key("pick-target")
+                .absolute(0.0, 0.0)
+                .size(w, h)
+                .cursor(Cursor::Crosshair)
+                .on_drag(move |s: &mut Preview, drag: &mut rune::Drag, tx: &mut Tx| {
+                    if matches!(drag.phase, rune::Phase::Up) && !drag.cancelled() {
+                        let g = pane_geometry(s, drag.w, drag.h);
+                        let (px, py) = (drag.start_x, drag.start_y);
+                        let bx = g.origin_x + (px - g.origin_x) / g.scale;
+                        let by = g.origin_y + (py - g.origin_y) / g.scale;
+                        let x = f64::from((bx - g.frame_x) / g.video_w.max(1.0)).clamp(0.0, 1.0);
+                        let y = f64::from((by - g.frame_y) / g.video_h.max(1.0)).clamp(0.0, 1.0);
+                        if s.document.set_zoom_target_from_preview(x, y) {
+                            crate::editor::edited(s, "Zoom point");
+                        } else {
+                            crate::editor::edited(s, "");
+                        }
+                    }
+                    tx.wake_after(Duration::ZERO);
+                }),
+        );
+        canvas = canvas.child(notice(s, "pick-hint", "Click where the zoom should center", ui.accent, true, false));
+    }
+    let importing = s.document.importing();
+    let error = s.document.import_error().to_owned();
+    if importing || !error.is_empty() {
+        let text_ = if importing { "Adding clip…".to_owned() } else { error };
+        canvas = canvas.child(notice(s, "import-notice", &text_, if importing { ui.accent } else { ui.record }, importing, !importing));
+    }
+    canvas
+}
+
+/// A pill at the top of the preview (OmPopupCard with a pulsing dot), with an optional dismiss.
+fn notice(s: &Preview, key: &str, message: &str, dot: rune::Color, pulse: bool, dismiss: bool) -> El {
+    let ui = &s.ui;
+    let mut dot_el = el().size(8.0, 8.0).radius(4.0).fill(dot);
+    if pulse {
+        dot_el = dot_el.looping(rune::LoopSpec::opacity(1.3, 0.0, 0.3, 1.0));
+    }
+    let mut pill = row()
+        .key(key.to_owned())
+        .h(32.0)
+        .px(18.0)
+        .gap(8.0)
+        .items_center()
+        .radius(ui.radius.clamp(0.0, 8.0))
+        .fill(ui.raised)
+        .border(1.0, ui.stroke_strong)
+        .shadow(8.0, 28.0, ui.shadow)
+        .transition(rune::Transition::opacity().combined(rune::Transition::scale(0.94)))
+        .child(dot_el)
+        .child(text(message.to_owned()).font(TextStyle::new(13.0, 500.0)).color(ui.text_strong).truncate().max_w(520.0));
+    if dismiss {
+        pill = pill.child(
+            el().key("import-dismiss")
+                .role("button")
+                .label("Dismiss")
+                .size(20.0, 20.0)
+                .center()
+                .radius(4.0)
+                .hover(ui.fill_hover)
+                .cursor(Cursor::Pointer)
+                .on_press(|s: &mut Preview| {
+                    s.document.clear_import_error();
+                    crate::editor::edited(s, "");
+                })
+                .child(rune::icon(&crate::icons::X, 14.0).color(ui.text_muted)),
+        );
+    }
+    row().absolute(0.0, 14.0).w_full().justify_center().child(pill)
+}
+
+/// Crop mode: the crop rectangle over the canvas and a handle on each corner; dragging one
+/// moves that corner (at least 5% each way), as one undo step.
+fn crop_rect(s: &Preview, w: f32, h: f32) -> El {
+    let ui = &s.ui;
+    let c = &s.document.project().crop;
+    let (x, y, cw, ch) = (c.x as f32 * w, c.y as f32 * h, c.width as f32 * w, c.height as f32 * h);
+    let mut rect = el().key("crop-rect").absolute(x, y).size(cw, ch).border(3.0, ui.accent);
+    for corner in 0..4u8 {
+        let (fx, fy) = ((corner % 2) as f32, (corner / 2) as f32);
+        let key = format!("crop-handle-{corner}");
+        rect = rect.child(
+            el().key(key)
+                .absolute(fx * cw - 8.0, fy * ch - 8.0)
+                .size(16.0, 16.0)
+                .radius(ui.radius.clamp(0.0, 5.0))
+                .fill(ui.accent)
+                .border(1.0, ui.accent_foreground)
+                .press_scale(1.15)
+                .cursor(Cursor::Move)
+                .on_drag(move |s: &mut Preview, drag: &mut rune::Drag, tx: &mut Tx| {
+                    let canvas = s.edit.timeline.crop_canvas.get();
+                    let (w, h) = (canvas[0].max(1.0), canvas[1].max(1.0));
+                    match drag.phase {
+                        rune::Phase::Down => {
+                            s.document.begin_coalesced_edit("crop");
+                            let c = &s.document.project().crop;
+                            // Where the corner was, in canvas points.
+                            drag.data = 0.0;
+                            s.edit.timeline.crop_press = [(c.x + f64::from(fx) * c.width) as f32 * w, (c.y + f64::from(fy) * c.height) as f32 * h];
+                        }
+                        rune::Phase::Move => {
+                            let [cx0, cy0] = s.edit.timeline.crop_press;
+                            let px = (cx0 + drag.dx).clamp(0.0, w) / w;
+                            let py = (cy0 + drag.dy).clamp(0.0, h) / h;
+                            let c = s.document.project().crop.clone();
+                            let left = if fx == 0.0 { f64::from(px) } else { c.x };
+                            let top = if fy == 0.0 { f64::from(py) } else { c.y };
+                            let right = if fx == 1.0 { f64::from(px) } else { c.x + c.width };
+                            let bottom = if fy == 1.0 { f64::from(py) } else { c.y + c.height };
+                            if right - left >= 0.05 && bottom - top >= 0.05 {
+                                s.document.set_project_value("crop.x", left.into(), true);
+                                s.document.set_project_value("crop.y", top.into(), true);
+                                s.document.set_project_value("crop.w", (right - left).into(), true);
+                                s.document.set_project_value("crop.h", (bottom - top).into(), true);
+                                crate::editor::edited(s, "");
+                            }
+                        }
+                        rune::Phase::Up => {
+                            s.document.end_coalesced_edit();
+                            crate::editor::edited(s, "");
+                        }
+                    }
+                    tx.wake_after(Duration::ZERO);
+                }),
+        );
+    }
+    s.edit.timeline.crop_canvas.set([w, h]);
+    rect
 }
 
 /// The bar under the preview: play/pause, the time, and a scrub bar.
@@ -451,6 +948,14 @@ pub fn run(options: Options) -> Result<(), String> {
         document.apply_motion(job.run());
     }
     document.set_screen_frame_times(media_probe::probe_frame_times(document.video_path()));
+    // SPIKE_EXPERIMENT=pick: the first zoom selected and its point being picked (the
+    // inspector's "Pick point"), to test the preview's picking headless.
+    if std::env::var("SPIKE_EXPERIMENT").is_ok_and(|e| e.contains("pick"))
+        && let Some(id) = document.project().zooms.first().map(|z| z.id.clone())
+    {
+        document.set_selected_zoom_id(&id);
+        document.set_picking_zoom_target(true);
+    }
     let _ = document.take_effects();
 
     let mut settings = Settings::new(
@@ -548,6 +1053,12 @@ pub fn run(options: Options) -> Result<(), String> {
                 clock: None,
                 origin: 0.0,
                 pending_seek: Some(0.0),
+                active_clip: 0,
+                next: None,
+                audio: None,
+                audio_end: 0.0,
+                audio_wait: None,
+                audio_sink: video::AudioSink::from_env(rune::is_headless()),
                 last_restart: Instant::now(),
                 started: Instant::now(),
                 measure,

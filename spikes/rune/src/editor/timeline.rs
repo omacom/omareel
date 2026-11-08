@@ -1,276 +1,407 @@
-//! BottomBar.qml and Timeline.qml: the transport (play, time, step, playback range), the tools
-//! (add zoom, split, insert clip, timeline scale) and the tracks (ClipTrack with trims, speed and
-//! layout; ZoomTrack with add, move, resize, multi-select; the keys row; thumbnails), the ruler
-//! and the playhead.
+//! BottomBar.qml and Timeline.qml (with ClipTrack.qml, ZoomTrack.qml and OmTrimHandle.qml), and
+//! the window's shortcuts from Main.qml.
+//!
+//! - `bar`: the bar under the preview: aspect and crop (or the canvas menu when narrow), the
+//!   transport (position, go to start, play, go to end, duration), and the tools (insert,
+//!   split, the timeline's scale, the shortcuts sheet).
+//! - `tracks`: the timeline: the ruler (scrub, Shift-drag a playback range), the playhead, the
+//!   clip track (filmstrips, trims, Ctrl-drag to slip, the speed and layout menu), the zoom
+//!   track (double-click to add, drag to move, edges to resize, marquee to select) and the
+//!   camera row; wheel zooms the timeline at the pointer, middle-drag pans it.
+//! - `popup`: the menus and the shortcuts sheet, drawn over the window.
+//! - `thumbs`: the filmstrips' frames and the camera strip, built by workers.
+//!
+//! The transport itself (play, pause, seek, scrub, step, the clock, decoders and sound) is in
+//! `crate::preview`.
 
-use super::{edited, label, mono};
-use crate::preview::{Preview, play_glyph, tenths};
+mod bar;
+mod popup;
+mod thumbs;
+mod tracks;
+
+pub use bar::view as bottom_bar;
+pub use popup::overlay;
+
+use super::edited;
+use crate::preview::Preview;
 use omareel_core::editor::Effect;
-use rune::{Color, Cursor, Cx, El, Key, KeyEvent, Phase, Spring, Tx, col, el, row, text};
+use rune::{Cx, El, Key, KeyEvent, Tx, col};
+use std::cell::Cell;
 use std::time::Duration;
 
-/// The timeline's own UI state (drags).
-#[derive(Default)]
-pub struct State {
-    /// A zoom being dragged: its id, its source start when the drag began, and the timeline's
-    /// points per second (handlers have no layout; the block's own width gives it).
-    pub zoom_drag: Option<(String, f64, f32)>,
+/// An open pop-up.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Popup {
+    /// The clip badge's speed (and layout) menu, for this clip.
+    Speed(String),
+    Aspect,
+    /// The narrow bar's canvas menu (aspect and crop).
+    Overflow,
+    Shortcuts,
 }
 
-const TRACK_H: f32 = 34.0;
-const HEADER_W: f32 = 84.0;
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Edge {
+    Left,
+    Right,
+}
 
-pub fn on_effect(_s: &mut Preview, _effect: &Effect) {}
+/// A pointer gesture in progress on the timeline. Positions are in the timeline's content
+/// points (seconds × points per second, from the start of the tracks).
+#[derive(Clone, Debug, PartialEq)]
+pub enum Gesture {
+    /// Dragging on the ruler, the clip track or the playhead: the playhead follows.
+    Scrub,
+    /// Shift-dragging a playback range, or moving one of its edges.
+    Range,
+    /// Ctrl-dragging a clip: it slides over its footage (`moveClip`) on release.
+    ClipMove { id: String, press_block_x: f32, original_in: f64, speed: f64, x: f32, w: f32, dragged: bool, was_selected: bool },
+    /// A clip's edge: the in (or out) point follows, committed on release.
+    ClipTrim { id: String, edge: Edge, press_block_x: f32, press_w: f32, original: f64, preview: f64, x: f32, w: f32 },
+    /// A zoom's body: the selection moves with it on release.
+    ZoomMove { id: String, press_block_x: f32, x: f32, w: f32 },
+    /// A zoom's edge.
+    ZoomResize { id: String, edge: Edge, press_block_x: f32, press_right: f32, press_w: f32, x: f32, w: f32 },
+    /// Dragging on the empty zoom track: a marquee that selects the zooms it covers.
+    Marquee { origin: f32, current: f32, added: bool },
+    /// Middle-dragging the tracks: they pan.
+    Pan { from: f32 },
+}
 
-pub fn poll(_s: &mut Preview) -> bool {
-    false
+/// The timeline's own UI state.
+pub struct State {
+    /// `window.timelineScale`: 1 shows the whole timeline, up to 16.
+    pub scale: f64,
+    /// `flick.contentX`: how far the tracks are scrolled.
+    pub content_x: f32,
+    /// `window.cropMode`: the preview shows the crop handles.
+    pub crop_mode: bool,
+    pub popup: Option<Popup>,
+    /// The camera row was clicked: the inspector shows its Camera panel
+    /// (`Timeline.cameraSelected` → `sidePanel.section = 5`). The inspector takes it.
+    pub camera_selected: bool,
+    pub gesture: Option<Gesture>,
+    /// The element under the pointer that changes how something looks (a zoom shows its
+    /// handles, a badge its chevron, the playhead its time).
+    pub hover: Option<String>,
+    // The playback range being drawn (Timeline.qml's rangeAnchor, rangeHead and friends).
+    range_anchor: f64,
+    range_head: f64,
+    selecting_range: bool,
+    resizing_range: bool,
+    resize_edge: Edge,
+    resize_offset: f64,
+    prior_range: (f64, f64),
+    /// Laid-out sizes the handlers need (they get no layout): the tracks' viewport and the bar.
+    pub flick_w: Cell<f32>,
+    pub bar_width: Cell<f32>,
+    pub thumbs: thumbs::Thumbs,
+    /// The preview canvas's size and where a crop corner was pressed (crop mode's handles).
+    pub crop_canvas: Cell<[f32; 2]>,
+    pub crop_press: [f32; 2],
+}
+
+impl Default for State {
+    fn default() -> State {
+        State {
+            scale: 1.0,
+            content_x: 0.0,
+            crop_mode: false,
+            popup: None,
+            camera_selected: false,
+            gesture: None,
+            hover: None,
+            range_anchor: -1.0,
+            range_head: -1.0,
+            selecting_range: false,
+            resizing_range: false,
+            resize_edge: Edge::Left,
+            resize_offset: 0.0,
+            prior_range: (-1.0, -1.0),
+            flick_w: Cell::new(1000.0),
+            bar_width: Cell::new(1000.0),
+            thumbs: thumbs::Thumbs::default(),
+            crop_canvas: Cell::new([1.0, 1.0]),
+            crop_press: [0.0, 0.0],
+        }
+    }
+}
+
+pub const LABEL_W: f32 = 72.0;
+pub const PADDING: f32 = 40.0;
+
+/// Theme radii (omareel_core's `Radii`): cards, controls and small parts.
+pub fn card_radius(ui: &crate::theme::Ui) -> f32 {
+    if ui.radius <= 0.0 { 0.0 } else { ui.radius.clamp(6.0, 12.0) }
+}
+pub fn control_radius(ui: &crate::theme::Ui) -> f32 {
+    if ui.radius <= 0.0 { 0.0 } else { (ui.radius * 0.6).round().clamp(3.0, 8.0) }
+}
+pub fn small_radius(ui: &crate::theme::Ui) -> f32 {
+    if ui.radius <= 0.0 { 0.0 } else { (ui.radius * 0.4).round().clamp(2.0, 5.0) }
+}
+
+impl State {
+    pub fn range_start(&self) -> f64 {
+        self.range_anchor.min(self.range_head)
+    }
+    pub fn range_end(&self) -> f64 {
+        self.range_anchor.max(self.range_head)
+    }
+    /// `hasRange`.
+    pub fn has_range(&self) -> bool {
+        self.range_anchor >= 0.0 && self.range_head >= 0.0 && self.range_end() - self.range_start() > 0.000001
+    }
+}
+
+/// Points per second at the timeline's scale (`basePixels * scaleFactor`).
+pub fn pps(s: &Preview) -> f32 {
+    let base = (s.edit.timeline.flick_w.get() - PADDING).max(1.0) / (s.document.duration().max(0.001) as f32);
+    base * s.edit.timeline.scale as f32
+}
+
+/// The tracks' full width and how far they can scroll.
+pub fn content_w(s: &Preview) -> f32 {
+    (s.document.duration() as f32 * pps(s) + PADDING).max(s.edit.timeline.flick_w.get())
+}
+
+pub fn content_x(s: &Preview) -> f32 {
+    s.edit.timeline.content_x.clamp(0.0, (content_w(s) - s.edit.timeline.flick_w.get()).max(0.0))
+}
+
+/// `zoomBy` and the scale slider: a new scale, keeping the time under `anchor_x` (points from
+/// the tracks' left edge) where it is.
+pub fn set_scale(s: &mut Preview, scale: f64, anchor_x: f32) {
+    let next = scale.clamp(1.0, 16.0);
+    if (next - s.edit.timeline.scale).abs() < 0.000001 {
+        return;
+    }
+    let anchor_x = anchor_x.clamp(0.0, s.edit.timeline.flick_w.get());
+    let time = (content_x(s) + anchor_x) / pps(s);
+    s.edit.timeline.scale = next;
+    let max = (content_w(s) - s.edit.timeline.flick_w.get()).max(0.0);
+    s.edit.timeline.content_x = (time * pps(s) - anchor_x).clamp(0.0, max);
+}
+
+// ---------------------------------------------------------------------------------------------
+// The playback range (Timeline.qml's functions of the same names)
+
+pub fn clear_range(s: &mut Preview) {
+    let t = &mut s.edit.timeline;
+    t.selecting_range = false;
+    t.resizing_range = false;
+    t.range_anchor = -1.0;
+    t.range_head = -1.0;
+    s.document.clear_playback_range();
+}
+
+pub fn begin_range(s: &mut Preview, time: f64) {
+    s.begin_scrub();
+    s.document.set_selected_clip_id("");
+    s.document.clear_playback_range();
+    let time = time.clamp(0.0, s.document.duration());
+    let t = &mut s.edit.timeline;
+    t.range_anchor = time;
+    t.range_head = time;
+    t.selecting_range = true;
+    t.resizing_range = false;
+    s.edit.timeline.gesture = Some(Gesture::Range);
+}
+
+pub fn begin_range_resize(s: &mut Preview, edge: Edge, pointer_time: f64) {
+    if !s.edit.timeline.has_range() {
+        return;
+    }
+    s.begin_scrub();
+    let t = &mut s.edit.timeline;
+    t.prior_range = (t.range_start(), t.range_end());
+    t.resize_edge = edge;
+    t.resize_offset = (if edge == Edge::Left { t.prior_range.0 } else { t.prior_range.1 }) - pointer_time;
+    t.resizing_range = true;
+    t.selecting_range = true;
+    t.gesture = Some(Gesture::Range);
+}
+
+pub fn update_range(s: &mut Preview, time: f64) {
+    if !s.edit.timeline.selecting_range {
+        return;
+    }
+    let duration = s.document.duration();
+    let t = &mut s.edit.timeline;
+    t.range_head = time.clamp(0.0, duration);
+    if t.resizing_range {
+        t.range_anchor = if t.resize_edge == Edge::Left { t.prior_range.1 } else { t.prior_range.0 };
+    }
+    if t.has_range() {
+        let (a, b) = (t.range_start(), t.range_end());
+        s.document.set_playback_range(a, b);
+    } else {
+        s.document.clear_playback_range();
+    }
+    let head = s.edit.timeline.range_head;
+    s.scrub_to(head);
+}
+
+pub fn finish_range(s: &mut Preview, time: f64) {
+    update_range(s, time);
+    s.edit.timeline.selecting_range = false;
+    s.edit.timeline.gesture = None;
+    let t = &s.edit.timeline;
+    if ((t.range_end() - t.range_start()) as f32) * pps(s) < 2.0 {
+        clear_range(s);
+        let p = s.document.output_position();
+        s.seek(p);
+    } else {
+        let (a, b, head, resizing) = (t.range_start(), t.range_end(), t.range_head, t.resizing_range);
+        s.document.set_playback_range(a, b);
+        s.seek(if resizing { head } else { a });
+    }
+    s.edit.timeline.resizing_range = false;
+}
+
+pub fn cancel_range(s: &mut Preview) {
+    s.edit.timeline.gesture = None;
+    if s.edit.timeline.resizing_range {
+        let t = &mut s.edit.timeline;
+        t.range_anchor = t.prior_range.0;
+        t.range_head = t.prior_range.1;
+        t.selecting_range = false;
+        t.resizing_range = false;
+        let (a, b) = (t.range_start(), t.range_end());
+        s.document.set_playback_range(a, b);
+        s.seek(a);
+    } else {
+        clear_range(s);
+        let p = s.document.output_position();
+        s.seek(p);
+    }
+}
+
+pub fn delete_selected_range(s: &mut Preview) -> bool {
+    let t = &s.edit.timeline;
+    if !t.has_range() {
+        return false;
+    }
+    let (a, b) = (t.range_start(), t.range_end());
+    // Editor::deleteOutputRange pauses first.
+    s.pause();
+    if !s.document.delete_output_range(a, b) {
+        return false;
+    }
+    clear_range(s);
+    edited(s, "Delete range");
+    true
+}
+
+// ---------------------------------------------------------------------------------------------
+// Hooks
+
+/// BottomBar.openInsertDialog: the insert dialog is the dialogs area's; until it has an
+/// `open_insert`, say so.
+pub fn open_insert_dialog(s: &mut Preview) {
+    if s.document.importing() {
+        return;
+    }
+    s.edit.toast = Some(("Insert video: the dialog isn't ported yet".into(), s.now));
+}
+
+pub fn on_effect(s: &mut Preview, effect: &Effect) {
+    match effect {
+        Effect::DurationChanged => clear_range(s),
+        Effect::StartNextVideoThumbnail => thumbs::start_next(s),
+        Effect::SetScreenAudio { .. } | Effect::UpdateInsertAudio | Effect::ProjectChanged => s.audio_edited(),
+        _ => {}
+    }
+}
+
+pub fn poll(s: &mut Preview) -> bool {
+    thumbs::poll(s)
 }
 
 pub fn busy(s: &Preview) -> bool {
-    s.edit.timeline.zoom_drag.is_some()
+    s.edit.timeline.gesture.is_some() || s.edit.timeline.thumbs.busy()
 }
 
-/// S splits at the playhead, Delete removes the selected zoom.
+/// Main.qml's Shortcuts (Space and the arrows are the preview's; Ctrl+Z, Ctrl+Shift+Z and Ctrl+S
+/// the editor's).
 pub fn on_key(s: &mut Preview, key: &KeyEvent, tx: &mut Tx) -> bool {
-    match &key.key {
-        Key::Text(t) if t == "s" => {
+    let plain = !key.mods.cmd && !key.mods.ctrl && !key.mods.alt;
+    let handled = match &key.key {
+        Key::Text(t) if plain && t == "s" => {
             if s.document.split_at_playhead() {
                 edited(s, "Split clip");
             }
             true
         }
-        Key::Delete | Key::Backspace => {
-            let id = s.document.selected_zoom_id().to_owned();
-            if !id.is_empty() && s.document.remove_zoom(&id) {
-                edited(s, "Delete zoom");
-                tx.wake_after(Duration::ZERO);
+        Key::Text(t) if plain && t == "z" => {
+            let at = s.document.output_position();
+            if !s.document.add_zoom_at(at, 2.0).is_empty() {
+                edited(s, "Add zoom");
             }
             true
         }
-        _ => false,
-    }
-}
-
-
-pub fn view(s: &Preview, cx: &mut Cx<Preview>) -> El {
-    let ui = &s.ui;
-    let duration = s.document.duration().max(0.001) as f32;
-    let tracks_w = cx.layout_size("tracks").map_or(1000.0, |[w, _]| w).max(1.0);
-    let pps = tracks_w / duration;
-    let position = s.document.output_position() as f32;
-
-    // Header: play, time, hints.
-    let play = el()
-        .key("tl-play")
-        .role("button")
-        .label(if s.playing { "Pause" } else { "Play" })
-        .size(32.0, 32.0)
-        .radius(16.0)
-        .center()
-        .fill(ui.accent)
-        .hover(ui.accent.mix(Color::WHITE, 0.1))
-        .press_scale(0.94)
-        .cursor(Cursor::Pointer)
-        .on_press_tx(|s: &mut Preview, tx: &mut Tx| {
-            s.toggle();
-            tx.wake_after(Duration::ZERO);
-        })
-        .child(play_glyph(s.playing, ui.accent_text));
-    let header = row()
-        .key("tl-header")
-        .w_full()
-        .h(44.0)
-        .px(16.0)
-        .gap(12.0)
-        .items_center()
-        .child(play)
-        .child(text(format!("{} / {}", tenths(f64::from(position)), tenths(f64::from(duration)))).font(mono(13.0, 500.0)).color(ui.text))
-        .child(el().grow(1.0))
-        .child(text("Space play · S split · ⌫ delete zoom · ⌘Z undo").font(label(12.0, 400.0)).color(ui.text_faint));
-
-    // The ruler and the tracks share the x axis: seconds × pps from the tracks' left.
-    let mut ruler = el().key("ruler").w_full().h(22.0).cursor(Cursor::Text).on_drag(|s: &mut Preview, drag, tx: &mut Tx| {
-        let t = f64::from((drag.x / drag.w.max(1.0)).clamp(0.0, 1.0)) * s.document.duration();
-        s.scrubbing = !matches!(drag.phase, Phase::Up);
-        s.seek(t);
-        tx.wake_after(Duration::ZERO);
-    });
-    let step = if pps > 80.0 { 1.0 } else if pps > 30.0 { 2.0 } else { 5.0 };
-    let mut tick = 0.0;
-    while tick <= duration + 0.001 {
-        let x = tick * pps;
-        ruler = ruler
-            .child(el().absolute(x, 14.0).size(1.0, 8.0).fill(ui.text_faint.alpha(0.5)))
-            .child(text(format!("{}:{:02}", (tick as i32) / 60, (tick as i32) % 60)).font(mono(10.0, 500.0)).color(ui.text_faint).absolute(x + 4.0, 1.0));
-        tick += step;
-    }
-
-    let clips = clip_track(s, ui, pps);
-    let zooms = zoom_track(s, ui, pps);
-    let keys = key_track(s, ui, pps);
-    // The playhead glides on seeks (the layout spring) and lands at once while playing.
-    let playhead = el()
-        .key("playhead")
-        .absolute(position * pps - 1.0, 0.0)
-        .size(2.0, 22.0 + 3.0 * (TRACK_H + 6.0))
-        .fill(ui.accent)
-        .motion(Spring::new(0.25, 0.0))
-        .inert()
-        .child(el().absolute(-5.0, 0.0).size(12.0, 12.0).radius(6.0).fill(ui.accent));
-    let tracks = col().key("tracks").grow(1.0).min_w(0.0).gap(6.0).child(ruler).child(clips).child(zooms).child(keys).child(playhead);
-    let headers = col()
-        .w(HEADER_W)
-        .gap(6.0)
-        .pt(22.0 + 6.0)
-        .child(track_label(ui, "Clips"))
-        .child(track_label(ui, "Zoom"))
-        .child(track_label(ui, "Keys"));
-    col()
-        .key("timeline")
-        .w_full()
-        .h(232.0)
-        .fill(ui.surface)
-        .child(header)
-        .child(row().w_full().grow(1.0).px(16.0).pb(16.0).child(headers).child(tracks))
-}
-
-fn track_label(ui: &crate::theme::Ui, name: &str) -> El {
-    row().h(TRACK_H).items_center().child(text(name.to_owned()).font(label(12.0, 600.0)).color(ui.text_muted))
-}
-
-fn clip_track(s: &Preview, ui: &crate::theme::Ui, pps: f32) -> El {
-    let mut track = el().key("clip-track").w_full().h(TRACK_H);
-    let mut start = 0.0f32;
-    let selected = s.document.selected_clip_id().to_owned();
-    for (i, clip) in s.document.project().clips.iter().enumerate() {
-        let length = ((clip.out - clip.in_) / clip.speed.max(0.01)) as f32;
-        let camera = clip.layout == "camera";
-        let fill = if camera { ui.zoom_accent.mix(ui.card, 0.55) } else { ui.accent.mix(ui.card, 0.7) };
-        let is_selected = clip.id == selected;
-        let id = clip.id.clone();
-        let mut block = row()
-            .key(format!("clip-{}", clip.id))
-            .absolute(start * pps + 1.0, 0.0)
-            .size((length * pps - 2.0).max(4.0), TRACK_H)
-            .radius(8.0)
-            .px(10.0)
-            .gap(6.0)
-            .items_center()
-            .fill(fill)
-            .hover(fill.mix(Color::WHITE, 0.08))
-            .cursor(Cursor::Pointer)
-            .on_press(move |s: &mut Preview| {
-                s.document.set_selected_clip_id(&id);
-                edited(s, "");
-            })
-            .child(text(format!("Clip {}", i + 1)).font(label(12.0, 600.0)).color(ui.text_strong).truncate())
-            .child(text(format!("{length:.1} s")).font(mono(11.0, 500.0)).color(ui.text_muted));
-        if camera {
-            block = block.child(text("Camera").font(label(11.0, 600.0)).color(ui.text_strong).px(6.0).radius(4.0).fill(ui.zoom_accent.alpha(0.35)));
+        Key::Text(t) if plain && t == "i" => {
+            open_insert_dialog(s);
+            true
         }
-        if is_selected {
-            block = block.child(selection_ring(ui, (length * pps - 2.0).max(4.0)));
+        Key::Text(t) if plain && t == "?" => {
+            s.edit.timeline.popup = if s.edit.timeline.popup == Some(Popup::Shortcuts) { None } else { Some(Popup::Shortcuts) };
+            true
         }
-        track = track.child(block);
-        start += length;
-    }
-    track
-}
-
-/// The ring around the selected item: one element, matched across tracks, so it flies to the
-/// new selection.
-fn selection_ring(ui: &crate::theme::Ui, w: f32) -> El {
-    el().key("selection").matched("selection").absolute(-3.0, -3.0).size(w + 6.0, TRACK_H + 6.0).radius(11.0).border(2.0, ui.text_strong).inert()
-}
-
-fn zoom_track(s: &Preview, ui: &crate::theme::Ui, pps: f32) -> El {
-    let mut track = el().key("zoom-track").w_full().h(TRACK_H).on_press(|s: &mut Preview| {
-        s.document.set_selected_zoom_id("");
-        edited(s, "");
-    });
-    let selected = s.document.selected_zoom_id().to_owned();
-    for zoom in &s.document.project().zooms {
-        let (start, end) = s.document.source_range_to_output(zoom.start, zoom.end);
-        if start < 0.0 || end <= start {
-            continue;
+        Key::Command('e') => {
+            super::dialogs::open_export(s);
+            true
         }
-        let id = zoom.id.clone();
-        let is_selected = zoom.id == selected;
-        let dragging = s.edit.timeline.zoom_drag.as_ref().is_some_and(|(d, ..)| *d == zoom.id);
-        let width = ((end - start) as f32 * pps - 2.0).max(18.0);
-        let seconds = (end - start) as f32;
-        let fill = ui.zoom_accent.mix(ui.card, if is_selected { 0.15 } else { 0.4 });
-        let mut block = row()
-            .key(format!("zoom-{}", zoom.id))
-            .absolute(start as f32 * pps + 1.0, 0.0)
-            .size(width, TRACK_H)
-            .radius(8.0)
-            .px(10.0)
-            .items_center()
-            .fill(fill)
-            .hover(fill.mix(Color::WHITE, 0.08))
-            .cursor(if dragging { Cursor::Grabbing } else { Cursor::Grab })
-            .scale(if dragging { 1.04 } else { 1.0 })
-            .shadow(if dragging { 8.0 } else { 0.0 }, if dragging { 18.0 } else { 0.0 }, Color::BLACK.alpha(if dragging { 0.35 } else { 0.0 }))
-            .on_drag(move |s: &mut Preview, drag, tx: &mut Tx| {
-                match drag.phase {
-                    Phase::Down => {
-                        s.document.set_selected_zoom_id(&id);
-                        let start = s.document.project().zooms.iter().find(|z| z.id == id).map_or(0.0, |z| z.start);
-                        let pps = (drag.w + 2.0) / seconds.max(0.01);
-                        s.edit.timeline.zoom_drag = Some((id.clone(), start, pps));
-                        s.document.begin_coalesced_edit("zoom-drag");
-                    }
-                    Phase::Move => {
-                        if let Some((_, from, pps)) = &s.edit.timeline.zoom_drag {
-                            let to = (from + f64::from(drag.dx / pps.max(1.0))).max(0.0);
-                            s.document.move_zoom(&id, to);
-                        }
-                    }
-                    Phase::Up => {
-                        s.edit.timeline.zoom_drag = None;
-                        s.document.end_coalesced_edit();
-                        // The lift and shadow settle on springs.
-                        tx.animated();
-                    }
+        Key::Delete if plain => {
+            if s.edit.timeline.has_range() {
+                delete_selected_range(s);
+            } else if !s.document.selected_zoom_ids().is_empty() {
+                if s.document.remove_selected_zooms() > 0 {
+                    edited(s, "Delete zoom");
                 }
-                edited(s, if matches!(drag.phase, Phase::Up) && drag.dx.abs() > 2.0 { "Move zoom" } else { "" });
-                tx.wake_after(Duration::ZERO);
-            })
-            .child(text(format!("{:.1}×", zoom.level)).font(mono(12.0, 600.0)).color(ui.text_strong));
-        if is_selected {
-            block = block.child(selection_ring(ui, width));
+            } else {
+                let id = s.document.selected_clip_id().to_owned();
+                if s.document.remove_clip(&id) {
+                    edited(s, "Delete clip");
+                }
+            }
+            true
         }
-        track = track.child(block);
+        Key::Backspace if plain && s.edit.timeline.has_range() => {
+            delete_selected_range(s);
+            true
+        }
+        Key::Escape if s.edit.timeline.popup.is_some() => {
+            s.edit.timeline.popup = None;
+            true
+        }
+        Key::Escape => {
+            if s.document.picking_zoom_target() {
+                s.document.set_picking_zoom_target(false);
+                edited(s, "");
+                true
+            } else if s.edit.timeline.has_range() {
+                clear_range(s);
+                edited(s, "");
+                true
+            } else if !s.document.selected_clip_id().is_empty() || !s.document.selected_zoom_id().is_empty() {
+                s.document.set_selected_clip_id("");
+                edited(s, "");
+                true
+            } else {
+                false
+            }
+        }
+        _ => false,
+    };
+    if handled {
+        tx.wake_after(Duration::ZERO);
     }
-    track
+    handled
 }
 
-fn key_track(s: &Preview, ui: &crate::theme::Ui, pps: f32) -> El {
-    let mut track = el().key("key-track").w_full().h(TRACK_H);
-    for (i, event) in s.document.input().events().iter().enumerate() {
-        if event.kind != omareel_core::input_log::InputKind::KeyDown || event.modifiers.is_empty() {
-            continue;
-        }
-        let t = s.document.source_to_output(event.time, -1);
-        if t < 0.0 {
-            continue;
-        }
-        let mods: Vec<&str> = event.modifiers.iter().map(|m| omareel_core::keystroke_track::modifier_label(m)).collect();
-        let key = event.key_label.clone();
-        let label = format!("{}+{}", mods.join("+"), if key.is_empty() { event.key_name.trim_start_matches("KEY_").to_owned() } else { key });
-        track = track.child(
-            row()
-                .key(format!("key-{i}"))
-                .absolute(t as f32 * pps, 6.0)
-                .h(TRACK_H - 12.0)
-                .px(7.0)
-                .items_center()
-                .radius(6.0)
-                .fill(ui.normal_fill)
-                .border(1.0, ui.hairline)
-                .child(text(label).font(mono(11.0, 600.0)).color(ui.text)),
-        );
-    }
-    track
+/// The timeline (the bar is placed under the preview by the editor's layout).
+pub fn view(s: &Preview, cx: &mut Cx<Preview>) -> El {
+    s.edit.timeline.thumbs.begin_view();
+    col().key("timeline-area").w_full().child(tracks::view(s, cx))
 }

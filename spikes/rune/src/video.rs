@@ -11,7 +11,7 @@
 
 use omareel_core::export::decoder::FfmpegDecoder;
 use rune::native_surface::{ByteFrame, ColorInfo, Format, Matrix, Transfer};
-use std::io::Read;
+use std::io::{Read, Write};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, SyncSender, TrySendError, sync_channel};
@@ -300,4 +300,243 @@ fn send(sender: &SyncSender<Frame>, mut frame: Frame, stop: &AtomicBool) -> bool
             Err(TrySendError::Disconnected(_)) => return false,
         }
     }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Sound
+
+/// One clip's part of the sound from the playhead on, in output order.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AudioSegment {
+    /// The file whose first audio stream plays; empty for silence (no audio, or a media clip
+    /// whose file has none).
+    pub path: String,
+    /// Where in that file it starts and how much of it plays (source seconds).
+    pub start: f64,
+    pub length: f64,
+    pub speed: f64,
+    /// The recording's sound with neither desktop nor microphone kept (`Document::screen_audio`).
+    pub muted: bool,
+}
+
+impl AudioSegment {
+    /// Its length in the output.
+    pub fn output_length(&self) -> f64 {
+        self.length / self.speed.max(0.01)
+    }
+}
+
+/// Where the sound goes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AudioSink {
+    /// `pw-cat --playback`: the speakers.
+    Speakers,
+    /// A WAV file (`OMAREEL_AUDIO=file:/path.wav`), to check what would play.
+    File(String),
+    /// Decoded and dropped: headless runs, and `OMAREEL_AUDIO=off`.
+    Null,
+}
+
+impl AudioSink {
+    /// `OMAREEL_AUDIO` (`off`, `file:<path>`), else the speakers in a window and nothing headless.
+    pub fn from_env(headless: bool) -> AudioSink {
+        match std::env::var("OMAREEL_AUDIO").unwrap_or_default().as_str() {
+            "off" | "null" => AudioSink::Null,
+            v if v.starts_with("file:") => AudioSink::File(v["file:".len()..].to_owned()),
+            "speakers" => AudioSink::Speakers,
+            _ if headless => AudioSink::Null,
+            _ => AudioSink::Speakers,
+        }
+    }
+}
+
+const AUDIO_RATE: u32 = 48_000;
+
+/// The recording's sound from one point on: an ffmpeg child decoding the clips' audio (each
+/// clip's span at its speed, as the export mixes it) to 48 kHz stereo s16, copied by a thread
+/// into `pw-cat`, which applies the volume on the way so a volume change needs no restart.
+/// Dropping it stops both children at once.
+pub struct Audio {
+    ffmpeg: Option<Child>,
+    sink: Option<Child>,
+    stop: Arc<AtomicBool>,
+    gain: Arc<std::sync::atomic::AtomicU32>,
+    /// Set once the first samples went to the sink.
+    ready: Arc<AtomicBool>,
+    /// How long the sink holds samples before they sound.
+    pub latency: f64,
+    /// What it plays, to notice when an edit changes it.
+    pub segments: Vec<AudioSegment>,
+    /// The output time it starts at.
+    pub output_start: f64,
+}
+
+/// ffmpeg's arguments for `segments` (silence where a segment has no file).
+pub fn audio_args(segments: &[AudioSegment]) -> Vec<String> {
+    use omareel_core::export::plan;
+    let mut args: Vec<String> = ["-v", "error", "-nostdin"].map(String::from).into();
+    let mut chains = Vec::new();
+    let mut input = 0;
+    for segment in segments {
+        let out = segment.output_length();
+        if segment.path.is_empty() {
+            chains.push(plan::silent_segment(out));
+            continue;
+        }
+        args.extend(["-ss".into(), format!("{:.6}", segment.start), "-t".into(), format!("{:.6}", segment.length), "-i".into(), segment.path.clone()]);
+        let mut chain = plan::audio_segment(&format!("[{input}:a:0]asetpts=PTS-STARTPTS"), segment.speed, out);
+        if segment.muted {
+            chain += ",volume=0";
+        }
+        chains.push(chain);
+        input += 1;
+    }
+    let mut filter = String::new();
+    for (i, chain) in chains.iter().enumerate() {
+        filter += &format!("{chain}[a{i}];");
+    }
+    filter += &format!("{}concat=n={}:v=0:a=1[out]", (0..chains.len()).map(|i| format!("[a{i}]")).collect::<String>(), chains.len());
+    args.extend(["-filter_complex".into(), filter, "-map".into(), "[out]".into()]);
+    args.extend(["-f", "s16le", "-ar", "48000", "-ac", "2", "-"].map(String::from));
+    args
+}
+
+impl Audio {
+    /// Starts the sound of `segments` (from `output_start` on the timeline) at `volume` (0 to 1).
+    /// None when there is nothing to play or ffmpeg can't start.
+    pub fn start(segments: Vec<AudioSegment>, output_start: f64, volume: f64, sink: &AudioSink) -> Option<Audio> {
+        if segments.is_empty() || segments.iter().all(|s| s.path.is_empty() || s.muted) {
+            return None;
+        }
+        let args = audio_args(&segments);
+        let started = std::time::Instant::now();
+        let mut ffmpeg = Command::new("ffmpeg").args(&args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::inherit()).spawn().ok()?;
+        let mut out = ffmpeg.stdout.take()?;
+        let mut sink_child = None;
+        let mut writer: Box<dyn std::io::Write + Send> = match sink {
+            AudioSink::Speakers => {
+                let child = Command::new("pw-cat")
+                    .args(["--playback", "--raw", "--format", "s16", "--rate", "48000", "--channels", "2", "--latency", "40ms"])
+                    .args(["-P", "{ media.name = \"omareel preview\" application.name = omareel }", "-"])
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn();
+                match child {
+                    Ok(mut child) => {
+                        let stdin = child.stdin.take();
+                        sink_child = Some(child);
+                        match stdin {
+                            Some(stdin) => Box::new(stdin),
+                            None => Box::new(std::io::sink()),
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("audio: pw-cat: {e}");
+                        Box::new(std::io::sink())
+                    }
+                }
+            }
+            AudioSink::File(path) => match std::fs::File::create(path) {
+                Ok(mut file) => {
+                    // A WAV header with an open length (players read to the end).
+                    let _ = file.write_all(&wav_header());
+                    Box::new(file)
+                }
+                Err(_) => Box::new(std::io::sink()),
+            },
+            AudioSink::Null => Box::new(std::io::sink()),
+        };
+        let stop = Arc::new(AtomicBool::new(false));
+        let gain = Arc::new(std::sync::atomic::AtomicU32::new((volume as f32).to_bits()));
+        let ready = Arc::new(AtomicBool::new(false));
+        let (thread_stop, thread_gain, thread_ready) = (stop.clone(), gain.clone(), ready.clone());
+        let summary: Vec<String> = segments.iter().map(|s| format!("{}@{:.3}+{:.3}x{}{}", if s.path.is_empty() { "silence" } else { std::path::Path::new(&s.path).file_name().and_then(|n| n.to_str()).unwrap_or("?") }, s.start, s.length, s.speed, if s.muted { " muted" } else { "" })).collect();
+        eprintln!("audio: start at output {output_start:.3} ({sink:?}, volume {volume:.2}): {}", summary.join(", "));
+        if std::env::var_os("OMAREEL_AUDIO_LOG").is_some() {
+            eprintln!("audio: ffmpeg {}", args.join(" "));
+        }
+        std::thread::Builder::new()
+            .name("audio".into())
+            .spawn(move || {
+                let mut buffer = vec![0u8; 4096];
+                let mut first = true;
+                let mut bytes = 0u64;
+                loop {
+                    if thread_stop.load(Ordering::SeqCst) {
+                        break;
+                    }
+                    let n = match out.read(&mut buffer) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => n & !1,
+                    };
+                    if first {
+                        first = false;
+                        eprintln!("audio: first samples {:.0} ms after start", started.elapsed().as_secs_f64() * 1000.0);
+                    }
+                    let gain = f32::from_bits(thread_gain.load(Ordering::Relaxed));
+                    if (gain - 1.0).abs() > 1e-4 {
+                        for pair in buffer[..n].chunks_exact_mut(2) {
+                            let v = i16::from_le_bytes([pair[0], pair[1]]) as f32 * gain;
+                            pair.copy_from_slice(&(v.clamp(-32768.0, 32767.0) as i16).to_le_bytes());
+                        }
+                    }
+                    bytes += n as u64;
+                    if writer.write_all(&buffer[..n]).is_err() {
+                        break;
+                    }
+                    thread_ready.store(true, Ordering::Release);
+                }
+                let _ = writer.flush();
+                if std::env::var_os("OMAREEL_AUDIO_LOG").is_some() {
+                    eprintln!("audio: ended after {:.3} s of sound", bytes as f64 / f64::from(AUDIO_RATE * 4));
+                }
+            })
+            .ok()?;
+        let latency = if *sink == AudioSink::Speakers { 0.04 } else { 0.0 };
+        Some(Audio { ffmpeg: Some(ffmpeg), sink: sink_child, stop, gain, ready, latency, segments, output_start })
+    }
+
+    /// Whether the first samples are on their way to the sink.
+    pub fn ready(&self) -> bool {
+        self.ready.load(Ordering::Acquire)
+    }
+
+    /// The volume, at once (0 to 1).
+    pub fn set_volume(&self, volume: f64) {
+        self.gain.store((volume as f32).to_bits(), Ordering::Relaxed);
+    }
+}
+
+impl Drop for Audio {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::SeqCst);
+        for child in [self.ffmpeg.take(), self.sink.take()].into_iter().flatten() {
+            let mut child = child;
+            let _ = child.kill();
+            // Reaped off the UI thread.
+            std::thread::spawn(move || {
+                let _ = child.wait();
+            });
+        }
+        eprintln!("audio: stop");
+    }
+}
+
+/// A 48 kHz stereo s16 WAV header whose lengths say "to the end of the file".
+fn wav_header() -> Vec<u8> {
+    let mut h = Vec::with_capacity(44);
+    h.extend_from_slice(b"RIFF");
+    h.extend_from_slice(&u32::MAX.to_le_bytes());
+    h.extend_from_slice(b"WAVEfmt ");
+    h.extend_from_slice(&16u32.to_le_bytes());
+    h.extend_from_slice(&1u16.to_le_bytes());
+    h.extend_from_slice(&2u16.to_le_bytes());
+    h.extend_from_slice(&AUDIO_RATE.to_le_bytes());
+    h.extend_from_slice(&(AUDIO_RATE * 4).to_le_bytes());
+    h.extend_from_slice(&4u16.to_le_bytes());
+    h.extend_from_slice(&16u16.to_le_bytes());
+    h.extend_from_slice(b"data");
+    h.extend_from_slice(&(u32::MAX - 36).to_le_bytes());
+    h
 }
