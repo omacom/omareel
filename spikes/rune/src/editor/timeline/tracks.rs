@@ -442,7 +442,7 @@ fn clip_track(s: &Preview, ui: &Ui, px: f32, scroll: f32) -> El {
                 to: (shown_out * 1000.0).round() as i64,
             };
             if let Some(path) = s.edit.timeline.thumbs.tile(tile) {
-                let image = s.cache.file(&path, 0.0, 1.0);
+                let image = s.edit.timeline.thumbs.image(&s.cache, &path);
                 strip = strip.child(el().key(format!("tile-{}-{index}", clip.id)).absolute(tx0, 0.0).size(tw, BLOCK_H).pixels_fit(image.pixels(), SurfaceFit::Fill));
             }
         }
@@ -934,7 +934,7 @@ fn camera_row(s: &Preview, ui: &Ui, px: f32) -> El {
     } else {
         let tile_w = (w - 6.0 - 2.0 * (thumbs.len().saturating_sub(1)) as f32) / thumbs.len() as f32;
         for (i, path) in thumbs.iter().enumerate() {
-            let image = s.cache.file(path, 0.0, 1.0);
+            let image = s.edit.timeline.thumbs.image(&s.cache, path);
             strip = strip.child(
                 el().key(format!("camera-thumb-{i}"))
                     .w(tile_w)

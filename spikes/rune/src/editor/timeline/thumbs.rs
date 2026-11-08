@@ -33,6 +33,10 @@ pub struct Thumbs {
     pub camera: Vec<String>,
     camera_job: Option<Receiver<Vec<String>>>,
     camera_key: String,
+    /// The decoded tiles the view draws, by file. Rune's cache only holds images weakly and an
+    /// `El` keeps just the pixels, so a handle dropped after a view is decoded again, blank until
+    /// done, on the next one: the strips flickered. Poll drops the ones no view wants any more.
+    images: RefCell<HashMap<String, rune::Image>>,
 }
 
 /// `file:///a%20b.jpg` → `/a b.jpg`.
@@ -62,6 +66,11 @@ impl Thumbs {
         let url = self.urls.borrow().get(&tile).map(|(_, u)| u.clone());
         self.wanted.borrow_mut().push(tile);
         url.filter(|u| !u.is_empty())
+    }
+
+    /// The decoded picture for a tile's or the camera strip's file, kept while the view shows it.
+    pub fn image(&self, cache: &rune::ImageCache, path: &str) -> rune::Image {
+        self.images.borrow_mut().entry(path.to_owned()).or_insert_with(|| cache.file(path, 0.0, 1.0)).clone()
     }
 
     /// Clears the wanted list before a view.
@@ -94,9 +103,10 @@ pub fn poll(s: &mut Preview) -> bool {
             Ok(urls) => {
                 s.edit.timeline.thumbs.camera_job = None;
                 let paths: Vec<String> = urls.iter().map(|u| url_path(u)).collect();
-                if rune::is_headless() {
-                    for path in &paths {
-                        let _ = s.cache.file(path, 0.0, 1.0).wait();
+                for path in &paths {
+                    let image = s.edit.timeline.thumbs.image(&s.cache, path);
+                    if rune::is_headless() {
+                        let _ = image.wait();
                     }
                 }
                 s.edit.timeline.thumbs.camera = paths;
@@ -129,7 +139,7 @@ pub fn poll(s: &mut Preview) -> bool {
         if known.as_ref().is_none_or(|(_, u)| *u != path) {
             changed = true;
             if !path.is_empty() {
-                let image = s.cache.file(&path, 0.0, 1.0);
+                let image = s.edit.timeline.thumbs.image(&s.cache, &path);
                 // Headless runs draw what is decoded at each frame: wait for the picture.
                 if rune::is_headless() {
                     let _ = image.wait();
@@ -137,6 +147,19 @@ pub fn poll(s: &mut Preview) -> bool {
             }
         }
         s.edit.timeline.thumbs.urls.borrow_mut().insert(tile, (revision, path));
+    }
+    // Keep only what the last view drew (or its neighbours' stand-ins) and the camera strip.
+    {
+        let thumbs = &s.edit.timeline.thumbs;
+        let urls = thumbs.urls.borrow();
+        let keep: std::collections::HashSet<String> = thumbs
+            .wanted
+            .borrow()
+            .iter()
+            .filter_map(|tile| urls.get(tile).map(|(_, u)| u.clone()))
+            .chain(thumbs.camera.iter().cloned())
+            .collect();
+        thumbs.images.borrow_mut().retain(|path, _| keep.contains(path));
     }
     // Asking queued frames (Effect::StartNextVideoThumbnail).
     super::super::handle_effects(s);
