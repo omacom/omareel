@@ -96,13 +96,13 @@ pub fn view(s: &Preview, _w: f32) -> El {
                         row()
                             .w_full()
                             .gap(8.0)
-                            .child(button(ui, "clip-earlier", "Move earlier", None, Btn { bordered: true, fill: true, disabled: i == 0, ..Btn::default() }, act(|s, _| reorder(s, -1))))
+                            .child(button(ui, "clip-earlier", "Move earlier", None, Btn { bordered: true, grow: true, disabled: i == 0, ..Btn::default() }, act(|s, _| reorder(s, -1))))
                             .child(button(
                                 ui,
                                 "clip-later",
                                 "Move later",
                                 None,
-                                Btn { bordered: true, fill: true, disabled: i + 1 >= clips.len(), ..Btn::default() },
+                                Btn { bordered: true, grow: true, disabled: i + 1 >= clips.len(), ..Btn::default() },
                                 act(|s, _| reorder(s, 1)),
                             )),
                     );
@@ -136,7 +136,7 @@ pub fn view(s: &Preview, _w: f32) -> El {
                             "clip-reset-trims",
                             "Reset trims",
                             Some(&crate::icons::UNDO_2),
-                            Btn { bordered: true, fill: true, ..Btn::default() },
+                            Btn { bordered: true, grow: true, ..Btn::default() },
                             act(|s, _| {
                                 let id = s.document.selected_clip_id().to_owned();
                                 if s.document.reset_clip_trims(&id) {
@@ -150,7 +150,7 @@ pub fn view(s: &Preview, _w: f32) -> El {
                             "Delete clip",
                             Some(&crate::icons::TRASH_2),
                             // The recording always keeps one clip.
-                            Btn { bordered: true, destructive: true, fill: true, disabled: !(clips.len() > 1 && (insert || recording_clips > 1)), ..Btn::default() },
+                            Btn { bordered: true, destructive: true, grow: true, disabled: !(clips.len() > 1 && (insert || recording_clips > 1)), ..Btn::default() },
                             act(|s, _| {
                                 let id = s.document.selected_clip_id().to_owned();
                                 if s.document.remove_clip(&id) {

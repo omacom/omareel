@@ -455,10 +455,7 @@ pub fn view(s: &Preview, _cx: &mut Cx<Preview>) -> El {
         let copy = d.success.clone();
         buttons = buttons
             .child(widgets::button(ui, "export-show", "Show in folder", Some(&crate::icons::FOLDER_OPEN), Btn::bordered(), act(move |_, _| open_folder(&path))))
-            .child(widgets::button(ui, "export-copy", "Copy path", None, Btn::default(), act(move |s, tx: &mut Tx| {
-                tx.copy(copy.clone());
-                s.edit.toast = Some(("Copied".into(), s.now));
-            })));
+            .child(widgets::button(ui, "export-copy", "Copy path", None, Btn::default(), act(move |_, tx: &mut Tx| tx.copy(copy.clone()))));
     }
     buttons = buttons.child(el().grow(1.0));
     if exporting {

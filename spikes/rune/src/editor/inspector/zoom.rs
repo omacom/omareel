@@ -74,7 +74,7 @@ pub fn view(s: &Preview, _w: f32) -> El {
                             "zoom-pick",
                             if picking { "Click the preview…" } else { "Pick point" },
                             Some(&crate::icons::MOUSE_POINTER_2),
-                            Btn { bordered: true, selected: picking, fill: true, ..Btn::default() },
+                            Btn { bordered: true, selected: picking, grow: true, ..Btn::default() },
                             act(|s, _| {
                                 let on = !s.document.picking_zoom_target();
                                 s.document.set_picking_zoom_target(on);
@@ -86,7 +86,7 @@ pub fn view(s: &Preview, _w: f32) -> El {
                             "zoom-remove",
                             &if count > 1 { format!("Remove {count}") } else { "Remove".to_owned() },
                             Some(&crate::icons::TRASH_2),
-                            Btn { bordered: true, destructive: true, fill: true, ..Btn::default() },
+                            Btn { bordered: true, destructive: true, grow: true, ..Btn::default() },
                             act(|s, _| {
                                 s.document.remove_selected_zooms();
                                 edited(s, "Zoom removed");

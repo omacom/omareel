@@ -218,8 +218,10 @@ pub struct Btn {
     pub destructive: bool,
     pub selected: bool,
     pub disabled: bool,
-    /// Layout.fillWidth.
+    /// Layout.fillWidth in a column.
     pub fill: bool,
+    /// Layout.fillWidth in a row: shares the row with its siblings.
+    pub grow: bool,
     /// `font.pixelSize: theme.type.small`.
     pub small: bool,
     pub trailing: Option<&'static Icon>,
@@ -278,6 +280,9 @@ pub fn button(ui: &Ui, key: &str, label: &str, icon: Option<&'static Icon>, b: B
     }
     if b.fill {
         e = e.w_full();
+    }
+    if b.grow {
+        e = e.w(0.0).grow(1.0).min_w(0.0);
     }
     if let Some(w) = b.width {
         e = e.w(w);
@@ -365,6 +370,16 @@ pub fn button_group(s: &Preview, key: &str, labels: &[&str], selected: Option<us
         Some(w) => track.w(w),
         None => track.w_full(),
     };
+    // Each segment is its label and 20 wide (Layout.preferredWidth), the rest shared out
+    // equally, or all scaled down when they don't fit.
+    let total = width.unwrap_or(284.0) - 4.0;
+    let preferred: Vec<f32> = labels.iter().map(|l| l.chars().count() as f32 * o.body * 0.6 + 20.0).collect();
+    let sum: f32 = preferred.iter().sum();
+    let widths: Vec<f32> = if sum <= total {
+        preferred.iter().map(|p| p + (total - sum) / labels.len() as f32).collect()
+    } else {
+        preferred.iter().map(|p| p * total / sum).collect()
+    };
     for (i, label) in labels.iter().enumerate() {
         let chosen = selected == Some(i);
         let seg_key = format!("{key}/segment{i}");
@@ -374,10 +389,7 @@ pub fn button_group(s: &Preview, key: &str, labels: &[&str], selected: Option<us
             .role("radio")
             .label((*label).to_owned())
             .checked(chosen)
-            // Layout.preferredWidth: the label and 20, then the rest shared.
-            .w(label.chars().count() as f32 * o.body * 0.56 + 20.0)
-            .grow(1.0)
-            .shrink()
+            .w(widths[i])
             .h_full()
             .min_w(0.0)
             .px(4.0)
