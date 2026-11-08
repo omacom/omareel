@@ -694,9 +694,196 @@ pub(crate) fn pane(s: &Preview, cx: &mut Cx<Preview>, margin_x: f32, margin_y: f
             canvas = canvas.shadow(14.0, 40.0, ui.shadow);
         }
         // While playing, every value comes from omareel_core; paused, an edit springs.
-        pane_el = pane_el.child(canvas.child(comp::composition(&s.settings, &s.media, &s.frame, canvas_w, canvas_h, s.playing || s.scrubbing)));
+        canvas = canvas.child(comp::composition(&s.settings, &s.media, &s.frame, canvas_w, canvas_h, s.playing || s.scrubbing));
+        if s.mode == Mode::Editor {
+            canvas = pane_overlays(s, canvas, canvas_w, canvas_h);
+        }
+        pane_el = pane_el.child(canvas);
     }
     pane_el
+}
+
+/// PreviewPane.qml's `scaled` geometry in canvas points: the video's frame inside the padding
+/// (without the border, as the QML has it) and the zoom's origin.
+struct PaneGeometry {
+    frame_x: f32,
+    frame_y: f32,
+    video_w: f32,
+    video_h: f32,
+    origin_x: f32,
+    origin_y: f32,
+    scale: f32,
+}
+
+fn pane_geometry(s: &Preview, w: f32, h: f32) -> PaneGeometry {
+    let project = s.document.project();
+    let no_background = project.background.type_ == "none";
+    let pad = if no_background { 0.0 } else { w.min(h) * project.frame.padding as f32 };
+    let aspect = (s.document.source_width() as f32 * project.crop.width as f32) / (s.document.source_height() as f32 * project.crop.height as f32).max(1.0);
+    let video_w = if no_background { w } else { (w - 2.0 * pad).min((h - 2.0 * pad) * aspect) };
+    let video_h = if no_background { h } else { video_w / aspect.max(0.0001) };
+    let (frame_x, frame_y) = ((w - video_w) / 2.0, (h - video_h) / 2.0);
+    let [scale, cx, cy] = s.frame.zoom;
+    PaneGeometry { frame_x, frame_y, video_w, video_h, origin_x: frame_x + cx * video_w, origin_y: frame_y + cy * video_h, scale: scale.max(0.0001) }
+}
+
+/// The preview's own controls over the composition (PreviewPane.qml): picking a zoom's point,
+/// the manual point's marker, the crop rectangle and its corners, and the notices on top.
+fn pane_overlays(s: &Preview, mut canvas: El, w: f32, h: f32) -> El {
+    let ui = &s.ui;
+    let g = pane_geometry(s, w, h);
+    let selected = s.document.selected_zoom_id().to_owned();
+    if let Some(zoom) = s.document.project().zooms.iter().find(|z| z.id == selected && !z.automatic_target) {
+        let tx = g.frame_x + zoom.target.x as f32 * g.video_w;
+        let ty = g.frame_y + zoom.target.y as f32 * g.video_h;
+        let x = g.origin_x + g.scale * (tx - g.origin_x);
+        let y = g.origin_y + g.scale * (ty - g.origin_y);
+        canvas = canvas.child(
+            el().key("zoom-target-marker")
+                .absolute(x - 9.0, y - 9.0)
+                .size(18.0, 18.0)
+                .radius(9.0)
+                .fill(ui.accent_soft)
+                .border(2.0, ui.accent)
+                .inert()
+                .child(el().absolute(7.0, 7.0).size(4.0, 4.0).radius(2.0).fill(ui.accent)),
+        );
+    }
+    if s.edit.timeline.crop_mode {
+        canvas = canvas.child(crop_rect(s, w, h));
+    }
+    if s.document.picking_zoom_target() {
+        canvas = canvas.child(
+            el().key("pick-target")
+                .absolute(0.0, 0.0)
+                .size(w, h)
+                .cursor(Cursor::Crosshair)
+                .on_drag(move |s: &mut Preview, drag: &mut rune::Drag, tx: &mut Tx| {
+                    if matches!(drag.phase, rune::Phase::Up) && !drag.cancelled() {
+                        let g = pane_geometry(s, drag.w, drag.h);
+                        let (px, py) = (drag.start_x, drag.start_y);
+                        let bx = g.origin_x + (px - g.origin_x) / g.scale;
+                        let by = g.origin_y + (py - g.origin_y) / g.scale;
+                        let x = f64::from((bx - g.frame_x) / g.video_w.max(1.0)).clamp(0.0, 1.0);
+                        let y = f64::from((by - g.frame_y) / g.video_h.max(1.0)).clamp(0.0, 1.0);
+                        if s.document.set_zoom_target_from_preview(x, y) {
+                            crate::editor::edited(s, "Zoom point");
+                        } else {
+                            crate::editor::edited(s, "");
+                        }
+                    }
+                    tx.wake_after(Duration::ZERO);
+                }),
+        );
+        canvas = canvas.child(notice(s, "pick-hint", "Click where the zoom should center", ui.accent, true, false));
+    }
+    let importing = s.document.importing();
+    let error = s.document.import_error().to_owned();
+    if importing || !error.is_empty() {
+        let text_ = if importing { "Adding clip…".to_owned() } else { error };
+        canvas = canvas.child(notice(s, "import-notice", &text_, if importing { ui.accent } else { ui.record }, importing, !importing));
+    }
+    canvas
+}
+
+/// A pill at the top of the preview (OmPopupCard with a pulsing dot), with an optional dismiss.
+fn notice(s: &Preview, key: &str, message: &str, dot: rune::Color, pulse: bool, dismiss: bool) -> El {
+    let ui = &s.ui;
+    let mut dot_el = el().size(8.0, 8.0).radius(4.0).fill(dot);
+    if pulse {
+        dot_el = dot_el.looping(rune::LoopSpec::opacity(1.3, 0.0, 0.3, 1.0));
+    }
+    let mut pill = row()
+        .key(key.to_owned())
+        .h(32.0)
+        .px(18.0)
+        .gap(8.0)
+        .items_center()
+        .radius(ui.radius.clamp(0.0, 8.0))
+        .fill(ui.raised)
+        .border(1.0, ui.stroke_strong)
+        .shadow(8.0, 28.0, ui.shadow)
+        .transition(rune::Transition::opacity().combined(rune::Transition::scale(0.94)))
+        .child(dot_el)
+        .child(text(message.to_owned()).font(TextStyle::new(13.0, 500.0)).color(ui.text_strong).truncate().max_w(520.0));
+    if dismiss {
+        pill = pill.child(
+            el().key("import-dismiss")
+                .role("button")
+                .label("Dismiss")
+                .size(20.0, 20.0)
+                .center()
+                .radius(4.0)
+                .hover(ui.fill_hover)
+                .cursor(Cursor::Pointer)
+                .on_press(|s: &mut Preview| {
+                    s.document.clear_import_error();
+                    crate::editor::edited(s, "");
+                })
+                .child(rune::icon(&crate::icons::X, 14.0).color(ui.text_muted)),
+        );
+    }
+    row().absolute(0.0, 14.0).w_full().justify_center().child(pill)
+}
+
+/// Crop mode: the crop rectangle over the canvas and a handle on each corner; dragging one
+/// moves that corner (at least 5% each way), as one undo step.
+fn crop_rect(s: &Preview, w: f32, h: f32) -> El {
+    let ui = &s.ui;
+    let c = &s.document.project().crop;
+    let (x, y, cw, ch) = (c.x as f32 * w, c.y as f32 * h, c.width as f32 * w, c.height as f32 * h);
+    let mut rect = el().key("crop-rect").absolute(x, y).size(cw, ch).border(3.0, ui.accent);
+    for corner in 0..4u8 {
+        let (fx, fy) = ((corner % 2) as f32, (corner / 2) as f32);
+        let key = format!("crop-handle-{corner}");
+        rect = rect.child(
+            el().key(key)
+                .absolute(fx * cw - 8.0, fy * ch - 8.0)
+                .size(16.0, 16.0)
+                .radius(ui.radius.clamp(0.0, 5.0))
+                .fill(ui.accent)
+                .border(1.0, ui.accent_foreground)
+                .press_scale(1.15)
+                .cursor(Cursor::Move)
+                .on_drag(move |s: &mut Preview, drag: &mut rune::Drag, tx: &mut Tx| {
+                    let canvas = s.edit.timeline.crop_canvas.get();
+                    let (w, h) = (canvas[0].max(1.0), canvas[1].max(1.0));
+                    match drag.phase {
+                        rune::Phase::Down => {
+                            s.document.begin_coalesced_edit("crop");
+                            let c = &s.document.project().crop;
+                            // Where the corner was, in canvas points.
+                            drag.data = 0.0;
+                            s.edit.timeline.crop_press = [(c.x + f64::from(fx) * c.width) as f32 * w, (c.y + f64::from(fy) * c.height) as f32 * h];
+                        }
+                        rune::Phase::Move => {
+                            let [cx0, cy0] = s.edit.timeline.crop_press;
+                            let px = (cx0 + drag.dx).clamp(0.0, w) / w;
+                            let py = (cy0 + drag.dy).clamp(0.0, h) / h;
+                            let c = s.document.project().crop.clone();
+                            let left = if fx == 0.0 { f64::from(px) } else { c.x };
+                            let top = if fy == 0.0 { f64::from(py) } else { c.y };
+                            let right = if fx == 1.0 { f64::from(px) } else { c.x + c.width };
+                            let bottom = if fy == 1.0 { f64::from(py) } else { c.y + c.height };
+                            if right - left >= 0.05 && bottom - top >= 0.05 {
+                                s.document.set_project_value("crop.x", left.into(), true);
+                                s.document.set_project_value("crop.y", top.into(), true);
+                                s.document.set_project_value("crop.w", (right - left).into(), true);
+                                s.document.set_project_value("crop.h", (bottom - top).into(), true);
+                                crate::editor::edited(s, "");
+                            }
+                        }
+                        rune::Phase::Up => {
+                            s.document.end_coalesced_edit();
+                            crate::editor::edited(s, "");
+                        }
+                    }
+                    tx.wake_after(Duration::ZERO);
+                }),
+        );
+    }
+    s.edit.timeline.crop_canvas.set([w, h]);
+    rect
 }
 
 /// The bar under the preview: play/pause, the time, and a scrub bar.
@@ -761,6 +948,14 @@ pub fn run(options: Options) -> Result<(), String> {
         document.apply_motion(job.run());
     }
     document.set_screen_frame_times(media_probe::probe_frame_times(document.video_path()));
+    // SPIKE_EXPERIMENT=pick: the first zoom selected and its point being picked (the
+    // inspector's "Pick point"), to test the preview's picking headless.
+    if std::env::var("SPIKE_EXPERIMENT").is_ok_and(|e| e.contains("pick"))
+        && let Some(id) = document.project().zooms.first().map(|z| z.id.clone())
+    {
+        document.set_selected_zoom_id(&id);
+        document.set_picking_zoom_target(true);
+    }
     let _ = document.take_effects();
 
     let mut settings = Settings::new(

@@ -96,6 +96,9 @@ pub struct State {
     pub flick_w: Cell<f32>,
     pub bar_width: Cell<f32>,
     pub thumbs: thumbs::Thumbs,
+    /// The preview canvas's size and where a crop corner was pressed (crop mode's handles).
+    pub crop_canvas: Cell<[f32; 2]>,
+    pub crop_press: [f32; 2],
 }
 
 impl Default for State {
@@ -118,6 +121,8 @@ impl Default for State {
             flick_w: Cell::new(1000.0),
             bar_width: Cell::new(1000.0),
             thumbs: thumbs::Thumbs::default(),
+            crop_canvas: Cell::new([1.0, 1.0]),
+            crop_press: [0.0, 0.0],
         }
     }
 }
