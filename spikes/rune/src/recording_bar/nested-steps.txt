@@ -6,7 +6,7 @@ shape-square 975 32 click
 shape-sharp 975 32 click
 shape-round 975 32 click
 corner 1007 32 click
-drag-bubble 104 104 drag 700 500
+drag-bubble 104 104 drag 404 304
 hide-selfview 879 32 click
 show-selfview 879 32 click
 discard-armed 1119 32 click

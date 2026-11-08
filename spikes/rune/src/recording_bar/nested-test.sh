@@ -58,7 +58,9 @@ while True:
     seen = seen or time.time()
     if time.time() - seen < 0.4:
         time.sleep(0.02); continue
-    want = {'overlay_monitor': output, 'selfview_monitor': output, 'bar_visible': True, 'selfview_safe': True}
+    want = {'overlay_monitor': output, 'selfview_monitor': output, 'selfview_safe': True}
+    if not os.environ.get('NO_BAR'):
+        want['bar_visible'] = True
     if any(state.get(k) != v for k, v in want.items()):
         state.update(want)
         tmp = path + '.patch'
@@ -69,7 +71,8 @@ while True:
 PY
 patcher=$!
 
-"$spike" record --fullscreen --with-webcam --webcam-device "$camera" --no-audio --no-open --dir "$out/recordings" \
+# NO_BAR=1 records with --no-bar (the bar stays hidden; countdown and bubble still show).
+"$spike" record --fullscreen --with-webcam --webcam-device "$camera" --no-audio --no-open --dir "$out/recordings" ${NO_BAR:+--no-bar} \
     > "$out/record.log" 2>&1 &
 record=$!
 # The countdown: three seconds once the bar published its geometry.
