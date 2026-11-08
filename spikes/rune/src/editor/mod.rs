@@ -200,13 +200,16 @@ pub fn on_key(s: &mut Preview, key: &KeyEvent, tx: &mut Tx) -> bool {
 
 pub fn view(s: &Preview, cx: &mut Cx<Preview>) -> El {
     let ui = &s.ui;
-    let middle = row()
-        .key("middle")
-        .w_full()
+    // Main.qml: the bottom bar sits under the preview, beside the inspector; the timeline runs
+    // the window's width below them.
+    let preview_column = col()
+        .key("preview-column")
         .grow(1.0)
-        .min_h(0.0)
-        .child(crate::preview::pane(s, cx, 64.0, 48.0))
-        .child(inspector::view(s, cx));
+        .min_w(528.0)
+        .h_full()
+        .child(crate::preview::pane(s, cx, 64.0, 56.0))
+        .child(timeline::bottom_bar(s, cx));
+    let middle = row().key("middle").w_full().grow(1.0).min_h(0.0).child(preview_column).child(inspector::view(s, cx));
     let mut window = col()
         .w_full()
         .h_full()
@@ -215,6 +218,9 @@ pub fn view(s: &Preview, cx: &mut Cx<Preview>) -> El {
         .child(middle)
         .child(timeline::view(s, cx))
         .child(toast(s));
+    if let Some(layer) = timeline::overlay(s, cx) {
+        window = window.child(layer);
+    }
     if let Some(layer) = dialogs::view(s, cx) {
         window = window.child(layer);
     }
