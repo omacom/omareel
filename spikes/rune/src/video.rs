@@ -417,7 +417,7 @@ impl Audio {
             AudioSink::Speakers => {
                 let child = Command::new("pw-cat")
                     .args(["--playback", "--raw", "--format", "s16", "--rate", "48000", "--channels", "2", "--latency", "40ms"])
-                    .args(["-P", "media.name=omareel preview,application.name=omareel", "-"])
+                    .args(["-P", "{ media.name = \"omareel preview\" application.name = omareel }", "-"])
                     .stdin(Stdio::piped())
                     .stdout(Stdio::null())
                     .stderr(Stdio::null())

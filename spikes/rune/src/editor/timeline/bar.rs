@@ -223,7 +223,7 @@ pub fn view(s: &Preview, cx: &mut Cx<Preview>) -> El {
             scale_to(s, v);
         }))
         .child(shortcuts);
-    let right = row().grow(1.0).min_w(if compact { 232.0 } else { 372.0 }).h_full().items_center().justify_end().child(right);
+    let right = row().grow(1.0).min_w(if compact { 270.0 } else { 372.0 }).h_full().items_center().justify_end().child(right);
 
     row()
         .key("bottom-bar")

@@ -327,11 +327,13 @@ fn range(s: &Preview, ui: &Ui, px: f32) -> El {
             let hit = trim_handle(s, ui, name, edge, w, 48.0, ui.accent, true, matches!(t.gesture, Some(Gesture::Range)) && t.resizing_range && t.resize_edge == edge);
             r = r.child(hit.on_drag(move |s: &mut Preview, drag: &mut Drag, tx: &mut Tx| {
                 let px = pps(s);
-                // The handle's own point, in content points, at the press.
-                let start = s.edit.timeline.range_start() as f32 * px;
-                let end = s.edit.timeline.range_end() as f32 * px;
-                let origin = if edge == Edge::Left { start - 6.0 } else { end - HANDLE_W };
-                let pointer = f64::from((origin + drag.start_x + drag.dx) / px);
+                // The pointer in content points: where the handle was at the press, plus travel.
+                if matches!(drag.phase, Phase::Down) {
+                    let t = &s.edit.timeline;
+                    let origin = if edge == Edge::Left { t.range_start() as f32 * px - 6.0 } else { t.range_end() as f32 * px - HANDLE_W };
+                    drag.data = origin + drag.start_x;
+                }
+                let pointer = f64::from((drag.data + drag.dx) / px);
                 match drag.phase {
                     Phase::Down => begin_range_resize(s, edge, pointer),
                     Phase::Move => {
@@ -355,9 +357,6 @@ fn range(s: &Preview, ui: &Ui, px: f32) -> El {
     r
 }
 
-/// The press position of a resize handle doesn't move with the range during the drag, so the
-/// handle's `on_drag` reads the range as it was at Down: `start_x` is fixed.
-///
 /// OmTrimHandle: a 14 pt cap on the block's edge, rounded on the outside, with a grip that
 /// grows while hovered or dragged; the hit area is 20 pt wide and reaches 6 pt past the block.
 #[allow(clippy::too_many_arguments)]
