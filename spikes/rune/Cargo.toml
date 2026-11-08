@@ -10,6 +10,9 @@ description = "omareel's preview, export and recording bar drawn with Rune over 
 
 [dependencies]
 omareel_core = { path = "../../crates/omareel_core" }
+# The recording runtime (recorder daemon, screen capture, input, region picker, launcher and
+# recording-bar decisions): the same crate the Qt app drives, with no Qt in it.
+omareel_record = { path = "../../crates/omareel_record" }
 # Rune is pre-release and asks apps to pin a rev of `dev` (never rewritten). This is dev on
 # 2026-11-06.
 rune = { git = "https://github.com/anomalyco/rune", rev = "8ee30954add065098f043335ece9d9ea0914d21d" }

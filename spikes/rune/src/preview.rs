@@ -35,6 +35,24 @@ pub struct Options {
     pub rune_args: Vec<String>,
 }
 
+impl Options {
+    /// `edit <bundle>`: the editor with the defaults (Rune's flags may follow `--`).
+    pub fn editor(bundle: &str) -> Options {
+        let args: Vec<String> = std::env::args().collect();
+        Options {
+            bundle: bundle.to_owned(),
+            upload: Upload::Surface,
+            decode: Decode::auto(),
+            canvas_height: 0.0,
+            decode_height: 0,
+            measure: None,
+            stats: None,
+            editor: true,
+            rune_args: args.iter().position(|a| a == "--").map(|i| args[i + 1..].to_vec()).unwrap_or_default(),
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
     Preview,
@@ -96,7 +114,7 @@ pub struct Preview {
     pub(crate) ui: Ui,
     pub(crate) scrubbing: bool,
     /// Keeps the wallpaper and cursor images' decoder alive.
-    _cache: rune::ImageCache,
+    pub(crate) cache: rune::ImageCache,
 }
 
 impl Preview {
@@ -269,7 +287,7 @@ impl Preview {
             .screen
             .as_ref()
             .is_some_and(|s| s.current_time.is_none_or(|c| (c - source).abs() > 1.0 / s.fps) && !s.finished);
-        self.playing || self.pending_seek.is_some() || waiting || self.scrubbing
+        self.playing || self.pending_seek.is_some() || waiting || self.scrubbing || (self.mode == Mode::Editor && (crate::editor::busy(self) || crate::editor::toast_showing(self)))
     }
 }
 
@@ -510,7 +528,7 @@ pub fn run(options: Options) -> Result<(), String> {
                 mode,
                 kit,
                 motion: None,
-                edit: Default::default(),
+                edit: crate::editor::EditState { background_path: background_path.clone(), ..Default::default() },
                 now: 0.0,
                 document,
                 settings,
@@ -537,7 +555,7 @@ pub fn run(options: Options) -> Result<(), String> {
                 stats_path,
                 ui,
                 scrubbing: false,
-                _cache: cache,
+                cache,
             }
         })
         .run();

@@ -2013,6 +2013,7 @@ dependencies = [
  "image",
  "libc",
  "omareel_core",
+ "omareel_record",
  "rune",
  "rune-kit",
  "wayland-client",
@@ -2025,6 +2026,18 @@ name = "omareel_core"
 version = "0.0.0"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "omareel_record"
+version = "0.0.0"
+dependencies = [
+ "cc",
+ "libc",
+ "omareel_core",
+ "pkg-config",
+ "wayland-client",
+ "wayland-protocols",
 ]
 
 [[package]]
