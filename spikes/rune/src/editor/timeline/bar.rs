@@ -206,7 +206,7 @@ pub fn view(s: &Preview, cx: &mut Cx<Preview>) -> El {
     let right = row()
         .gap(4.0)
         .items_center()
-        .child(tool_button(ui, "insert-clip", &icons::FILM, if compact { "" } else { "Insert" }, "Insert a video at the playhead  I", compact, false, None, !importing, |s, _| open_insert_dialog(s)))
+        .child(tool_button(ui, "insert-clip", &icons::FILM, if compact { "" } else { "Insert" }, "Insert a video at the playhead  I", compact, false, None, !importing, |s, tx| open_insert_dialog(s, tx)))
         .child(tool_button(ui, "split-clip", &icons::SCISSORS, if compact { "" } else { "Split" }, "Split at playhead  S", compact, false, None, true, |s, _| {
             if s.document.split_at_playhead() {
                 edited(s, "Split clip");

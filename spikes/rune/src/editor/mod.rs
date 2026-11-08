@@ -207,7 +207,13 @@ pub fn view(s: &Preview, cx: &mut Cx<Preview>) -> El {
         .grow(1.0)
         .min_w(528.0)
         .h_full()
-        .child(crate::preview::pane(s, cx, 64.0, 56.0))
+        .child({
+            // Rune draws the camera bubble (a rounded, shadowed video surface) above a translucent
+            // scrim drawn later, so under a dialog the preview dims itself instead of relying on
+            // the scrim.
+            let pane = crate::preview::pane(s, cx, 64.0, 56.0);
+            if s.edit.dialogs.modal.is_some() { pane.dim(0.35) } else { pane }
+        })
         .child(timeline::bottom_bar(s, cx));
     let middle = row().key("middle").w_full().grow(1.0).min_h(0.0).child(preview_column).child(inspector::view(s, cx));
     let mut window = col()

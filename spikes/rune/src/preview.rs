@@ -103,6 +103,11 @@ pub struct Preview {
     camera_color: ColorInfo,
     screen: Option<Stream>,
     camera: Option<Stream>,
+    /// An inserted video's decoder (MediaLayer's player), the media it decodes, and whether it
+    /// has shown a frame of it (`media_frame_ready`).
+    insert: Option<Stream>,
+    insert_media: String,
+    insert_ready: bool,
     screen_size: (u32, u32),
     camera_path: String,
     canvas_limit: f32,
@@ -548,9 +553,9 @@ impl Preview {
             }
         }
         let source = self.document.source_position();
-        let composition = self.document.preview_composition(false, "");
+        let mut changed = self.step_insert();
+        let composition = self.document.preview_composition(self.insert_ready, &self.insert_media);
         let mut skipped = 0;
-        let mut changed = false;
         // Headless runs (`--snap`, `--video`) are frame-exact: wait for each frame's pictures.
         if rune::is_headless() {
             if let Some(stream) = self.screen.as_mut() {
@@ -590,13 +595,62 @@ impl Preview {
         changed || self.playing
     }
 
+    /// MediaLayer's player: while the playhead is in an inserted video, decode it from the
+    /// matching time and hand its frames to `media.insert`. True when a frame was shown.
+    fn step_insert(&mut self) -> bool {
+        let seek = self.document.media_seek(self.document.output_position());
+        let Some((media, source, speed)) = seek.and_then(|m| m.media.map(|media| (media, m.source, m.speed))) else {
+            self.insert = None;
+            self.insert_ready = false;
+            return false;
+        };
+        let stale = self.insert.as_ref().is_none_or(|stream| {
+            stream.finished || stream.current_time.is_some_and(|c| c > source + 0.2 || source - c > 1.0)
+        });
+        if media != self.insert_media || stale {
+            let info = self.document.inserts().get(&media).copied().unwrap_or_default();
+            let path = if std::path::Path::new(&media).is_absolute() { media.clone() } else { format!("{}/{}", self.document.bundle_path(), media) };
+            let (w, h) = ((info.width.max(2) & !1) as u32, (info.height.max(2) & !1) as u32);
+            let fps = (info.fps / speed.max(0.01)).clamp(1.0, 60.0);
+            self.insert = Some(Stream::start(StreamSpec {
+                path: &path,
+                start: source,
+                end: info.duration.max(source + 0.1),
+                fps,
+                width: w,
+                height: h,
+                ahead: 6,
+                upload: self.upload,
+                decode: Decode::Software,
+                color: video::color_info(&path),
+            }));
+            if media != self.insert_media {
+                self.insert_ready = false;
+            }
+            self.insert_media = media;
+        }
+        let stream = self.insert.as_mut().expect("started above");
+        if rune::is_headless() {
+            stream.wait_for(source);
+        }
+        let mut skipped = 0;
+        match stream.advance(source, &mut skipped) {
+            Some(frame) => {
+                Self::show(&self.media.insert, frame);
+                self.insert_ready = true;
+                true
+            }
+            None => false,
+        }
+    }
+
     pub(crate) fn busy(&self) -> bool {
         let source = self.document.source_position();
         let waiting = self
             .screen
             .as_ref()
             .is_some_and(|s| s.current_time.is_none_or(|c| (c - source).abs() > 1.0 / s.fps) && !s.finished);
-        self.playing || self.pending_seek.is_some() || waiting || self.scrubbing || (self.mode == Mode::Editor && (crate::editor::busy(self) || crate::editor::toast_showing(self)))
+        self.playing || self.pending_seek.is_some() || waiting || self.scrubbing || (self.insert.is_some() && !self.insert_ready) || (self.mode == Mode::Editor && (crate::editor::busy(self) || crate::editor::toast_showing(self)))
     }
 }
 
@@ -1000,6 +1054,7 @@ pub fn run(options: Options) -> Result<(), String> {
     let stats_path = options.stats.clone();
 
     let mode = if options.editor { Mode::Editor } else { Mode::Preview };
+    let title: &'static str = if options.editor { Box::leak(format!("{} — Omareel", document.bundle_name()).into_boxed_str()) } else { "omareel (Rune spike)" };
     let size = if options.editor { (1440.0, 900.0) } else { (1280.0, 760.0) };
     let spec = AppSpec {
         setup: Some(setup),
@@ -1007,8 +1062,10 @@ pub fn run(options: Options) -> Result<(), String> {
         on_key: Some(on_key),
         // Inter for the interface, fontconfig's monospace for times and keys.
         families: ("Inter", "ui-monospace"),
-        ..AppSpec::new("omareel (Rune spike)", size, || unreachable!("App::init supplies the state"), view)
+        ..AppSpec::new(title, size, || unreachable!("App::init supplies the state"), view)
     };
+    // Main.qml's title, and the app id the Qt editor has (Hyprland and Omarchy match on it).
+    rune::set_app_id("omareel");
     let ui = Ui::load();
     let kit = crate::editor::kit(&ui);
     App::new(spec)
@@ -1046,6 +1103,9 @@ pub fn run(options: Options) -> Result<(), String> {
                 camera_color,
                 screen: None,
                 camera: None,
+                insert: None,
+                insert_media: String::new(),
+                insert_ready: false,
                 screen_size,
                 camera_path,
                 canvas_limit,

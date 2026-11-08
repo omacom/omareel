@@ -296,13 +296,9 @@ pub fn delete_selected_range(s: &mut Preview) -> bool {
 // ---------------------------------------------------------------------------------------------
 // Hooks
 
-/// BottomBar.openInsertDialog: the insert dialog is the dialogs area's; until it has an
-/// `open_insert`, say so.
-pub fn open_insert_dialog(s: &mut Preview) {
-    if s.document.importing() {
-        return;
-    }
-    s.edit.toast = Some(("Insert video: the dialog isn't ported yet".into(), s.now));
+/// BottomBar.openInsertDialog: the dialogs area's insert dialog.
+pub fn open_insert_dialog(s: &mut Preview, tx: &mut Tx) {
+    super::dialogs::open_insert(s, tx);
 }
 
 pub fn on_effect(s: &mut Preview, effect: &Effect) {
@@ -315,7 +311,13 @@ pub fn on_effect(s: &mut Preview, effect: &Effect) {
 }
 
 pub fn poll(s: &mut Preview) -> bool {
-    thumbs::poll(s)
+    let mut changed = thumbs::poll(s);
+    // A click on the camera row opens the inspector's Camera panel.
+    if std::mem::take(&mut s.edit.timeline.camera_selected) {
+        super::inspector::show_camera(s);
+        changed = true;
+    }
+    changed
 }
 
 pub fn busy(s: &Preview) -> bool {
@@ -341,7 +343,7 @@ pub fn on_key(s: &mut Preview, key: &KeyEvent, tx: &mut Tx) -> bool {
             true
         }
         Key::Text(t) if plain && t == "i" => {
-            open_insert_dialog(s);
+            open_insert_dialog(s, tx);
             true
         }
         Key::Text(t) if plain && t == "?" => {

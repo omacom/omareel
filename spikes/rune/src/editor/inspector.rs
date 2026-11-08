@@ -72,6 +72,11 @@ pub struct State {
     thumbnails_pending: usize,
 }
 
+/// Shows the Camera panel (the timeline's camera row).
+pub fn show_camera(s: &mut Preview) {
+    show_section(s, 5);
+}
+
 /// Shows panel `index` (the timeline selects Zoom, Clip or Camera this way).
 pub fn show_section(s: &mut Preview, index: usize) {
     let index = index.min(SECTIONS.len() - 1);
