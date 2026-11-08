@@ -3,7 +3,7 @@
 //! starts the recorder daemon, the recording bar and, when the recording is saved, the editor,
 //! each by running this binary again (`/proc/self/exe`) with the command below.
 //!
-//!   omareel-rune-spike                        the launcher
+//!   omareel-rune-spike [-- <Rune flags>]      the launcher
 //!   omareel-rune-spike edit <bundle>          the editor
 //!   omareel-rune-spike export <bundle> -o <out.mp4> [...]
 //!   omareel-rune-spike record [...]           as `omareel record`
@@ -63,7 +63,9 @@ fn main() {
         std::process::exit(status);
     }
     let result = match args.get(1).map(String::as_str) {
-        None => launcher::run(),
+        // The launcher, with Rune's own flags after `--` (`-- --snap out.png --scene recording`).
+        None => launcher::run(Vec::new()),
+        Some("--") => launcher::run(args[2..].to_vec()),
         Some("__record-bar") => recording_bar::run(&args[2..]),
         Some("edit") if args.len() > 2 => preview::run(preview::Options::editor(&args[2])),
         Some("setup") if args.len() > 2 => setup::run(&args[2]),
