@@ -8,6 +8,7 @@
 
 use cxx_qt_lib::{QByteArray, QList, QMap, QMapPair_QString_QVariant, QString, QStringList, QVariant};
 use omareel_core::compat::qjson::Value;
+use omareel_core::export::plan::YuvMatrix;
 use omareel_core::export::{self, FrameImages, Image};
 use omareel_core::media_probe;
 use std::sync::Arc;
@@ -112,13 +113,22 @@ pub mod ffi {
         fn cancel(self: &CancelFlag);
         fn reset(self: &CancelFlag);
 
-        /// A decoded frame: tightly packed RGBA rows, `width` * 4 bytes each.
+        /// A decoded frame: tightly packed RGBA rows, `width` * 4 bytes each, or when `isYuv`
+        /// the planes of a YUV 4:2:0 frame (Y, then U and V at half the width and height).
         type DecodedImage;
         #[cxx_name = "isNull"]
         fn is_null(self: &DecodedImage) -> bool;
         fn width(self: &DecodedImage) -> i32;
         fn height(self: &DecodedImage) -> i32;
         fn pixels(self: &DecodedImage) -> &[u8];
+        #[cxx_name = "isYuv"]
+        fn is_yuv(self: &DecodedImage) -> bool;
+        /// A YUV frame's matrix: BT.709, else BT.601.
+        #[cxx_name = "yuvBt709"]
+        fn yuv_bt709(self: &DecodedImage) -> bool;
+        /// A YUV frame's range: full, else limited.
+        #[cxx_name = "yuvFullRange"]
+        fn yuv_full_range(self: &DecodedImage) -> bool;
 
         type ExportJob;
         #[cxx_name = "newExportJob"]
@@ -146,6 +156,10 @@ pub mod ffi {
         fn ripples(self: &ExportJob) -> QList_QVariant;
         #[cxx_name = "keystrokePills"]
         fn keystroke_pills(self: &ExportJob) -> QList_QVariant;
+        /// Before `start`: the recording's frames as YUV (see `DecodedImage`) when the
+        /// renderer converts them on the GPU.
+        #[cxx_name = "setYuvScreen"]
+        fn set_yuv_screen(self: &mut ExportJob, yuv: bool);
         /// Once the renderer is ready: temporary files, the encoder and the decoder.
         fn start(self: &mut ExportJob, software_rendering: bool, error: &mut QString) -> bool;
         /// Waits for frame `frame` and updates the composition; false with `error` set to end.
@@ -251,6 +265,18 @@ impl DecodedImage {
 
     fn pixels(&self) -> &[u8] {
         self.0.as_ref().map_or(&[], |image| image.pixels.as_slice())
+    }
+
+    fn is_yuv(&self) -> bool {
+        self.0.as_ref().is_some_and(|image| image.yuv.is_some())
+    }
+
+    fn yuv_bt709(&self) -> bool {
+        self.0.as_ref().and_then(|image| image.yuv).is_some_and(|yuv| yuv.matrix == YuvMatrix::Bt709)
+    }
+
+    fn yuv_full_range(&self) -> bool {
+        self.0.as_ref().and_then(|image| image.yuv).is_some_and(|yuv| yuv.full_range)
     }
 }
 
@@ -442,6 +468,12 @@ impl ExportJob {
                 ]))
             })
             .collect()
+    }
+
+    fn set_yuv_screen(&mut self, yuv: bool) {
+        if let Some(job) = self.job.as_mut() {
+            job.set_yuv_screen(yuv);
+        }
     }
 
     fn start(&mut self, software_rendering: bool, error: &mut QString) -> bool {

@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 6.8 REQUIRED COMPONENTS Core Concurrent Gui GuiPrivate Quick QuickControls2 Multimedia OpenGL Svg Test)
+find_package(Qt6 6.8 REQUIRED COMPONENTS Core Concurrent Gui GuiPrivate Quick QuickControls2 Multimedia OpenGL ShaderTools Svg Test)
 find_package(LayerShellQt REQUIRED)
 
 # The program logic is Rust (crates/). omareel_qt is the one static library linked into C++:
@@ -188,6 +188,13 @@ qt_add_qml_module(omareel_render
         src/ui/qml/Launcher.qml
         src/ui/qml/RecordingBar.qml
 )
+# FrameSource's YUV node converts the export's frames on the GPU.
+qt_add_shaders(omareel_render "omareel_shaders"
+    BATCHABLE
+    PREFIX "/omareel/shaders"
+    BASE src/render/shaders
+    FILES src/render/shaders/yuv.vert src/render/shaders/yuv.frag
+)
 qt_add_resources(omareel_render "omareel_assets"
     PREFIX "/omareel"
     FILES
@@ -219,7 +226,8 @@ qt_add_resources(omareel_render "omareel_assets"
         assets/sounds/click.wav
 )
 target_include_directories(omareel_render PUBLIC src src/render)
-target_link_libraries(omareel_render PUBLIC omareel_qt omareel_ui Qt6::Concurrent Qt6::Quick Qt6::QuickControls2 Qt6::Multimedia Qt6::OpenGL Qt6::Svg)
+target_link_libraries(omareel_render PUBLIC omareel_qt omareel_ui Qt6::Concurrent Qt6::Quick Qt6::QuickControls2 Qt6::Multimedia Qt6::OpenGL Qt6::Svg
+    PRIVATE Qt6::GuiPrivate)
 
 qt_add_executable(omareel src/main.cpp src/ui/CaptureTestClient.cpp)
 target_link_libraries(omareel PRIVATE omareel_render omareel_qt Qt6::Quick Qt6::Multimedia Qt6::GuiPrivate LayerShellQt::Interface PkgConfig::WAYLAND_CLIENT)
