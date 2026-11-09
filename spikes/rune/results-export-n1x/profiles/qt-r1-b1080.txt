@@ -1,0 +1,259 @@
+CPU seconds per process:
+    28.90  ffmpeg encoder (37743)
+     4.72  app (37655)
+     2.68  ffmpeg decoder (37747)
+     2.16  ffmpeg decoder (37963)
+     2.06  ffmpeg decoder (38431)
+     1.17  ffmpeg decoder (37819)
+     0.08  other ffmpeg (37726)
+     0.05  ffmpeg decoder (38430)
+     0.04  ffmpeg decoder (37689)
+     0.03  ffmpeg decoder (37962)
+     0.03  ffmpeg decoder (37746)
+     0.03  ffmpeg decoder (37745)
+     0.02  ffmpeg decoder (37703)
+
+CPU seconds per thread (top 25):
+     2.58  app             omareel 37655
+     1.07  ffmpeg encoder  vf#0:0 37955
+     1.04  ffmpeg encoder  vf#0:0 37957
+     1.03  ffmpeg encoder  vf#0:0 37958
+     1.02  ffmpeg encoder  vf#0:0 37956
+     1.01  ffmpeg encoder  vf#0:0 37959
+     0.91  ffmpeg encoder  vf#0:0 37960
+     0.73  ffmpeg encoder  vf#0:0 37942
+     0.72  ffmpeg encoder  vf#0:0 37931
+     0.70  ffmpeg encoder  vf#0:0 37933
+     0.70  ffmpeg encoder  vf#0:0 37930
+     0.70  ffmpeg encoder  vf#0:0 37936
+     0.69  ffmpeg encoder  vf#0:0 37926
+     0.69  ffmpeg encoder  vf#0:0 37935
+     0.65  ffmpeg encoder  vf#0:0 37947
+     0.65  ffmpeg encoder  vf#0:0 37948
+     0.65  ffmpeg encoder  vf#0:0 37944
+     0.63  ffmpeg encoder  vf#0:0 37945
+     0.62  ffmpeg encoder  vf#0:0 37934
+     0.61  ffmpeg encoder  vf#0:0 37946
+     0.59  ffmpeg encoder  vf#0:0 37939
+     0.59  ffmpeg encoder  vf#0:0 37949
+     0.57  ffmpeg encoder  vf#0:0 37954
+     0.57  ffmpeg encoder  enc0:0:libx264 37891
+     0.57  ffmpeg encoder  vf#0:0 37932
+
+app (37655): top self functions
+     1.39  [libQt6Gui.so.6.12.0]
+     1.20  memcpy
+     0.53  [libc.so.6]
+     0.31  [libnvidia-eglcore.so.615.78.08]
+     0.12  [ld-linux-aarch64.so.1]
+     0.09  [libQt6Qml.so.6.12.0]
+     0.08  pthread_cond_timedwait
+     0.08  [libQt6Core.so.6.12.0]
+     0.06  [libwebp.so.7.2.0]
+     0.06  [libQt6Quick.so.6.12.0]
+     0.04  QQmlNotifier::emitNotify(QQmlNotifierEndpoint*, void**)
+     0.02  ppoll
+
+ffmpeg decoder (37689): top self functions
+     0.03  [ld-linux-aarch64.so.1]
+     0.00  [libavcodec.so.63.1.102]
+     0.00  [libc.so.6]
+     0.00  [libglslang.so.16.6.0]
+     0.00  cosf32x
+     0.00  [libjxl.so.0.12.0]
+     0.00  asn1_find_node
+     0.00  [libopenmpt.so.0.5.5]
+     0.00  [libavformat.so.63.1.102]
+
+ffmpeg decoder (37703): top self functions
+     0.02  [ld-linux-aarch64.so.1]
+     0.00  [libavcodec.so.63.1.102]
+     0.00  [libglslang.so.16.6.0]
+     0.00  sinf32x
+     0.00  scalbnf32x
+     0.00  asn1_array2tree
+     0.00  [libavformat.so.63.1.102]
+     0.00  [libc.so.6]
+
+other ffmpeg (37726): top self functions
+     0.04  [ld-linux-aarch64.so.1]
+     0.04  [libc.so.6]
+     0.00  pthread_cond_wait
+     0.00  __call_tls_dtors
+     0.00  [libglslang.so.16.6.0]
+     0.00  [libp11-kit.so.0.4.11]
+     0.00  [libjxl.so.0.12.0]
+     0.00  asn1_find_node
+     0.00  sinf32x
+     0.00  cosf32x
+     0.00  av_demuxer_iterate
+     0.00  __ctype_init
+
+ffmpeg encoder (37743): top self functions
+    14.68  [libx264.so.165]
+     4.21  [libswscale.so.10.1.102]
+     1.48  [libc.so.6]
+     0.74  x264_8_pixel_avg2_w8_neon
+     0.66  x264_8_pixel_sad_x4_16x16_neon_dotprod
+     0.56  x264_8_pixel_avg2_w16_neon
+     0.45  x264_8_pixel_sad_x4_8x8_neon
+     0.45  x264_8_pixel_sad_16x16_neon_dotprod
+     0.36  x264_8_hpel_filter_neon_i8mm
+     0.36  x264_8_pixel_sad_x3_16x16_neon_dotprod
+     0.33  x264_8_cabac_encode_decision_asm
+     0.26  x264_8_pixel_sad_x3_8x8_neon
+
+ffmpeg decoder (37745): top self functions
+     0.02  [ld-linux-aarch64.so.1]
+     0.00  [libc.so.6]
+     0.00  [libavcodec.so.63.1.102]
+     0.00  [libglslang.so.16.6.0]
+     0.00  pthread_sigmask
+     0.00  pthread_mutexattr_init
+     0.00  [libwebp.so.7.2.0]
+     0.00  scalbnf32x
+     0.00  asn1_find_node
+     0.00  [libmodplug.so.1.0.0]
+     0.00  cosf32x
+     0.00  strcmp
+
+ffmpeg decoder (37746): top self functions
+     0.02  [ld-linux-aarch64.so.1]
+     0.00  [libavcodec.so.63.1.102]
+     0.00  [libglslang.so.16.6.0]
+     0.00  scalbnf32x
+     0.00  [libjxl.so.0.12.0]
+     0.00  memcpy
+     0.00  [libmodplug.so.1.0.0]
+     0.00  cosf32x
+     0.00  av_opt_next
+     0.00  [libavformat.so.63.1.102]
+     0.00  memset
+     0.00  avcodec_parameters_copy
+
+ffmpeg decoder (37747): top self functions
+     1.05  [libavcodec.so.63.1.102]
+     0.54  [libc.so.6]
+     0.47  [libswscale.so.10.1.102]
+     0.34  memcpy
+     0.10  pthread_cond_wait
+     0.04  [libavutil.so.61.1.102]
+     0.02  [libavformat.so.63.1.102]
+     0.02  [ld-linux-aarch64.so.1]
+     0.02  [ffmpeg]
+     0.01  memset
+     0.01  [libavfilter.so.12.1.102]
+     0.00  __ctype_init
+
+ffmpeg decoder (37819): top self functions
+     0.49  [libc.so.6]
+     0.20  [libswscale.so.10.1.102]
+     0.13  [libavcodec.so.63.1.102]
+     0.08  pthread_cond_wait
+     0.08  memcpy
+     0.04  [ld-linux-aarch64.so.1]
+     0.04  [libavutil.so.61.1.102]
+     0.02  [ffmpeg]
+     0.01  [libavfilter.so.12.1.102]
+     0.01  [libavformat.so.63.1.102]
+     0.00  av_fifo_can_write
+     0.00  __ctype_init
+
+ffmpeg decoder (37962): top self functions
+     0.02  [ld-linux-aarch64.so.1]
+     0.00  [libavcodec.so.63.1.102]
+     0.00  [libglslang.so.16.6.0]
+     0.00  btowc
+     0.00  [libjxl.so.0.12.0]
+     0.00  [libtasn1.so.6.6.5]
+     0.00  [libmodplug.so.1.0.0]
+     0.00  pw_set_domain
+     0.00  [libavformat.so.63.1.102]
+     0.00  memset
+     0.00  av_strlcpy
+
+ffmpeg decoder (37963): top self functions
+     1.72  [libavcodec.so.63.1.102]
+     0.18  memcpy
+     0.16  [libswscale.so.10.1.102]
+     0.04  [libc.so.6]
+     0.04  [ld-linux-aarch64.so.1]
+     0.01  [libavutil.so.61.1.102]
+     0.00  [libavfilter.so.12.1.102]
+     0.00  pthread_cond_wait
+     0.00  [libavformat.so.63.1.102]
+     0.00  memset
+     0.00  [ffmpeg]
+     0.00  pthread_mutex_lock
+
+ffmpeg decoder (38430): top self functions
+     0.04  [ld-linux-aarch64.so.1]
+     0.00  [libavcodec.so.63.1.102]
+     0.00  [libglslang.so.16.6.0]
+     0.00  scalbnf32x
+     0.00  [libgnutls.so.30.42.0]
+     0.00  cosf32x
+     0.00  av_opt_child_class_iterate
+     0.00  [libavformat.so.63.1.102]
+     0.00  [libc.so.6]
+
+ffmpeg decoder (38431): top self functions
+     1.49  [libavcodec.so.63.1.102]
+     0.24  memcpy
+     0.22  [libswscale.so.10.1.102]
+     0.04  [ld-linux-aarch64.so.1]
+     0.03  [libc.so.6]
+     0.01  [libavformat.so.63.1.102]
+     0.01  [libavutil.so.61.1.102]
+     0.00  [libavfilter.so.12.1.102]
+     0.00  [ffmpeg]
+     0.00  memset
+     0.00  pthread_cond_wait
+     0.00  av_freep
+
+inclusive CPU seconds, the app main thread (2.58 s):
+     2.52  [libc.so.6]
+     2.52  _start
+     2.52  __libc_start_main
+     2.51  main
+     2.46  Omareel::Exporter::exportBundle(Omareel::ExportOptions const&)
+     2.46  exportCommand(QList<QString> const&)
+     2.46  Omareel::Exporter::run(Omareel::ExportOptions const&, QString*)
+     2.25  Omareel::ExportRenderer::renderFrame(QImage const&, QImage const&, QImage const&, QByteArray*, QString*)
+     1.11  memcpy
+     1.00  [libQt6Gui.so.6.12.0]
+     0.84  [libnvidia-eglcore.so.615.78.08]
+     0.78  [libQt6Quick.so.6.12.0]
+     0.75  QQuickRenderControl::endFrame()
+     0.75  QRhi::endOffscreenFrame(QFlags<QRhi::EndFrameFlag>)
+     0.52  [libQt6Core.so.6.12.0]
+     0.48  QQuickRenderControl::polishItems()
+     0.48  [libQt6Qml.so.6.12.0]
+     0.48  QQuickWindowPrivate::polishItems()
+     0.43  QQmlBinding::update(QFlags<QQmlPropertyData::WriteFlag>)
+     0.43  QQmlBinding::doUpdate(QQmlJavaScriptExpression::DeleteWatcher const&, QFlags<QQmlPropertyData::WriteFlag>, QV4::Scope&)
+     0.42  QQmlNotifier::emitNotify(QQmlNotifierEndpoint*, void**)
+     0.35  QQmlBinding::slowWrite(QQmlPropertyData const&, QQmlPropertyData const&, QV4::Value const&, bool, QFlags<QQmlPropertyData::WriteFlag>)
+     0.32  QImage::copy(QRect const&) const
+     0.29  Omareel::ExportRenderer::mapReadback(Omareel::ExportRenderer::ReadbackSlot&, QString*)
+     0.28  QPainter::begin(QPaintDevice*)
+     0.27  QImage::detach()
+     0.14  QQuickWindowPrivate::renderSceneGraph()
+     0.14  QSGRenderer::renderScene()
+     0.14  QRasterPaintEngine::fillRect(QRectF const&, QSpanData*)
+     0.13  QQmlPropertyPrivate::write(QObject*, QQmlPropertyData const&, QVariant const&, QQmlRefPointer<QQmlContextData> const&, QFlags<QQmlPropertyData::WriteFlag>)
+     0.13  Omareel::ExportRenderer::init(int, int, bool, QString*)
+     0.13  [ld-linux-aarch64.so.1]
+     0.12  [memfd:JITCode:QtQml (deleted)]
+     0.11  QQmlJavaScriptExpression::evaluate(QV4::CallData*, bool*)
+     0.11  QQmlBinding::evaluate(bool*)
+     0.11  QQuickRenderControl::sync()
+     0.11  QQuickWindowPrivate::syncSceneGraph()
+     0.11  QQuickWindowPrivate::updateDirtyNodes()
+     0.11  QSGRenderer::preprocess()
+     0.11  QQmlObjectCreator::finalize(QQmlInstantiationInterrupt&)
+     0.10  QSGRhiLayer::updateTexture()
+     0.10  QSGRhiLayer::grab()
+     0.10  QQuickWindowPrivate::updateDirtyNode(QQuickItem*)
+     0.10  QSGBatchRenderer::Renderer::render()
+     0.09  QSGBatchRenderer::Renderer::prepareRenderPass(QSGBatchRenderer::Renderer::RenderPassContext*)

@@ -1,0 +1,2 @@
+{"label": "before-3m", "app": "qt", "bundle": "real3m", "run": 1, "rc": 0, "seconds": 77.089, "frames": 10800, "decoder": "software", "encoder": "libx264", "stages_ms": {"decode wait": 0.023, "upload": 0.231, "render": 5.434, "readback": 0.582, "encode write": 5.38}}
+{"label": "before-3m", "app": "rune", "bundle": "real3m", "run": 1, "rc": 0, "seconds": 64.941, "frames": 10800, "decoder": "software", "encoder": "libx264", "stages_ms": {"decode wait": 0.034, "upload": 0.092, "render": 5.771, "readback": 0.661, "encode write": 5.393}}

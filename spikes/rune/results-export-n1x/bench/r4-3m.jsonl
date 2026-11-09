@@ -1,0 +1,2 @@
+{"label": "r4-3m", "app": "qt", "bundle": "real3m", "run": 1, "rc": 0, "seconds": 48.133, "frames": 10800, "decoder": "software", "encoder": "libx264", "stages_ms": {"decode wait": 0.057, "upload": 0.196, "render": 1.023, "readback": 0.647, "encode write": 4.289}}
+{"label": "r4-3m", "app": "rune", "bundle": "real3m", "run": 1, "rc": 0, "seconds": 66.617, "frames": 10800, "decoder": "software", "encoder": "libx264", "stages_ms": {"decode wait": 0.034, "upload": 0.054, "render": 5.862, "readback": 0.677, "encode write": 3.933}}

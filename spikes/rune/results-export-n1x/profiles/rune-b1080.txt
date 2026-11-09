@@ -1,0 +1,305 @@
+CPU seconds per process:
+    28.53  ffmpeg encoder (3940271)
+     2.96  app (3940001)
+     2.78  ffmpeg decoder (3940286)
+     1.99  ffmpeg decoder (3940730)
+     1.78  ffmpeg decoder (3940887)
+     1.28  ffmpeg decoder (3940404)
+     0.06  other ffmpeg (3940242)
+     0.05  ffmpeg decoder (3940003)
+     0.05  ffmpeg decoder (3940857)
+     0.04  ffmpeg decoder (3940002)
+     0.03  ffmpeg decoder (3940274)
+     0.03  ffmpeg decoder (3940273)
+     0.03  ffmpeg decoder (3940729)
+     0.02  other fc-list (3940224)
+     0.01  other hyprctl (3940046)
+     0.01  other fc-match (3940695)
+     0.01  other fc-match (3940044)
+
+CPU seconds per thread (top 25):
+     1.37  app             omareel-rune-sp 3940001
+     1.04  ffmpeg encoder  vf#0:0 3940632
+     1.01  ffmpeg encoder  vf#0:0 3940629
+     0.97  ffmpeg encoder  vf#0:0 3940631
+     0.96  ffmpeg encoder  vf#0:0 3940630
+     0.95  ffmpeg encoder  vf#0:0 3940628
+     0.92  ffmpeg encoder  vf#0:0 3940634
+     0.85  ffmpeg encoder  vf#0:0 3940612
+     0.78  ffmpeg encoder  vf#0:0 3940624
+     0.73  ffmpeg encoder  vf#0:0 3940615
+     0.72  ffmpeg encoder  vf#0:0 3940605
+     0.70  ffmpeg encoder  vf#0:0 3940619
+     0.68  ffmpeg encoder  vf#0:0 3940597
+     0.67  ffmpeg encoder  vf#0:0 3940627
+     0.67  ffmpeg encoder  vf#0:0 3940598
+     0.65  ffmpeg encoder  vf#0:0 3940600
+     0.63  ffmpeg encoder  vf#0:0 3940625
+     0.62  app             omareel-rune-sp 3940270
+     0.61  ffmpeg encoder  vf#0:0 3940609
+     0.60  ffmpeg encoder  vf#0:0 3940622
+     0.60  ffmpeg encoder  vf#0:0 3940621
+     0.60  app             omareel-rune-sp 3940272
+     0.59  ffmpeg encoder  vf#0:0 3940607
+     0.59  ffmpeg encoder  vf#0:0 3940626
+     0.59  ffmpeg encoder  vf#0:0 3940599
+
+app (3940001): top self functions
+     1.35  memcpy
+     0.35  memset
+     0.29  [libc.so.6]
+     0.12  [libnvidia-glcore.so.615.78.08]
+     0.06  ppoll
+     0.05  rune::image::downsample::<rune::image::mip_chain::{closure#0}>::{closure#0}
+     0.05  __kernel_clock_gettime
+     0.03  <image_webp::vp8_arithmetic_decoder::ArithmeticDecoder>::read_with_tree_with_first_node
+     0.03  image_webp::loop_filter::should_filter_vertical
+     0.03  [ld-linux-aarch64.so.1]
+     0.03  <omareel_core::compat::qprocess::Process>::poll
+     0.02  image_webp::loop_filter::subblock_filter_horizontal
+
+ffmpeg decoder (3940002): top self functions
+     0.03  [ld-linux-aarch64.so.1]
+     0.00  [libavcodec.so.63.1.102]
+     0.00  [libc.so.6]
+     0.00  [libglslang.so.16.6.0]
+     0.00  cfree
+     0.00  [libjxl.so.0.12.0]
+     0.00  [libtasn1.so.6.6.5]
+     0.00  cosf32x
+     0.00  sinf32x
+     0.00  [libavformat.so.63.1.102]
+
+ffmpeg decoder (3940003): top self functions
+     0.05  [ld-linux-aarch64.so.1]
+     0.00  [libc.so.6]
+     0.00  [libglslang.so.16.6.0]
+     0.00  [libavcodec.so.63.1.102]
+     0.00  pthread_sigmask
+     0.00  __dup2
+     0.00  [libjxl.so.0.12.0]
+     0.00  sinf32x
+     0.00  [libmodplug.so.1.0.0]
+     0.00  strcmp
+     0.00  [libavformat.so.63.1.102]
+     0.00  malloc
+
+other fc-match (3940044): top self functions
+     0.00  [libc.so.6]
+     0.00  [libexpat.so.1.13.0]
+     0.00  [libfontconfig.so.1.17.0]
+     0.00  [ld-linux-aarch64.so.1]
+     0.00  getenv
+     0.00  FcStrCmpIgnoreCase
+     0.00  strncmp
+     0.00  cfree
+
+other hyprctl (3940046): top self functions
+     0.01  [ld-linux-aarch64.so.1]
+     0.00  [libc.so.6]
+     0.00  pthread_sigmask
+
+other fc-list (3940224): top self functions
+     0.01  [libfontconfig.so.1.17.0]
+     0.00  [libexpat.so.1.13.0]
+     0.00  [libc.so.6]
+     0.00  [ld-linux-aarch64.so.1]
+     0.00  malloc
+     0.00  getenv
+     0.00  memcpy
+     0.00  strcmp
+     0.00  FcStrCmpIgnoreCase
+     0.00  FcStrSetMember
+     0.00  strlen
+     0.00  FcFontSetList
+
+other ffmpeg (3940242): top self functions
+     0.03  [libc.so.6]
+     0.02  [ld-linux-aarch64.so.1]
+     0.00  pthread_cond_wait
+     0.00  __ctype_init
+     0.00  [libglslang.so.16.6.0]
+     0.00  [libavutil.so.61.1.102]
+     0.00  [libjxl.so.0.12.0]
+     0.00  [libmodplug.so.1.0.0]
+     0.00  strchrnul
+     0.00  memcpy
+     0.00  cfree
+     0.00  srt_logging::AllFaOn::AllFaOn()
+
+ffmpeg encoder (3940271): top self functions
+    14.52  [libx264.so.165]
+     3.60  [libswscale.so.10.1.102]
+     1.86  [libc.so.6]
+     0.75  x264_8_pixel_avg2_w8_neon
+     0.66  x264_8_pixel_sad_x4_16x16_neon_dotprod
+     0.57  x264_8_pixel_avg2_w16_neon
+     0.47  x264_8_pixel_sad_16x16_neon_dotprod
+     0.44  x264_8_pixel_sad_x4_8x8_neon
+     0.35  x264_8_pixel_sad_x3_16x16_neon_dotprod
+     0.34  x264_8_cabac_encode_decision_asm
+     0.32  x264_8_hpel_filter_neon_i8mm
+     0.25  x264_8_pixel_sad_x3_8x8_neon
+
+ffmpeg decoder (3940273): top self functions
+     0.02  [ld-linux-aarch64.so.1]
+     0.00  [libc.so.6]
+     0.00  [libglslang.so.16.6.0]
+     0.00  [libavcodec.so.63.1.102]
+     0.00  pthread_sigmask
+     0.00  __libc_sigaction
+     0.00  [libgomp.so.1.0.0]
+     0.00  [libm.so.6]
+     0.00  asn1_find_node
+     0.00  cosf32x
+     0.00  [libmodplug.so.1.0.0]
+     0.00  [libavformat.so.63.1.102]
+
+ffmpeg decoder (3940274): top self functions
+     0.02  [ld-linux-aarch64.so.1]
+     0.00  [libavcodec.so.63.1.102]
+     0.00  [libc.so.6]
+     0.00  [libglslang.so.16.6.0]
+     0.00  pthread_sigmask
+     0.00  pthread_mutex_init
+     0.00  [libcrypto.so.3]
+     0.00  sinf32x
+     0.00  cosf32x
+     0.00  av_opt_set_defaults
+     0.00  [libavformat.so.63.1.102]
+     0.00  [ffmpeg]
+
+ffmpeg decoder (3940286): top self functions
+     0.95  [libavcodec.so.63.1.102]
+     0.66  [libc.so.6]
+     0.51  [libswscale.so.10.1.102]
+     0.32  memcpy
+     0.10  pthread_cond_wait
+     0.06  [libavutil.so.61.1.102]
+     0.03  [libavformat.so.63.1.102]
+     0.02  [ld-linux-aarch64.so.1]
+     0.02  [ffmpeg]
+     0.01  memset
+     0.01  [libavfilter.so.12.1.102]
+     0.01  av_fifo_can_write
+
+ffmpeg decoder (3940404): top self functions
+     0.56  [libc.so.6]
+     0.21  [libswscale.so.10.1.102]
+     0.15  [libavcodec.so.63.1.102]
+     0.08  memcpy
+     0.07  pthread_cond_wait
+     0.05  [libavutil.so.61.1.102]
+     0.04  [ld-linux-aarch64.so.1]
+     0.02  [libavformat.so.63.1.102]
+     0.01  [ffmpeg]
+     0.01  [libavfilter.so.12.1.102]
+     0.01  __ctype_init
+     0.00  av_fifo_can_write
+
+other fc-match (3940695): top self functions
+     0.01  [libfontconfig.so.1.17.0]
+     0.00  [libexpat.so.1.13.0]
+     0.00  [ld-linux-aarch64.so.1]
+     0.00  [libc.so.6]
+     0.00  FcStrSetMember
+     0.00  fstatat64
+     0.00  memcmp
+     0.00  cfree
+
+ffmpeg decoder (3940729): top self functions
+     0.02  [ld-linux-aarch64.so.1]
+     0.00  [libavcodec.so.63.1.102]
+     0.00  [libglslang.so.16.6.0]
+     0.00  [libm.so.6]
+     0.00  [libcrypto.so.3]
+     0.00  sinf32x
+     0.00  cosf32x
+     0.00  srandom_r
+     0.00  av_opt_next
+     0.00  [libavformat.so.63.1.102]
+     0.00  av_match_name
+
+ffmpeg decoder (3940730): top self functions
+     1.62  [libavcodec.so.63.1.102]
+     0.15  memcpy
+     0.14  [libswscale.so.10.1.102]
+     0.03  [libc.so.6]
+     0.01  [ld-linux-aarch64.so.1]
+     0.01  [libavutil.so.61.1.102]
+     0.00  memset
+     0.00  [libavformat.so.63.1.102]
+     0.00  pthread_cond_wait
+     0.00  [ffmpeg]
+     0.00  [libavfilter.so.12.1.102]
+     0.00  malloc
+
+ffmpeg decoder (3940857): top self functions
+     0.04  [ld-linux-aarch64.so.1]
+     0.01  [libavcodec.so.63.1.102]
+     0.00  [libglslang.so.16.6.0]
+     0.00  scalbnf32x
+     0.00  [libmodplug.so.1.0.0]
+     0.00  memset
+     0.00  log2
+     0.00  asn1_find_node
+     0.00  sinf32x
+     0.00  cosf32x
+     0.00  av_opt_find2
+     0.00  av_match_name
+
+ffmpeg decoder (3940887): top self functions
+     1.31  [libavcodec.so.63.1.102]
+     0.19  memcpy
+     0.18  [libswscale.so.10.1.102]
+     0.03  [libc.so.6]
+     0.02  [ld-linux-aarch64.so.1]
+     0.01  [libavutil.so.61.1.102]
+     0.01  [ffmpeg]
+     0.00  [libavformat.so.63.1.102]
+     0.00  [libavfilter.so.12.1.102]
+     0.00  pthread_cond_wait
+     0.00  pthread_mutex_lock
+     0.00  malloc
+
+inclusive CPU seconds, the app main thread (1.37 s):
+     1.34  std::sys::backtrace::__rust_begin_short_backtrace::<fn(),
+     1.34  omareel_rune_spike::main
+     1.34  _start
+     1.34  main
+     1.34  __libc_start_main
+     1.34  std::rt::lang_start::<()>::{closure#0}
+     1.34  std::rt::lang_start_internal
+     1.34  [libc.so.6]
+     1.34  omareel_rune_spike::export::command
+     1.34  omareel_rune_spike::export::export
+     0.75  memcpy
+     0.37  <rune::runtime::Runtime<omareel_rune_spike::export::Scene>>::frame_step
+     0.35  omareel_rune_spike::export::export::{closure#7}
+     0.30  <rune::render::Renderer>::upload_images
+     0.29  <rune_staging::Staging>::write_texture_rows
+     0.27  <rune::runtime::Runtime<omareel_rune_spike::export::Scene>>::step_motion
+     0.27  <rune::runtime::Runtime<omareel_rune_spike::export::Scene>>::build
+     0.25  <rune::pixels::ImageAtlas>::place
+     0.16  memset
+     0.15  <rune::render::Renderer>::submit
+     0.12  [libnvidia-glcore.so.615.78.08]
+     0.11  <wgpu::api::command_encoder::CommandEncoder>::finish
+     0.11  <wgpu::backend::wgpu_core::CoreCommandEncoder as wgpu::dispatch::CommandEncoderInterface>::finish
+     0.11  <wgpu_core::global::Global>::command_encoder_finish
+     0.11  <wgpu_core::command::CommandEncoder>::finish
+     0.09  <rune::runtime::Runtime<omareel_rune_spike::export::Scene>>::commit
+     0.08  <wgpu::api::device::Device>::create_buffer
+     0.08  <wgpu_core::global::Global>::device_create_buffer
+     0.08  <wgpu::backend::wgpu_core::CoreDevice as wgpu::dispatch::DeviceInterface>::create_buffer
+     0.08  <wgpu_core::device::resource::Device>::create_buffer
+     0.08  wgpu_core::device::map_buffer
+     0.06  wgpu_core::command::render::encode_render_pass
+     0.06  <rune::runtime::Runtime<omareel_rune_spike::export::Scene>>::measure
+     0.05  <rune::runtime::commit::Measurement<omareel_rune_spike::export::Scene>>::finish_from
+     0.04  [ld-linux-aarch64.so.1]
+     0.04  <wgpu::api::queue::Queue>::submit::<[wgpu::api::command_buffer::CommandBuffer; 1]>
+     0.04  <wgpu::backend::wgpu_core::CoreQueue as wgpu::dispatch::QueueInterface>::submit
+     0.03  <wgpu_core::global::Global>::queue_submit
+     0.03  <wgpu_core::device::queue::Queue>::submit
+     0.03  [libvulkan.so.1.4.363]

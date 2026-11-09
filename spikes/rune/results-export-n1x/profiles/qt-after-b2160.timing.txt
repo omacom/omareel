@@ -1,0 +1,8 @@
+  decode wait:  0.877 ms/frame
+  upload:       0.263 ms/frame
+  render:       2.188 ms/frame
+  readback:     0.637 ms/frame
+  encode write: 5.073 ms/frame
+  total:        4.647 s (129.1 frames/s)
+  decoder:      software
+  encoder:      libx264

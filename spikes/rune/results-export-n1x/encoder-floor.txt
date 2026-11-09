@@ -1,0 +1,4 @@
+# The export's encoder command alone, fed the before build's 600 rendered 1080p frames (RGBA) from a file.
+run 1: 3.013 s wall, 26.641 user, 1.732 sys
+run 2: 3.042 s wall, 27.087 user, 1.759 sys
+run 3: 3.012 s wall, 26.910 user, 1.686 sys

@@ -1,0 +1,4 @@
+# 600 frames of b2160 (4K) decoded as the export's decoder does, written to a pipe read 1 MiB at a time (dd).
+rgba to /dev/null (no pipe): 1.186 s wall, 13.511 user, 0.433 sys
+rgba through a pipe: 3.577 s wall, 17.054 user, 5.443 sys
+yuv420p through a pipe: 1.375 s wall, 10.065 user, 1.952 sys
