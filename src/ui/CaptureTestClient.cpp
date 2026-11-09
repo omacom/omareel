@@ -44,9 +44,15 @@ int runCaptureTestClient(QGuiApplication &app, const QStringList &args, bool lay
     window.resize(qBound(1, option("--w", "300").toInt(), 4096), qBound(1, option("--h", "200").toInt(), 4096));
     LayerShellQt::Window *shell = nullptr;
     if (layer) {
-        QProcess rule;
-        rule.start("hyprctl", {"eval", "hl.layer_rule({ name = '" + scope + "-test', match = { namespace = '" + scope + "' }, no_anim = true })"});
-        if (!rule.waitForFinished(2000) || rule.exitCode() != 0) return 2;
+        // Lua configurations take the rule through eval; Hyprland 0.56's hyprlang ones as a keyword.
+        const auto accepted = [](const QStringList &arguments) {
+            QProcess rule;
+            rule.start("hyprctl", arguments);
+            return rule.waitForFinished(2000) && rule.exitCode() == 0 && rule.readAllStandardOutput().trimmed() == "ok";
+        };
+        if (!accepted({"eval", "hl.layer_rule({ name = '" + scope + "-test', match = { namespace = '" + scope + "' }, no_anim = true })"})
+            && !accepted({"keyword", "layerrule", "no_anim on, match:namespace " + scope}))
+            return 2;
         shell = LayerShellQt::Window::get(&window);
         shell->setLayer(LayerShellQt::Window::LayerOverlay);
         shell->setAnchors(LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorTop) | LayerShellQt::Window::AnchorLeft);

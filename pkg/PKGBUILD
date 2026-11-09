@@ -58,10 +58,14 @@ package() {
   cd "$startdir/.."
   install -Dm755 build-pkg/omareel "$pkgdir/usr/bin/omareel"
   ln -s omareel "$pkgdir/usr/bin/omarecord"
-  if [[ -f build-pkg/plugin/omareel-capture-exclude.so ]]; then
-    install -Dm755 build-pkg/plugin/omareel-capture-exclude.so "$pkgdir/usr/lib/omareel/omareel-capture-exclude.so"
-    install -Dm644 build-pkg/plugin/omareel-capture-exclude.so.hash "$pkgdir/usr/lib/omareel/omareel-capture-exclude.so.hash"
-  fi
+  # The plugin for this Hyprland, and any built for other versions (OMAREEL_EXTRA_HYPRLAND_SDKS)
+  # in hyprland-<version>/ beside it.
+  local plugin
+  for plugin in build-pkg/plugin/omareel-capture-exclude.so build-pkg/plugin/hyprland-*/omareel-capture-exclude.so; do
+    [[ -f $plugin ]] || continue
+    install -Dm755 "$plugin" "$pkgdir/usr/lib/omareel/${plugin#build-pkg/plugin/}"
+    install -Dm644 "$plugin.hash" "$pkgdir/usr/lib/omareel/${plugin#build-pkg/plugin/}.hash"
+  done
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
   install -Dm644 LICENSES/lucide.txt "$pkgdir/usr/share/licenses/$pkgname/lucide.txt"
   install -Dm644 LICENSES/inter.txt "$pkgdir/usr/share/licenses/$pkgname/inter.txt"
