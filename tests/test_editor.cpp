@@ -13,6 +13,7 @@
 #include <QQmlComponent>
 #include <QQmlContext>
 #include <QQmlEngine>
+#include <QQmlPropertyMap>
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QImage>
@@ -1410,6 +1411,68 @@ private slots:
         QVERIFY2(camera > 1200, qPrintable(QString::number(camera)));
         QVERIFY(cameraSteps > 10);
         editor.pause();
+    }
+
+    void cameraOverlayEasesEditsOnlyInThePausedPreview()
+    {
+        // A shape change in the paused preview eases from the old bubble to the new; one in the
+        // export (no nativePreview) or during playback lands at once.
+        QQmlEngine engine;
+        QQmlPropertyMap comp;
+        comp.insert(QStringLiteral("playing"), false);
+        engine.rootContext()->setContextProperty(QStringLiteral("comp"), &comp);
+        const auto settings = [](const QString &shape) {
+            return QVariantMap{{QStringLiteral("enabled"), true}, {QStringLiteral("position"), QStringLiteral("bottom-right")},
+                               {QStringLiteral("size"), .25}, {QStringLiteral("shape"), shape}, {QStringLiteral("radius"), 16},
+                               {QStringLiteral("rotation"), 0}, {QStringLiteral("flipHorizontal"), false},
+                               {QStringLiteral("scaleDuringZoom"), .7},
+                               {QStringLiteral("offset"), QVariantMap{{QStringLiteral("x"), .035}, {QStringLiteral("y"), .035}}},
+                               {QStringLiteral("fullFrame"), QStringLiteral("fill")},
+                               {QStringLiteral("shadow"), QVariantMap{{QStringLiteral("enabled"), false}, {QStringLiteral("intensity"), .28},
+                                                                      {QStringLiteral("blur"), 23}, {QStringLiteral("distance"), 20},
+                                                                      {QStringLiteral("angle"), 45}}},
+                               {QStringLiteral("border"), QVariantMap{{QStringLiteral("enabled"), false}, {QStringLiteral("width"), 6},
+                                                                      {QStringLiteral("color"), QStringLiteral("white")},
+                                                                      {QStringLiteral("alpha"), .7}}}};
+        };
+        const auto overlay = [&](bool nativePreview) {
+            QQmlComponent component(&engine);
+            component.setData(QStringLiteral(R"(
+                import QtQuick
+                import Omareel
+                CameraOverlay {
+                    zoomScale: 1
+                    bubbleOpacity: 1
+                    outputWidth: 1280; outputHeight: 720
+                    sourceWidth: 1920; sourceHeight: 1080
+                    nativePreview: %1
+                })").arg(nativePreview ? "true" : "false").toUtf8(), QUrl());
+            return std::unique_ptr<QObject>(component.createWithInitialProperties(
+                {{QStringLiteral("settings"), settings(QStringLiteral("round"))}}));
+        };
+        const double roundWidth = 180, rectangleWidth = 180 * 16.0 / 9;
+
+        auto exported = overlay(false);
+        QVERIFY(exported);
+        exported->setProperty("settings", settings(QStringLiteral("rectangle")));
+        QCOMPARE(exported->property("width").toDouble(), rectangleWidth);
+        QCOMPARE(exported->property("cornerRadius").toDouble(), 16 * 720 / 1080.0);
+
+        auto preview = overlay(true);
+        QVERIFY(preview);
+        QCOMPARE(preview->property("width").toDouble(), roundWidth);
+        QCOMPARE(preview->property("cornerRadius").toDouble(), 90.0);
+        preview->setProperty("settings", settings(QStringLiteral("rectangle")));
+        QVERIFY(preview->property("width").toDouble() < rectangleWidth - 1);
+        QTest::qWait(80);
+        const double partway = preview->property("width").toDouble();
+        QVERIFY2(partway > roundWidth + 1 && partway < rectangleWidth - 1, qPrintable(QString::number(partway)));
+        QTRY_COMPARE(preview->property("width").toDouble(), rectangleWidth);
+        QTRY_COMPARE(preview->property("cornerRadius").toDouble(), 16 * 720 / 1080.0);
+
+        comp.insert(QStringLiteral("playing"), true);
+        preview->setProperty("settings", settings(QStringLiteral("round")));
+        QCOMPARE(preview->property("width").toDouble(), roundWidth);
     }
 
     void cameraOverlayGrowsToFullFrame()
