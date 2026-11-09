@@ -10,6 +10,7 @@
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/display.h>
+#include <libavutil/hwcontext.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/pixdesc.h>
 #include <libswscale/swscale.h>
@@ -323,4 +324,228 @@ done:
     avcodec_free_context(&decoder);
     avformat_close_input(&format);
     return result;
+}
+
+// ---------------------------------------------------------------------------------------------
+// A playing video: what `ffmpeg [-hwaccel vaapi] -ss <start> -noaccurate_seek -i <path>
+// -vf fps=<fps>:start_time=0,scale=<w>:<h>:flags=bilinear,format=nv12 -f rawvideo -` hands the
+// preview, but kept open, so a seek is a flush and a decode from the keyframe rather than a new
+// process opening the file and the GPU again.
+
+struct omr_stream {
+    AVFormatContext *format;
+    AVCodecContext *decoder;
+    AVBufferRef *device;
+    struct SwsContext *scaler;
+    int index;
+    int width, height;
+    int scaler_format, scaler_width, scaler_height;
+    AVPacket *packet;
+    AVFrame *current;   // the newest frame at or before the slot
+    AVFrame *pending;   // the next decoded frame, past the slot
+    AVFrame *download;  // a GPU frame copied back to memory
+    double current_time, pending_time;
+    int has_current, has_pending, ended;
+    double start, fps;
+    long slot;
+    int positioned;     // a seek has been made: current_time says where decoding is
+    int preview;        // hand over the first decoded frame (the keyframe) before the slot's
+};
+
+static enum AVPixelFormat pick_vaapi(AVCodecContext *context, const enum AVPixelFormat *formats)
+{
+    (void)context;
+    for (const enum AVPixelFormat *f = formats; *f != AV_PIX_FMT_NONE; ++f)
+        if (*f == AV_PIX_FMT_VAAPI) return *f;
+    return formats[0];
+}
+
+struct omr_stream *omr_stream_open(const char *path, const char *vaapi_device, int width, int height, int threads)
+{
+    struct omr_stream *s = calloc(1, sizeof *s);
+    if (!s) return NULL;
+    s->width = width;
+    s->height = height;
+    s->index = -1;
+    if (avformat_open_input(&s->format, path, NULL, NULL) < 0) goto fail;
+    for (unsigned i = 0; i < s->format->nb_streams; ++i) {
+        if (s->format->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO && s->index < 0) s->index = (int)i;
+        else s->format->streams[i]->discard = AVDISCARD_ALL;
+    }
+    if (s->index < 0) goto fail;
+    const AVCodec *codec = avcodec_find_decoder(s->format->streams[s->index]->codecpar->codec_id);
+    if (!codec || !(s->decoder = avcodec_alloc_context3(codec))) goto fail;
+    if (avcodec_parameters_to_context(s->decoder, s->format->streams[s->index]->codecpar) < 0) goto fail;
+    s->decoder->pkt_timebase = s->format->streams[s->index]->time_base;
+    if (vaapi_device && *vaapi_device) {
+        if (av_hwdevice_ctx_create(&s->device, AV_HWDEVICE_TYPE_VAAPI, vaapi_device, NULL, 0) < 0) goto fail;
+        s->decoder->hw_device_ctx = av_buffer_ref(s->device);
+        s->decoder->get_format = pick_vaapi;
+        // The frame shown and the next one stay held beside the decoder's own.
+        s->decoder->extra_hw_frames = 4;
+    } else {
+        s->decoder->thread_count = threads;
+    }
+    if (avcodec_open2(s->decoder, codec, NULL) < 0) goto fail;
+    s->packet = av_packet_alloc();
+    s->current = av_frame_alloc();
+    s->pending = av_frame_alloc();
+    s->download = av_frame_alloc();
+    if (!s->packet || !s->current || !s->pending || !s->download) goto fail;
+    return s;
+fail:
+    omr_stream_close(s);
+    return NULL;
+}
+
+void omr_stream_close(struct omr_stream *s)
+{
+    if (!s) return;
+    av_frame_free(&s->current);
+    av_frame_free(&s->pending);
+    av_frame_free(&s->download);
+    av_packet_free(&s->packet);
+    sws_freeContext(s->scaler);
+    avcodec_free_context(&s->decoder);
+    av_buffer_unref(&s->device);
+    avformat_close_input(&s->format);
+    free(s);
+}
+
+// Whether decoding on from where it is reaches `start` without passing a keyframe (from which a
+// seek would start for less).
+static int continues_to(struct omr_stream *s, double start)
+{
+    if (!s->positioned || !s->has_current || s->ended || start + 1e-6 < s->current_time) return 0;
+    AVStream *stream = s->format->streams[s->index];
+    const double origin = s->format->start_time == AV_NOPTS_VALUE ? 0 : (double)s->format->start_time / AV_TIME_BASE;
+    int64_t target = (int64_t)llround((start + origin) / av_q2d(stream->time_base));
+    int key = av_index_search_timestamp(stream, target, AVSEEK_FLAG_BACKWARD);
+    if (key < 0) return start - s->current_time < 1.0;
+    const AVIndexEntry *entry = avformat_index_get_entry(stream, key);
+    if (!entry) return 0;
+    double key_time = entry->timestamp * av_q2d(stream->time_base) - origin;
+    return key_time <= s->current_time + 1e-6;
+}
+
+int omr_stream_seek(struct omr_stream *s, double start, double fps, int preview)
+{
+    s->fps = fps > 0 ? fps : 60;
+    s->slot = 0;
+    s->start = start;
+    if (continues_to(s, start)) {
+        // The frames before the new start are passed over by the slot logic.
+        s->preview = 0;
+        return 0;
+    }
+    int64_t origin = s->format->start_time == AV_NOPTS_VALUE ? 0 : s->format->start_time;
+    int64_t timestamp = (int64_t)llround(start * AV_TIME_BASE) + origin;
+    int code = avformat_seek_file(s->format, -1, INT64_MIN, timestamp, timestamp, 0);
+    if (code < 0) return code;
+    avcodec_flush_buffers(s->decoder);
+    av_frame_unref(s->current);
+    av_frame_unref(s->pending);
+    s->has_current = s->has_pending = s->ended = 0;
+    s->positioned = 1;
+    s->preview = preview;
+    return 0;
+}
+
+// The next decoded frame into `pending`; 0 at the end.
+static int decode_next(struct omr_stream *s)
+{
+    AVStream *stream = s->format->streams[s->index];
+    const double origin = s->format->start_time == AV_NOPTS_VALUE ? 0 : (double)s->format->start_time / AV_TIME_BASE;
+    for (;;) {
+        int code = avcodec_receive_frame(s->decoder, s->pending);
+        if (code == 0) {
+            int64_t pts = s->pending->best_effort_timestamp;
+            s->pending_time = pts == AV_NOPTS_VALUE ? s->current_time : pts * av_q2d(stream->time_base) - origin;
+            s->has_pending = 1;
+            return 1;
+        }
+        if (code == AVERROR_EOF || s->ended == 2 || code != AVERROR(EAGAIN)) {
+            s->ended = 2;
+            return 0;
+        }
+        if (s->ended) {
+            s->ended = 2;
+            continue;
+        }
+        code = av_read_frame(s->format, s->packet);
+        if (code < 0) {
+            avcodec_send_packet(s->decoder, NULL);
+            s->ended = 1;
+            continue;
+        }
+        if (s->packet->stream_index == s->index) avcodec_send_packet(s->decoder, s->packet);
+        av_packet_unref(s->packet);
+    }
+}
+
+int omr_stream_next(struct omr_stream *s, uint8_t *y, uint8_t *uv, double *time)
+{
+    const double slot_time = s->start + (double)s->slot / s->fps;
+    const double half = 0.5 / s->fps;
+    int preview = 0;
+    if (s->preview) {
+        // After a seek while paused: the first frame decoded (the keyframe) goes out at once,
+        // at its own time, if the frame wanted is more than two frames on.
+        s->preview = 0;
+        if (!s->has_pending && !decode_next(s)) return 0;
+        if (s->pending_time < slot_time - 2.0 / s->fps) {
+            AVFrame *swap = s->current;
+            s->current = s->pending;
+            s->pending = swap;
+            av_frame_unref(s->pending);
+            s->current_time = s->pending_time;
+            s->has_current = 1;
+            s->has_pending = 0;
+            preview = 1;
+        }
+    }
+    if (!preview) {
+        // The fps filter's choice: the newest frame at or before the slot (to half a frame).
+        for (;;) {
+            if (!s->has_pending && !decode_next(s)) break;
+            if (s->pending_time > slot_time + half && s->has_current) break;
+            AVFrame *swap = s->current;
+            s->current = s->pending;
+            s->pending = swap;
+            av_frame_unref(s->pending);
+            s->current_time = s->pending_time;
+            s->has_current = 1;
+            s->has_pending = 0;
+            if (s->current_time > slot_time + half) break;
+        }
+        if (!s->has_current) return 0;
+        // Past the last frame by more than a frame: the end.
+        if (!s->has_pending && s->ended == 2 && slot_time > s->current_time + 1.0 / s->fps) return 0;
+    }
+    AVFrame *source = s->current;
+    if (source->format == AV_PIX_FMT_VAAPI) {
+        av_frame_unref(s->download);
+        if (av_hwframe_transfer_data(s->download, source, 0) < 0) return -1;
+        source = s->download;
+    }
+    if (!s->scaler || s->scaler_format != source->format || s->scaler_width != source->width
+        || s->scaler_height != source->height) {
+        sws_freeContext(s->scaler);
+        s->scaler = sws_getContext(source->width, source->height, source->format, s->width, s->height, AV_PIX_FMT_NV12,
+                                   SWS_BILINEAR, NULL, NULL, NULL);
+        if (!s->scaler) return -1;
+        s->scaler_format = source->format;
+        s->scaler_width = source->width;
+        s->scaler_height = source->height;
+    }
+    uint8_t *planes[4] = {y, uv, NULL, NULL};
+    int strides[4] = {s->width, s->width, 0, 0};
+    sws_scale(s->scaler, (const uint8_t *const *)source->data, source->linesize, 0, source->height, planes, strides);
+    if (preview) {
+        *time = s->current_time;
+        return 1;
+    }
+    *time = slot_time;
+    ++s->slot;
+    return 1;
 }

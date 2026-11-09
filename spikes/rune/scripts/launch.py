@@ -42,7 +42,8 @@ play_x, play_y = sys.argv[3].split(',')
 seek_y, seek_x1, seek_x2 = sys.argv[4].split(',')
 command = sys.argv[sys.argv.index('--') + 1:]
 pointer = os.environ.get('SPIKE_POINTER', os.path.join(os.path.dirname(command[0]), 'spike-pointer'))
-shots = tempfile.mkdtemp(prefix='launch-', dir=os.environ.get('XDG_RUNTIME_DIR', '/tmp'))
+shots = os.environ.get('LAUNCH_LOGS') or tempfile.mkdtemp(prefix='launch-', dir=os.environ.get('XDG_RUNTIME_DIR', '/tmp'))
+os.makedirs(shots, exist_ok=True)
 
 
 def grab(path):
@@ -286,7 +287,8 @@ for n in range(runs):
         'play_ms': plays,
         'seek_ms': seeks,
     })
-    os.remove(log)
+    if not os.environ.get('LAUNCH_LOGS'):
+        os.remove(log)
     time.sleep(1)
 
 

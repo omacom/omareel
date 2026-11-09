@@ -95,6 +95,11 @@ pub struct Preview {
     pub(crate) motion: Option<std::sync::mpsc::Receiver<omareel_core::motion_track::MotionTrack>>,
     /// The screen's frame times, read by a worker on open.
     pub(crate) frame_times: Option<std::sync::mpsc::Receiver<Vec<f64>>>,
+    /// The clip and source time the running decoders started from.
+    decoders_from: Option<(i32, f64)>,
+    /// The output time at the last step, and whether this step's differs.
+    last_position: Option<f64>,
+    jumped: bool,
     /// The editor's transient UI state.
     pub(crate) edit: crate::editor::EditState,
     /// Poll's clock: seconds since start (virtual in headless runs).
@@ -161,6 +166,7 @@ impl Preview {
             upload: self.upload,
             decode: self.decode.clone(),
             color: self.screen_color,
+            preview: !self.playing,
         })
     }
 
@@ -181,6 +187,7 @@ impl Preview {
             // The camera is small; software decoding keeps the video engine for the screen.
             decode: Decode::Software,
             color: self.camera_color,
+            preview: !self.playing,
         }))
     }
 
@@ -189,12 +196,21 @@ impl Preview {
         self.next = None;
         if self.document.clip_is_media(self.active_clip) {
             // An inserted video plays in its own player; the recording's decoders rest.
+            self.decoders_from = None;
             self.screen = None;
             self.camera = None;
         } else {
             let source = self.document.source_position();
-            self.screen = Some(self.screen_stream(self.active_clip, source));
-            self.camera = self.camera_stream(source);
+            // A click seeks on press and again on release: decoders already started there for
+            // the same clip carry on rather than decoding from the keyframe a second time.
+            let same = !self.playing
+                && self.decoders_from == Some((self.active_clip, source))
+                && self.screen.as_ref().is_some_and(|s| !s.finished && s.current_time.is_none_or(|c| c <= source + 1.0 / s.fps));
+            if !same {
+                self.screen = Some(self.screen_stream(self.active_clip, source));
+                self.camera = self.camera_stream(source);
+                self.decoders_from = Some((self.active_clip, source));
+            }
         }
         self.last_restart = Instant::now();
     }
@@ -214,6 +230,21 @@ impl Preview {
             self.audio_wait = None;
             self.clock = None;
             self.origin = t;
+        }
+        self.seek_now();
+    }
+
+    /// Paused, a seek starts its decoders in the handler that asked for it, as Qt's does, not
+    /// at the next frame's poll: its picture comes a frame sooner. Scrubbing keeps the 35 ms
+    /// spacing `step` gives restarts.
+    fn seek_now(&mut self) {
+        if let Some(target) = self.pending_seek
+            && !self.playing
+            && !rune::is_headless()
+            && (self.last_restart.elapsed().as_secs_f64() > 0.035 || self.screen.is_none())
+        {
+            self.pending_seek = None;
+            self.restart_decoders(target);
         }
     }
 
@@ -276,6 +307,7 @@ impl Preview {
         let t = self.document.clamp_playback_position(output_time);
         self.active_clip = self.document.set_output_position(t);
         self.pending_seek = Some(t);
+        self.seek_now();
     }
 
     /// `Editor::endScrub`.
@@ -450,6 +482,7 @@ impl Preview {
         let previous = self.active_clip;
         self.active_clip = index;
         if self.document.clip_is_media(index) {
+            self.decoders_from = None;
             self.screen = None;
             self.camera = None;
             self.next = None;
@@ -459,6 +492,7 @@ impl Preview {
             return;
         }
         if let Some(next) = self.next.take().filter(|n| n.clip == index) {
+            self.decoders_from = None;
             self.screen = Some(next.screen);
             self.camera = next.camera;
             return;
@@ -555,6 +589,11 @@ impl Preview {
             }
         }
         let source = self.document.source_position();
+        // The playhead moved (a seek, a scrub, a step): this frame's composition lands at once,
+        // as Qt's does; only edits at the same time spring.
+        let position = self.document.output_position();
+        self.jumped = self.last_position.is_some_and(|last| (last - position).abs() > 1e-9);
+        self.last_position = Some(position);
         let mut changed = self.step_insert();
         let composition = self.document.preview_composition(self.insert_ready, &self.insert_media);
         let mut skipped = 0;
@@ -625,6 +664,7 @@ impl Preview {
                 upload: self.upload,
                 decode: Decode::Software,
                 color: video::color_info(&path),
+                preview: false,
             }));
             if media != self.insert_media {
                 self.insert_ready = false;
@@ -750,7 +790,7 @@ pub(crate) fn pane(s: &Preview, cx: &mut Cx<Preview>, margin_x: f32, margin_y: f
             canvas = canvas.shadow(14.0, 40.0, ui.shadow);
         }
         // While playing, every value comes from omareel_core; paused, an edit springs.
-        canvas = canvas.child(comp::composition(&s.settings, &s.media, &s.frame, canvas_w, canvas_h, s.playing || s.scrubbing));
+        canvas = canvas.child(comp::composition(&s.settings, &s.media, &s.frame, canvas_w, canvas_h, s.playing || s.scrubbing || s.jumped));
         if s.mode == Mode::Editor {
             canvas = pane_overlays(s, canvas, canvas_w, canvas_h);
         }
@@ -1125,6 +1165,9 @@ pub fn run(options: Options) -> Result<(), String> {
                 kit,
                 motion,
                 frame_times,
+                decoders_from: None,
+                last_position: None,
+                jumped: false,
                 edit: crate::editor::EditState { background_path: background_path.clone(), ..Default::default() },
                 now: 0.0,
                 document,

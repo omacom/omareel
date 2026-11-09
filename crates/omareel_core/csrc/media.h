@@ -38,4 +38,17 @@ void omr_free(void *pointer);
 // crop=W:H -q:v <quality> <output>`, decoding with `threads` threads. 0 when written.
 int omr_thumbnail(const char *path, double at, int width, int height, int quality, int threads, const char *output);
 
+// A video decoded for the preview, kept open between seeks (see media.c).
+#include <stdint.h>
+struct omr_stream;
+struct omr_stream *omr_stream_open(const char *path, const char *vaapi_device, int width, int height, int threads);
+// Positions the stream so the next frames are for start, start + 1/fps, ... Decodes on from
+// where it is when no keyframe lies between. With `preview`, the keyframe a seek starts from is
+// handed over first (at its own time) when the frame for `start` is further on.
+int omr_stream_seek(struct omr_stream *stream, double start, double fps, int preview);
+// The frame for the next slot as NV12 at the stream's size (`y` width*height bytes, `uv` half
+// that) and its time: 1, or 0 at the end, or a negative error.
+int omr_stream_next(struct omr_stream *stream, uint8_t *y, uint8_t *uv, double *time);
+void omr_stream_close(struct omr_stream *stream);
+
 #endif

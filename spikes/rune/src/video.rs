@@ -1,5 +1,6 @@
-//! The preview's decoding: one thread per video running ffmpeg from a start time, a few frames
-//! ahead of the playhead.
+//! The preview's decoding: one thread per video decoding from a start time, a few frames ahead
+//! of the playhead, in process (FFmpeg's libraries, the decoder kept open between seeks) or,
+//! when that can't open the file, through an ffmpeg process.
 //!
 //! Two ways to the GPU, picked with `--upload`:
 //! - `surface` (default): ffmpeg hands over NV12 (1.5 bytes a pixel, no colour conversion on the
@@ -10,6 +11,7 @@
 //!   which Rune uploads into its image pages.
 
 use omareel_core::export::decoder::FfmpegDecoder;
+use omareel_core::media_av::VideoStream;
 use rune::native_surface::{ByteFrame, ColorInfo, Format, Matrix, Transfer};
 use std::io::{Read, Write};
 use std::process::{Child, Command, Stdio};
@@ -89,6 +91,8 @@ pub struct StreamSpec<'a> {
     pub upload: Upload,
     pub decode: Decode,
     pub color: ColorInfo,
+    /// Paused: show the keyframe the seek starts from at once, then the frame wanted.
+    pub preview: bool,
 }
 
 impl Stream {
@@ -107,6 +111,7 @@ impl Stream {
             upload: spec.upload,
             decode: spec.decode,
             color: spec.color,
+            preview: spec.preview,
         };
         std::thread::Builder::new().name("decode".into()).spawn(move || job.run(&sender, &thread_stop)).expect("decode thread");
         Stream { frames, stop, current_time: None, next: None, fps, finished: false }
@@ -187,6 +192,7 @@ struct Job {
     upload: Upload,
     decode: Decode,
     color: ColorInfo,
+    preview: bool,
 }
 
 impl Job {
@@ -214,7 +220,68 @@ impl Job {
         command.spawn()
     }
 
+    /// The frames from an in-process decoder (`media_av::VideoStream`), kept open in [`POOL`]
+    /// between streams. False when it could not open the file, for the ffmpeg process to try.
+    fn run_in_process(&self, sender: &SyncSender<Frame>, stop: &AtomicBool) -> bool {
+        let device = match &self.decode {
+            Decode::Vaapi(device) => Some(device.clone()),
+            Decode::Software => None,
+        };
+        let key = (self.path.clone(), device.clone(), self.width, self.height);
+        let log = std::env::var_os("OMAREEL_DECODE_LOG").is_some();
+        let began = std::time::Instant::now();
+        let pooled = std::cell::Cell::new(true);
+        let Some(mut stream) = POOL.take(&key).or_else(|| {
+            pooled.set(false);
+            // Threads 0: FFmpeg's own count, for software decoding.
+            VideoStream::open(&self.path, device.as_deref(), self.width, self.height, 0)
+        }) else {
+            POOL.gone(&key);
+            return false;
+        };
+        if !stream.seek(self.start, self.fps, self.preview) {
+            POOL.gone(&key);
+            return false;
+        }
+        let (w, h) = (self.width as usize, self.height as usize);
+        let end = self.start + self.length - 1e-6;
+        let mut sent = 0u64;
+        while !stop.load(Ordering::SeqCst) {
+            let mut y = vec![0u8; w * h];
+            let mut uv = vec![0u8; w * h / 2];
+            let Some(time) = stream.next(&mut y, &mut uv) else { break };
+            if time >= end && sent > 0 && time >= self.start {
+                break;
+            }
+            let frame = Frame {
+                time,
+                width: self.width,
+                height: self.height,
+                pixels: Pixels::Nv12(ByteFrame { width: self.width, height: self.height, format: Format::Nv12Video, color: self.color, planes: [y, uv] }),
+            };
+            if log && sent < 2 {
+                eprintln!(
+                    "decode: {} from {:.3} (preview {}, {}): frame {sent} at {time:.3} after {:.1} ms",
+                    self.path.rsplit('/').next().unwrap_or(""),
+                    self.start,
+                    self.preview,
+                    if pooled.get() { "pooled" } else { "opened" },
+                    began.elapsed().as_secs_f64() * 1000.0
+                );
+            }
+            if !send(sender, frame, stop) {
+                break;
+            }
+            sent += 1;
+        }
+        POOL.put(key, stream);
+        sent > 0 || stop.load(Ordering::SeqCst)
+    }
+
     fn run_nv12(&self, sender: &SyncSender<Frame>, stop: &AtomicBool) {
+        if self.run_in_process(sender, stop) {
+            return;
+        }
         let (w, h) = (self.width as usize, self.height as usize);
         let mut attempts = vec![self.decode.clone()];
         if self.decode != Decode::Software {
@@ -286,6 +353,64 @@ impl Job {
                 return;
             }
         }
+    }
+}
+
+type PoolKey = (String, Option<String>, u32, u32);
+
+/// In-process decoders between streams. A seek stops the playing stream and starts another on
+/// the same file at once: the new one waits briefly for the old one's decoder rather than
+/// opening the file (and the GPU) again.
+struct Pool {
+    state: std::sync::Mutex<(Vec<(PoolKey, VideoStream)>, Vec<PoolKey>)>,
+    returned: std::sync::Condvar,
+}
+
+static POOL: Pool = Pool { state: std::sync::Mutex::new((Vec::new(), Vec::new())), returned: std::sync::Condvar::new() };
+
+impl Pool {
+    /// An idle decoder for the key (waiting up to 50 ms for one in use), marked in use; `None`
+    /// to open a new one, which is marked in use too.
+    fn take(&self, key: &PoolKey) -> Option<VideoStream> {
+        let mut state = self.state.lock().ok()?;
+        let deadline = std::time::Instant::now() + Duration::from_millis(50);
+        loop {
+            if let Some(index) = state.0.iter().position(|(k, _)| k == key) {
+                let (key, stream) = state.0.swap_remove(index);
+                state.1.push(key);
+                return Some(stream);
+            }
+            let busy = state.1.iter().any(|k| k == key);
+            let now = std::time::Instant::now();
+            if !busy || now >= deadline {
+                state.1.push(key.clone());
+                return None;
+            }
+            state = self.returned.wait_timeout(state, deadline - now).ok()?.0;
+        }
+    }
+
+    fn release(state: &mut (Vec<(PoolKey, VideoStream)>, Vec<PoolKey>), key: &PoolKey) {
+        if let Some(index) = state.1.iter().position(|k| k == key) {
+            state.1.swap_remove(index);
+        }
+    }
+
+    /// A decoder back, idle; at most two are kept per video.
+    fn put(&self, key: PoolKey, stream: VideoStream) {
+        let Ok(mut state) = self.state.lock() else { return };
+        Pool::release(&mut state, &key);
+        if state.0.iter().filter(|(k, _)| *k == key).count() < 2 {
+            state.0.push((key, stream));
+        }
+        self.returned.notify_all();
+    }
+
+    /// A decoder taken (or to be opened) that will not come back.
+    fn gone(&self, key: &PoolKey) {
+        let Ok(mut state) = self.state.lock() else { return };
+        Pool::release(&mut state, key);
+        self.returned.notify_all();
     }
 }
 
