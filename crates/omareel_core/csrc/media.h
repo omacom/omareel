@@ -38,6 +38,13 @@ long omr_keyframe_times(const char *path, double **times);
 
 void omr_free(void *pointer);
 
+// av_color_space_name, or NULL.
+const char *omr_color_space_name(int space);
+
+// Opens FFmpeg's libraries now (they are opened the first time they are needed otherwise; see
+// ffmpeg_dl.h), so a thread can do it while the caller gets on: 0 when they are.
+int omr_ff_preload(void);
+
 // `ffmpeg -ss <at> -i <path> -frames:v 1 -vf scale=W:H:force_original_aspect_ratio=increase,
 // crop=W:H -q:v <quality> <output>`, decoding with `threads` threads. 0 when written.
 int omr_thumbnail(const char *path, double at, int width, int height, int quality, int threads, const char *output);

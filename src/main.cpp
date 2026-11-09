@@ -4,6 +4,7 @@
 #include "Exporter.h"
 #include "render/VideoDecoding.h"
 #include "omareel_qt/src/cli.cxxqt.h"
+extern "C" int omr_ff_preload(void);
 #include "omareel_qt/src/editor.cxxqt.h"
 #include "omareel_qt/src/launcher.cxxqt.h"
 #include "omareel_qt/src/record.cxxqt.h"
@@ -57,6 +58,7 @@
 #include <fcntl.h>
 #include <sys/syscall.h>
 #include <memory>
+#include <thread>
 #include <vector>
 
 #ifndef OMAREEL_VERSION
@@ -456,6 +458,20 @@ int main(int argc, char **argv)
         app.setApplicationVersion(QStringLiteral(OMAREEL_VERSION));
         return omareel::record::daemonMain(app.arguments().mid(2));
     }
+    // Nor do `omareel record` (the keybinding's start and stop, and the launcher's) and the
+    // bar's and self-view's commands: a QGuiApplication's display connection, fonts and D-Bus
+    // registration were 40 ms of each, before Stop even reached the recorder.
+    if (argc > 1 && (std::strcmp(argv[1], "record") == 0 || std::strcmp(argv[1], "__selfview-ipc") == 0
+                     || std::strcmp(argv[1], "__record-bar-ipc") == 0)) {
+        QCoreApplication app(argc, argv);
+        app.setApplicationName(QStringLiteral("omareel"));
+        app.setOrganizationName(QStringLiteral("omareel"));
+        app.setApplicationVersion(QStringLiteral(OMAREEL_VERSION));
+        const QStringList args = app.arguments();
+        if (args[1] == QLatin1String("record")) return omareel::record::recordCommand(args.mid(2));
+        if (args[1] == QLatin1String("__selfview-ipc")) return omareel::record::selfViewIpc(args.mid(2));
+        return omareel::record::recordBarIpc(args.mid(2));
+    }
     const bool exporting = argc > 1 && QByteArray(argv[1]) == "export";
     const bool layerTest = argc > 1 && QByteArray(argv[1]) == "__layer-test";
     const bool windowTest = argc > 1 && QByteArray(argv[1]) == "__window-test";
@@ -468,6 +484,9 @@ int main(int argc, char **argv)
     if (argc == 3 && QByteArray(argv[1]) == "edit")
         omareel::cli::preloadEditor(QString::fromLocal8Bit(argv[2]).toStdString());
     if (graphical) omareel::cli::prefetchTheme();
+    // FFmpeg's libraries are opened, not linked (ffmpeg_dl.h): a window process opens them on a
+    // thread now, so Qt Multimedia's FFmpeg plugin, which links them, finds them loaded.
+    if (graphical || exporting) std::thread([] { omr_ff_preload(); }).detach();
     if (recordBar || layerTest) LayerShellQt::Shell::useLayerShell();
     if (graphical) {
         QQuickStyle::setStyle(QStringLiteral("Basic"));
