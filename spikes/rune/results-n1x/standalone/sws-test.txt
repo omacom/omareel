@@ -1,0 +1,182 @@
+# legacy sws_scale (what media.c calls): exit code per case; 139 = SIGSEGV on the guard page after the destination
+stream 1920x1080 -> 1280x720: exit 0
+thumb 1920x1080 -> 1280x720: exit 0
+stream 1920x1080 -> 1366x768: exit 0
+thumb 1920x1080 -> 1366x768: exit 0
+stream 1920x1080 -> 1600x900: exit 0
+thumb 1920x1080 -> 1600x900: exit 0
+/usr/bin/bash: line 1: 3072175 Segmentation fault         (core dumped) $T $m ${src%x*} ${src#*x} ${dst%x*} ${dst#*x} 3 > /dev/null 2>&1
+stream 1920x1080 -> 1517x853: exit 139
+thumb 1920x1080 -> 1517x853: exit 0
+/usr/bin/bash: line 1: 3072250 Segmentation fault         (core dumped) $T $m ${src%x*} ${src#*x} ${dst%x*} ${dst#*x} 3 > /dev/null 2>&1
+stream 1920x1080 -> 1001x563: exit 139
+thumb 1920x1080 -> 1001x563: exit 0
+/usr/bin/bash: line 1: 3072356 Segmentation fault         (core dumped) $T $m ${src%x*} ${src#*x} ${dst%x*} ${dst#*x} 3 > /dev/null 2>&1
+stream 1920x1080 -> 999x561: exit 139
+thumb 1920x1080 -> 999x561: exit 0
+/usr/bin/bash: line 1: 3072418 Segmentation fault         (core dumped) $T $m ${src%x*} ${src#*x} ${dst%x*} ${dst#*x} 3 > /dev/null 2>&1
+stream 1920x1080 -> 1919x1079: exit 139
+thumb 1920x1080 -> 1919x1079: exit 0
+stream 1920x1080 -> 1920x1080: exit 0
+thumb 1920x1080 -> 1920x1080: exit 0
+stream 1920x1080 -> 640x361: exit 0
+thumb 1920x1080 -> 640x361: exit 0
+/usr/bin/bash: line 1: 3072442 Segmentation fault         (core dumped) $T $m ${src%x*} ${src#*x} ${dst%x*} ${dst#*x} 3 > /dev/null 2>&1
+stream 1920x1080 -> 641x360: exit 139
+thumb 1920x1080 -> 641x360: exit 0
+/usr/bin/bash: line 1: 3072453 Segmentation fault         (core dumped) $T $m ${src%x*} ${src#*x} ${dst%x*} ${dst#*x} 3 > /dev/null 2>&1
+stream 1920x1080 -> 333x187: exit 139
+thumb 1920x1080 -> 333x187: exit 0
+stream 1920x1080 -> 2560x1440: exit 0
+thumb 1920x1080 -> 2560x1440: exit 0
+stream 1920x1080 -> 3840x2160: exit 0
+thumb 1920x1080 -> 3840x2160: exit 0
+/usr/bin/bash: line 1: 3072476 Segmentation fault         (core dumped) $T $m ${src%x*} ${src#*x} ${dst%x*} ${dst#*x} 3 > /dev/null 2>&1
+stream 1920x1080 -> 17x9: exit 139
+thumb 1920x1080 -> 17x9: exit 0
+stream 1920x1080 -> 2x2: exit 0
+thumb 1920x1080 -> 2x2: exit 0
+stream 2560x1440 -> 1280x720: exit 0
+thumb 2560x1440 -> 1280x720: exit 0
+stream 2560x1440 -> 1366x768: exit 0
+thumb 2560x1440 -> 1366x768: exit 0
+stream 2560x1440 -> 1600x900: exit 0
+thumb 2560x1440 -> 1600x900: exit 0
+/usr/bin/bash: line 1: 3072533 Segmentation fault         (core dumped) $T $m ${src%x*} ${src#*x} ${dst%x*} ${dst#*x} 3 > /dev/null 2>&1
+stream 2560x1440 -> 1517x853: exit 139
+thumb 2560x1440 -> 1517x853: exit 0
+/usr/bin/bash: line 1: 3072556 Segmentation fault         (core dumped) $T $m ${src%x*} ${src#*x} ${dst%x*} ${dst#*x} 3 > /dev/null 2>&1
+stream 2560x1440 -> 1001x563: exit 139
+thumb 2560x1440 -> 1001x563: exit 0
+/usr/bin/bash: line 1: 3072605 Segmentation fault         (core dumped) $T $m ${src%x*} ${src#*x} ${dst%x*} ${dst#*x} 3 > /dev/null 2>&1
+stream 2560x1440 -> 999x561: exit 139
+thumb 2560x1440 -> 999x561: exit 0
+/usr/bin/bash: line 1: 3072615 Segmentation fault         (core dumped) $T $m ${src%x*} ${src#*x} ${dst%x*} ${dst#*x} 3 > /dev/null 2>&1
+stream 2560x1440 -> 1919x1079: exit 139
+thumb 2560x1440 -> 1919x1079: exit 0
+stream 2560x1440 -> 1920x1080: exit 0
+thumb 2560x1440 -> 1920x1080: exit 0
+stream 2560x1440 -> 640x361: exit 0
+thumb 2560x1440 -> 640x361: exit 0
+/usr/bin/bash: line 1: 3072636 Segmentation fault         (core dumped) $T $m ${src%x*} ${src#*x} ${dst%x*} ${dst#*x} 3 > /dev/null 2>&1
+stream 2560x1440 -> 641x360: exit 139
+thumb 2560x1440 -> 641x360: exit 0
+/usr/bin/bash: line 1: 3072675 Segmentation fault         (core dumped) $T $m ${src%x*} ${src#*x} ${dst%x*} ${dst#*x} 3 > /dev/null 2>&1
+stream 2560x1440 -> 333x187: exit 139
+thumb 2560x1440 -> 333x187: exit 0
+stream 2560x1440 -> 2560x1440: exit 0
+thumb 2560x1440 -> 2560x1440: exit 0
+stream 2560x1440 -> 3840x2160: exit 0
+thumb 2560x1440 -> 3840x2160: exit 0
+/usr/bin/bash: line 1: 3072714 Segmentation fault         (core dumped) $T $m ${src%x*} ${src#*x} ${dst%x*} ${dst#*x} 3 > /dev/null 2>&1
+stream 2560x1440 -> 17x9: exit 139
+thumb 2560x1440 -> 17x9: exit 0
+stream 2560x1440 -> 2x2: exit 0
+thumb 2560x1440 -> 2x2: exit 0
+stream 3840x2160 -> 1280x720: exit 0
+thumb 3840x2160 -> 1280x720: exit 0
+stream 3840x2160 -> 1366x768: exit 0
+thumb 3840x2160 -> 1366x768: exit 0
+stream 3840x2160 -> 1600x900: exit 0
+thumb 3840x2160 -> 1600x900: exit 0
+/usr/bin/bash: line 1: 3072783 Segmentation fault         (core dumped) $T $m ${src%x*} ${src#*x} ${dst%x*} ${dst#*x} 3 > /dev/null 2>&1
+stream 3840x2160 -> 1517x853: exit 139
+thumb 3840x2160 -> 1517x853: exit 0
+/usr/bin/bash: line 1: 3072798 Segmentation fault         (core dumped) $T $m ${src%x*} ${src#*x} ${dst%x*} ${dst#*x} 3 > /dev/null 2>&1
+stream 3840x2160 -> 1001x563: exit 139
+thumb 3840x2160 -> 1001x563: exit 0
+/usr/bin/bash: line 1: 3072808 Segmentation fault         (core dumped) $T $m ${src%x*} ${src#*x} ${dst%x*} ${dst#*x} 3 > /dev/null 2>&1
+stream 3840x2160 -> 999x561: exit 139
+thumb 3840x2160 -> 999x561: exit 0
+/usr/bin/bash: line 1: 3072822 Segmentation fault         (core dumped) $T $m ${src%x*} ${src#*x} ${dst%x*} ${dst#*x} 3 > /dev/null 2>&1
+stream 3840x2160 -> 1919x1079: exit 139
+thumb 3840x2160 -> 1919x1079: exit 0
+stream 3840x2160 -> 1920x1080: exit 0
+thumb 3840x2160 -> 1920x1080: exit 0
+stream 3840x2160 -> 640x361: exit 0
+thumb 3840x2160 -> 640x361: exit 0
+/usr/bin/bash: line 1: 3072844 Segmentation fault         (core dumped) $T $m ${src%x*} ${src#*x} ${dst%x*} ${dst#*x} 3 > /dev/null 2>&1
+stream 3840x2160 -> 641x360: exit 139
+thumb 3840x2160 -> 641x360: exit 0
+/usr/bin/bash: line 1: 3072855 Segmentation fault         (core dumped) $T $m ${src%x*} ${src#*x} ${dst%x*} ${dst#*x} 3 > /dev/null 2>&1
+stream 3840x2160 -> 333x187: exit 139
+thumb 3840x2160 -> 333x187: exit 0
+stream 3840x2160 -> 2560x1440: exit 0
+thumb 3840x2160 -> 2560x1440: exit 0
+stream 3840x2160 -> 3840x2160: exit 0
+thumb 3840x2160 -> 3840x2160: exit 0
+/usr/bin/bash: line 1: 3072924 Segmentation fault         (core dumped) $T $m ${src%x*} ${src#*x} ${dst%x*} ${dst#*x} 3 > /dev/null 2>&1
+stream 3840x2160 -> 17x9: exit 139
+thumb 3840x2160 -> 17x9: exit 0
+stream 3840x2160 -> 2x2: exit 0
+thumb 3840x2160 -> 2x2: exit 0
+stream 1280x720 -> 1280x720: exit 0
+thumb 1280x720 -> 1280x720: exit 0
+stream 1280x720 -> 1366x768: exit 0
+thumb 1280x720 -> 1366x768: exit 0
+stream 1280x720 -> 1600x900: exit 0
+thumb 1280x720 -> 1600x900: exit 0
+/usr/bin/bash: line 1: 3072945 Segmentation fault         (core dumped) $T $m ${src%x*} ${src#*x} ${dst%x*} ${dst#*x} 3 > /dev/null 2>&1
+stream 1280x720 -> 1517x853: exit 139
+thumb 1280x720 -> 1517x853: exit 0
+/usr/bin/bash: line 1: 3072955 Segmentation fault         (core dumped) $T $m ${src%x*} ${src#*x} ${dst%x*} ${dst#*x} 3 > /dev/null 2>&1
+stream 1280x720 -> 1001x563: exit 139
+thumb 1280x720 -> 1001x563: exit 0
+/usr/bin/bash: line 1: 3072966 Segmentation fault         (core dumped) $T $m ${src%x*} ${src#*x} ${dst%x*} ${dst#*x} 3 > /dev/null 2>&1
+stream 1280x720 -> 999x561: exit 139
+thumb 1280x720 -> 999x561: exit 0
+/usr/bin/bash: line 1: 3072982 Segmentation fault         (core dumped) $T $m ${src%x*} ${src#*x} ${dst%x*} ${dst#*x} 3 > /dev/null 2>&1
+stream 1280x720 -> 1919x1079: exit 139
+thumb 1280x720 -> 1919x1079: exit 0
+stream 1280x720 -> 1920x1080: exit 0
+thumb 1280x720 -> 1920x1080: exit 0
+stream 1280x720 -> 640x361: exit 0
+thumb 1280x720 -> 640x361: exit 0
+/usr/bin/bash: line 1: 3073004 Segmentation fault         (core dumped) $T $m ${src%x*} ${src#*x} ${dst%x*} ${dst#*x} 3 > /dev/null 2>&1
+stream 1280x720 -> 641x360: exit 139
+thumb 1280x720 -> 641x360: exit 0
+/usr/bin/bash: line 1: 3073051 Segmentation fault         (core dumped) $T $m ${src%x*} ${src#*x} ${dst%x*} ${dst#*x} 3 > /dev/null 2>&1
+stream 1280x720 -> 333x187: exit 139
+thumb 1280x720 -> 333x187: exit 0
+stream 1280x720 -> 2560x1440: exit 0
+thumb 1280x720 -> 2560x1440: exit 0
+stream 1280x720 -> 3840x2160: exit 0
+thumb 1280x720 -> 3840x2160: exit 0
+/usr/bin/bash: line 1: 3073208 Segmentation fault         (core dumped) $T $m ${src%x*} ${src#*x} ${dst%x*} ${dst#*x} 3 > /dev/null 2>&1
+stream 1280x720 -> 17x9: exit 139
+thumb 1280x720 -> 17x9: exit 0
+stream 1280x720 -> 2x2: exit 0
+thumb 1280x720 -> 2x2: exit 0
+
+# legacy paths at real sizes, MALLOC_CHECK_=3
+stream 1920x1080 -> 1920x1080: 300 frames, no fault
+stream 3840x2160 -> 3840x2160: 120 frames, no fault
+stream 2560x1440 -> 2560x1440: 200 frames, no fault
+stream 1920x1080 -> 1280x720: 300 frames, no fault
+thumb 2560x1440 -> 284x160: 300 frames, no fault
+thumb 3840x2160 -> 284x160: 100 frames, no fault
+
+# frame API (sws_scale_frame, what ffmpeg's scale filter uses), SWS_THREADS = swscale threads; 134 = SIGABRT
+threads=1 nv12 64 48 yuv420p 64 48 601 709: exit 0
+threads=1 nv12 64 48 yuv420p 64 48 601 same: exit 0
+threads=1 nv12 1280 720 yuv420p 1280 720 601 709: exit 0
+threads=1 nv12 1280 720 yuv420p 1280 720 601 same: exit 0
+threads=1 yuv420p 1920 1080 nv12 1920 1080 709 same: exit 0
+threads=4 nv12 64 48 yuv420p 64 48 601 709: exit 0
+threads=4 nv12 64 48 yuv420p 64 48 601 same: exit 0
+threads=4 nv12 1280 720 yuv420p 1280 720 601 709: exit 0
+threads=4 nv12 1280 720 yuv420p 1280 720 601 same: exit 0
+threads=4 yuv420p 1920 1080 nv12 1920 1080 709 same: exit 0
+/usr/bin/bash: line 1: 3074302 Aborted                    (core dumped) SWS_THREADS=$th $T frame $args 5 > /dev/null 2>&1
+threads=0 nv12 64 48 yuv420p 64 48 601 709: exit 134
+threads=0 nv12 64 48 yuv420p 64 48 601 same: exit 0
+/usr/bin/bash: line 1: 3074342 Aborted                    (core dumped) SWS_THREADS=$th $T frame $args 5 > /dev/null 2>&1
+threads=0 nv12 1280 720 yuv420p 1280 720 601 709: exit 134
+threads=0 nv12 1280 720 yuv420p 1280 720 601 same: exit 0
+threads=0 yuv420p 1920 1080 nv12 1920 1080 709 same: exit 0
+/usr/bin/bash: line 1: 3074404 Aborted                    (core dumped) SWS_THREADS=$th $T frame $args 5 > /dev/null 2>&1
+threads=20 nv12 64 48 yuv420p 64 48 601 709: exit 134
+threads=20 nv12 64 48 yuv420p 64 48 601 same: exit 0
+threads=20 nv12 1280 720 yuv420p 1280 720 601 709: exit 0
+threads=20 nv12 1280 720 yuv420p 1280 720 601 same: exit 0
+threads=20 yuv420p 1920 1080 nv12 1920 1080 709 same: exit 0

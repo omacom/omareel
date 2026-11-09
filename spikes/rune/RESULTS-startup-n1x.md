@@ -7,6 +7,12 @@ the launcher and the recording bar from 2.1 s and 2.3 s to 0.48 s and 0.63 s. Pa
 are bounded by NVIDIA's driver setup, which is kernel time perf can't see without root: about 205 ms
 for Rune's Vulkan device and about 200 ms of EGL for Qt.
 
+Follow-up at f831c8a: with 0662299 Qt's editor shows its first frame at 0.58 s and Rune's at
+0.48 s. b81b10a's in-process decoder doesn't crash here: the libswscale corruption is in the
+multithreaded frame API with a colour-matrix change, which `media.c` doesn't use. Its NV12 path is
+clean at every even size, but an odd width would overrun the UV plane by a byte; omareel only
+passes even sizes today.
+
 Measured on n1x (NVIDIA N1X: 10 Cortex-X925 + 10 Cortex-A725 cores, NVIDIA 615.78.08, Hyprland
 0.57.0 nested, windowed on DP-7) on 2026-11-08, with `t3/startup-perf` at 51743e9 as "after" and
 4fd1696 as "before". The recording is `make-real-bundle.sh`'s 3 minutes of 1440p60 with audio,
@@ -47,6 +53,123 @@ Hyprland 0aa6745), so the bar stays on the recorded output.
 
 The encoder probe costs every Qt process the same 1.6 to 1.8 s, not just the editor.
 
+## Follow-up: 0662299 (Qt encoder probe) and b81b10a (Rune in-process decoding)
+
+Rebuilt Qt after and Rune after at f831c8a and measured again, same machine and setup.
+
+### libswscale on aarch64: the decoder's conversions are safe at the sizes omareel uses
+
+`results-n1x/standalone/sws-test.c` replays `media.c`'s conversions with every destination plane
+ending at a page boundary followed by a no-access guard page (a write past it faults at once) and
+canary bytes before it; results in `sws-test.txt`.
+
+- **The crash I saw is the frame API, multithreaded, with a matrix change.** `sws_scale_frame`
+  (what ffmpeg's `scale` filter uses) converting NV12 to yuv420p with BT.601 in and BT.709 out
+  aborts with heap corruption when swscale runs several threads (`threads` 0, which is auto, or
+  20), at 64x48 and at 1280x720. With 1 or 4 threads, or without the matrix change, it doesn't.
+  That is the camera encoder's filter, and why `cameracapture` fails.
+- **`media.c` uses neither.** It calls the legacy `sws_getContext` / `sws_scale`, single
+  threaded, and the stream path makes no matrix change (the thumbnail path changes only the range).
+- **Stream path (yuv420p to NV12, bilinear):** clean at 1920x1080 (300 frames), 2560x1440 (200),
+  3840x2160 (120), and scaled 1080p to 720p and 4K to 1080p, with `MALLOC_CHECK_=3`. **But every
+  odd destination width faults**: 28 of 28 cases (1517, 1001, 999, 1919, 641, 333 and 17 wide,
+  from 720p, 1080p, 1440p and 4K sources); even widths never do, odd heights are fine. That is the
+  caller's buffer, not swscale: an NV12 row of chroma for an odd width `w` is `w + 1` bytes
+  (`2 × ceil(w / 2)`), but `omr_stream_next` passes a UV stride of `w` and
+  `media_av::VideoStream::next` sizes the UV buffer `w × h / 2`, so the last row writes a byte
+  past the end (and each row overlaps the next).
+- **Thumbnail path (yuv420p to yuv420p, bicubic, cover and crop, full range out):** clean in all
+  60 sweep cases, odd widths included, and at the real sizes (2560x1440 and 3840x2160 to 284x160,
+  300 and 100 frames).
+- **In the app:** 3 runs each of 1080p and 4K playback with `MALLOC_CHECK_=3`, plus 30 launches with
+  plays and seeks (below), no crash and no omareel core dump.
+
+Every size omareel passes today is even: recordings are trimmed to even sides
+(`even_capture_region`, `crates/omareel_record/src/recorder/mod.rs:54`), the camera is libx264
+yuv420p, and inserted media is rounded down to even (`preview.rs:654`). So **NV12 output is
+safe as used; no need to switch to yuv420p.** The odd-width case is a latent bug in the API: round
+`width` down to even in `omr_stream_open` (or use a UV stride and buffer of `2 × ceil(w / 2)`), so
+a future caller with an odd canvas can't corrupt the heap.
+
+### Qt after with 0662299
+
+| | Qt after (51743e9) | Qt after, env var | **Qt after (0662299)** | Rune after (b81b10a) |
+|---|---|---|---|---|
+| First frame on screen | 2.40 | 0.568 | **0.581** | **0.475** |
+| Camera strip complete | 2.18 | 0.237 | 0.236 | 0.524 |
+| Filmstrip complete | 4.08 | 2.08 | 2.10 | 1.43 |
+| Reopening: first frame | 2.23 | 0.51 | 0.555 | |
+
+0662299 lands where the environment variable did. Rune after's first frame moved 0.503 → 0.475 s
+with in-process decoding (`timings/clean-rune-after2.json`).
+
+### Opening, playing and seeking (`launch.py`, 6 runs, warm median of runs 2 to 6)
+
+The stock `launch` bundle is `~/spike/b1080` (10 s of 1080p60, keyframes at 0, 4.17 and 8.33 s,
+B-frames). `launch-g60` is the same with `screen.mp4` re-encoded `-g 60 -keyint_min 60
+-sc_threshold 0 -bf 0` (keyframes every 1.00 s). Each app got a fresh copy of each.
+
+| | Rune after (b81b10a) | Rune before (4fd1696) | Qt after (0662299) |
+|---|---|---|---|
+| **Stock bundle** | | | |
+| Window | **0.505 s** | 0.757 s | 0.557 s |
+| Video showing | **0.548 s** | 0.881 s | 1.249 s |
+| Play to motion, median (max) | 213 ms (356) | 236 ms (374) | **169 ms** (220) |
+| Seek to its frame, median (max) | 86 ms (131) | 170 ms (200) | **43 ms** (67) |
+| Idle CPU / RSS (with decoders) | 3.0 % / 681 MB | 3.1 % / 506 (933) MB | 0 % / 751 MB |
+| **1 s keyframes** | | | |
+| Window | **0.515 s** | 0.784 s | 0.544 s |
+| Video showing | **0.549 s** | 0.883 s | 1.243 s |
+| Play to motion, median (max) | 229 ms (896) | 218 ms (376) | **136 ms** (226) |
+| Seek to its frame, median (max) | 85 ms (127) | 163 ms (188) | **46 ms** (74) |
+
+- Rune since 4fd1696 (the startup work and in-process decoding together) shows its video 0.33 s
+  sooner (0.88 → 0.55 s) and seeks twice as fast (170 → 86 ms; the seek is b81b10a's, since
+  51743e9 didn't change seeking on foundry2). Qt still seeks twice as fast as Rune.
+- Keyframe spacing doesn't change Rune's seek any more: the paused seek shows the keyframe first.
+  `OMAREEL_DECODE_LOG=1` shows the keyframe 11 to 16 ms after the click and the exact frame 40 to
+  54 ms later when the keyframe is 2 s back, 88 to 90 ms when it's 3.5 s back
+  (`followup/rune-decode-log-launch-run.txt`).
+- Play doesn't reopen a decoder (no decode lines at Play; it reuses the paused stream), so
+  Rune's extra ~60 ms over Qt isn't decoder start. It is one frame interval at the 15 Hz the
+  window gets (below); I didn't pin down where it goes. The 896 ms max is one outlier in 18 plays.
+- Qt shows its window at 0.56 s but its video only at 1.25 s, warm runs included (where the
+  filmstrip is cached, so it isn't contention with the filmstrip workers). That 0.7 s is the next
+  thing to look at in Qt.
+- All play and seek times are quantised to the 66 ms the nested window gets between frames here
+  (see "Regression checks"), for both apps; the comparisons hold, the absolute milliseconds don't
+  match foundry2's.
+
+### Rune playback with the in-process decoder (`measure.sh preview`, 3 runs)
+
+Against 51743e9 (ffmpeg processes), same 15 frames/s cap on both:
+
+| | 51743e9 | b81b10a |
+|---|---|---|
+| 1080p: CPU, app + decoder processes | 91.3 + 43.6 = **135 %** | **117 %** |
+| 4K: CPU, app + decoder processes | 104.1 + 131.5 = **236 %** | **182 %** |
+| 1080p / 4K RSS | 628 / 691 MB, decoders not counted | 788 / 1185 MB, decoders included |
+| UI-thread frame | 1.72 / 2.20 ms | 1.67 / 2.09 ms |
+
+Frame pacing and drops match (both bound by the cap). I can't compare with `RESULTS-n1x.md`'s
+software-decode numbers: those ran at 60 frames/s before the monitor change.
+
+### The new Rune after under perf (frame pointers, `--user-callchains`)
+
+Nothing new before the first frame (0.535 s in the profiled run): the same order and the same
+`for_surface` span, 0.10 to 0.44 s (`analyze/rune-after-b81b10a-fp-1-until0.8.txt`). Two things
+after it, neither from b81b10a (the 51743e9 profile has both):
+
+- **The event loop spins while the editor is busy.** From the first frame to 0.85 s the main
+  thread is on the CPU 238 ms of 300, 100 ms of it in `clock_gettime` (`Timespec::now`) and most
+  of the rest in calloop's `epoll` wait returning almost at once, so the loop is polling rather
+  than sleeping until the next frame. Worth checking what `busy()` asks the loop for (a wait until
+  the next frame rather than a poll), since it competes with the decoders for a big core.
+- **Wallpaper picker thumbnails** (`inspector::generate_thumbnail`, the `image` crate's WebP
+  decoder and resize) take two threads at 100 % while they're being made. They are cached on disk,
+  so this is the first launch after a theme change, not every launch; my profile runs cleared the
+  cache.
+
 ## Top bottlenecks, ranked by milliseconds
 
 ### 1. Qt Multimedia probing hardware encoders: 1,830 ms (Qt only)
@@ -74,7 +197,8 @@ for the editor, and the launcher and bar as above.
 
 **Fix:** set `QT_FFMPEG_ENCODING_HW_DEVICE_TYPES=cuda` beside the decoding variable in
 `src/render/VideoDecoding.cpp`, under the same `vaapiDriverIsNvidia()` check. This is the same fix
-`RESULTS-n1x.md` proposed (item 6); it isn't in 51743e9.
+`RESULTS-n1x.md` proposed (item 6); it isn't in 51743e9. **Landed in 0662299**: 0.581 s to the
+first frame, see the follow-up below.
 
 ### 2. EGL setup on two threads: about 200 ms (Qt), 116 ms of it avoidable
 

@@ -1,0 +1,213 @@
+{
+ "command": [
+  "/home/ryan/.t3/worktrees/omareel/t3-rune-spike-n1x/spikes/rune/target/release/omareel-rune-spike",
+  "edit",
+  "/home/ryan/.cache/omareel-spikes/launch-bundles/run-rune-after-launch-g60"
+ ],
+ "runs": [
+  {
+   "window_s": 0.461,
+   "video_s": 0.483,
+   "idle_cpu_percent": 2.37,
+   "idle_rss_mb": 928.2,
+   "idle_tree_rss_mb": 928.2,
+   "idle_gpu_render_percent": 0.2,
+   "idle_gpu_whole_percent": 6.8,
+   "idle_commits_per_s": 0.0,
+   "click_ms": [
+    2.6,
+    2.0,
+    2.7
+   ],
+   "play_ms": [
+    268.6,
+    210.2,
+    270.4
+   ],
+   "seek_ms": [
+    81.5,
+    118.3,
+    93.8,
+    20.3
+   ]
+  },
+  {
+   "window_s": 0.531,
+   "video_s": 0.55,
+   "idle_cpu_percent": 2.57,
+   "idle_rss_mb": 668.7,
+   "idle_tree_rss_mb": 668.7,
+   "idle_gpu_render_percent": 0.0,
+   "idle_gpu_whole_percent": 9.8,
+   "idle_commits_per_s": 0.0,
+   "click_ms": [
+    2.5,
+    4.0,
+    2.3
+   ],
+   "play_ms": [
+    180.9,
+    199.8,
+    272.0
+   ],
+   "seek_ms": [
+    45.6,
+    59.6,
+    75.2,
+    98.6
+   ]
+  },
+  {
+   "window_s": 0.515,
+   "video_s": 0.549,
+   "idle_cpu_percent": 2.94,
+   "idle_rss_mb": 671.6,
+   "idle_tree_rss_mb": 671.6,
+   "idle_gpu_render_percent": 0.0,
+   "idle_gpu_whole_percent": 7.0,
+   "idle_commits_per_s": 0.0,
+   "click_ms": [
+    2.7,
+    1.2,
+    2.1
+   ],
+   "play_ms": [
+    242.6,
+    251.2,
+    199.2
+   ],
+   "seek_ms": [
+    72.5,
+    127.3,
+    93.7,
+    96.4
+   ]
+  },
+  {
+   "window_s": 0.505,
+   "video_s": 0.54,
+   "idle_cpu_percent": 2.76,
+   "idle_rss_mb": 667.0,
+   "idle_tree_rss_mb": 667.0,
+   "idle_gpu_render_percent": 0.0,
+   "idle_gpu_whole_percent": 11.4,
+   "idle_commits_per_s": 0.0,
+   "click_ms": [
+    4.8,
+    2.3,
+    3.1
+   ],
+   "play_ms": [
+    217.5,
+    240.4,
+    167.4
+   ],
+   "seek_ms": [
+    96.5,
+    75.8,
+    57.0,
+    106.2
+   ]
+  },
+  {
+   "window_s": 0.61,
+   "video_s": 0.613,
+   "idle_cpu_percent": 2.96,
+   "idle_rss_mb": 666.3,
+   "idle_tree_rss_mb": 666.3,
+   "idle_gpu_render_percent": 0.0,
+   "idle_gpu_whole_percent": 2.0,
+   "idle_commits_per_s": 0.0,
+   "click_ms": [
+    3.1,
+    1.9,
+    2.1
+   ],
+   "play_ms": [
+    127.7,
+    196.8,
+    197.9
+   ],
+   "seek_ms": [
+    46.7,
+    68.8,
+    111.7,
+    89.2
+   ]
+  },
+  {
+   "window_s": 0.509,
+   "video_s": 0.532,
+   "idle_cpu_percent": 2.57,
+   "idle_rss_mb": 667.6,
+   "idle_tree_rss_mb": 667.6,
+   "idle_gpu_render_percent": 0.0,
+   "idle_gpu_whole_percent": 6.4,
+   "idle_commits_per_s": 0.0,
+   "click_ms": [
+    2.8,
+    2.0,
+    1.7
+   ],
+   "play_ms": [
+    244.6,
+    896.3,
+    494.5
+   ],
+   "seek_ms": [
+    30.8,
+    95.7,
+    64.5,
+    100.7
+   ]
+  }
+ ],
+ "first": {
+  "window_s": 0.461,
+  "video_s": 0.483,
+  "idle_cpu_percent": 2.37,
+  "idle_rss_mb": 928.2,
+  "idle_tree_rss_mb": 928.2,
+  "idle_gpu_render_percent": 0.2,
+  "idle_gpu_whole_percent": 6.8,
+  "idle_commits_per_s": 0.0,
+  "click_ms": [
+   2.6,
+   2.0,
+   2.7
+  ],
+  "play_ms": [
+   268.6,
+   210.2,
+   270.4
+  ],
+  "seek_ms": [
+   81.5,
+   118.3,
+   93.8,
+   20.3
+  ]
+ },
+ "warm_median": {
+  "window_s": 0.515,
+  "video_s": 0.549,
+  "idle_cpu_percent": 2.76,
+  "idle_rss_mb": 667.6,
+  "idle_tree_rss_mb": 667.6,
+  "idle_gpu_render_percent": 0.0,
+  "idle_gpu_whole_percent": 7.0,
+  "idle_commits_per_s": 0.0
+ },
+ "click_ms_median": 2.4,
+ "click_ms_max": 4.8,
+ "play_ms": {
+  "median": 228.9,
+  "max": 896.3,
+  "timeouts": 0
+ },
+ "seek_ms": {
+  "median": 85.3,
+  "max": 127.3,
+  "timeouts": 0
+ }
+}

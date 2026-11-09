@@ -1,0 +1,27 @@
+thread 3062817: waits over 5.0 ms before 0.7 s (start, ms, where):
+   0.072    8.8  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || <std::sync::once::Once>::call_once_force::<<std::sync::once_
+   0.092   13.7  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || statx [libc.so.6]
+   0.451    9.1  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || __fprintf_chk [libc.so.6]
+   0.461    9.7  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || <alloc::raw_vec::RawVec<std::sync::mpmc::waker::Entry>>::gro
+   0.475   17.1  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || <omareel_core::theme::palette::Palette>::from_files [omareel
+   0.495   10.9  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || rune::runtime::flatten::flatten_owned [omareel-rune-spike]
+   0.534    5.9  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || <wgpu_hal::vulkan::Queue as wgpu_hal::Queue>::present [omare
+   0.574   10.6  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || <wgpu_hal::vulkan::Queue as wgpu_hal::Queue>::present [omare
+   0.638   11.5  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || <wgpu_hal::vulkan::Queue as wgpu_hal::Queue>::present [omare
+
+total waited, by stack:
+    28.0  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || <wgpu_hal::vulkan::Queue as wgpu_hal::Queue>::present [omare
+    17.1  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || <omareel_core::theme::palette::Palette>::from_files [omareel
+    14.6  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || statx [libc.so.6]
+    11.1  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || rune::runtime::flatten::flatten_owned [omareel-rune-spike]
+    10.7  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || __fprintf_chk [libc.so.6]
+     9.7  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || <alloc::raw_vec::RawVec<std::sync::mpmc::waker::Entry>>::gro
+     8.8  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || <std::sync::once::Once>::call_once_force::<<std::sync::once_
+     6.8    || ?
+     2.7  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || wl_display_read_events [libwayland-client.so.0.26.0]
+     1.9  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || vkCreateDevice [libvulkan.so.1.4.363]
+     1.1  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || <wgpu_hal::vulkan::Queue as wgpu_hal::dynamic::queue::DynQue
+     0.9  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || g_malloc [libglib-2.0.so.0.9000.1]
+     0.8  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || getenv [libc.so.6]
+     0.8  std::rt::lang_start_internal > pthread_getattr_np  || _IO_sputbackc [libc.so.6]
+     0.8  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || open_memstream [libc.so.6]

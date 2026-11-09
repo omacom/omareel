@@ -1,0 +1,25 @@
+preview: screen 1920x1080 decoded Software (Bt601), upload Surface
+decode: camera.mp4 from 0.000 (preview true, opened): frame 0 at 0.000 after 8.4 ms
+decode: camera.mp4 from 0.000 (preview true, opened): frame 1 at 0.033 after 8.7 ms
+decode: screen.mp4 from 0.000 (preview true, opened): frame 0 at 0.000 after 13.3 ms
+decode: screen.mp4 from 0.000 (preview true, opened): frame 1 at 0.017 after 13.6 ms
+decode: camera.mp4 from 2.016 (preview true, pooled): frame 0 at 2.016 after 5.7 ms
+decode: camera.mp4 from 2.016 (preview true, pooled): frame 1 at 2.049 after 5.8 ms
+decode: screen.mp4 from 2.016 (preview true, pooled): frame 0 at 2.016 after 39.6 ms
+decode: screen.mp4 from 2.016 (preview true, pooled): frame 1 at 2.032 after 39.8 ms
+decode: screen.mp4 from 7.713 (preview true, pooled): frame 0 at 4.167 after 15.3 ms
+decode: camera.mp4 from 7.713 (preview true, pooled): frame 0 at 7.713 after 16.1 ms
+decode: camera.mp4 from 7.713 (preview true, pooled): frame 1 at 7.746 after 16.2 ms
+decode: screen.mp4 from 7.713 (preview true, pooled): frame 1 at 7.713 after 90.5 ms
+decode: camera.mp4 from 2.016 (preview true, pooled): frame 0 at 0.000 after 6.4 ms
+decode: screen.mp4 from 2.016 (preview true, pooled): frame 0 at 0.000 after 11.6 ms
+decode: camera.mp4 from 2.016 (preview true, pooled): frame 1 at 2.016 after 12.6 ms
+decode: screen.mp4 from 2.016 (preview true, pooled): frame 1 at 2.016 after 51.6 ms
+decode: screen.mp4 from 7.713 (preview true, pooled): frame 0 at 4.167 after 10.9 ms
+decode: camera.mp4 from 7.713 (preview true, pooled): frame 0 at 7.713 after 16.2 ms
+decode: camera.mp4 from 7.713 (preview true, pooled): frame 1 at 7.746 after 16.3 ms
+decode: screen.mp4 from 7.713 (preview true, pooled): frame 1 at 7.713 after 88.2 ms
+decode: camera.mp4 from 2.016 (preview true, pooled): frame 0 at 0.000 after 5.0 ms
+decode: camera.mp4 from 2.016 (preview true, pooled): frame 1 at 2.016 after 10.0 ms
+decode: screen.mp4 from 2.016 (preview true, pooled): frame 0 at 0.000 after 10.9 ms
+decode: screen.mp4 from 2.016 (preview true, pooled): frame 1 at 2.016 after 54.2 ms

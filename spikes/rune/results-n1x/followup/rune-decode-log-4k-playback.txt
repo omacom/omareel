@@ -1,0 +1,4 @@
+decode: camera.mp4 from 0.000 (preview true, opened): frame 0 at 0.000 after 8.4 ms
+decode: camera.mp4 from 0.000 (preview true, opened): frame 1 at 0.033 after 8.6 ms
+decode: screen.mp4 from 0.000 (preview true, opened): frame 0 at 0.000 after 31.2 ms
+decode: screen.mp4 from 0.000 (preview true, opened): frame 1 at 0.017 after 34.1 ms
