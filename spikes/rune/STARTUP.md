@@ -100,6 +100,9 @@ What the second round changed:
 - **Qt's buttons** make their tooltip on first hover and their icons only when they have one
   (about 390 objects fewer in the editor). No change on foundry2; n1x's QML profile ranked them
   first.
+- **Qt's loading spinner** shows only after 400 ms. Spinning, it redrew every frame and held the
+  GUI thread for each render-thread swap, and the player's set-up queued behind it: the video
+  showed 0.6 s after the window on n1x. Now 0.40 to 0.34 s on foundry2 and 1.22 to 0.94 s on n1x.
 - **The wallpaper picker** rebuilt its whole list for every thumbnail made (a hundred times after
   a theme change); it now refreshes at most four times a second.
 - **Checks:** all Rust (374), Qt (`ctest`, 4/4) and Rune tests pass; `compare-binaries.sh` finds no
@@ -121,7 +124,8 @@ What the second round changed:
   created on a thread at the top of `main` (a Rune change); Qt pays NVIDIA's 70 ms first
   `eglMakeCurrent` on two threads, which `QSG_RENDER_LOOP=basic` avoids (0.57 to 0.45 s, playback
   not yet checked with it); Hyprland's scale change costs Qt a second expose (110 ms on n1x).
-- n1x: Qt's video shows 0.7 s after its window (cause being measured).
+- n1x: Qt's video still shows 0.39 s after its window; `QSG_RENDER_LOOP=basic` makes it 0.21 s
+  (and the first frame 0.45 s), but a click then takes 20 ms to reach the screen instead of 5.
 - Omarchy's `QT_QPA_PLATFORMTHEME=gtk3` costs Qt 30 to 38 ms on n1x; clearing it would lose GTK's
   file dialogs.
 
