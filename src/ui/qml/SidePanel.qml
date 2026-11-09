@@ -131,11 +131,11 @@ Rectangle {
                         onClicked: root.section = index
                         tooltipText: modelData.name
                         tooltipPlacement: "left"
-                        OmToolTip {
+                        OmLazyToolTip {
                             target: railButton
                             placement: "left"
                             delay: 0
-                            visible: root.forcedTooltip === railButton.modelData.name
+                            shown: root.forcedTooltip === railButton.modelData.name
                             text: railButton.modelData.name
                         }
                     }

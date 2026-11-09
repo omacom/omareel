@@ -92,7 +92,7 @@ ColumnLayout {
                     cursorShape: Qt.PointingHandCursor
                     onClicked: editor.setProjectValue("cursor.style", modelData.value)
                 }
-                OmToolTip { target: styleTile; visible: styleMouse.containsMouse; text: modelData.label }
+                OmLazyToolTip { target: styleTile; shown: styleMouse.containsMouse; text: modelData.label }
             }
         }
     }

@@ -165,9 +165,9 @@ ColumnLayout {
                     Accessible.name: "Pick file"
                     onClicked: imageDialog.open()
                 }
-                OmToolTip {
+                OmLazyToolTip {
                     target: wallpaperTile
-                    visible: wallpaperTile.hot && !wallpaperTile.picker
+                    shown: wallpaperTile.hot && !wallpaperTile.picker
                     text: wallpaperTile.picker ? "" : wallpaperTile.modelData.theme + " · " + wallpaperTile.modelData.file
                 }
             }

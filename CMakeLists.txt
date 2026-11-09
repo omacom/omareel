@@ -85,6 +85,8 @@ qt_add_qml_module(omareel_ui STATIC
         src/ui/qml/ui/OmSettingRow.qml
         src/ui/qml/ui/OmColorWell.qml
         src/ui/qml/ui/OmEmptyState.qml
+        src/ui/qml/ui/OmCountModel.qml
+        src/ui/qml/ui/OmLazyToolTip.qml
 )
 target_link_libraries(omareel_ui PUBLIC Qt6::Quick Qt6::QuickControls2)
 set_source_files_properties(
