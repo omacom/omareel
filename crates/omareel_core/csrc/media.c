@@ -7,13 +7,8 @@
 #define _POSIX_C_SOURCE 200809L
 #include "media.h"
 
-#include <libavcodec/avcodec.h>
-#include <libavformat/avformat.h>
-#include <libavutil/display.h>
-#include <libavutil/hwcontext.h>
 #include <libavutil/imgutils.h>
-#include <libavutil/pixdesc.h>
-#include <libswscale/swscale.h>
+#include "ffmpeg_dl.h"
 
 #include <limits.h>
 #include <math.h>
@@ -38,6 +33,10 @@ int omr_probe(const char *path, struct omr_media_info *info)
     memset(info, 0, sizeof *info);
     info->stream_duration = -1.0;
     info->format_duration = -1.0;
+    if (omr_ff_load() != 0) {
+        snprintf(info->error, sizeof info->error, "%s: %s", path, omr_ff_error());
+        return AVERROR(ENOSYS);
+    }
     AVFormatContext *format = NULL;
     int code = avformat_open_input(&format, path, NULL, NULL);
     if (code < 0) {
@@ -95,6 +94,7 @@ static int compare_doubles(const void *a, const void *b)
 long omr_frame_times(const char *path, double **times)
 {
     *times = NULL;
+    if (omr_ff_load() != 0) return -1;
     AVFormatContext *format = NULL;
     // The index and the packets need no decoding, so no avformat_find_stream_info.
     if (avformat_open_input(&format, path, NULL, NULL) < 0) return -1;
@@ -184,6 +184,7 @@ void omr_free(void *pointer)
 long omr_keyframe_times(const char *path, double **times)
 {
     *times = NULL;
+    if (omr_ff_load() != 0) return -1;
     AVFormatContext *format = NULL;
     if (avformat_open_input(&format, path, NULL, NULL) < 0) return -1;
     int index = -1;
@@ -259,6 +260,7 @@ static AVFrame *frame_at(AVFormatContext *format, AVCodecContext *decoder, int i
 int omr_thumbnail(const char *path, double at, int width, int height, int quality, int threads, const char *output)
 {
     int result = -1;
+    if (omr_ff_load() != 0) return -1;
     AVFormatContext *format = NULL;
     AVCodecContext *decoder = NULL, *encoder = NULL;
     AVFrame *frame = NULL, *small = NULL;
@@ -396,6 +398,7 @@ struct omr_stream *omr_stream_open(const char *path, const char *vaapi_device, i
 {
     // NV12's colour plane is half the width in pairs: an odd size would overrun its rows.
     if (width < 2 || height < 2 || (width & 1) || (height & 1)) return NULL;
+    if (omr_ff_load() != 0) return NULL;
     struct omr_stream *s = calloc(1, sizeof *s);
     if (!s) return NULL;
     s->width = width;
@@ -582,4 +585,15 @@ int omr_stream_next(struct omr_stream *s, uint8_t *y, uint8_t *uv, double *time)
     *time = slot_time;
     ++s->slot;
     return 1;
+}
+
+const char *omr_color_space_name(int space)
+{
+    if (omr_ff_load() != 0) return NULL;
+    return av_color_space_name((enum AVColorSpace)space);
+}
+
+int omr_ff_preload(void)
+{
+    return omr_ff_load();
 }

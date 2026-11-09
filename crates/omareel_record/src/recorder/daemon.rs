@@ -474,6 +474,9 @@ fn camera_probe(camera_video: &str) -> Option<Object> {
 pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
     let daemon_start_us = monotonic_us();
     debug_start_stage("daemon_start", daemon_start_us, "");
+    // The screen capture's encoder needs FFmpeg's libraries, which are opened, not linked: a
+    // thread opens them while the recording is set up.
+    omareel_core::media_av::preload();
     STOP_REQUESTED.store(false, Ordering::SeqCst);
     DISCARD_REQUESTED.store(false, Ordering::SeqCst);
     // SAFETY: the handlers only store to atomics; glibc's signal() installs them with

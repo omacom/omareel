@@ -40,6 +40,8 @@ unsafe extern "C" {
     fn omr_probe(path: *const c_char, info: *mut RawInfo) -> c_int;
     fn omr_frame_times(path: *const c_char, times: *mut *mut c_double) -> c_long;
     fn omr_keyframe_times(path: *const c_char, times: *mut *mut c_double) -> c_long;
+    fn omr_color_space_name(space: c_int) -> *const c_char;
+    fn omr_ff_preload() -> c_int;
     fn omr_free(pointer: *mut c_void);
     fn omr_thumbnail(
         path: *const c_char,
@@ -100,11 +102,8 @@ pub fn probe(path: &str) -> Result<Probe, String> {
         return Err(text(&raw.error));
     }
     let color_space = {
-        // SAFETY: av_color_space_name gives a static string or null.
-        unsafe extern "C" {
-            fn av_color_space_name(space: c_int) -> *const c_char;
-        }
-        let name = unsafe { av_color_space_name(raw.color_space) };
+        // SAFETY: omr_color_space_name gives a static string or null.
+        let name = unsafe { omr_color_space_name(raw.color_space) };
         if name.is_null() { "unknown".to_owned() } else { unsafe { CStr::from_ptr(name) }.to_string_lossy().into_owned() }
     };
     Ok(Probe {
@@ -137,6 +136,15 @@ pub fn frame_times(path: &str) -> Option<Vec<f64>> {
     let result = if count == 0 { Vec::new() } else { unsafe { std::slice::from_raw_parts(times, count as usize) }.to_vec() };
     unsafe { omr_free(times.cast()) };
     Some(result)
+}
+
+/// Opens FFmpeg's libraries on a thread of its own, so whatever needs them next doesn't wait for
+/// the dynamic loader (about 20 ms): they are opened, not linked (csrc/ffmpeg_dl.h).
+pub fn preload() {
+    std::thread::spawn(|| {
+        // SAFETY: no arguments; it only opens the libraries, once.
+        unsafe { omr_ff_preload() };
+    });
 }
 
 /// When each keyframe of the first video stream starts, in seconds from the file's start (the

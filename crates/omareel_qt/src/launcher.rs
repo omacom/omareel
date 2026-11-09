@@ -86,8 +86,8 @@ pub mod qobject {
     extern "RustQt" {
         #[qobject]
         #[base = LauncherBase]
-        #[qproperty(QString, capture_exclusion_note, READ = capture_exclusion_note, CONSTANT)]
-        #[qproperty(QString, capture_exclusion_reason, READ = capture_exclusion_reason, CONSTANT)]
+        #[qproperty(QString, capture_exclusion_note, READ = capture_exclusion_note, NOTIFY = capture_exclusion_changed)]
+        #[qproperty(QString, capture_exclusion_reason, READ = capture_exclusion_reason, NOTIFY = capture_exclusion_changed)]
         #[qproperty(QString, self_view_status, READ = self_view_status, NOTIFY = self_view_status_changed)]
         #[qproperty(bool, recording, READ = recording, NOTIFY = recording_changed)]
         #[qproperty(bool, starting_recording, READ = starting_recording, NOTIFY = starting_recording_changed)]
@@ -125,6 +125,8 @@ pub mod qobject {
         fn recording_preferences_changed(self: Pin<&mut Launcher>);
         #[qsignal]
         fn audio_devices_changed(self: Pin<&mut Launcher>);
+        #[qsignal]
+        fn capture_exclusion_changed(self: Pin<&mut Launcher>);
         #[qsignal]
         fn microphone_level_changed(self: Pin<&mut Launcher>);
         #[qsignal]
@@ -243,6 +245,8 @@ pub struct LauncherRust {
     microphone_device: String,
     chosen_microphone_device: String,
     audio_devices: QList<QVariant>,
+    /// Counts the listings asked for, so a slower, older one doesn't land after a newer one.
+    audio_devices_generation: u64,
     microphone_level: MicrophoneLevel,
     webcam: bool,
     webcam_device: String,
@@ -279,6 +283,7 @@ impl Default for LauncherRust {
             microphone_device: "default_input".into(),
             chosen_microphone_device: "default_input".into(),
             audio_devices: QList::default(),
+            audio_devices_generation: 0,
             microphone_level: MicrophoneLevel::default(),
             webcam: false,
             webcam_device: "/dev/video2".into(),
@@ -409,16 +414,30 @@ fn run_record(program: &str, arguments: &[String], cancel: &AtomicBool) -> Optio
 impl cxx_qt::Initialize for qobject::Launcher {
     /// `Launcher::Launcher`, after the members LauncherBase holds and its connections.
     fn initialize(mut self: Pin<&mut Self>) {
-        // A recorder that was killed mid-recording left hardware cursors held on.
-        capture_exclusion::restore_abandoned_hardware_cursor();
-        let exclusion = capture_exclusion::ensure_loaded(&qobject::application_dir_path().to_string());
-        if !exclusion.loaded {
-            let screens = usize::try_from(self.screen_count()).unwrap_or(0);
-            let mut rust = self.as_mut().rust_mut();
-            rust.capture_exclusion_note = launcher::capture_exclusion_note(screens).into();
-            rust.capture_exclusion_reason = exclusion.reason.clone();
-            print_error(&format!("omareel: {}; recording overlays stay off the recorded screen\n", exclusion.reason));
-        }
+        // A recorder that was killed mid-recording left hardware cursors held on. That and the
+        // capture-exclusion plugin's check are hyprctl calls, made on a thread so the window
+        // doesn't wait for them; the note, if the plugin is missing, lands well before it shows.
+        let thread = self.qt_thread();
+        let application_dir = qobject::application_dir_path().to_string();
+        std::thread::spawn(move || {
+            capture_exclusion::restore_abandoned_hardware_cursor();
+            let exclusion = capture_exclusion::ensure_loaded(&application_dir);
+            if !exclusion.loaded {
+                let _ = thread.queue(move |mut launcher| {
+                    let screens = usize::try_from(launcher.screen_count()).unwrap_or(0);
+                    {
+                        let mut rust = launcher.as_mut().rust_mut();
+                        rust.capture_exclusion_note = launcher::capture_exclusion_note(screens).into();
+                        rust.capture_exclusion_reason = exclusion.reason.clone();
+                    }
+                    print_error(&format!(
+                        "omareel: {}; recording overlays stay off the recorded screen\n",
+                        exclusion.reason
+                    ));
+                    launcher.capture_exclusion_changed();
+                });
+            }
+        });
         let preferences = RecordingPreferences::load();
         {
             let mut rust = self.as_mut().rust_mut();
@@ -714,10 +733,28 @@ impl qobject::Launcher {
     // ---------------------------------------------------------------------------------------
     // Devices.
 
-    /// `refreshAudioDevices`: asks gpu-screen-recorder (up to five seconds), keeps the chosen
-    /// microphone while it is listed, and reopens the meter.
+    /// `refreshAudioDevices`: asks gpu-screen-recorder (up to five seconds) on a thread, so the
+    /// launcher's window doesn't wait for it (20 ms of its start); [`apply_audio_devices`] takes
+    /// the answer.
     fn refresh_audio_devices(mut self: Pin<&mut Self>) {
-        let devices = launcher::audio_devices();
+        let generation = self.audio_devices_generation.wrapping_add(1);
+        self.as_mut().rust_mut().audio_devices_generation = generation;
+        let thread = self.qt_thread();
+        let listed = std::thread::Builder::new().name("omareel-audio-devices".into()).spawn(move || {
+            let devices = launcher::audio_devices();
+            let _ = thread.queue(move |launcher| launcher.apply_audio_devices(generation, devices));
+        });
+        if listed.is_err() {
+            let devices = launcher::audio_devices();
+            self.apply_audio_devices(generation, devices);
+        }
+    }
+
+    /// The listing: keeps the chosen microphone while it is listed, and reopens the meter.
+    fn apply_audio_devices(mut self: Pin<&mut Self>, generation: u64, devices: Vec<AudioDevice>) {
+        if generation != self.audio_devices_generation {
+            return;
+        }
         let selection = launcher::select_microphone(&devices, &self.chosen_microphone_device, &self.microphone_device);
         self.as_mut().rust_mut().audio_devices = audio_device_list(&devices);
         self.as_mut().audio_devices_changed();

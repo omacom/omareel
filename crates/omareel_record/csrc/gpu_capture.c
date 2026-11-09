@@ -23,6 +23,8 @@
 #include <libavutil/hwcontext_vaapi.h>
 #include <libavutil/opt.h>
 #include <va/va.h>
+/* FFmpeg's functions through the table omareel_core opens them into. */
+#include "ffmpeg_dl.h"
 
 #define OC_MAX_BUFFERS 16
 
@@ -75,6 +77,7 @@ static int fail_av(char *error, size_t size, const char *what, int code)
 int oc_device_open(uint64_t device, oc_device **out, char *error, size_t error_size)
 {
     *out = NULL;
+    if (omr_ff_load() != 0) return fail(error, error_size, "FFmpeg: %s", omr_ff_error());
     drmDevicePtr found = NULL;
     if (drmGetDeviceFromDevId((dev_t)device, 0, &found) != 0 || !found)
         return fail(error, error_size, "The capture device %llu is not a DRM device", (unsigned long long)device);
@@ -355,6 +358,7 @@ int oc_encoder_open(oc_device *device, const oc_encoder_config *config, const oc
                     size_t count, oc_encoder **out, char *error, size_t error_size)
 {
     *out = NULL;
+    if (omr_ff_load() != 0) return fail(error, error_size, "FFmpeg: %s", omr_ff_error());
     if (count == 0 || count > OC_MAX_BUFFERS)
         return fail(error, error_size, "Bad capture buffer count %zu", count);
     oc_encoder *encoder = calloc(1, sizeof *encoder);

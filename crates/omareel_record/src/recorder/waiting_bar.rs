@@ -44,7 +44,10 @@ pub fn start(application: &str) {
         return;
     }
     let pid = application_pid().to_string();
-    qprocess::start_detached(application, &["__record-bar", "--wait", pid.as_str()], DetachedChannels::default());
+    // Its output goes nowhere, as a bar the recorder starts (whose own goes to /dev/null): one
+    // that kept `omareel record`'s would hold the caller's pipes open for the whole recording.
+    let channels = DetachedChannels { standard_output_file: Some("/dev/null"), standard_error_file: Some("/dev/null") };
+    qprocess::start_detached(application, &["__record-bar", "--wait", pid.as_str()], channels);
 }
 
 /// For the bar: it can take the signal now.
