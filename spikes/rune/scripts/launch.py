@@ -214,9 +214,21 @@ results = []
 for n in range(runs):
     log = os.path.join(shots, f'run{n}.log')
     env = dict(os.environ, WAYLAND_DEBUG='client')
-    started = time.monotonic()
-    started_utc = now_utc()
-    process = subprocess.Popen(command, env=env, stdout=open(log + '.out', 'w'), stderr=open(log, 'w'))
+    holder = None
+    if os.environ.get('WAIT'):
+        # WAIT=<s>: the editor the recorder starts (`edit --wait <pid> <bundle>`), signalled after
+        # that many seconds; times are from the signal, as from Stop.
+        holder = subprocess.Popen(['sleep', '1000'])
+        argv = command[:-1] + ['--wait', str(holder.pid), command[-1]]
+        process = subprocess.Popen(argv, env=env, stdout=open(log + '.out', 'w'), stderr=open(log, 'w'))
+        time.sleep(float(os.environ['WAIT']))
+        started = time.monotonic()
+        started_utc = now_utc()
+        os.kill(process.pid, 10)
+    else:
+        started = time.monotonic()
+        started_utc = now_utc()
+        process = subprocess.Popen(command, env=env, stdout=open(log + '.out', 'w'), stderr=open(log, 'w'))
     window_s = video_s = None
     k = 0
     while time.monotonic() - started < 15:
@@ -263,6 +275,8 @@ for n in range(runs):
         subprocess.run([pointer, play_x, play_y], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(1.0)
     process.terminate()
+    if holder:
+        holder.kill()
     try:
         process.wait(5)
     except subprocess.TimeoutExpired:
