@@ -484,6 +484,7 @@ int main(int argc, char **argv)
     if (argc == 3 && QByteArray(argv[1]) == "edit")
         omareel::cli::preloadEditor(QString::fromLocal8Bit(argv[2]).toStdString());
     if (graphical) omareel::cli::prefetchTheme();
+    if (argc == 1) omareel::cli::prefetchLauncher();
     // FFmpeg's libraries are opened, not linked (ffmpeg_dl.h): a window process opens them on a
     // thread now, so Qt Multimedia's FFmpeg plugin, which links them, finds them loaded.
     if (graphical || exporting) std::thread([] { omr_ff_preload(); }).detach();
