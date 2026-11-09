@@ -58,6 +58,7 @@ extern "C" int omr_ff_preload(void);
 #include <fcntl.h>
 #include <sys/syscall.h>
 #include <memory>
+#include <optional>
 #include <thread>
 #include <vector>
 
@@ -532,7 +533,7 @@ int main(int argc, char **argv)
     applicationFont.setPixelSize(qRound(omareel::theme::shellFontBaseSize() * 1.083));
     QGuiApplication::setFont(applicationFont);
     ThemeFonts::setConfiguredFamily(resolvedFonts.ui);
-    if (graphical)
+    if (graphical && qEnvironmentVariable("OMAREEL_DEBUG") == QLatin1String("1"))
         QTextStream(stderr) << "omareel: application font " << resolvedFonts.ui
                             << " at " << applicationFont.pixelSize() << " px\n";
     const QStringList args = app.arguments();
@@ -559,6 +560,9 @@ int main(int argc, char **argv)
     if (command == QLatin1String("__record-bar-ipc")) return omareel::record::recordBarIpc(args.mid(2));
     if (command == QLatin1String("__record-bar")) {
         Theme theme;
+        // The bar outlives the engine, as its bindings read it while the engine tears down; it
+        // is made after the wait, which already uses the engine.
+        std::optional<RecordingBar> bar;
         QQmlApplicationEngine engine;
         reportQmlWarnings(engine);
         engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
@@ -581,8 +585,8 @@ int main(int argc, char **argv)
             hidden = (flags & 1) != 0;
         }
         const int ownerIndex = args.indexOf(QStringLiteral("--owner"));
-        RecordingBar recordingBar(hidden, args.contains(QStringLiteral("--standby")),
-                                  ownerIndex >= 0 ? args.value(ownerIndex + 1).toLongLong() : 0);
+        RecordingBar &recordingBar = bar.emplace(hidden, args.contains(QStringLiteral("--standby")),
+                                                 ownerIndex >= 0 ? args.value(ownerIndex + 1).toLongLong() : 0);
         if (args.contains(QStringLiteral("--standby")) && !recordingBar.ownsStandbyHost()) return 0;
         engine.rootContext()->setContextProperty(QStringLiteral("recordingBar"), &recordingBar);
         QObject::connect(&recordingBar, &RecordingBar::finished, &app, &QCoreApplication::quit);
