@@ -317,10 +317,11 @@ pub fn status() -> Status {
 
 /// `CaptureExclusion::ensureLoaded`: the plugin's [`status`], after loading it if it is not
 /// loaded. `OMAREEL_PLUGIN_PATH`, when set (even to nothing), is the only candidate and must be
-/// a file; otherwise `plugin/omareel-capture-exclude.so` beside the program
-/// (`application_dir_path`, the C++'s `QCoreApplication::applicationDirPath()`) and
-/// `/usr/lib/omareel/omareel-capture-exclude.so` are tried. A candidate's `.hash` file must hold
-/// the running commit, and Hyprland must answer `ok` to `hyprctl plugin load`.
+/// a file; otherwise the builds in `plugin/` beside the program (`application_dir_path`, the
+/// C++'s `QCoreApplication::applicationDirPath()`) and in `/usr/lib/omareel` are tried
+/// ([`plugin_builds`]). The first whose `.hash` file holds the running commit is loaded, and
+/// Hyprland must answer `ok` to `hyprctl plugin load`; when none does, the first build found is
+/// reported as needing a rebuild.
 pub fn ensure_loaded(application_dir_path: &str) -> Status {
     let variable = std::env::var_os("OMAREEL_PLUGIN_PATH");
     let override_path =
@@ -336,11 +337,12 @@ pub fn ensure_loaded(application_dir_path: &str) -> Status {
     let candidates = if variable.is_some() {
         vec![override_path]
     } else {
-        vec![
-            qdir::file_path(application_dir_path, "plugin/omareel-capture-exclude.so"),
-            "/usr/lib/omareel/omareel-capture-exclude.so".to_owned(),
-        ]
+        let mut builds = plugin_builds(&qdir::file_path(application_dir_path, "plugin"));
+        builds.extend(plugin_builds("/usr/lib/omareel"));
+        builds
     };
+    let mut running: Option<String> = None;
+    let mut mismatched: Option<String> = None;
     for path in candidates {
         if !FileInfo::new(path.clone()).is_file() {
             continue;
@@ -349,13 +351,12 @@ pub fn ensure_loaded(application_dir_path: &str) -> Status {
             Ok(bytes) => qstring::trimmed(&qstring::from_utf8(&bytes)).to_owned(),
             Err(_) => String::new(),
         };
-        let version = json_object(&hyprctl(&["-j", "version"]).output);
-        if !compatible_hash(&built, &version.value("commit").to_string_or("")) {
-            return Status {
-                built_hash: built,
-                reason: "Capture exclusion plugin needs rebuilding for this Hyprland commit".into(),
-                ..Status::default()
-            };
+        let commit = running.get_or_insert_with(|| {
+            json_object(&hyprctl(&["-j", "version"]).output).value("commit").to_string_or("")
+        });
+        if !compatible_hash(&built, commit) {
+            mismatched.get_or_insert(built);
+            continue;
         }
         let absolute = FileInfo::new(path.clone()).absolute_file_path();
         let load = hyprctl(&["plugin", "load", &absolute]);
@@ -370,8 +371,32 @@ pub fn ensure_loaded(application_dir_path: &str) -> Status {
         }
         return status();
     }
+    if let Some(built) = mismatched {
+        return Status {
+            built_hash: built,
+            reason: "Capture exclusion plugin needs rebuilding for this Hyprland commit".into(),
+            ..Status::default()
+        };
+    }
     result.reason = "Capture exclusion plugin is not installed or was not built (it needs Hyprland's headers)".into();
     result
+}
+
+/// The plugin builds in `directory`: `omareel-capture-exclude.so`, built against the Hyprland
+/// the package was built with, then one in each `hyprland-<version>/` for another Hyprland
+/// (plugin/CMakeLists.txt's OMAREEL_EXTRA_HYPRLAND_SDKS), in name order.
+pub fn plugin_builds(directory: &str) -> Vec<String> {
+    let mut others: Vec<String> = std::fs::read_dir(directory)
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_name().to_string_lossy().starts_with("hyprland-"))
+        .map(|entry| qdir::file_path(&entry.path().to_string_lossy(), "omareel-capture-exclude.so"))
+        .collect();
+    others.sort();
+    let mut builds = vec![qdir::file_path(directory, "omareel-capture-exclude.so")];
+    builds.extend(others);
+    builds
 }
 
 /// `CaptureExclusion::overlayMonitor`: where the bar and the self-view go. With the plugin

@@ -23,10 +23,21 @@ A private include-directory symlink takes precedence over stale copies under
 tree when building the standalone plugin. Rebuild after updating Hyprland.
 
 CMake installation and `pkg/PKGBUILD` install both files under `/usr/lib/omareel/`.
+
+The plugin can be built for more Hyprland versions at once:
+`-DOMAREEL_EXTRA_HYPRLAND_SDKS=<prefix>[;<prefix>…]`, each prefix holding
+`include/hyprland` and the `include/aquamarine`, `include/hyprutils` and
+`include/hyprgraphics` that Hyprland was built with (unpacked from those
+packages). Each such build goes to `hyprland-<version>/` beside the main one, and
+installs to `/usr/lib/omareel/hyprland-<version>/`. The Omarchy package builds one
+for Hyprland 0.56.2 while Omarchy's stable channel runs it; the source keeps the
+0.56 interfaces behind `OMAREEL_HYPRLAND_MINOR`, which CMake sets from the
+headers' `version.h`. Drop those `#else` branches with 0.56.
+
 The application checks the sidecar commit against `hyprctl -j version` before
 loading. It searches an explicit `OMAREEL_PLUGIN_PATH` first (an explicit missing
-path forces fallback), otherwise the executable's `plugin/` directory and then
-the installed path. It does not unload the plugin after recording. With
+path forces fallback), otherwise the builds in the executable's `plugin/`
+directory and then in the installed path, and loads the first whose commit matches. It does not unload the plugin after recording. With
 `ecosystem:enforce_permissions` enabled, Hyprland shows a one-time permission
 dialog; refusal leaves the application in fallback mode.
 

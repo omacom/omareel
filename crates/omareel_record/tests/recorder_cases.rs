@@ -533,6 +533,14 @@ impl ScopedEnvironment {
         // SAFETY: the programs lock keeps the other tests that start programs out meanwhile.
         unsafe { std::env::set_var(name, value) };
     }
+
+    fn unset(&mut self, name: &'static str) {
+        if !self.0.iter().any(|(saved, _)| *saved == name) {
+            self.0.push((name, std::env::var_os(name)));
+        }
+        // SAFETY: as in set.
+        unsafe { std::env::remove_var(name) };
+    }
 }
 
 impl Drop for ScopedEnvironment {
@@ -589,6 +597,60 @@ fn capture_exclusion_checks_hash_before_loading() {
     assert!(std::fs::read_to_string(&log).unwrap().contains("plugin load"));
     environment.set("OMAREEL_PLUGIN_PATH", scratch.file("absent.so"));
     assert!(capture_exclusion::ensure_loaded("").reason.contains("does not exist"));
+}
+
+// A package holds a plugin build per Hyprland version (one beside the program's plugin/, others
+// in plugin/hyprland-<version>/): the one built for the running commit is loaded, wherever it
+// sorts, and when none is, the first build found is the one reported.
+#[test]
+fn capture_exclusion_loads_the_build_for_the_running_hyprland() {
+    let _programs = programs();
+    let scratch = Scratch::new("exclusion-builds");
+    let application = scratch.file("application");
+    let current = format!("{application}/plugin/omareel-capture-exclude.so");
+    let older = format!("{application}/plugin/hyprland-0.56.2/omareel-capture-exclude.so");
+    for (path, hash) in [(&current, "b"), (&older, "a")] {
+        std::fs::create_dir_all(std::path::Path::new(path).parent().unwrap()).unwrap();
+        std::fs::write(path, "fixture").unwrap();
+        std::fs::write(format!("{path}.hash"), hash.repeat(40)).unwrap();
+    }
+    assert_eq!(
+        capture_exclusion::plugin_builds(&format!("{application}/plugin")),
+        vec![current.clone(), older.clone()]
+    );
+    let log = scratch.file("calls");
+    let mock = scratch.file("hyprctl");
+    let write_mock = |commit: &str| {
+        std::fs::write(
+            &mock,
+            format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{log}'\n\
+                 case \"$*\" in\n \
+                 '-j plugin list') printf '[]';;\n \
+                 '-j version') printf '{{\"commit\":\"{commit}\"}}';;\n \
+                 'plugin load '*) printf 'ok';;\n \
+                 *) printf 'unexpected';;\nesac\n"
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&mock, std::os::unix::fs::PermissionsExt::from_mode(0o700)).unwrap();
+    };
+    let mut environment = ScopedEnvironment::new();
+    environment.set("PATH", &scratch.0);
+    environment.unset("OMAREEL_PLUGIN_PATH");
+
+    write_mock(&"a".repeat(40));
+    capture_exclusion::ensure_loaded(&application);
+    let calls = std::fs::read_to_string(&log).unwrap();
+    assert!(calls.contains(&format!("plugin load {older}")), "{calls}");
+    assert!(!calls.contains(&format!("plugin load {current}")), "{calls}");
+
+    std::fs::remove_file(&log).unwrap();
+    write_mock(&"c".repeat(40));
+    let mismatch = capture_exclusion::ensure_loaded(&application);
+    assert!(mismatch.reason.contains("rebuilding"), "{}", mismatch.reason);
+    assert_eq!(mismatch.built_hash, "b".repeat(40));
+    assert!(!std::fs::read_to_string(&log).unwrap().contains("plugin load"));
 }
 
 #[test]

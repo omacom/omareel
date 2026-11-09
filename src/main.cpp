@@ -303,15 +303,27 @@ static QScreen *recordBarScreen(const QString &recordedMonitor)
     return nullptr;
 }
 
+// Whether Hyprland took a hyprctl request: it answers `ok`, and a refusal comes back with exit
+// status 0 all the same.
+static bool hyprctlAccepted(const QStringList &arguments)
+{
+    QProcess request;
+    request.start(QStringLiteral("hyprctl"), arguments);
+    return request.waitForFinished(3000) && request.exitCode() == 0
+        && request.readAllStandardOutput().trimmed() == "ok";
+}
+
 static void configureOverlayRule(const QString &scope)
 {
-    QProcess rule;
     // Named Lua rules merge effects. Retire the previous rule before adding ours.
     const QString expression = QStringLiteral(
         "hl.layer_rule({ name = '%1-private', enabled = false }); "
         "hl.layer_rule({ name = '%1-display', match = { namespace = '%1' }, no_anim = true })").arg(scope);
-    rule.start(QStringLiteral("hyprctl"), {QStringLiteral("eval"), expression});
-    if (!rule.waitForFinished(3000) || rule.exitCode() != 0)
+    // Hyprland 0.56 with a hyprlang configuration (Omarchy's stable channel) answers eval with
+    // "eval is only supported with the lua config manager" and takes the rule as a keyword.
+    if (!hyprctlAccepted({QStringLiteral("eval"), expression})
+        && !hyprctlAccepted({QStringLiteral("keyword"), QStringLiteral("layerrule"),
+                             QStringLiteral("no_anim on, match:namespace %1").arg(scope)}))
         qWarning().noquote() << "omareel: could not apply the overlay animation rule";
 }
 
