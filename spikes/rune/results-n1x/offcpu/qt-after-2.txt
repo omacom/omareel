@@ -1,0 +1,28 @@
+thread 2453416: waits over 5.0 ms before 2.5 s (start, ms, where):
+   0.955    9.2  Omareel::Editor::Editor > Omareel::Editor::Editor > Omareel::EditorBase::EditorBase > Omareel::PlaybackDriver::PlaybackDriver  || vkCreateDevice [libvulkan.so.1.4.363]
+   1.929    9.0  QQmlApplicationEngine::load > QQmlApplicationEnginePrivate::startLoad > QQmlApplicationEnginePrivate::_q_loadTranslations  || QRecursiveMutex::unlock
+   1.945    5.3    || ?
+   1.954    8.3    || ?
+   1.962    5.7    || ?
+   1.974    8.3    || ?
+   2.123  163.8  wl_display_dispatch_queue_pending > QtWaylandClient::QWaylandWindow::updateExposure > QtWaylandClient::QWaylandWindow::sendExposeEvent > QGuiApplicationPrivate::processExposeEvent  || QMetaObject::cast
+   2.290  121.5    || ?
+   2.421   55.6  QCoreApplicationPrivate::sendPostedEvents > QPlatformWindow::deliverUpdateRequest > QQuickWindow::event > QQuickWindowPrivate::polishItems  || QQuickItemPrivate::paintOrderChildItems
+   2.477   64.7  QCoreApplicationPrivate::sendPostedEvents  || QCoreApplicationPrivate::sendPostedEvents
+
+total waited, by stack:
+   169.5    || ?
+   163.8  wl_display_dispatch_queue_pending > QtWaylandClient::QWaylandWindow::updateExposure > QtWaylandClient::QWaylandWindow::sendExposeEvent > QGuiApplicationPrivate::processExposeEvent  || QMetaObject::cast
+    64.7  QCoreApplicationPrivate::sendPostedEvents  || QCoreApplicationPrivate::sendPostedEvents
+    55.6  QCoreApplicationPrivate::sendPostedEvents > QPlatformWindow::deliverUpdateRequest > QQuickWindow::event > QQuickWindowPrivate::polishItems  || QQuickItemPrivate::paintOrderChildItems
+    12.0  Omareel::Editor::Editor > Omareel::Editor::Editor > Omareel::EditorBase::EditorBase > Omareel::PlaybackDriver::PlaybackDriver  || vkCreateDevice [libvulkan.so.1.4.363]
+     9.0  QQmlApplicationEngine::load > QQmlApplicationEnginePrivate::startLoad > QQmlApplicationEnginePrivate::_q_loadTranslations  || QRecursiveMutex::unlock
+     4.9  QQmlApplicationEngine::load > QQmlApplicationEnginePrivate::startLoad > QQmlComponentPrivate::loadUrl > QQmlTypeLoader::getType  || void QQmlTypeLoader::doLoad<CachedLoader>
+     3.4  Omareel::Editor::Editor > Omareel::Editor::Editor > Omareel::EditorBase::EditorBase > Omareel::PlaybackDriver::PlaybackDriver  || cuMemsetD8Async [libcuda.so.615.78.08]
+     2.7  Omareel::Editor::Editor > Omareel::Editor::Editor > Omareel::EditorBase::EditorBase > Omareel::PlaybackDriver::PlaybackDriver  || cuCtxDestroy_v2 [libcuda.so.615.78.08]
+     2.6  QQmlApplicationEngine::load > QQmlApplicationEnginePrivate::startLoad > QQmlComponentPrivate::loadUrl > QQmlTypeLoader::getType  || QWaitCondition::wait
+     2.4  QCoreApplicationPrivate::sendPostedEvents > QPlatformWindow::deliverUpdateRequest > QQuickWindow::event > QQuickWindowPrivate::polishItems  || pthread_cond_signal [libc.so.6]
+     2.4  preempted
+     2.3  QGuiApplication::QGuiApplication > QGuiApplicationPrivate::init > QGuiApplicationPrivate::createEventDispatcher > QGuiApplicationPrivate::createPlatformIntegration  || wl_display_connect [libwayland-client.so.0.26.0]
+     2.3  QQmlApplicationEngine::load > QQmlApplicationEnginePrivate::finishLoad > QQmlComponent::create > QQmlComponentPrivate::createWithProperties  || realloc [libc.so.6]
+     2.3  QGuiApplication::QGuiApplication > QGuiApplicationPrivate::init > QGuiApplicationPrivate::createEventDispatcher > QGuiApplicationPrivate::createPlatformIntegration  || g_mutex_lock [libglib-2.0.so.0.9000.1]

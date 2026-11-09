@@ -1,0 +1,25 @@
+thread 2556939: waits over 5.0 ms before 0.8 s (start, ms, where):
+   0.150    5.6  QQmlApplicationEngine::load > QQmlApplicationEnginePrivate::startLoad > QQmlComponentPrivate::loadUrl > QQmlTypeLoader::getType  || QResource::fileName
+   0.176   10.5    || ?
+   0.396   10.8  QCoreApplicationPrivate::sendPostedEvents > wl_display_dispatch_queue_pending > QtWaylandClient::QWaylandWindow::updateExposure > QtWaylandClient::QWaylandWindow::sendExposeEvent  || snprintf [libc.so.6]
+   0.442  140.8  QCoreApplicationPrivate::sendPostedEvents > wl_display_dispatch_queue_pending > QtWaylandClient::QWaylandWindow::updateExposure > QtWaylandClient::QWaylandWindow::sendExposeEvent  || QQuickItemPrivate::paintOrderChildItems
+   0.585  111.5  QCoreApplicationPrivate::sendPostedEvents > wl_display_dispatch_queue_pending > QtWaylandClient::QWaylandWindow::updateExposure > QtWaylandClient::QWaylandWindow::sendExposeEvent  || QRegion::isEmpty
+   0.714   46.5  QCoreApplicationPrivate::sendPostedEvents > QPlatformWindow::deliverUpdateRequest > QQuickWindow::event > QQuickWindowPrivate::polishItems  || QQuickMouseArea::metaObject
+   0.760   66.7  QCoreApplicationPrivate::sendPostedEvents  || QQueuedMetaCallEvent::~QQueuedMetaCallEvent
+
+total waited, by stack:
+   140.8  QCoreApplicationPrivate::sendPostedEvents > wl_display_dispatch_queue_pending > QtWaylandClient::QWaylandWindow::updateExposure > QtWaylandClient::QWaylandWindow::sendExposeEvent  || QQuickItemPrivate::paintOrderChildItems
+   113.3  QCoreApplicationPrivate::sendPostedEvents > wl_display_dispatch_queue_pending > QtWaylandClient::QWaylandWindow::updateExposure > QtWaylandClient::QWaylandWindow::sendExposeEvent  || QRegion::isEmpty
+    66.7  QCoreApplicationPrivate::sendPostedEvents  || QQueuedMetaCallEvent::~QQueuedMetaCallEvent
+    46.5  QCoreApplicationPrivate::sendPostedEvents > QPlatformWindow::deliverUpdateRequest > QQuickWindow::event > QQuickWindowPrivate::polishItems  || QQuickMouseArea::metaObject
+    24.9    || ?
+    10.8  QCoreApplicationPrivate::sendPostedEvents > wl_display_dispatch_queue_pending > QtWaylandClient::QWaylandWindow::updateExposure > QtWaylandClient::QWaylandWindow::sendExposeEvent  || snprintf [libc.so.6]
+     5.6  QQmlApplicationEngine::load > QQmlApplicationEnginePrivate::startLoad > QQmlComponentPrivate::loadUrl > QQmlTypeLoader::getType  || QResource::fileName
+     3.5  QQmlApplicationEngine::load > QQmlApplicationEnginePrivate::startLoad > QQmlComponentPrivate::loadUrl > QQmlTypeLoader::getType  || pthread_cond_wait [libc.so.6]
+     2.8  QQmlApplicationEngine::load > QQmlApplicationEnginePrivate::startLoad > QQmlComponentPrivate::loadUrl > QQmlTypeLoader::getType  || cfree [libc.so.6]
+     1.6  QGuiApplication::QGuiApplication > QGuiApplicationPrivate::init > QGuiApplicationPrivate::createEventDispatcher > QGuiApplicationPrivate::createPlatformIntegration  || QMetaType::registerHelper
+     1.2  QCoreApplicationPrivate::sendPostedEvents > wl_display_dispatch_queue_pending > QQuickTextField::qt_metacall > QQuickTextInput::qt_metacall  || QtWaylandClient::QWaylandClipboard::mimeData
+     0.8  QQmlApplicationEngine::load > QQmlApplicationEnginePrivate::finishLoad > QQmlComponent::create > QQmlComponentPrivate::createWithProperties  || _dbus_type_reader_recurse [libdbus-1.so.3.38.3]
+     0.8  QCoreApplicationPrivate::sendPostedEvents  || realloc [libc.so.6]
+     0.7  QGuiApplication::QGuiApplication > QGuiApplicationPrivate::init > QGuiApplicationPrivate::createEventDispatcher > QGuiApplicationPrivate::createPlatformIntegration  || pango_font_map_load_font [libpango-1.0.so.0.5800.2]
+     0.6  QQmlApplicationEngine::load > QQmlApplicationEnginePrivate::finishLoad > QQmlComponent::create > QQmlComponentPrivate::createWithProperties  || QGuiApplication::notify

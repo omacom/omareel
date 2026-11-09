@@ -182,7 +182,9 @@ for title, chosen in (('main thread up to the first frame', [s for s in mains if
 # --- The main thread's time up to the first frame, by kind of work (the first kind whose
 # pattern matches anywhere in the stack wins).
 CATEGORIES = [
-    ('GPU and EGL setup', r'QWaylandEglClientBufferIntegration|eglInitialize|eglCreate|libgallium|libEGL|vkCreate|vkEnumerate|libvulkan|request_adapter|request_device|create_surface'),
+    # On NVIDIA (n1x) Qt Multimedia's FFmpeg backend probes the hardware codecs through CUDA.
+    ('Qt Multimedia, FFmpeg and CUDA', r'QFFmpeg|libffmpegmediaplugin|QPlatformMediaIntegration|QMediaDevices|libcuda|libnvcuvid|libnvidia-encode|av_hwdevice|avcodec_open|avcodec_find'),
+    ('GPU and EGL setup', r'QWaylandEglClientBufferIntegration|eglInitialize|eglCreate|libgallium|libEGL|libnvidia-|vkCreate|vkEnumerate|libvulkan|request_adapter|request_device|create_surface'),
     ('icon theme lookup', r'QIconLoader'),
     ('SVG icons drawn', r'QSvg|resvg|usvg|tiny_skia'),
     ('image decode', r'libwebp|libpng|libjpeg|QImageReader|image::|png::|jpeg_decoder|zune|libjxl'),

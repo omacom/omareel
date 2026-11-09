@@ -1,0 +1,28 @@
+thread 2557955: waits over 5.0 ms before 0.8 s (start, ms, where):
+   0.147    8.8  QQmlApplicationEngine::load > QQmlApplicationEnginePrivate::startLoad > QQmlApplicationEnginePrivate::_q_loadTranslations  || QResource::compressionAlgorithm
+   0.163    5.4    || ?
+   0.169    6.5    || ?
+   0.180    7.2    || ?
+   0.188    5.7    || ?
+   0.193   17.5    || ?
+   0.442    5.4    || ?
+   0.480  151.4  QCoreApplicationPrivate::sendPostedEvents > wl_display_dispatch_queue_pending > QtWaylandClient::QWaylandWindow::updateExposure > QtWaylandClient::QWaylandWindow::sendExposeEvent  || QMetaObject::cast
+   0.635  123.1  QCoreApplicationPrivate::sendPostedEvents > wl_display_dispatch_queue_pending > QtWaylandClient::QWaylandWindow::setScale > QtWaylandClient::QWaylandWindow::sendExposeEvent  || QVariant::toBool
+   0.778   45.5  QCoreApplicationPrivate::sendPostedEvents > QPlatformWindow::deliverUpdateRequest > QQuickWindow::event > QQuickWindowPrivate::polishItems  || QQuickRectangle::metaObject
+
+total waited, by stack:
+   151.4  QCoreApplicationPrivate::sendPostedEvents > wl_display_dispatch_queue_pending > QtWaylandClient::QWaylandWindow::updateExposure > QtWaylandClient::QWaylandWindow::sendExposeEvent  || QMetaObject::cast
+   123.1  QCoreApplicationPrivate::sendPostedEvents > wl_display_dispatch_queue_pending > QtWaylandClient::QWaylandWindow::setScale > QtWaylandClient::QWaylandWindow::sendExposeEvent  || QVariant::toBool
+    59.8    || ?
+    45.5  QCoreApplicationPrivate::sendPostedEvents > QPlatformWindow::deliverUpdateRequest > QQuickWindow::event > QQuickWindowPrivate::polishItems  || QQuickRectangle::metaObject
+     8.8  QQmlApplicationEngine::load > QQmlApplicationEnginePrivate::startLoad > QQmlApplicationEnginePrivate::_q_loadTranslations  || QResource::compressionAlgorithm
+     2.9  QCoreApplicationPrivate::sendPostedEvents > wl_display_dispatch_queue_pending > QtWaylandClient::QWaylandWindow::updateExposure > QtWaylandClient::QWaylandWindow::sendExposeEvent  || realloc [libc.so.6]
+     2.6  QQmlApplicationEngine::load > QQmlApplicationEnginePrivate::startLoad > QQmlComponentPrivate::loadUrl > QQmlTypeLoader::getType  || void QQmlTypeLoader::doLoad<CachedLoader>
+     2.1  QQmlApplicationEngine::load > QQmlApplicationEnginePrivate::finishLoad > QQmlComponent::create > QQmlComponentPrivate::createWithProperties  || QV4::QQmlContextWrapper::getPropertyAndBase
+     1.9  QCoreApplicationPrivate::sendPostedEvents > fcitx::FcitxQtWatcher::watch  || _dbus_type_writer_init_values_only [libdbus-1.so.3.38.3]
+     1.9  QQmlApplicationEngine::load > QQmlApplicationEnginePrivate::finishLoad > QQmlComponent::create > QQmlComponentPrivate::createWithProperties  || _dbus_type_reader_next [libdbus-1.so.3.38.3]
+     1.4  QGuiApplication::QGuiApplication > QGuiApplicationPrivate::init > QGuiApplicationPrivate::createEventDispatcher > QGuiApplicationPrivate::createPlatformIntegration  || g_hash_table_insert [libglib-2.0.so.0.9000.1]
+     1.3  QGuiApplication::QGuiApplication > QGuiApplicationPrivate::init > QGuiApplicationPrivate::createEventDispatcher > QGuiApplicationPrivate::createPlatformIntegration  || QDBusMetaType::registerMarshallOperators
+     0.8  Omareel::Editor::Editor > Omareel::cxx_qt_Editor::initialize0 > <omareel_qt::editor::qobject::Editor as cxx_qt::Constructor<>>::initia > Omareel$cxxbridge1$198$Editor$playback_load_screen  || _dl_catch_exception [ld-linux-aarch64.
+     0.8  QQmlApplicationEngine::load > QQmlApplicationEnginePrivate::finishLoad > QQmlComponent::create > QQmlComponentPrivate::createWithProperties  || QV4::Runtime::CallPropertyLookup::call
+     0.7  QGuiApplication::QGuiApplication > QGuiApplicationPrivate::init > QGuiApplicationPrivate::createEventDispatcher > QGuiApplicationPrivate::createPlatformIntegration  || FcPatternGetString [libfontconfig.so.1.17.0]

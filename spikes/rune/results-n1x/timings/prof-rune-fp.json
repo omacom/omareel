@@ -1,0 +1,36 @@
+{
+ "runs": [
+  {
+   "first_frame_s": 0.6199,
+   "filmstrip_frames": 47,
+   "filmstrip_first_s": 0.646,
+   "filmstrip_last_s": 1.603,
+   "camera_frames": 8,
+   "camera_last_s": 0.707
+  },
+  {
+   "first_frame_s": 0.5785,
+   "filmstrip_frames": 47,
+   "filmstrip_first_s": 0.612,
+   "filmstrip_last_s": 1.583,
+   "camera_frames": 8,
+   "camera_last_s": 0.653
+  },
+  {
+   "first_frame_s": 0.7018,
+   "filmstrip_frames": 47,
+   "filmstrip_first_s": 0.73,
+   "filmstrip_last_s": 1.689,
+   "camera_frames": 8,
+   "camera_last_s": 0.796
+  }
+ ],
+ "median_after_first": {
+  "first_frame_s": 0.64,
+  "filmstrip_frames": 47.0,
+  "filmstrip_first_s": 0.671,
+  "filmstrip_last_s": 1.636,
+  "camera_frames": 8.0,
+  "camera_last_s": 0.725
+ }
+}

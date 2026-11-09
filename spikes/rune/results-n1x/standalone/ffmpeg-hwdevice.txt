@@ -1,0 +1,15 @@
+ffmpeg -init_hw_device none: 0.037 s wall, 0.021 user, 0.020 sys
+ffmpeg -init_hw_device none: 0.056 s wall, 0.027 user, 0.034 sys
+ffmpeg -init_hw_device none: 0.037 s wall, 0.018 user, 0.023 sys
+ffmpeg -init_hw_device cuda: 0.044 s wall, 0.023 user, 0.021 sys
+Device creation failed: -12.
+ffmpeg -init_hw_device cuda: 0.028 s wall, 0.014 user, 0.014 sys
+Device creation failed: -12.
+ffmpeg -init_hw_device cuda: 0.033 s wall, 0.015 user, 0.018 sys
+Device creation failed: -12.
+ffmpeg -init_hw_device vaapi: 0.632 s wall, 0.053 user, 0.579 sys
+ffmpeg -init_hw_device vaapi: 0.619 s wall, 0.047 user, 0.572 sys
+ffmpeg -init_hw_device vaapi: 0.613 s wall, 0.042 user, 0.570 sys
+ffmpeg -init_hw_device vulkan: 1.094 s wall, 0.048 user, 1.037 sys
+ffmpeg -init_hw_device vulkan: 1.142 s wall, 0.051 user, 1.080 sys
+ffmpeg -init_hw_device vulkan: 1.084 s wall, 0.036 user, 1.041 sys

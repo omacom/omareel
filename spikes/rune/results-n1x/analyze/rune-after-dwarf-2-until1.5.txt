@@ -1,0 +1,209 @@
+run /home/ryan/.cache/omareel-spikes/n1x/prof-rune-dwarf/2: first frame 0.5054s; commits [0.5054, 0.5131, 0.5434, 0.6048, 0.6739, 0.7344, 0.8007, 0.867]; window 0..1.500s; 44198 samples
+
+CPU ms by thread before the window ends:
+   1031.7 ms  omareel-rune-sp      2442090/2442217 
+    988.7 ms  omareel-rune-sp      2442090/2442218 
+    921.3 ms  omareel-rune-sp      2442090/2442090 main
+    261.4 ms  rune-images          2442090/2442121 
+    166.1 ms  av:h264:df1          2442090/2442522 
+    164.4 ms  av:h264:df1          2442090/2442533 
+    163.7 ms  av:h264:df0          2442090/2442532 
+    162.7 ms  av:h264:df0          2442090/2442519 
+    162.1 ms  av:h264:df0          2442090/2442596 
+    160.1 ms  av:h264:df1          2442090/2442597 
+    158.7 ms  av:h264:df1          2442090/2442691 
+    155.7 ms  av:h264:df0          2442090/2442514 
+    153.7 ms  av:h264:df0          2442090/2442269 
+    153.7 ms  av:h264:df0          2442090/2442664 
+    153.4 ms  av:h264:df1          2442090/2442515 
+    152.4 ms  av:h264:df0          2442090/2442521 
+    151.1 ms  av:h264:df0          2442090/2442690 
+    148.7 ms  av:h264:df1          2442090/2442523 
+    147.4 ms  av:h264:df1          2442090/2442271 
+    146.4 ms  av:h264:df1          2442090/2442667 
+    145.4 ms  av:h264:df1          2442090/2442666 
+    140.4 ms  av:h264:df0          2442090/2442665 
+    140.0 ms  av:h264:df0          2442090/2442260 
+    139.7 ms  av:h264:df0          2442090/2442264 
+    135.4 ms  av:h264:df1          2442090/2442256 
+
+child processes (fork, exit, CPU ms over the whole run):
+    0.052   0.062  hyprctl             16.3 ms  pid 2442096
+    0.052   0.064  fc-match            17.7 ms  pid 2442097
+    0.072   0.077  hyprctl              7.7 ms  pid 2442113
+    0.072   0.078  fc-match             4.7 ms  pid 2442114
+    0.085   0.101  fc-list             20.3 ms  pid 2442125
+    0.467   3.051  ffmpeg            1183.7 ms  pid 2442223
+    0.467   0.481  fc-match            19.0 ms  pid 2442225
+    0.469   3.044  ffmpeg             526.2 ms  pid 2442227
+    0.469   0.474  hyprctl             10.3 ms  pid 2442228
+    0.485   0.492  fc-match             7.3 ms  pid 2442238
+
+main thread, 25 ms buckets (busy % of the bucket, then the commonest stacks):
+   0.000    13%  10× [ld-linux-aarch64.so.1] [unknown]
+   0.025    87%  61× [ld-linux-aarch64.so.1] [unknown]; 3× [libglslang.so.16.6.0] [unknown]
+   0.050    84%  23× omareel_core::media_av::probe > omr_probe; 13× <>::load_bundle > omareel_core::compat::qjson::from_json
+   0.075    31%  7× rune::window::event_loop::run_configured; 6× [libxkbcommon.so.0.13.2] [unknown]
+   0.100    65%  10× vk_icdNegotiateLoaderICDInterfaceVersion > loadEGLExternalPlatform; 9× <rune::windows::Erased<> as rune::windows::ErasedWindow>::start > rune::platform::preferences::reduced_motion
+   0.125    59%  44× vk_icdNegotiateLoaderICDInterfaceVersion
+   0.150    24%  17× vk_icdNegotiateLoaderICDInterfaceVersion; 1× [ld-linux-aarch64.so.1] [unknown]
+   0.175    19%  14× vk_icdNegotiateLoaderICDInterfaceVersion
+   0.200    19%  12× [[vdso]] __kernel_clock_gettime; 2× vk_icdNegotiateLoaderICDInterfaceVersion
+   0.225    37%  7× <>::for_surface::<<rune::window::Host<>>::try_create::{closure#5}> > rune::gpu::pick::pick > rune::gpu::pick::dmabuf::main_device; 5× <>::for_surface::<<rune::window::Host<>>::try_create::{closure#5}> > rune::gpu::pick::pick > <alloc::vec::Vec<> as alloc::v
+   0.250     1%  1× [libc.so.6] ioctl
+   0.275     4%  2× [libnvidia-eglcore.so.615.78.08] [unknown]; 1× [libc.so.6] memset
+   0.300     9%  6× [[vdso]] __kernel_clock_gettime; 1× [libnvidia-eglcore.so.615.78.08] [unknown]
+   0.325     4%  2× [libnvidia-eglcore.so.615.78.08] [unknown]; 1× [libc.so.6] ioctl
+   0.350     3%  1× [libc.so.6] memset; 1× [libnvidia-eglcore.so.615.78.08] [unknown]
+   0.375    12%  4× [[vdso]] __kernel_clock_gettime; 2× [libnvidia-eglcore.so.615.78.08] [unknown]
+   0.400    56%  32× <rune::window::Host<>>::create > rune::window::surface_config; 4× [libnvidia-eglcore.so.615.78.08] [unknown]
+   0.425    60%  8× <rune::window::Host<>>::create > rune::window::surface_config > rune::render::translucency::mode; 8× [libc.so.6] [unknown]
+   0.450    25%  7× <rune::window::Host<> as rune::window::AnyHost>::window_event > <rune::runtime::Runtime<>>::frame_step > omareel_core::compat::qdir::matches_filters; 2× <rune::window::Host<> as rune::window::AnyHost>::resumed > <rune::window::Host<>>::create
+   0.475    39%  5× [libnvidia-eglcore.so.615.78.08] [unknown]; 2× omareel_rune_spike::editor::inspector::background::view > omareel_rune_spike::comp::gradient_pixels
+   0.500    51%  8× rune::window::event_loop::run_configured > <rune::window::Windows as winit::application::ApplicationHandler<>>::window_event > <rune::window::Host<> as rune::window::AnyHost>::window_event; 4× rune::window::event_loop::run_configured > <rune::window::Window FRAME FRAME
+   0.525    56%  8× [[vdso]] __kernel_clock_gettime; 3× rune::window::event_loop::run_configured FRAME
+   0.550    85%  29× [[vdso]] __kernel_clock_gettime; 16× rune::window::event_loop::run_configured
+   0.575    84%  29× [[vdso]] __kernel_clock_gettime; 11× [omareel-rune-spike] <>::wait_deadline
+   0.600    52%  11× [[vdso]] __kernel_clock_gettime; 7× rune::window::event_loop::run_configured > <rune::window::Windows as winit::application::ApplicationHandler<>>::window_event > <rune::window::Host<> as rune::window::AnyHost>::window_event FRAME
+   0.625    99%  27× [[vdso]] __kernel_clock_gettime; 25× [omareel-rune-spike] <>::wait_deadline
+   0.650    84%  18× [[vdso]] __kernel_clock_gettime; 9× [omareel-rune-spike] <>::wait_deadline FRAME
+   0.675    65%  27× [[vdso]] __kernel_clock_gettime; 9× rune::window::event_loop::run_configured
+   0.700   100%  34× [[vdso]] __kernel_clock_gettime; 17× [omareel-rune-spike] <>::wait_deadline
+   0.725    53%  15× [[vdso]] __kernel_clock_gettime; 3× [libc.so.6] [unknown] FRAME
+   0.750   101%  40× [[vdso]] __kernel_clock_gettime; 14× [omareel-rune-spike] <>::wait_deadline
+   0.775   103%  31× [[vdso]] __kernel_clock_gettime; 14× [omareel-rune-spike] <>::wait_deadline
+   0.800    44%  16× [?] ?; 14× [[vdso]] __kernel_clock_gettime FRAME
+   0.825    84%  30× [[vdso]] __kernel_clock_gettime; 29× [?] ?
+   0.850    67%  28× [?] ?; 11× [[vdso]] __kernel_clock_gettime FRAME
+   0.875    80%  29× [?] ?; 25× [[vdso]] __kernel_clock_gettime
+   0.900    99%  39× [?] ?; 31× [[vdso]] __kernel_clock_gettime
+   0.925    48%  17× [?] ?; 10× [[vdso]] __kernel_clock_gettime FRAME
+   0.950   100%  41× [[vdso]] __kernel_clock_gettime; 23× [?] ?
+   0.975    89%  34× [?] ?; 21× [[vdso]] __kernel_clock_gettime FRAME
+   1.000    47%  17× [[vdso]] __kernel_clock_gettime; 16× [?] ?
+   1.025   100%  35× [[vdso]] __kernel_clock_gettime; 33× [?] ?
+   1.050    49%  16× [[vdso]] __kernel_clock_gettime; 16× [?] ? FRAME
+   1.075    80%  38× [[vdso]] __kernel_clock_gettime; 21× [?] ?
+   1.100   101%  35× [[vdso]] __kernel_clock_gettime; 33× [?] ?
+   1.125    37%  15× [?] ?; 4× [libc.so.6] [unknown] FRAME
+   1.150    99%  34× [?] ?; 32× [[vdso]] __kernel_clock_gettime
+   1.175    88%  31× [?] ?; 25× [[vdso]] __kernel_clock_gettime FRAME
+   1.200    36%  11× [[vdso]] __kernel_clock_gettime; 10× [?] ?
+   1.225   100%  37× [[vdso]] __kernel_clock_gettime; 32× [?] ?
+   1.250    51%  17× [?] ?; 10× [[vdso]] __kernel_clock_gettime FRAME
+   1.275    92%  32× [[vdso]] __kernel_clock_gettime; 29× [?] ?
+   1.300    99%  36× [[vdso]] __kernel_clock_gettime; 29× [?] ?
+   1.325    39%  18× [?] ?; 7× [[vdso]] __kernel_clock_gettime FRAME
+   1.350    93%  33× [[vdso]] __kernel_clock_gettime; 32× [?] ?
+   1.375    80%  27× [?] ?; 23× [[vdso]] __kernel_clock_gettime FRAME
+   1.400    60%  24× [?] ?; 17× [[vdso]] __kernel_clock_gettime
+   1.425   100%  36× [[vdso]] __kernel_clock_gettime; 32× [?] ?
+   1.450    45%  15× [?] ?; 10× [[vdso]] __kernel_clock_gettime FRAME
+   1.475    93%  45× [[vdso]] __kernel_clock_gettime; 18× [?] ?
+   1.500     0%  (off CPU) FRAME
+
+inclusive CPU ms, main thread up to the first frame (167 ms sampled):
+    136.4  [unknown]
+     31.3  vk_icdNegotiateLoaderICDInterfaceVersion
+     30.0  _dl_catch_exception
+     25.0  dlopen
+     21.3  <>::surface_capabilities
+     19.7  pthread_once
+     19.3  wl_display_dispatch_queue
+     19.3  wl_display_dispatch_queue_timeout
+     19.3  wl_display_roundtrip_queue
+     18.7  <>::get_capabilities_with_raw
+     17.3  eglGetProcAddress
+     17.0  <rune::window::Host<>>::create
+     15.7  wl_display_dispatch_queue_pending
+     15.7  <>::surface_get_capabilities
+     15.7  rune::window::surface_config
+     13.0  ash::prelude::read_into_uninitialized_vector::<u32, ash::vk::definitions::SurfaceFormatKHR, <>::get_physical_device_surf
+     11.7  __fprintf_chk
+      9.7  omr_probe
+      8.3  omareel_core::media_av::probe
+      8.0  avformat_find_stream_info
+      8.0  __kernel_clock_gettime
+      8.0  clock_gettime
+      8.0  <>::get_capabilities
+      7.7  avcodec_send_packet
+      7.7  <>::load_bundle
+      7.7  <>::new
+      7.7  <>::get_default_config
+      7.0  <>::load::<>
+      5.3  <rune::window::Host<> as rune::window::AnyHost>::window_event
+      4.7  omareel_core::compat::qjson::from_json
+      4.7  <>::roundtrip
+      4.7  <rune::runtime::Runtime<>>::frame_step
+      4.3  <>::open_with_callback
+      4.3  vkCreateDevice
+      4.0  <>::try_picked
+      4.0  rune::gpu::pick::pick
+      4.0  <>::for_surface::<<rune::window::Host<>>::try_create::{closure#5}>
+      4.0  omareel_rune_spike::editor::poll
+      4.0  <>::advance::<>
+      3.7  <>::parse_value
+      3.7  rune::window::event_loop::run_configured
+      3.7  <>::call
+      3.7  omareel_rune_spike::preview::poll
+      3.7  omareel_rune_spike::editor::inspector::poll
+      3.7  <>::wallpaper_groups
+  self time by library: ld-linux-aarch64.so.1 44, libc.so.6 44, omareel-rune-spike 26, libnvidia-eglcore.so.615.78.08 15, libavcodec.so.63.1.102 9, [vdso] 8, libwayland-client.so.0.26.0 4, libnvidia-gpucomp.so.615.78.08 3, libxkbcommon.so.0.13.2 3, libnvidia-glsi.so.615.78.08 2
+
+inclusive CPU ms, all threads of the app in the window (13735 ms sampled):
+  10798.9  [unknown]
+    557.5  pthread_cond_wait
+    513.8  image::io::free_functions::decoder_to_vec::<u8, alloc::boxed::Box<>>
+    494.5  avcodec_send_packet
+    418.5  <>::new::thread_start
+    396.8  <>::from_decoder::<alloc::boxed::Box<>>
+    395.8  <image::codecs::webp::decoder::WebPDecoder<alloc::io::buffered::bufreader::BufReader<>> as image::io::decoder::ImageDeco
+    395.8  <image_webp::decoder::WebPDecoder<alloc::io::buffered::bufreader::BufReader<>>>::read_image
+    370.8  <image::io::image_reader_type::ImageReader<alloc::io::buffered::bufreader::BufReader<>>>::decode
+    356.1  <image_webp::vp8::Vp8Decoder<core::io::util::Take<&mut alloc::io::buffered::bufreader::BufReader<>>>>::decode_frame
+    330.1  clock_gettime
+    326.4  __kernel_clock_gettime
+    260.4  omr_thumbnail
+    150.7  avformat_open_input
+    149.7  omareel_rune_spike::editor::inspector::generate_thumbnail
+    148.0  <image_webp::vp8::Vp8Decoder<core::io::util::Take<&mut alloc::io::buffered::bufreader::BufReader<>>>>::loop_filter
+    145.0  std::sys::backtrace::__rust_begin_short_backtrace::<omareel_rune_spike::editor::inspector::queue_thumbnail::{closure#0},
+    144.0  <std::thread::lifecycle::spawn_unchecked<omareel_rune_spike::editor::inspector::queue_thumbnail::{closure#0},
+    140.0  <>::resize_to_fill
+    139.7  <>::resize_exact
+    121.0  <image_webp::vp8::Vp8Decoder<core::io::util::Take<&mut core::io::cursor::Cursor<>>>>::decode_frame
+    117.0  image::images::dynimage::decoder_to_image::<alloc::boxed::Box<>>
+    117.0  <image_webp::decoder::WebPDecoder<core::io::cursor::Cursor<>>>::read_image
+    117.0  <image::codecs::webp::decoder::WebPDecoder<core::io::cursor::Cursor<>> as image::io::decoder::ImageDecoder>::read_image_
+    107.4  image::imageops::sample::resize::<image::images::buffer::ImageBuffer<image::color::Rgb<>, alloc::vec::Vec<>>>
+    106.4  <>::read_with_tree_with_first_node
+    102.4  std::sys::backtrace::__rust_begin_short_backtrace::<>
+    102.4  <std::thread::lifecycle::spawn_unchecked<>::{closure#1} as core::ops::function::FnOnce<>>::call_once::{shim:vtable#0}
+     91.7  memset
+     83.7  rune::image::decode
+     82.4  rune::image::mip_chain
+     79.0  image_webp::loop_filter::should_filter_vertical
+     76.7  image_webp::loop_filter::subblock_filter_vertical
+     74.0  <image_webp::vp8::Vp8Decoder<core::io::util::Take<&mut core::io::cursor::Cursor<>>>>::loop_filter
+     73.4  memcpy
+     71.4  snprintf
+     68.7  clock_nanosleep
+     68.0  image_webp::loop_filter::macroblock_filter_vertical
+     63.7  rune::image::downsample::<>::{closure#0}
+     59.7  <calloop::loop_logic::EventLoop<>>::dispatch::<core::option::Option<>>
+     54.7  std::sys::backtrace::__rust_begin_short_backtrace::<omareel_rune_spike::editor::handle_effects::{closure#0},
+     54.7  <std::thread::lifecycle::spawn_unchecked<omareel_rune_spike::editor::handle_effects::{closure#0},
+     54.4  <>::build
+     53.0  __ctype_init
+     52.4  omareel_core::zoom_timeline::target_at
+  self time by library: libavcodec.so.63.1.102 8529, libc.so.6 1492, omareel-rune-spike 1158, [vdso] 327, libswscale.so.10.1.102 128, libavformat.so.63.1.102 114, libavutil.so.61.1.102 105, libnvidia-eglcore.so.615.78.08 53, ld-linux-aarch64.so.1 47, libwayland-client.so.0.26.0 9
+
+main thread up to the first frame (505 ms), by kind:
+     76.7 ms  GPU and EGL setup
+     27.0 ms  dynamic linking
+     25.7 ms  rune build, layout and draw
+     21.3 ms  recording and project load
+     11.7 ms  other
+      4.7 ms  Wayland
+      0.3 ms  Qt Multimedia, FFmpeg and CUDA
+    338.0 ms  off the CPU (waiting)

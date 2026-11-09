@@ -1,0 +1,27 @@
+thread 2455856: waits over 5.0 ms before 0.7 s (start, ms, where):
+   0.077    9.0  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || alloc::io::read::default_read_to_end::small_probe_read::<&st
+   0.095   13.5  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || <alloc::raw_vec::RawVecInner>::finish_grow [omareel-rune-spi
+   0.480   11.0  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || wl_proxy_marshal_array_flags [libwayland-client.so.0.26.0]
+   0.499   16.0  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || <alloc::raw_vec::RawVecInner>::finish_grow [omareel-rune-spi
+   0.517   11.1  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || <std::process::Command>::output [omareel-rune-spike]
+   0.550    9.4  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || <wgpu_hal::vulkan::Queue as wgpu_hal::Queue>::present [omare
+   0.573    8.6  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || <wgpu_hal::vulkan::Queue as wgpu_hal::Queue>::present [omare
+   0.624   10.4  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || __kernel_gettimeofday [[vdso]]
+   0.691    9.5  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || <wayland_backend::sys::client_impl::InnerBackend>::flush [om
+
+total waited, by stack:
+    29.8  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || <alloc::raw_vec::RawVecInner>::finish_grow [omareel-rune-spi
+    18.1  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || <wgpu_hal::vulkan::Queue as wgpu_hal::Queue>::present [omare
+    11.1  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || <std::process::Command>::output [omareel-rune-spike]
+    11.1  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || wl_proxy_marshal_array_flags [libwayland-client.so.0.26.0]
+    10.4  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || __kernel_gettimeofday [[vdso]]
+     9.5  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || <wayland_backend::sys::client_impl::InnerBackend>::flush [om
+     9.0  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || alloc::io::read::default_read_to_end::small_probe_read::<&st
+     3.9  preempted
+     3.9  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || pthread_mutex_lock [libc.so.6]
+     3.8  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || __fprintf_chk [libc.so.6]
+     3.8  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || vkCreateDevice [libvulkan.so.1.4.363]
+     2.8  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || g_main_context_unref [libglib-2.0.so.0.9000.1]
+     2.7    || ?
+     2.6  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || pthread_once [libc.so.6]
+     2.3  std::rt::lang_start_internal > std::rt::lang_start::<>::{closure#0} > std::sys::backtrace::__rust_begin_short_backtrace::<fn, > omareel_rune_spike::main  || g_variant_new_variant [libglib-2.0.so.0.9000.1]

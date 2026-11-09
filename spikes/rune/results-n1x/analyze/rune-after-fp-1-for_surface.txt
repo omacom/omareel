@@ -1,0 +1,181 @@
+run /home/ryan/.cache/omareel-spikes/n1x/prof-rune-fp/1: first frame 0.5785s; commits [0.5785, 0.5927, 0.6454, 0.7052, 0.7716, 0.8366, 0.9038, 0.9685]; window 0..0.580s; 3463 samples
+
+CPU ms by thread before the window ends:
+    257.1 ms  rune-images          2445529/2445589 
+    142.7 ms  omareel-rune-sp      2445529/2445529 main
+     53.4 ms  omareel-rune-sp      2445529/2445573 
+     53.4 ms  omareel-rune-sp      2445529/2445665 
+     45.3 ms  omareel-rune-sp      2445529/2445666 
+     38.0 ms  ffmpeg               2445674/2445674 child process
+     28.3 ms  ffmpeg               2445673/2445673 child process
+     14.7 ms  fc-match             2445676/2445676 child process
+     14.0 ms  omareel-rune-sp      2445529/2445557 
+     14.0 ms  fc-match             2445560/2445560 child process
+     13.0 ms  fc-match             2445579/2445579 child process
+     12.7 ms  rune-images          2445529/2445591 
+     12.3 ms  rune-images          2445529/2445592 
+     11.7 ms  omareel-rune-sp      2445529/2445558 
+     11.7 ms  omareel-rune-sp      2445529/2445689 
+     11.3 ms  [vkps] Update        2445529/2445650 
+     11.3 ms  omareel-rune-sp      2445529/2445670 
+     10.7 ms  omareel-rune-sp      2445529/2445574 
+     10.7 ms  fc-list              2445593/2445593 child process
+     10.3 ms  omareel-rune-sp      2445529/2445744 
+      9.7 ms  hyprctl              2445675/2445675 child process
+      9.7 ms  av:h264:df1          2445529/2445682 
+      9.7 ms  av:h264:df0          2445674/2445714 child process
+      9.3 ms  fc-match             2445687/2445687 child process
+      9.0 ms  omareel-rune-sp      2445529/2445559 
+
+child processes (fork, exit, CPU ms over the whole run):
+    0.069   0.082  fc-match            16.0 ms  pid 2445560
+    0.070   0.075  hyprctl              7.3 ms  pid 2445562
+    0.088   0.093  hyprctl              6.3 ms  pid 2445578
+    0.088   0.100  fc-match            14.7 ms  pid 2445579
+    0.107   0.117  fc-list             12.7 ms  pid 2445593
+    0.529   3.042  ffmpeg             733.2 ms  pid 2445673
+    0.530   3.051  ffmpeg             977.0 ms  pid 2445674
+    0.530   0.539  hyprctl             12.0 ms  pid 2445675
+    0.530   0.543  fc-match            16.7 ms  pid 2445676
+    0.546   0.553  fc-match            11.3 ms  pid 2445687
+
+main thread, 25 ms buckets (busy % of the bucket, then the commonest stacks):
+   0.000     0%  (off CPU)
+   0.025    84%  63× [ld-linux-aarch64.so.1] [unknown]
+   0.050    76%  29× [ld-linux-aarch64.so.1] [unknown]; 16× omareel_rune_spike::main > omareel_rune_spike::preview::run > omareel_core::media_av::probe
+   0.075    52%  13× omareel_rune_spike::main > omareel_rune_spike::preview::run > omareel_core::media_av::probe; 9× omareel_rune_spike::main > omareel_rune_spike::preview::run > omareel_core::compat::qjson::from_json
+   0.100    29%  10× omareel_rune_spike::main > omareel_rune_spike::preview::run > rune::platform::preferences::reduced_motion; 6× omareel_rune_spike::main > omareel_rune_spike::preview::run > rune::window::event_loop::run_configured
+   0.125    88%  55× omareel_rune_spike::main > omareel_rune_spike::preview::run > <>::for_surface::<<rune::window::Host<>>::try_create::{closure#5}>; 8× omareel_rune_spike::main > omareel_rune_spike::preview::run > loadEGLExternalPlatform
+   0.150    20%  15× omareel_rune_spike::main > omareel_rune_spike::preview::run > <>::for_surface::<<rune::window::Host<>>::try_create::{closure#5}>
+   0.175    23%  17× omareel_rune_spike::main > omareel_rune_spike::preview::run > <>::for_surface::<<rune::window::Host<>>::try_create::{closure#5}>
+   0.200     0%  (off CPU)
+   0.225     0%  (off CPU)
+   0.250    43%  21× omareel_rune_spike::main > omareel_rune_spike::preview::run > <>::for_surface::<<rune::window::Host<>>::try_create::{closure#5}>; 4× omareel_rune_spike::main > omareel_rune_spike::preview::run > <alloc::vec::Vec<wgpu_hal::ExposedAdapter<>> as alloc::vec::s
+   0.275     4%  2× omareel_rune_spike::main > omareel_rune_spike::preview::run > <>::for_surface::<<rune::window::Host<>>::try_create::{closure#5}>; 1× omareel_rune_spike::main > omareel_rune_spike::preview::run > <alloc::vec::Vec<> as alloc::vec::spec_from_iter_nested::SpecF
+   0.300     3%  2× omareel_rune_spike::main > omareel_rune_spike::preview::run > <>::for_surface::<<rune::window::Host<>>::try_create::{closure#5}>
+   0.325     9%  7× omareel_rune_spike::main > omareel_rune_spike::preview::run > <>::for_surface::<<rune::window::Host<>>::try_create::{closure#5}>
+   0.350     7%  5× omareel_rune_spike::main > omareel_rune_spike::preview::run > <>::for_surface::<<rune::window::Host<>>::try_create::{closure#5}>
+   0.375     0%  (off CPU)
+   0.400     9%  7× omareel_rune_spike::main > omareel_rune_spike::preview::run > <>::for_surface::<<rune::window::Host<>>::try_create::{closure#5}>
+   0.425     7%  5× omareel_rune_spike::main > omareel_rune_spike::preview::run > <>::for_surface::<<rune::window::Host<>>::try_create::{closure#5}>
+   0.450    43%  10× omareel_rune_spike::main > omareel_rune_spike::preview::run > rune::window::surface_config; 5× omareel_rune_spike::main > omareel_rune_spike::preview::run > rune::render::translucency::mode
+   0.475     1%  1× omareel_rune_spike::main > omareel_rune_spike::preview::run > <rune::window::Host<>>::create
+   0.500     8%  2× omareel_rune_spike::main > omareel_rune_spike::preview::run > <rune::window::Host<>>::create; 2× omareel_rune_spike::main > omareel_rune_spike::preview::run > omareel_core::compat::qdir::matches_filters
+   0.525    25%  6× omareel_rune_spike::main > omareel_rune_spike::preview::run > <>::reload; 5× omareel_rune_spike::main > omareel_rune_spike::preview::run > omareel_core::compat::qdir::matches_filters
+   0.550    29%  4× omareel_rune_spike::main > omareel_rune_spike::preview::run > <rune::runtime::Runtime<>>::build; 4× omareel_rune_spike::main > omareel_rune_spike::preview::run > <>::upload_images
+   0.575    11%  5× omareel_rune_spike::main > omareel_rune_spike::preview::run > <rune::window::Host<> as rune::window::AnyHost>::window_event; 1× omareel_rune_spike::main > omareel_rune_spike::preview::run > naga::back::spv::write_vec FRAME FRAME
+
+inclusive CPU ms, main thread up to the first frame (52 ms sampled):
+     52.4  omareel_rune_spike::main
+     52.4  <>::for_surface::<<rune::window::Host<>>::try_create::{closure#5}>
+     52.4  <rune::window::Host<> as rune::window::AnyHost>::resumed
+     52.4  rune::window::event_loop::run_configured
+     52.4  std::sys::backtrace::__rust_begin_short_backtrace::<fn(),
+     52.4  omareel_rune_spike::preview::run
+     52.4  <rune::window::Windows as winit::application::ApplicationHandler<>>::resumed
+     52.4  std::rt::lang_start::<>::{closure#0}
+     52.4  __libc_start_main
+     52.4  rune::window::event_loop::run::<>
+     52.4  _start
+     52.4  [unknown]
+     52.4  <rune::window::Host<>>::open
+     52.4  std::rt::lang_start_internal
+     52.4  <rune::app::App<>>::run
+     52.4  <rune::window::Host<>>::create
+     52.4  main
+     52.4  <winit::platform_impl::linux::wayland::event_loop::EventLoop<>>::pump_events::<&mut <winit::event_loop::EventLoop<>>::ru
+     39.3  <>::new
+     38.7  <>::init_with_callback
+     38.7  <>::instance
+     37.3  <>::desired_extensions
+     37.0  vkEnumerateInstanceExtensionProperties
+     37.0  ash::prelude::read_into_uninitialized_vector::<u32, ash::vk::definitions::ExtensionProperties, <>::enumerate_instance_ex
+     21.7  _dl_catch_exception
+     21.7  dlopen
+     18.7  pthread_once
+     16.3  eglGetProcAddress
+     13.7  <>::try_picked
+      9.7  <>::create_device_and_queue
+      9.7  <>::device_on
+      9.7  <>::adapter_request_device
+      9.7  <>::request_device
+      9.0  <>::open
+      9.0  <>::open_with_callback
+      9.0  vkCreateDevice
+      6.3  clock_gettime
+      6.3  __kernel_clock_gettime
+      4.0  rune::gpu::pick::pick
+      2.7  loadEGLExternalPlatform
+      2.0  dbus_connection_send_with_reply_and_block
+      2.0  <>::enumerate_adapters
+      1.3  __poll
+      1.3  __glDispatchMakeCurrent
+      1.3  __fprintf_chk
+      1.3  wl_display_dispatch_queue_pending
+      1.3  <alloc::vec::Vec<wgpu_hal::ExposedAdapter<>> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<wgpu_hal::ExposedA
+      1.3  <alloc::vec::Vec<> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<(wgpu_types::adapter::AdapterInfo, bool), co
+      1.3  <>::get_capabilities_with_raw
+      1.3  <>::adapter_is_surface_supported
+  self time by library: ld-linux-aarch64.so.1 16, libc.so.6 10, libnvidia-eglcore.so.615.78.08 10, [vdso] 6, libnvidia-glcore.so.615.78.08 2, libnvidia-glsi.so.615.78.08 2, libEGL_nvidia.so.615.78.08 1, libnvidia-gpucomp.so.615.78.08 1, omareel-rune-spike 1, libdbus-1.so.3.38.3 1
+
+inclusive CPU ms, all threads of the app in the window (52 ms sampled):
+     52.4  omareel_rune_spike::main
+     52.4  <>::for_surface::<<rune::window::Host<>>::try_create::{closure#5}>
+     52.4  <rune::window::Host<> as rune::window::AnyHost>::resumed
+     52.4  rune::window::event_loop::run_configured
+     52.4  std::sys::backtrace::__rust_begin_short_backtrace::<fn(),
+     52.4  omareel_rune_spike::preview::run
+     52.4  <rune::window::Windows as winit::application::ApplicationHandler<>>::resumed
+     52.4  std::rt::lang_start::<>::{closure#0}
+     52.4  __libc_start_main
+     52.4  rune::window::event_loop::run::<>
+     52.4  _start
+     52.4  [unknown]
+     52.4  <rune::window::Host<>>::open
+     52.4  std::rt::lang_start_internal
+     52.4  <rune::app::App<>>::run
+     52.4  <rune::window::Host<>>::create
+     52.4  main
+     52.4  <winit::platform_impl::linux::wayland::event_loop::EventLoop<>>::pump_events::<&mut <winit::event_loop::EventLoop<>>::ru
+     39.3  <>::new
+     38.7  <>::init_with_callback
+     38.7  <>::instance
+     37.3  <>::desired_extensions
+     37.0  vkEnumerateInstanceExtensionProperties
+     37.0  ash::prelude::read_into_uninitialized_vector::<u32, ash::vk::definitions::ExtensionProperties, <>::enumerate_instance_ex
+     21.7  _dl_catch_exception
+     21.7  dlopen
+     18.7  pthread_once
+     16.3  eglGetProcAddress
+     13.7  <>::try_picked
+      9.7  <>::create_device_and_queue
+      9.7  <>::device_on
+      9.7  <>::adapter_request_device
+      9.7  <>::request_device
+      9.0  <>::open
+      9.0  <>::open_with_callback
+      9.0  vkCreateDevice
+      6.3  clock_gettime
+      6.3  __kernel_clock_gettime
+      4.0  rune::gpu::pick::pick
+      2.7  loadEGLExternalPlatform
+      2.0  dbus_connection_send_with_reply_and_block
+      2.0  <>::enumerate_adapters
+      1.3  __poll
+      1.3  __glDispatchMakeCurrent
+      1.3  __fprintf_chk
+      1.3  wl_display_dispatch_queue_pending
+      1.3  <alloc::vec::Vec<wgpu_hal::ExposedAdapter<>> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<wgpu_hal::ExposedA
+      1.3  <alloc::vec::Vec<> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<(wgpu_types::adapter::AdapterInfo, bool), co
+      1.3  <>::get_capabilities_with_raw
+      1.3  <>::adapter_is_surface_supported
+  self time by library: ld-linux-aarch64.so.1 16, libc.so.6 10, libnvidia-eglcore.so.615.78.08 10, [vdso] 6, libnvidia-glcore.so.615.78.08 2, libnvidia-glsi.so.615.78.08 2, libEGL_nvidia.so.615.78.08 1, libnvidia-gpucomp.so.615.78.08 1, omareel-rune-spike 1, libdbus-1.so.3.38.3 1
+
+main thread up to the first frame (578 ms), by kind:
+     59.7 ms  GPU and EGL setup
+     33.0 ms  dynamic linking
+     25.7 ms  rune build, layout and draw
+     23.0 ms  recording and project load
+      0.7 ms  fonts
+      0.3 ms  image decode
+    436.1 ms  off the CPU (waiting)

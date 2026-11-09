@@ -1,0 +1,172 @@
+run /home/ryan/.cache/omareel-spikes/n1x/prof-qt-fp/1: first frame 2.5976s; commits [2.5976, 2.6019, 2.664, 2.7292, 2.7951, 2.8618, 2.9292, 2.9952]; window 0..2.600s; 9235 samples
+
+CPU ms by thread before the window ends:
+    452.8 ms  omareel              2428667/2428667 main
+    268.4 ms  omareel              2428667/2429173 
+    260.4 ms  omareel              2428667/2429172 
+    139.7 ms  av:h264:df1          2428667/2429198 
+    133.7 ms  av:h264:df0          2428667/2429196 
+    124.4 ms  av:h264:df1          2428667/2429202 
+    112.7 ms  av:h264:df0          2428667/2429200 
+    109.4 ms  av:h264:df0          2428667/2429193 
+    102.4 ms  av:h264:df1          2428667/2429194 
+     93.4 ms  QQuickPixmapRea      2428667/2429174 
+     89.0 ms  av:h264:df1          2428667/2429192 
+     70.7 ms  av:h264:df0          2428667/2429191 
+     54.4 ms  QQmlThread           2428667/2429148 
+     53.7 ms  av:h264:df1          2428667/2429201 
+     52.0 ms  omareel              2428667/2429145 
+     47.3 ms  av:h264:df0          2428667/2429199 
+     39.3 ms  QSGRenderThread      2428667/2429203 
+     32.7 ms  Thread (pooled)      2428667/2429208 
+     31.3 ms  Thread (pooled)      2428667/2429207 
+     27.3 ms  Thread (pooled)      2428667/2429205 
+     26.3 ms  Thread (pooled)      2428667/2429211 
+     25.7 ms  Thread (pooled)      2428667/2429209 
+     24.3 ms  Thread (pooled)      2428667/2429212 
+     24.3 ms  Thread (pooled)      2428667/2429206 
+     23.0 ms  omareel              2428667/2429190 
+
+child processes (fork, exit, CPU ms over the whole run):
+    0.098   0.103  hyprctl              7.0 ms  pid 2428676
+    0.098   0.106  fc-match            11.0 ms  pid 2428677
+
+main thread, 100 ms buckets (busy % of the bucket, then the commonest stacks):
+   0.000    67%  163× [ld-linux-aarch64.so.1] [unknown]; 7× QFactoryLoader::QFactoryLoader(char const*, QString const&, Qt::CaseSensitivity) > QFactoryLoader::update() > QFactoryLoader::Private::updateSinglePath(QString const&)
+   0.100    70%  66× QFactoryLoader::instance(int) const; 36× Omareel::Editor::Editor(QString) > Omareel::Editor::Editor(Omareel::cxx_qt_Editor::CxxQtConstructorArguments0&&) > Omareel::PlaybackDriver::PlaybackDriver(QObject*)
+   0.200    19%  57× Omareel::Editor::Editor(QString) > Omareel::Editor::Editor(Omareel::cxx_qt_Editor::CxxQtConstructorArguments0&&) > Omareel::PlaybackDriver::PlaybackDriver(QObject*)
+   0.300    16%  48× Omareel::Editor::Editor(QString) > Omareel::Editor::Editor(Omareel::cxx_qt_Editor::CxxQtConstructorArguments0&&) > Omareel::PlaybackDriver::PlaybackDriver(QObject*)
+   0.400    11%  32× Omareel::Editor::Editor(QString) > Omareel::Editor::Editor(Omareel::cxx_qt_Editor::CxxQtConstructorArguments0&&) > Omareel::PlaybackDriver::PlaybackDriver(QObject*)
+   0.500    14%  41× Omareel::Editor::Editor(QString) > Omareel::Editor::Editor(Omareel::cxx_qt_Editor::CxxQtConstructorArguments0&&) > Omareel::PlaybackDriver::PlaybackDriver(QObject*)
+   0.600    11%  34× Omareel::Editor::Editor(QString) > Omareel::Editor::Editor(Omareel::cxx_qt_Editor::CxxQtConstructorArguments0&&) > Omareel::PlaybackDriver::PlaybackDriver(QObject*)
+   0.700     4%  12× Omareel::Editor::Editor(QString) > Omareel::Editor::Editor(Omareel::cxx_qt_Editor::CxxQtConstructorArguments0&&) > Omareel::PlaybackDriver::PlaybackDriver(QObject*)
+   0.800    13%  39× Omareel::Editor::Editor(QString) > Omareel::Editor::Editor(Omareel::cxx_qt_Editor::CxxQtConstructorArguments0&&) > Omareel::PlaybackDriver::PlaybackDriver(QObject*)
+   0.900    13%  40× Omareel::Editor::Editor(QString) > Omareel::Editor::Editor(Omareel::cxx_qt_Editor::CxxQtConstructorArguments0&&) > Omareel::PlaybackDriver::PlaybackDriver(QObject*)
+   1.000     8%  23× Omareel::Editor::Editor(QString) > Omareel::Editor::Editor(Omareel::cxx_qt_Editor::CxxQtConstructorArguments0&&) > Omareel::PlaybackDriver::PlaybackDriver(QObject*)
+   1.100     5%  16× Omareel::Editor::Editor(QString) > Omareel::Editor::Editor(Omareel::cxx_qt_Editor::CxxQtConstructorArguments0&&) > Omareel::PlaybackDriver::PlaybackDriver(QObject*)
+   1.200     5%  16× Omareel::Editor::Editor(QString) > Omareel::Editor::Editor(Omareel::cxx_qt_Editor::CxxQtConstructorArguments0&&) > Omareel::PlaybackDriver::PlaybackDriver(QObject*)
+   1.300     8%  24× Omareel::Editor::Editor(QString) > Omareel::Editor::Editor(Omareel::cxx_qt_Editor::CxxQtConstructorArguments0&&) > Omareel::PlaybackDriver::PlaybackDriver(QObject*)
+   1.400     4%  13× Omareel::Editor::Editor(QString) > Omareel::Editor::Editor(Omareel::cxx_qt_Editor::CxxQtConstructorArguments0&&) > Omareel::PlaybackDriver::PlaybackDriver(QObject*)
+   1.500     5%  15× Omareel::Editor::Editor(QString) > Omareel::Editor::Editor(Omareel::cxx_qt_Editor::CxxQtConstructorArguments0&&) > Omareel::PlaybackDriver::PlaybackDriver(QObject*)
+   1.600     7%  21× Omareel::Editor::Editor(QString) > Omareel::Editor::Editor(Omareel::cxx_qt_Editor::CxxQtConstructorArguments0&&) > Omareel::PlaybackDriver::PlaybackDriver(QObject*)
+   1.700     5%  15× Omareel::Editor::Editor(QString) > Omareel::Editor::Editor(Omareel::cxx_qt_Editor::CxxQtConstructorArguments0&&) > Omareel::PlaybackDriver::PlaybackDriver(QObject*)
+   1.800     8%  23× Omareel::Editor::Editor(QString) > Omareel::Editor::Editor(Omareel::cxx_qt_Editor::CxxQtConstructorArguments0&&) > Omareel::PlaybackDriver::PlaybackDriver(QObject*)
+   1.900     8%  25× Omareel::Editor::Editor(QString) > Omareel::Editor::Editor(Omareel::cxx_qt_Editor::CxxQtConstructorArguments0&&) > Omareel::PlaybackDriver::PlaybackDriver(QObject*)
+   2.000     4%  11× Omareel::Editor::Editor(QString) > Omareel::Editor::Editor(Omareel::cxx_qt_Editor::CxxQtConstructorArguments0&&) > Omareel::PlaybackDriver::PlaybackDriver(QObject*)
+   2.100    16%  20× Omareel::Editor::Editor(QString) > Omareel::Editor::Editor(Omareel::cxx_qt_Editor::CxxQtConstructorArguments0&&) > Omareel::PlaybackDriver::PlaybackDriver(QObject*); 10× Omareel::Editor::Editor(QString) > Omareel::cxx_qt_Editor::initialize0(Omareel::Editor
+   2.200    53%  63× QQmlApplicationEngine::load(QUrl const&) > QQmlApplicationEnginePrivate::finishLoad(QQmlComponent*) > QFactoryLoader::instance(int) const; 10× QQmlApplicationEngine::load(QUrl const&) > QQmlApplicationEnginePrivate::finishLoad(QQmlComponent*) > FT_Load_Gly
+   2.300    77%  18× QQmlApplicationEngine::load(QUrl const&) > QQmlApplicationEnginePrivate::finishLoad(QQmlComponent*) > QQmlFileSelectorInterceptor::intercept(QUrl const&, QQmlAbstractUrlInterceptor::DataType); 9× QQmlApplicationEngine::load(QUrl const&) > QQmlApplicationEn
+   2.400     0%  (off CPU)
+   2.500     0%  (off CPU) FRAME
+   2.600     0%  (off CPU) FRAME FRAME
+
+inclusive CPU ms, main thread up to the first frame (453 ms sampled):
+    452.8  [unknown]
+    390.5  _start
+    390.5  main
+    390.5  __libc_start_main
+    198.4  Omareel::Editor::Editor(QString)
+    191.1  Omareel::EditorBase::EditorBase(QObject*)
+    191.1  Omareel::Editor::Editor(Omareel::cxx_qt_Editor::CxxQtConstructorArguments0&&)
+    191.1  Omareel::PlaybackDriver::PlaybackDriver(QObject*)
+    190.7  QPlatformMediaIntegration::instance()
+    190.7  QMediaPlayer::QMediaPlayer(QObject*)
+    117.7  QQmlApplicationEngine::load(QUrl const&)
+    117.4  QQmlComponent::create(QQmlContext*)
+    117.4  QQmlApplicationEnginePrivate::finishLoad(QQmlComponent*)
+    117.4  QQmlComponentPrivate::createWithProperties(QObject*, QMap<> const&, QQmlContext*, QQmlComponentPrivate::CreateBehavior)
+    106.0  _dl_catch_exception
+    103.7  QQmlObjectCreator::finalize(QQmlInstantiationInterrupt&)
+    102.7  QQmlComponentPrivate::completeCreate()
+    102.7  QQmlComponentPrivate::complete(QQmlEnginePrivate*, QQmlComponentPrivate::ConstructionState*)
+     94.0  dlopen
+     88.7  vaInitialize
+     82.7  __vaDriverInit_1_0
+     59.0  vkCreateDevice
+     58.0  QGuiApplication::QGuiApplication(int&, char**, int)
+     58.0  QGuiApplicationPrivate::init()
+     57.7  QCoreApplicationPrivate::init()
+     46.7  QFactoryLoader::instance(int) const
+     45.7  QGuiApplicationPrivate::createPlatformIntegration()
+     45.7  QGuiApplicationPrivate::createEventDispatcher()
+     42.0  QQmlEnginePrivate::incubate(QQmlIncubator&, QQmlRefPointer<> const&)
+     42.0  QQmlIncubatorPrivate::incubate(QQmlInstantiationInterrupt&)
+     40.3  clock_gettime
+     40.3  __kernel_clock_gettime
+     38.3  QPlatformThemeFactory::create(QString const&, QString const&)
+     38.3  QQmlBinding::update(QFlags<>)
+     38.3  QQmlBinding::doUpdate(QQmlJavaScriptExpression::DeleteWatcher const&, QFlags<>, QV4::Scope&)
+     33.0  pthread_once
+     32.3  QQuickIconImage::load()
+     32.0  QQuickImageBase::loadPixmap(QUrl const&, QFlags<>)
+     30.7  QQmlObjectCreator::createInstance(int, QObject*, bool)
+     30.7  QQuickRepeater::componentComplete()
+     29.0  QQmlObjectCreator::create(int, QObject*, QQmlInstantiationInterrupt*, int)
+     28.0  QQuickPixmap::load(QQmlEngine*, QUrl const&, QRect const&, QSize const&, QFlags<>, QQuickImageProviderOptions const&, in
+     26.3  QQmlObjectCreator::populateInstanceAndAliasBindings(int, QObject*, QFlags<>)
+     25.7  QQmlObjectCreator::populateInstance(int, QObject*, QObject*, QQmlPropertyData const*, QV4::CompiledData::Binding const*)
+     25.3  QQmlObjectCreator::setPropertyBinding(QQmlPropertyData const*, QV4::CompiledData::Binding const*)
+  self time by library: ld-linux-aarch64.so.1 142, libc.so.6 79, [vdso] 40, libnvidia-eglcore.so.615.78.08 31, libQt6Qml.so.6.12.0 30, libQt6Core.so.6.12.0 26, libcuda.so.615.78.08 23, libnvcuvid.so.615.78.08 12, libQt6Quick.so.6.12.0 9, libharfbuzz.so.0.61500.0 6
+
+inclusive CPU ms, all threads of the app in the window (3061 ms sampled):
+   3061.4  [unknown]
+    788.3  <>::new::thread_start
+    611.5  QImageReader::read(QImage*)
+    524.5  std::sys::backtrace::__rust_begin_short_backtrace::<<>::spawn<<>::generate_wallpaper_thumbnail::{closure#0}>::{closure#1
+    524.5  Omareel$EditorShims$cxxbridge1$198$generate_wallpaper_thumbnail
+    524.5  <std::thread::lifecycle::spawn_unchecked<<>::spawn<<>::generate_wallpaper_thumbnail::{closure#0}>::{closure#1},
+    524.2  Omareel::EditorShims::generateWallpaperThumbnail(QString const&, QString const&)
+    517.8  QImageReader::read()
+    390.5  _start
+    390.5  main
+    390.5  __libc_start_main
+    198.4  Omareel::Editor::Editor(QString)
+    191.1  Omareel::EditorBase::EditorBase(QObject*)
+    191.1  Omareel::Editor::Editor(Omareel::cxx_qt_Editor::CxxQtConstructorArguments0&&)
+    191.1  Omareel::PlaybackDriver::PlaybackDriver(QObject*)
+    190.7  QPlatformMediaIntegration::instance()
+    190.7  QMediaPlayer::QMediaPlayer(QObject*)
+    152.7  g_main_context_iteration
+    152.1  QEventDispatcherGlib::processEvents(QFlags<>)
+    151.7  QEventLoop::exec(QFlags<>)
+    148.7  QCoreApplication::notifyInternal2(QObject*, QEvent*)
+    147.0  QCoreApplicationPrivate::sendPostedEvents(QObject*, int, QThreadData*)
+    138.4  QThread::exec()
+    138.4  std::sys::backtrace::__rust_begin_short_backtrace::<>
+    138.4  <std::thread::lifecycle::spawn_unchecked<>::{closure#1} as core::ops::function::FnOnce<>>::call_once::{shim:vtable#0}
+    117.7  _dl_catch_exception
+    117.7  QQmlApplicationEngine::load(QUrl const&)
+    117.4  QQmlComponent::create(QQmlContext*)
+    117.4  QQmlApplicationEnginePrivate::finishLoad(QQmlComponent*)
+    117.4  QQmlComponentPrivate::createWithProperties(QObject*, QMap<> const&, QQmlContext*, QQmlComponentPrivate::CreateBehavior)
+    105.4  dlopen
+    103.7  QQmlObjectCreator::finalize(QQmlInstantiationInterrupt&)
+    102.7  QQmlComponentPrivate::completeCreate()
+    102.7  QQmlComponentPrivate::complete(QQmlEnginePrivate*, QQmlComponentPrivate::ConstructionState*)
+     88.7  vaInitialize
+     88.7  pthread_cond_wait
+     82.7  __vaDriverInit_1_0
+     59.0  vkCreateDevice
+     58.0  QGuiApplication::QGuiApplication(int&, char**, int)
+     58.0  QGuiApplicationPrivate::init()
+     57.7  QCoreApplicationPrivate::init()
+     54.7  clock_gettime
+     54.0  __kernel_clock_gettime
+     52.0  std::sys::backtrace::__rust_begin_short_backtrace::<<>::spawn<<>::rebuild_motion::{closure#0}>::{closure#1},
+     52.0  <>::build
+  self time by library: libavcodec.so.63.1.102 1151, libwebp.so.7.2.0 553, libc.so.6 492, libQt6Gui.so.6.12.0 192, ld-linux-aarch64.so.1 157, omareel 70, libQt6Core.so.6.12.0 58, [vdso] 54, libQt6Qml.so.6.12.0 48, libnvidia-eglcore.so.615.78.08 38
+
+main thread up to the first frame (2598 ms), by kind:
+    196.4 ms  Qt Multimedia, FFmpeg and CUDA
+     82.0 ms  dynamic linking
+     69.7 ms  QML objects, bindings and layout
+     25.0 ms  image decode
+     22.7 ms  fonts
+     18.0 ms  other
+     13.0 ms  QML compile and type loading
+     12.3 ms  Wayland
+      9.0 ms  GPU and EGL setup
+      2.3 ms  SVG icons drawn
+      1.7 ms  recording and project load
+      0.7 ms  icon theme lookup
+   2144.8 ms  off the CPU (waiting)

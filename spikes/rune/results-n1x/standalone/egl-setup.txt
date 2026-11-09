@@ -1,0 +1,36 @@
+-- run 1
+eglQueryDevicesEXT (3)     wall    22.0 ms  user   13.0  sys    9.0
+eglGetPlatformDisplay      wall     0.1 ms  user    0.0  sys    0.0
+eglInitialize              wall     7.1 ms  user    0.6  sys    6.6
+eglChooseConfig            wall     0.1 ms  user    0.0  sys    0.0
+eglCreateContext (ES 3)    wall    11.9 ms  user    0.2  sys   11.1
+eglMakeCurrent (surfaceless) wall    66.9 ms  user    3.0  sys   63.5
+glFinish                   wall     0.1 ms  user    0.0  sys    0.1
+second eglCreateContext    wall     0.2 ms  user    0.2  sys    0.0
+second eglMakeCurrent      wall     0.2 ms  user    0.2  sys    0.0
+thread: eglCreateContext   wall     0.9 ms  user    0.4  sys    0.5
+thread: eglMakeCurrent     wall    64.1 ms  user    2.1  sys   61.7
+-- run 2
+eglQueryDevicesEXT (3)     wall    21.9 ms  user    7.8  sys   13.9
+eglGetPlatformDisplay      wall     0.1 ms  user    0.0  sys    0.0
+eglInitialize              wall     6.4 ms  user    0.1  sys    6.2
+eglChooseConfig            wall     0.1 ms  user    0.0  sys    0.0
+eglCreateContext (ES 3)    wall    12.1 ms  user    1.9  sys    9.8
+eglMakeCurrent (surfaceless) wall    66.3 ms  user    3.9  sys   61.9
+glFinish                   wall     0.1 ms  user    0.0  sys    0.1
+second eglCreateContext    wall     0.3 ms  user    0.0  sys    0.2
+second eglMakeCurrent      wall     0.2 ms  user    0.0  sys    0.2
+thread: eglCreateContext   wall     0.9 ms  user    1.0  sys    0.0
+thread: eglMakeCurrent     wall    65.4 ms  user    1.8  sys   63.1
+-- run 3
+eglQueryDevicesEXT (3)     wall    25.6 ms  user    8.7  sys   16.8
+eglGetPlatformDisplay      wall     0.1 ms  user    0.0  sys    0.0
+eglInitialize              wall     6.3 ms  user    0.0  sys    6.0
+eglChooseConfig            wall     0.0 ms  user    0.0  sys    0.0
+eglCreateContext (ES 3)    wall    11.0 ms  user    1.9  sys    8.8
+eglMakeCurrent (surfaceless) wall    67.4 ms  user    3.3  sys   63.8
+glFinish                   wall     0.1 ms  user    0.0  sys    0.1
+second eglCreateContext    wall     0.2 ms  user    0.0  sys    0.2
+second eglMakeCurrent      wall     0.2 ms  user    0.0  sys    0.2
+thread: eglCreateContext   wall     0.8 ms  user    0.0  sys    0.9
+thread: eglMakeCurrent     wall    61.0 ms  user    2.8  sys   57.9

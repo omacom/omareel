@@ -1,0 +1,52 @@
+{
+ "runs": [
+  {
+   "first_frame_s": 0.5157,
+   "filmstrip_frames": 47,
+   "filmstrip_first_s": 0.591,
+   "filmstrip_last_s": 1.51,
+   "camera_frames": 8,
+   "camera_last_s": 0.591
+  },
+  {
+   "first_frame_s": 0.5226,
+   "filmstrip_frames": 47,
+   "filmstrip_first_s": 0.573,
+   "filmstrip_last_s": 1.481,
+   "camera_frames": 8,
+   "camera_last_s": 0.613
+  },
+  {
+   "first_frame_s": 0.4691,
+   "filmstrip_frames": 47,
+   "filmstrip_first_s": 0.492,
+   "filmstrip_last_s": 1.413,
+   "camera_frames": 8,
+   "camera_last_s": 0.553
+  },
+  {
+   "first_frame_s": 0.5161,
+   "filmstrip_frames": 47,
+   "filmstrip_first_s": 0.566,
+   "filmstrip_last_s": 1.612,
+   "camera_frames": 8,
+   "camera_last_s": 0.607
+  },
+  {
+   "first_frame_s": 0.4895,
+   "filmstrip_frames": 47,
+   "filmstrip_first_s": 0.518,
+   "filmstrip_last_s": 1.449,
+   "camera_frames": 8,
+   "camera_last_s": 0.58
+  }
+ ],
+ "median_after_first": {
+  "first_frame_s": 0.503,
+  "filmstrip_frames": 47.0,
+  "filmstrip_first_s": 0.542,
+  "filmstrip_last_s": 1.465,
+  "camera_frames": 8.0,
+  "camera_last_s": 0.593
+ }
+}

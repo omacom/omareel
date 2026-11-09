@@ -1,0 +1,69 @@
+/home/ryan/.cache/omareel-spikes/n1x/qml/enc.qtd: up to 3.0 s after the engine started; 787.3 ms of QML work (self time)
+by kind (ms):
+     370.2  Creating
+     350.9  Javascript
+      36.7  Compiling
+      29.5  Binding
+       0.0  HandlingSignal
+by file (ms):
+     300.2  BackgroundPanel.qml
+     287.4  OmButton.qml
+      43.8  ApplicationWindow.qml
+      37.2  ClipTrack.qml
+      12.1  PreviewPane.qml
+      11.3  Main.qml
+      10.6  Timeline.qml
+      10.4  OmToolTip.qml
+       9.4  BottomBar.qml
+       4.3  OmDropdown.qml
+       4.2  TopBar.qml
+       4.1  Label.qml
+       3.7  ZoomTrack.qml
+       3.1  SidePanel.qml
+       2.8  Calendar.qml
+       2.8  OmPopupCard.qml
+       2.6  InsertClipDialog.qml
+       2.5  RoundedFrame.qml
+       2.3  OmButtonGroup.qml
+       2.2  ToolTip.qml
+top ranges by self time (ms, count):
+     286.4   100  Javascript   BackgroundPanel.qml:31         wallpaperEntries
+     188.6   154  Creating     OmButton.qml:92                QtQuick.Controls.impl/IconImage
+      67.9   154  Creating     OmButton.qml:60                QtQuick.Controls.impl/IconImage
+      43.6     2  Creating     ApplicationWindow.qml:11       QtQuick.Templates/ApplicationWindow
+      22.1  2325  Javascript   ClipTrack.qml:155              expression for source
+      11.4  2325  Binding      ClipTrack.qml:155              
+      10.6   154  Creating     OmButton.qml:87                QtQuick/Item
+       9.6     7  Javascript   PreviewPane.qml:118            expression for x
+       8.7     1  Compiling    Main.qml:0                     qrc:/qt/qml/Omareel/Main.qml
+       5.4     3  Javascript   BottomBar.qml:166              expression for preferredWidth
+       4.0   100  Binding      BackgroundPanel.qml:136        
+       3.7   160  Creating     Label.qml:11                   QtQuick.Templates/Label
+       3.4   154  Creating     OmButton.qml:55                QtQuick/Item
+       2.9   154  Creating     OmButton.qml:50                QtQuick.Layouts/RowLayout
+       2.8     1  Compiling    Calendar.qml:0                 qrc:/qt-project.org/imports/QtQuick/Controls/Basic/Calendar.
+       2.7     4  Creating     OmDropdown.qml:20              QtQuick.Controls.impl/IconImage
+       2.6     1  Compiling    InsertClipDialog.qml:0         qrc:/qt/qml/Omareel/InsertClipDialog.qml
+       2.2   154  Creating     OmButton.qml:75                QtQuick/Text
+       1.9   224  Creating     OmToolTip.qml:52               QtQuick/Text
+       1.7   417  Javascript   OmToolTip.qml:20               expression for flipped
+       1.7   224  Creating     ToolTip.qml:11                 QtQuick.Templates/ToolTip
+       1.7     1  Compiling    RoundedFrame.qml:0             qrc:/qt/qml/Omareel/RoundedFrame.qml
+       1.5     6  Javascript   TopBar.qml:72                  expression for width
+       1.4     1  Compiling    CursorOverlay.qml:0            qrc:/qt/qml/Omareel/CursorOverlay.qml
+       1.3     2  Creating     :                              
+       1.2    77  Creating     OmButton.qml:8                 Button
+       1.2   154  Creating     OmButton.qml:118               QtQuick/Rectangle
+       1.2    10  Javascript   Timeline.qml:640               expression for policy
+       1.2    22  Creating     OmPopupCard.qml:15             QtQuick/Rectangle
+       1.2   158  Creating     Button.qml:11                  QtQuick.Templates/Button
+       1.1    16  Creating     Timeline.qml:472               QtQuick/Image
+       1.1     1  Compiling    OmPopupCard.qml:0              qrc:/qt/qml/Omareel/Ui/src/ui/qml/ui/OmPopupCard.qml
+       0.9     1  Compiling    OmButtonGroup.qml:0            qrc:/qt/qml/Omareel/Ui/src/ui/qml/ui/OmButtonGroup.qml
+       0.9     1  Compiling    ScrollBar.qml:0                qrc:/qt-project.org/imports/QtQuick/Controls/Fusion/ScrollBa
+       0.9   100  Javascript   BackgroundPanel.qml:30         expression for wallpapers
+       0.9    54  Binding      OmButton.qml:26                
+       0.9   224  Creating     OmToolTip.qml:60               QtQuick/Text
+       0.9     1  Compiling    SidePanel.qml:0                qrc:/qt/qml/Omareel/SidePanel.qml
+       0.9   112  Creating     OmToolTip.qml:6                ToolTip
+       0.8   147  Creating     Timeline.qml:284               <component>

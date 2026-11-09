@@ -1,0 +1,206 @@
+run /home/ryan/.cache/omareel-spikes/n1x/prof-qt-enc-fp/1: first frame 0.6179s; commits [0.6179, 0.6203, 0.662, 0.7261, 0.7917, 0.8576, 0.9245, 1.0277]; window 0..1.500s; 31719 samples
+
+CPU ms by thread before the window ends:
+    348.8 ms  omareel              2538519/2538519 main
+    148.0 ms  av:h264:df0          2538519/2538746 
+    145.4 ms  av:h264:df0          2538519/2538688 
+    141.7 ms  av:h264:df1          2538519/2538796 
+    141.4 ms  av:h264:df1          2538519/2538747 
+    141.4 ms  av:h264:df0          2538519/2538795 
+    136.4 ms  av:h264:df0          2538519/2538686 
+    132.4 ms  av:h264:df1          2538519/2538599 
+    128.7 ms  av:h264:df1          2538519/2538689 
+    127.4 ms  av:h264:df0          2538519/2538597 
+    124.4 ms  av:h264:df0          2538519/2538680 
+    122.0 ms  av:h264:df1          2538519/2538687 
+    119.0 ms  av:h264:df1          2538519/2538783 
+    118.0 ms  av:h264:df1          2538519/2538681 
+    117.7 ms  av:h264:df1          2538519/2538691 
+    117.7 ms  av:h264:df1          2538519/2538787 
+    116.0 ms  av:h264:df0          2538519/2538774 
+    115.4 ms  av:h264:df1          2538519/2538771 
+    114.4 ms  av:h264:df0          2538519/2538862 
+    114.0 ms  av:h264:df1          2538519/2538596 
+    113.7 ms  av:h264:df1          2538519/2538775 
+    113.7 ms  av:h264:df0          2538519/2538782 
+    112.7 ms  av:h264:df0          2538519/2538713 
+    112.0 ms  av:h264:df1          2538519/2538715 
+    111.7 ms  av:h264:df1          2538519/2538739 
+
+child processes (fork, exit, CPU ms over the whole run):
+    0.076   0.081  hyprctl              6.3 ms  pid 2538523
+    0.077   0.084  fc-match            11.3 ms  pid 2538528
+
+main thread, 25 ms buckets (busy % of the bucket, then the commonest stacks):
+   0.000    45%  34× [ld-linux-aarch64.so.1] [unknown]
+   0.025   100%  75× [ld-linux-aarch64.so.1] [unknown]
+   0.050    76%  34× [ld-linux-aarch64.so.1] [unknown]; 6× [libnvidia-glcore.so.615.78.08] [unknown]
+   0.075    65%  30× QFactoryLoader::instance(int) const; 4× wl_cursor_theme_load
+   0.100    89%  27× gtk_css_provider_load_from_resource > gtk_css_provider_load_from_file; 15× QFactoryLoader::instance(int) const
+   0.125    51%  12× QFactoryLoader::instance(int) const; 5× Omareel::Editor::Editor(QString) > Omareel::cxx_qt_Editor::initialize0(Omareel::Editor&, Omareel::cxx_qt_Editor::CxxQtConstructorInitializeArguments0) > Omareel::PlaybackDriver::loadScreen(QString const&)
+   0.150     0%  (off CPU)
+   0.175     3%  1× QQmlApplicationEngine::load(QUrl const&) > QQmlApplicationEnginePrivate::finishLoad(QQmlComponent*) > QQmlPropertyCache::createMetaObject() const; 1× QQmlApplicationEngine::load(QUrl const&) > QQmlApplicationEnginePrivate::finishLoad(QQmlComponent*) > QFact
+   0.200   108%  70× QQmlApplicationEngine::load(QUrl const&) > QQmlApplicationEnginePrivate::finishLoad(QQmlComponent*) > QSGRenderLoop::instance(); 10× QQmlApplicationEngine::load(QUrl const&) > QQmlApplicationEnginePrivate::finishLoad(QQmlComponent*) > loadEGLExternalPlatfo
+   0.225    43%  32× QQmlApplicationEngine::load(QUrl const&) > QQmlApplicationEnginePrivate::finishLoad(QQmlComponent*) > QSGRenderLoop::instance()
+   0.250    99%  9× QQmlApplicationEngine::load(QUrl const&) > QQmlApplicationEnginePrivate::finishLoad(QQmlComponent*) > FT_Load_Glyph; 4× QQmlApplicationEngine::load(QUrl const&) > QQmlApplicationEnginePrivate::finishLoad(QQmlComponent*) > QQmlPropertyCache::defaultProperty(
+   0.275    99%  52× QQmlApplicationEngine::load(QUrl const&) > QQmlApplicationEnginePrivate::finishLoad(QQmlComponent*) > QFactoryLoader::instance(int) const; 5× QQmlApplicationEngine::load(QUrl const&) > QQmlApplicationEnginePrivate::finishLoad(QQmlComponent*) > FT_Load_Glyp
+   0.300    99%  8× QQmlApplicationEngine::load(QUrl const&) > QQmlApplicationEnginePrivate::finishLoad(QQmlComponent*) > QQmlFileSelectorInterceptor::intercept(QUrl const&, QQmlAbstractUrlInterceptor::DataType); 3× QQmlApplicationEngine::load(QUrl const&) > QQmlApplicationEng
+   0.325   107%  7× QQmlApplicationEngine::load(QUrl const&) > QQmlApplicationEnginePrivate::finishLoad(QQmlComponent*) > QQmlFileSelectorInterceptor::intercept(QUrl const&, QQmlAbstractUrlInterceptor::DataType); 6× QQmlApplicationEngine::load(QUrl const&) > QQmlApplicationEng
+   0.350    61%  6× Omareel$cxxbridge1$198$Editor$composition_changed > QQmlNotifier::emitNotify(QQmlNotifierEndpoint*, void**) > QV4::Function::call(QObject*, void**, QMetaType const*, int, QV4::ExecutionContext*); 4× QV4::GCStateMachine::transition()
+   0.375    48%  22× QSGRhiSupport::maybeCreateOffscreenSurface(QWindow*); 2× QQuickApplicationWindowPrivate::relayout() > QQuickItem::setSize(QSizeF const&) > QQmlFileSelectorInterceptor::intercept(QUrl const&, QQmlAbstractUrlInterceptor::DataType)
+   0.400     0%  (off CPU)
+   0.425     0%  (off CPU)
+   0.450    35%  17× QSGRhiSupport::maybeCreateOffscreenSurface(QWindow*); 2× QQuickWindowPrivate::polishItems() > QQuickLayout::updatePolish() > QV4::Function::call(QObject*, void**, QMetaType const*, int, QV4::ExecutionContext*)
+   0.475     1%  1× QQuickWindowPrivate::polishItems() > QQuickWindowPrivate::updateChildWindowStackingOrder(QQuickItem*)
+   0.500     0%  (off CPU)
+   0.525     0%  (off CPU)
+   0.550     0%  (off CPU)
+   0.575     0%  (off CPU)
+   0.600     0%  (off CPU) FRAME FRAME
+   0.625     0%  (off CPU)
+   0.650     0%  (off CPU) FRAME
+   0.675     0%  (off CPU)
+   0.700     0%  (off CPU)
+   0.725    23%  12× QQuickWindow::event(QEvent*) > QQuickWindowPrivate::polishItems(); 1× [libxkbcommon.so.0.13.2] [unknown] FRAME
+   0.750     0%  (off CPU)
+   0.775     0%  (off CPU) FRAME
+   0.800     0%  (off CPU)
+   0.825     0%  (off CPU)
+   0.850     0%  (off CPU) FRAME
+   0.875     0%  (off CPU)
+   0.900     0%  (off CPU) FRAME
+   0.925     8%  1× QQuickApplicationWindow::resizeEvent(QResizeEvent*) > QQuickWindow::resizeEvent(QResizeEvent*) > QQuickItemPrivate::itemChange(QQuickItem::ItemChange, QQuickItem::ItemChangeData const&); 1× QQuickApplicationWindowPrivate::relayout() > QQuickItem::setSize(QS
+   0.950     0%  (off CPU)
+   0.975     0%  (off CPU)
+   1.000     0%  (off CPU)
+   1.025    32%  3× <<>::start_next_video_thumbnail::{closure#1}::{closure#0} as core::ops::function::FnOnce<(core::pin::Pin<>,)>>::call_onc > Omareel$cxxbridge1$198$Editor$video_thumbnail_revision_changed > QQmlFileSelectorInterceptor::intercept(QUrl const&, QQmlAbstractUrlIn FRAME
+   1.050     1%  1× [libQt6Gui.so.6.12.0] QGuiApplicationPrivate::captureGlobalModifierState(QEvent*)
+   1.075    12%  2× [libc.so.6] [unknown]; 2× [libc.so.6] ppoll FRAME
+   1.100     9%  2× [libc.so.6] [unknown]; 2× [libc.so.6] ppoll
+   1.125     1%  1× <<>::start_next_video_thumbnail::{closure#1}::{closure#0} as core::ops::function::FnOnce<(core::pin::Pin<>,)>>::call_onc > Omareel$cxxbridge1$198$Editor$video_thumbnail_revision_changed > QQuickPixmap::connectDownloadProgress(QObject*, int)
+   1.150    25%  4× [libglib-2.0.so.0.9000.1] [unknown]; 2× [libc.so.6] [unknown] FRAME
+   1.175    21%  2× <<>::start_next_video_thumbnail::{closure#1}::{closure#0} as core::ops::function::FnOnce<(core::pin::Pin<>,)>>::call_onc > Omareel$cxxbridge1$198$Editor$video_thumbnail_revision_changed > QQmlFileSelectorInterceptor::intercept(QUrl const&, QQmlAbstractUrlIn
+   1.200     1%  1× <<>::start_next_video_thumbnail::{closure#1}::{closure#0} as core::ops::function::FnOnce<(core::pin::Pin<>,)>>::call_onc > <>::start_next_video_thumbnail > <>::next_video_thumbnail_job FRAME
+   1.225    11%  3× [libc.so.6] [unknown]; 2× [libc.so.6] ppoll
+   1.250     3%  1× <<>::start_next_video_thumbnail::{closure#1}::{closure#0} as core::ops::function::FnOnce<(core::pin::Pin<>,)>>::call_onc > Omareel$cxxbridge1$198$Editor$video_thumbnail_revision_changed > QQmlJavaScriptExpression::evaluate(QV4::CallData*, bool*); 1× <<>::st
+   1.275     4%  2× QQuickWindow::event(QEvent*); 1× [libQt6Core.so.6.12.0] QCoreApplicationPrivate::notify_helper(QObject*, QEvent*) FRAME
+   1.300    20%  4× [libglib-2.0.so.0.9000.1] [unknown]; 2× [libc.so.6] [unknown]
+   1.325    21%  4× [libc.so.6] [unknown]; 2× [libc.so.6] ppoll
+   1.350    20%  1× [[vdso]] __kernel_clock_gettime; 1× <<>::start_next_video_thumbnail::{closure#1}::{closure#0} as core::ops::function::FnOnce<(core::pin::Pin<>,)>>::call_onc > Omareel$cxxbridge1$198$Editor$video_thumbnail_revision_changed > QV4::ExecutionEngine::fromData(QM FRAME
+   1.375    32%  3× <<>::start_next_video_thumbnail::{closure#1}::{closure#0} as core::ops::function::FnOnce<(core::pin::Pin<>,)>>::call_onc > Omareel$cxxbridge1$198$Editor$video_thumbnail_revision_changed > QV4::MarkStack::drain(QDeadlineTimer); 3× [libglib-2.0.so.0.9000.1] [
+   1.400    17%  6× QQuickWindow::event(QEvent*); 3× [libc.so.6] [unknown] FRAME
+   1.425     1%  1× QQuickDeliveryAgent::event(QEvent*) > QQuickDeliveryAgentPrivate::flushFrameSynchronousEvents(QQuickWindow*) > QQuickWindow::mouseGrabberItem() const
+   1.450     0%  (off CPU)
+   1.475     3%  1× <<>::start_next_video_thumbnail::{closure#1}::{closure#0} as core::ops::function::FnOnce<(core::pin::Pin<>,)>>::call_onc > Omareel$cxxbridge1$198$Editor$video_thumbnail_revision_changed > Omareel$cxxbridge1$198$Editor$clip_thumbnail_url; 1× <<>::start_next_ FRAME
+   1.500     0%  (off CPU)
+
+inclusive CPU ms, main thread up to the first frame (282 ms sampled):
+    282.1  [unknown]
+    227.4  __libc_start_main
+    227.4  _start
+    226.7  main
+    141.7  QQmlApplicationEngine::load(QUrl const&)
+    141.4  QQmlComponent::create(QQmlContext*)
+    141.4  QQmlComponentPrivate::createWithProperties(QObject*, QMap<> const&, QQmlContext*, QQmlComponentPrivate::CreateBehavior)
+    141.4  QQmlApplicationEnginePrivate::finishLoad(QQmlComponent*)
+     96.4  QQmlObjectCreator::finalize(QQmlInstantiationInterrupt&)
+     92.4  QQmlComponentPrivate::completeCreate()
+     92.4  QQmlComponentPrivate::complete(QQmlEnginePrivate*, QQmlComponentPrivate::ConstructionState*)
+     76.7  _dl_catch_exception
+     68.7  dlopen
+     56.7  QQmlObjectCreator::createInstance(int, QObject*, bool)
+     56.4  QQmlObjectCreator::create(int, QObject*, QQmlInstantiationInterrupt*, int)
+     49.0  QQmlComponent::beginCreate(QQmlContext*)
+     49.0  QQmlComponentPrivate::beginCreate(QQmlRefPointer<>)
+     44.7  QGuiApplicationPrivate::init()
+     44.7  QGuiApplication::QGuiApplication(int&, char**, int)
+     44.3  QCoreApplicationPrivate::init()
+     40.0  QQmlEnginePrivate::incubate(QQmlIncubator&, QQmlRefPointer<> const&)
+     40.0  QQmlIncubatorPrivate::incubate(QQmlInstantiationInterrupt&)
+     39.7  QQmlType::createWithQQmlData() const
+     39.7  QQmlType::create(void**, unsigned long) const
+     39.3  QQmlBinding::doUpdate(QQmlJavaScriptExpression::DeleteWatcher const&, QFlags<>, QV4::Scope&)
+     39.3  QQmlBinding::update(QFlags<>)
+     39.0  QQuickWindowPrivate::init(QQuickWindow*, QQuickRenderControl*)
+     39.0  QQuickApplicationWindow::QQuickApplicationWindow(QWindow*)
+     39.0  QQuickWindowQmlImpl::QQuickWindowQmlImpl(QQuickWindowQmlImplPrivate&, QWindow*)
+     38.7  QtWaylandClient::QWaylandIntegration::clientBufferIntegration() const
+     38.7  QtWaylandClient::QWaylandIntegration::initializeClientBufferIntegration()
+     38.7  QtWaylandClient::QWaylandIntegration::hasCapability(QPlatformIntegration::Capability) const
+     38.7  QSGRenderLoop::instance()
+     37.7  QFactoryLoader::instance(int) const
+     36.0  QtWaylandClient::QWaylandEglClientBufferIntegration::initialize(QtWaylandClient::QWaylandDisplay*)
+     34.0  QGuiApplicationPrivate::createPlatformIntegration()
+     34.0  QGuiApplicationPrivate::createEventDispatcher()
+     34.0  QEventLoop::exec(QFlags<>)
+     34.0  QEventDispatcherGlib::processEvents(QFlags<>)
+     34.0  QCoreApplication::exec()
+     33.7  QCoreApplication::notifyInternal2(QObject*, QEvent*)
+     30.3  QPlatformThemeFactory::create(QString const&, QString const&)
+     29.0  pthread_once
+     29.0  QQuickImageBase::loadPixmap(QUrl const&, QFlags<>)
+     28.0  QQuickIconImage::load()
+  self time by library: ld-linux-aarch64.so.1 110, libc.so.6 48, libQt6Qml.so.6.12.0 30, libQt6Core.so.6.12.0 24, libQt6Quick.so.6.12.0 10, libQt6Gui.so.6.12.0 7, libharfbuzz.so.0.61500.0 5, libnvidia-eglcore.so.615.78.08 4, libfontconfig.so.1.17.0 4, libnvidia-glsi.so.615.78.08 4
+
+inclusive CPU ms, all threads of the app in the window (10559 ms sampled):
+  10558.9  [unknown]
+    828.3  <>::new::thread_start
+    636.5  <std::thread::lifecycle::spawn_unchecked<>::{closure#1} as core::ops::function::FnOnce<>>::call_once::{shim:vtable#0}
+    635.2  std::sys::backtrace::__rust_begin_short_backtrace::<>
+    487.8  pthread_cond_wait
+    413.8  QEventLoop::exec(QFlags<>)
+    413.8  QEventDispatcherGlib::processEvents(QFlags<>)
+    390.5  g_main_context_iteration
+    310.4  QThread::exec()
+    298.1  __libc_start_main
+    298.1  _start
+    297.4  main
+    269.4  QCoreApplication::notifyInternal2(QObject*, QEvent*)
+    237.7  QCoreApplicationPrivate::sendPostedEvents(QObject*, int, QThreadData*)
+    142.4  QQmlApplicationEngine::load(QUrl const&)
+    142.0  QQmlComponent::create(QQmlContext*)
+    142.0  QQmlComponentPrivate::createWithProperties(QObject*, QMap<> const&, QQmlContext*, QQmlComponentPrivate::CreateBehavior)
+    142.0  QQmlApplicationEnginePrivate::finishLoad(QQmlComponent*)
+    103.4  QCoreApplication::exec()
+    101.0  QObject::event(QEvent*)
+     97.0  QQmlObjectCreator::finalize(QQmlInstantiationInterrupt&)
+     93.0  QQmlComponentPrivate::completeCreate()
+     93.0  QQmlComponentPrivate::complete(QQmlEnginePrivate*, QQmlComponentPrivate::ConstructionState*)
+     90.7  _dl_catch_exception
+     82.7  dlopen
+     80.0  std::sys::backtrace::__rust_begin_short_backtrace::<<>::spawn<<>::rebuild_motion::{closure#0}>::{closure#1},
+     80.0  <>::build
+     80.0  <std::thread::lifecycle::spawn_unchecked<<>::spawn<<>::rebuild_motion::{closure#0}>::{closure#1},
+     76.4  QImageReader::read(QImage*)
+     74.4  omareel_core::zoom_timeline::target_at
+     73.7  ppoll
+     65.4  QQmlBinding::update(QFlags<>)
+     65.0  QQmlBinding::doUpdate(QQmlJavaScriptExpression::DeleteWatcher const&, QFlags<>, QV4::Scope&)
+     63.0  snprintf
+     60.7  <alloc::vec::Vec<> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<omareel_core::cursor_path::CursorSample, cor
+     58.4  QQmlTypeLoader::setCachedUnit(QQmlRefPointer<> const&, QQmlPrivate::CachedQmlUnit const*)
+     58.0  memset
+     56.7  QQmlObjectCreator::createInstance(int, QObject*, bool)
+     56.4  QQmlObjectCreator::create(int, QObject*, QQmlInstantiationInterrupt*, int)
+     52.7  __ctype_init
+     50.4  QQmlNotifier::emitNotify(QQmlNotifierEndpoint*, void**)
+     49.0  QQmlComponent::beginCreate(QQmlContext*)
+     49.0  QQmlComponentPrivate::beginCreate(QQmlRefPointer<>)
+     45.7  <std::thread::lifecycle::spawn_unchecked<<>::spawn<<>::start_next_video_thumbnail::{closure#1}>::{closure#1},
+     44.7  QGuiApplicationPrivate::init()
+  self time by library: libavcodec.so.63.1.102 8161, libc.so.6 1338, ld-linux-aarch64.so.1 128, libswscale.so.10.1.102 127, omareel 120, libavformat.so.63.1.102 109, libavutil.so.61.1.102 92, libQt6Core.so.6.12.0 87, libQt6Qml.so.6.12.0 66, libglib-2.0.so.0.9000.1 63
+
+main thread up to the first frame (618 ms), by kind:
+     70.4 ms  dynamic linking
+     65.4 ms  QML objects, bindings and layout
+     55.7 ms  GPU and EGL setup
+     21.3 ms  image decode
+     20.3 ms  other
+     16.3 ms  fonts
+     14.3 ms  QML compile and type loading
+      8.0 ms  Wayland
+      6.7 ms  Qt Multimedia, FFmpeg and CUDA
+      2.0 ms  SVG icons drawn
+      1.0 ms  icon theme lookup
+      0.7 ms  recording and project load
+    335.8 ms  off the CPU (waiting)

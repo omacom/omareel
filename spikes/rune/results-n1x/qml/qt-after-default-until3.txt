@@ -1,0 +1,69 @@
+/home/ryan/.cache/omareel-spikes/n1x/qml/default.qtd: up to 3.0 s after the engine started; 859.9 ms of QML work (self time)
+by kind (ms):
+     418.8  Creating
+     364.3  Javascript
+      38.8  Compiling
+      38.0  Binding
+       0.0  HandlingSignal
+by file (ms):
+     361.3  OmButton.qml
+     327.1  BackgroundPanel.qml
+      41.1  ClipTrack.qml
+      15.0  OmToolTip.qml
+      12.1  Main.qml
+      10.5  ApplicationWindow.qml
+       9.6  Timeline.qml
+       9.4  BottomBar.qml
+       4.9  TopBar.qml
+       4.9  Label.qml
+       4.4  OmDropdown.qml
+       3.9  ZoomTrack.qml
+       3.7  ExportDialog.qml
+       3.3  ToolTip.qml
+       3.1  InsertClipDialog.qml
+       3.0  Calendar.qml
+       3.0  SidePanel.qml
+       2.8  OmPopupCard.qml
+       2.6  RoundedFrame.qml
+       2.5  PreviewPane.qml
+top ranges by self time (ms, count):
+     304.3   100  Javascript   BackgroundPanel.qml:31         wallpaperEntries
+     251.9   202  Creating     OmButton.qml:92                QtQuick.Controls.impl/IconImage
+      71.0   202  Creating     OmButton.qml:60                QtQuick.Controls.impl/IconImage
+      23.6  2325  Javascript   ClipTrack.qml:155              expression for source
+      13.2  2325  Binding      ClipTrack.qml:155              
+      10.7   202  Creating     OmButton.qml:87                QtQuick/Item
+      10.4     2  Creating     ApplicationWindow.qml:11       QtQuick.Templates/ApplicationWindow
+       9.2     1  Compiling    Main.qml:0                     qrc:/qt/qml/Omareel/Main.qml
+       8.1   100  Binding      BackgroundPanel.qml:136        
+       5.3     3  Javascript   BottomBar.qml:166              expression for preferredWidth
+       4.2   202  Creating     OmButton.qml:50                QtQuick.Layouts/RowLayout
+       3.6   160  Creating     Label.qml:11                   QtQuick.Templates/Label
+       3.5   202  Creating     OmButton.qml:55                QtQuick/Item
+       3.3   320  Creating     OmToolTip.qml:52               QtQuick/Text
+       3.1     1  Compiling    InsertClipDialog.qml:0         qrc:/qt/qml/Omareel/InsertClipDialog.qml
+       3.0     1  Compiling    Calendar.qml:0                 qrc:/qt-project.org/imports/QtQuick/Controls/Basic/Calendar.
+       2.8   101  Creating     OmButton.qml:8                 Button
+       2.8     4  Creating     OmDropdown.qml:20              QtQuick.Controls.impl/IconImage
+       2.6   202  Creating     OmButton.qml:75                QtQuick/Text
+       2.5   320  Creating     ToolTip.qml:11                 QtQuick.Templates/ToolTip
+       2.4     1  Compiling    ExportDialog.qml:0             qrc:/qt/qml/Omareel/ExportDialog.qml
+       2.3   515  Javascript   OmToolTip.qml:20               expression for flipped
+       2.0   206  Creating     Button.qml:11                  QtQuick.Templates/Button
+       1.8     1  Compiling    RoundedFrame.qml:0             qrc:/qt/qml/Omareel/RoundedFrame.qml
+       1.5   202  Creating     OmButton.qml:118               QtQuick/Rectangle
+       1.4     6  Javascript   TopBar.qml:72                  expression for width
+       1.4   160  Creating     OmToolTip.qml:6                ToolTip
+       1.3   100  Javascript   BackgroundPanel.qml:30         expression for wallpapers
+       1.2   320  Creating     OmToolTip.qml:60               QtQuick/Text
+       1.2     2  Creating     :                              
+       1.2   183  Creating     ClipTrack.qml:146              <component>
+       1.1     1  Compiling    OmPopupCard.qml:0              qrc:/qt/qml/Omareel/Ui/src/ui/qml/ui/OmPopupCard.qml
+       1.1    96  Creating     BackgroundPanel.qml:149        QtQuick/Image
+       1.1    22  Creating     OmPopupCard.qml:15             QtQuick/Rectangle
+       1.0    48  Creating     BackgroundPanel.qml:160        OmIconButton
+       1.0    16  Creating     Timeline.qml:472               QtQuick/Image
+       1.0   320  Creating     OmToolTip.qml:48               QtQuick/Row
+       1.0    54  Binding      OmButton.qml:26                
+       1.0     6  Javascript   Timeline.qml:648               expression for minimumSize
+       1.0     1  Compiling    ComboBox.qml:0                 qrc:/qt-project.org/imports/QtQuick/Controls/Fusion/ComboBox

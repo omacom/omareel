@@ -1,0 +1,343 @@
+{
+ "app": "/home/ryan/.t3/worktrees/omareel/t3-rune-spike-n1x/spikes/rune/target/release/omareel-rune-spike",
+ "runs": [
+  {
+   "launcher_ms": 560.6,
+   "picker_ms": 252.0,
+   "picker_layer": "hyprpicker",
+   "state_ms": 225.8,
+   "bar_ms": 719.3,
+   "bar_layer": "omareel-record-bar",
+   "layers_recording": [
+    [
+     "omareel-record-bar",
+     "layer"
+    ]
+   ],
+   "stop_command_ms": 366.7,
+   "editor_ms": 870.2
+  },
+  {
+   "launcher_ms": 448.1,
+   "picker_ms": 132.6,
+   "picker_layer": "hyprpicker",
+   "state_ms": 218.7,
+   "bar_ms": 764.0,
+   "bar_layer": "omareel-record-bar",
+   "layers_recording": [
+    [
+     "omareel-record-bar",
+     "layer"
+    ]
+   ],
+   "stop_command_ms": 365.2,
+   "editor_ms": 842.6
+  },
+  {
+   "launcher_ms": 442.9,
+   "picker_ms": 229.0,
+   "picker_layer": "hyprpicker",
+   "state_ms": 218.4,
+   "bar_ms": 744.5,
+   "bar_layer": "omareel-record-bar",
+   "layers_recording": [
+    [
+     "omareel-record-bar",
+     "layer"
+    ]
+   ],
+   "stop_command_ms": 365.5,
+   "editor_ms": 852.7
+  },
+  {
+   "launcher_ms": 440.9,
+   "picker_ms": 231.1,
+   "picker_layer": "hyprpicker",
+   "state_ms": 205.5,
+   "bar_ms": 727.7,
+   "bar_layer": "omareel-record-bar",
+   "layers_recording": [
+    [
+     "omareel-record-bar",
+     "layer"
+    ]
+   ],
+   "stop_command_ms": 316.4,
+   "editor_ms": 807.4
+  },
+  {
+   "launcher_ms": 425.4,
+   "picker_ms": 270.6,
+   "picker_layer": "hyprpicker",
+   "state_ms": 215.4,
+   "bar_ms": 729.4,
+   "bar_layer": "omareel-record-bar",
+   "layers_recording": [
+    [
+     "omareel-record-bar",
+     "layer"
+    ]
+   ],
+   "stop_command_ms": 415.2,
+   "editor_ms": 893.3
+  },
+  {
+   "launcher_ms": 475.9,
+   "picker_ms": 237.3,
+   "picker_layer": "hyprpicker",
+   "state_ms": 217.7,
+   "bar_ms": 736.8,
+   "bar_layer": "omareel-record-bar",
+   "layers_recording": [
+    [
+     "omareel-record-bar",
+     "layer"
+    ]
+   ],
+   "stop_command_ms": 417.4,
+   "editor_ms": 922.9
+  }
+ ],
+ "first": {
+  "launcher_ms": 560.6,
+  "picker_ms": 252.0,
+  "picker_layer": "hyprpicker",
+  "state_ms": 225.8,
+  "bar_ms": 719.3,
+  "bar_layer": "omareel-record-bar",
+  "layers_recording": [
+   [
+    "omareel-record-bar",
+    "layer"
+   ]
+  ],
+  "stop_command_ms": 366.7,
+  "editor_ms": 870.2
+ },
+ "warm_median": {
+  "launcher_ms": 442.9,
+  "picker_ms": 231.1,
+  "state_ms": 217.7,
+  "bar_ms": 736.8,
+  "stop_command_ms": 365.5,
+  "editor_ms": 852.7
+ },
+ "events": [
+  [
+   359687.824,
+   "client",
+   "omareel",
+   2735813
+  ],
+  [
+   359690.097,
+   "layer",
+   "hyprpicker",
+   2736394
+  ],
+  [
+   359690.121,
+   "layer",
+   "selection",
+   2736454
+  ],
+  [
+   359692.344,
+   "layer",
+   "omareel-record-bar",
+   2736904
+  ],
+  [
+   359695.194,
+   "layer",
+   "omareel-record-bar",
+   2736904
+  ],
+  [
+   359699.238,
+   "client",
+   "omareel",
+   2738270
+  ],
+  [
+   359704.723,
+   "client",
+   "omareel",
+   2739354
+  ],
+  [
+   359706.875,
+   "layer",
+   "hyprpicker",
+   2739788
+  ],
+  [
+   359706.996,
+   "layer",
+   "selection",
+   2739830
+  ],
+  [
+   359709.166,
+   "layer",
+   "omareel-record-bar",
+   2740022
+  ],
+  [
+   359711.943,
+   "layer",
+   "omareel-record-bar",
+   2740022
+  ],
+  [
+   359716.03,
+   "client",
+   "omareel",
+   2741524
+  ],
+  [
+   359721.507,
+   "client",
+   "omareel",
+   2742837
+  ],
+  [
+   359723.754,
+   "layer",
+   "hyprpicker",
+   2743327
+  ],
+  [
+   359723.802,
+   "layer",
+   "selection",
+   2743345
+  ],
+  [
+   359726.032,
+   "layer",
+   "omareel-record-bar",
+   2743600
+  ],
+  [
+   359728.881,
+   "layer",
+   "omareel-record-bar",
+   2743600
+  ],
+  [
+   359732.909,
+   "client",
+   "omareel",
+   2745040
+  ],
+  [
+   359738.393,
+   "client",
+   "omareel",
+   2746081
+  ],
+  [
+   359740.641,
+   "layer",
+   "hyprpicker",
+   2746483
+  ],
+  [
+   359740.675,
+   "layer",
+   "selection",
+   2746502
+  ],
+  [
+   359742.893,
+   "layer",
+   "omareel-record-bar",
+   2747095
+  ],
+  [
+   359745.784,
+   "layer",
+   "omareel-record-bar",
+   2747095
+  ],
+  [
+   359749.713,
+   "client",
+   "omareel",
+   2748193
+  ],
+  [
+   359755.168,
+   "client",
+   "omareel",
+   2749545
+  ],
+  [
+   359757.459,
+   "layer",
+   "hyprpicker",
+   2749955
+  ],
+  [
+   359757.527,
+   "layer",
+   "selection",
+   2749975
+  ],
+  [
+   359759.713,
+   "layer",
+   "omareel-record-bar",
+   2750557
+  ],
+  [
+   359762.536,
+   "layer",
+   "omareel-record-bar",
+   2750557
+  ],
+  [
+   359766.628,
+   "client",
+   "omareel",
+   2751702
+  ],
+  [
+   359772.135,
+   "client",
+   "omareel",
+   2752876
+  ],
+  [
+   359774.386,
+   "layer",
+   "hyprpicker",
+   2753494
+  ],
+  [
+   359774.451,
+   "layer",
+   "selection",
+   2753512
+  ],
+  [
+   359776.647,
+   "layer",
+   "omareel-record-bar",
+   2753751
+  ],
+  [
+   359779.446,
+   "layer",
+   "omareel-record-bar",
+   2753751
+  ],
+  [
+   359783.583,
+   "client",
+   "omareel",
+   2755233
+  ]
+ ]
+}

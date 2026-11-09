@@ -1,0 +1,18 @@
+-- run 1
+vkCreateInstance             wall    67.1 ms  user   11.9  sys   53.4
+vkEnumeratePhysicalDevices (1) wall     0.1 ms  user    0.0  sys    0.1
+vkCreateDevice               wall   181.7 ms  user    4.7  sys  174.3
+vkDestroyDevice              wall    34.7 ms  user    0.0  sys   33.3
+vkDestroyInstance            wall    14.2 ms  user    0.0  sys   13.9
+-- run 2
+vkCreateInstance             wall    40.0 ms  user    7.1  sys   31.9
+vkEnumeratePhysicalDevices (1) wall     0.1 ms  user    0.0  sys    0.1
+vkCreateDevice               wall   167.2 ms  user    3.7  sys  164.2
+vkDestroyDevice              wall    37.7 ms  user    0.0  sys   36.6
+vkDestroyInstance            wall    14.6 ms  user    1.0  sys   13.4
+-- run 3
+vkCreateInstance             wall    44.7 ms  user    8.6  sys   34.7
+vkEnumeratePhysicalDevices (1) wall     0.1 ms  user    0.0  sys    0.1
+vkCreateDevice               wall   166.5 ms  user    1.9  sys  164.2
+vkDestroyDevice              wall    35.4 ms  user    1.0  sys   33.7
+vkDestroyInstance            wall    14.0 ms  user    1.0  sys   12.9
