@@ -13,7 +13,9 @@ Written per run, in <out dir>/<n>/: perf.data, wayland.log, start.json (CLOCK_MO
 seconds of day at the launch, to line the perf samples up with the Wayland log), and
 thumbs.json (when each new filmstrip or camera-strip frame appeared in the cache). PERF=0 runs
 without perf (for the true timings); REOPEN=1 opens the same copy every run (the second and later
-runs find their project.json and cached frames, as reopening a recording does). Prints the
+runs find their project.json and cached frames, as reopening a recording does). WAIT=<s> starts
+`<app> edit --wait <pid> <copy>` instead, the editor the recorder starts while it records, and
+SIGUSR1s it after that many seconds: times are then from the signal (as from Stop). Prints the
 median first frame and filmstrip times over the runs after the first.
 """
 import json
@@ -33,6 +35,7 @@ seconds = float(os.environ.get('SECONDS_RUN', '4'))
 use_perf = os.environ.get('PERF', '1') == '1'
 freq = os.environ.get('PERF_FREQ', '2999')
 reopen = os.environ.get('REOPEN', '0') == '1'
+wait = float(os.environ.get('WAIT', '0'))
 os.makedirs(out, exist_ok=True)
 cache = os.path.join(os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache')), 'omareel', 'omareel')
 stamp = re.compile(r'^\[(\d+):(\d+):(\d+\.\d+)\]\s*(?:\{[^}]*\}\s*)?(.*)')
@@ -73,13 +76,20 @@ for n in range(runs):
     env = dict(os.environ, WAYLAND_DEBUG='client',
                QT_MESSAGE_PATTERN='[%{time process}] %{category}: %{message}',
                QT_LOGGING_RULES='qt.scenegraph.time.*=true;qt.scenegraph.general=true;qt.rhi.general=true')
-    argv = command + [bundle]
+    holder = subprocess.Popen(['sleep', '1000']) if wait else None
+    argv = command + (['--wait', str(holder.pid)] if wait else []) + [bundle]
     if use_perf:
         argv = [perf, 'record', '-q', '-k', 'mono'] + (os.environ['PERF_EVENT'].split() if os.environ.get('PERF_EVENT') else ['-F', freq]) + [ '--call-graph', os.environ.get('CALLGRAPH', 'dwarf,24576'), '-o',
                 os.path.join(run, 'perf.data'), '--'] + argv
     started_mono, started_utc = time.monotonic(), time.time() % 86400
     process = subprocess.Popen(argv, env=env, stdout=open(os.path.join(run, 'stdout.log'), 'w'),
                                stderr=open(os.path.join(run, 'wayland.log'), 'w'), start_new_session=True)
+    if wait:
+        # The editor is perf's child; once it is waiting, the signal is the start.
+        time.sleep(wait)
+        editor = int(open(f'/proc/{process.pid}/task/{process.pid}/children').read().split()[0]) if use_perf else process.pid
+        started_mono, started_utc = time.monotonic(), time.time() % 86400
+        os.kill(editor, signal.SIGUSR1)
     json.dump({'mono': started_mono, 'utc': started_utc, 'argv': argv}, open(os.path.join(run, 'start.json'), 'w'))
     appeared = {}
     while time.monotonic() - started_mono < seconds:
@@ -101,6 +111,8 @@ for n in range(runs):
         process.wait(30)
     except subprocess.TimeoutExpired:
         os.killpg(process.pid, signal.SIGKILL)
+    if holder:
+        holder.kill()
     if not reopen:
         shutil.rmtree(bundle, ignore_errors=True)
     times = sorted(appeared.values())

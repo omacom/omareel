@@ -38,7 +38,7 @@ os.makedirs(recordings, exist_ok=True)
 state_path = os.path.join(os.environ['XDG_RUNTIME_DIR'], 'omareel', 'recording.json')
 config = os.path.join(os.environ.get('XDG_CONFIG_HOME', os.path.expanduser('~/.config')), 'omareel')
 os.makedirs(config, exist_ok=True)
-json.dump({'systemAudio': False, 'microphone': False, 'countdownBeforeRecording': True, 'selfViewEnabled': False,
+json.dump({'systemAudio': os.environ.get('LOOP_AUDIO') == '1', 'microphone': False, 'countdownBeforeRecording': True, 'selfViewEnabled': False,
            'outputDirectory': recordings, 'webcam': {'enabled': False}}, open(os.path.join(config, 'settings.json'), 'w'))
 env = dict(os.environ, OMAREEL_RECENTS_DIR=recordings)
 

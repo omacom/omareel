@@ -40,6 +40,8 @@ for text in open(os.path.join(args.run, 'wayland.log'), errors='replace'):
         continue
     t = int(m[1]) * 3600 + int(m[2]) * 60 + float(m[3]) - start['utc']
     body = m[4]
+    if t < 0:
+        continue
     if re.search(r'-> wl_surface[#@]\d+\.attach\(wl_buffer', body):
         attached = True
     elif re.search(r'-> wl_surface[#@]\d+\.commit', body) and attached:
@@ -87,7 +89,8 @@ finish()
 main_pid = samples[0]['pid'] if samples else None
 main_tid = main_pid
 period = 1.0 / args.freq
-window = [s for s in samples if s['t'] <= until]
+# With WAIT (startup-profile.py) the start is the signal; what came before is the wait.
+window = [s for s in samples if 0 <= s['t'] <= until]
 print(f'run {args.run}: first frame {first_frame}s; commits {commits[:8]}; window 0..{until:.3f}s; {len(window)} samples')
 
 # --- Threads and processes.
