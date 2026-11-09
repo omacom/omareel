@@ -48,9 +48,13 @@ pub fn audio_sources(options: &RecordOptions) -> AudioSources {
 /// through volumedetect, so a muted or dead microphone can be told from a quiet one; AAC in
 /// Matroska flushed every half second, so the file stays readable if ffmpeg has to be killed.
 /// `-loglevel info` puts each input's start time in the log, which [`first_sample_us`] reads.
+/// ffmpeg only notices the SIGINT that stops it when its main loop wakes, every `-stats_period`
+/// (half a second by default, even with `-nostats`): at 50 ms, Stop no longer waits up to 0.5 s.
 pub fn audio_capture_arguments<S: AsRef<str>>(sources: &[S], microphone: bool, path: &str) -> Vec<String> {
-    let mut arguments: Vec<String> =
-        ["-y", "-hide_banner", "-nostats", "-loglevel", "info"].iter().map(|s| (*s).to_owned()).collect();
+    let mut arguments: Vec<String> = ["-y", "-hide_banner", "-nostats", "-stats_period", "0.05", "-loglevel", "info"]
+        .iter()
+        .map(|s| (*s).to_owned())
+        .collect();
     for source in sources {
         arguments.extend(["-thread_queue_size", "1024", "-f", "pulse", "-i"].iter().map(|s| (*s).to_owned()));
         arguments.push(source.as_ref().to_owned());
