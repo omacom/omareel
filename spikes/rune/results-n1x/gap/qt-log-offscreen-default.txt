@@ -1,0 +1,114 @@
+omareel: application font Inter at 13 px
+[     0.000] qt.multimedia.ffmpeg: Using Qt multimedia with FFmpeg version n9.0.2 GPL version 3 or later
+[     0.000] qt.multimedia.ffmpeg: Available HW decoding frameworks:
+[     0.000] qt.multimedia.ffmpeg:      cuda
+[     0.000] qt.multimedia.ffmpeg: Available HW encoding frameworks:
+[     0.000] qt.multimedia.ffmpeg:      cuda
+[     0.011] qt.multimedia.ffmpeg.mediadataholder: Using custom network timeout: 20000ms
+[     0.011] qt.multimedia.ffmpeg.mediadataholder: Using custom network timeout: 20000ms
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from '/tmp/omareel-nested/lb/camera.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf63.1.102
+  Duration: 00:00:10.00, start: 0.000000, bitrate: 56 kb/s
+  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 640x480 [SAR 1:1 DAR 4:3], 52 kb/s, 30 fps, 30 tbr, 15360 tbn (default)
+    Metadata:
+      handler_name    : VideoHandler
+      encoder         : Lavc63.1.102 libx264
+[     0.014] qt.multimedia.ffmpeg.metadata:    checking: language und
+[     0.014] qt.multimedia.ffmpeg.metadata:        adding QMediaMetaData::Language
+[     0.014] qt.multimedia.ffmpeg.metadata:    checking: handler_name VideoHandler
+[     0.014] qt.multimedia.ffmpeg.metadata:    checking: encoder Lavc63.1.102 libx264
+[     0.014] qt.multimedia.ffmpeg.metadata:    checking: major_brand isom
+[     0.014] qt.multimedia.ffmpeg.metadata:    checking: minor_version 512
+[     0.014] qt.multimedia.ffmpeg.metadata:    checking: compatible_brands isomiso2avc1mp41
+[     0.014] qt.multimedia.ffmpeg.metadata:    checking: encoder Lavf63.1.102
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from '/tmp/omareel-nested/lb/screen.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf63.1.102
+  Duration: 00:00:10.00, start: 0.000000, bitrate: 8768 kb/s
+  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 1920x1080 [SAR 1:1 DAR 16:9], 8761 kb/s, 60 fps, 60 tbr, 15360 tbn (default)
+    Metadata:
+      handler_name    : VideoHandler
+      encoder         : Lavc63.1.102 libx264
+[     0.015] qt.multimedia.ffmpeg.metadata:    checking: language und
+[     0.015] qt.multimedia.ffmpeg.metadata:        adding QMediaMetaData::Language
+[     0.015] qt.multimedia.ffmpeg.metadata:    checking: handler_name VideoHandler
+[     0.015] qt.multimedia.ffmpeg.metadata:    checking: encoder Lavc63.1.102 libx264
+[     0.015] qt.multimedia.ffmpeg.metadata:    checking: major_brand isom
+[     0.015] qt.multimedia.ffmpeg.metadata:    checking: minor_version 512
+[     0.015] qt.multimedia.ffmpeg.metadata:    checking: compatible_brands isomiso2avc1mp41
+[     0.015] qt.multimedia.ffmpeg.metadata:    checking: encoder Lavf63.1.102
+[     0.135] qt.multimedia.ffmpeg.playbackengine: Create PlaybackEngine
+[     0.135] qt.multimedia.ffmpeg.playbackengine: Create codec for stream: 0 trackType: VideoStream
+[     0.136] qt.multimedia.ffmpeg.hwaccel: No hw acceleration found for codec id h264
+[     0.136] qt.multimedia.playbackengine.codec: "No HW decoder found"
+[     0.136] qt.multimedia.playbackengine.codec: found decoder "h264" for id h264
+[     0.137] qt.multimedia.ffmpeg.streamdecoder: Create stream decoder, trackType VideoStream absSeekPos: 0
+[     0.137] qt.multimedia.ffmpeg.demuxer: Create demuxer. pos: 0 loop offset: 0 loop index: 0 loops: 1
+[     0.137] qt.multimedia.ffmpeg.demuxer: Activate demuxing stream 0 , trackType: VideoStream
+[     0.137] qt.multimedia.ffmpeg.playbackengine: Create PlaybackEngine
+[     0.137] qt.multimedia.ffmpeg.playbackengine: Create codec for stream: 0 trackType: VideoStream
+[     0.137] qt.multimedia.ffmpeg.hwaccel: No hw acceleration found for codec id h264
+[     0.137] qt.multimedia.playbackengine.codec: "No HW decoder found"
+[     0.137] qt.multimedia.playbackengine.codec: found decoder "h264" for id h264
+[     0.137] qt.multimedia.ffmpeg.hwaccel: Selected format with no conversion yuv420p
+[     0.138] qt.multimedia.ffmpeg.streamdecoder: Create stream decoder, trackType VideoStream absSeekPos: 0
+[     0.138] qt.multimedia.ffmpeg.demuxer: Create demuxer. pos: 0 loop offset: 0 loop index: 0 loops: 1
+[     0.138] qt.multimedia.ffmpeg.demuxer: Activate demuxing stream 0 , trackType: VideoStream
+[     0.139] qt.multimedia.ffmpeg.hwaccel: Selected format with no conversion yuv420p
+[     0.148] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 6ms, polish=1, sync=3, render=1, swap=0, frameDelta=0
+[     0.150] qt.multimedia.ffmpeg.playbackengine: Delay of demuxer initialization: 14158us
+[     0.150] qt.multimedia.ffmpeg.playbackengine: Delay of demuxer initialization: 12851us
+[     0.154] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 3ms, polish=3, sync=0, render=0, swap=0, frameDelta=6
+[     0.155] qt.multimedia.ffmpeg.demuxer: Seeking to offset 0us from media start.
+[     0.155] qt.multimedia.ffmpeg.playbackengine: Delay of demuxer initialization: 88us
+[     0.160] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 0ms, polish=0, sync=0, render=0, swap=0, frameDelta=5
+[     0.178] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 6ms, polish=0, sync=1, render=5, swap=0, frameDelta=17
+[     0.179] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 1ms, polish=0, sync=0, render=1, swap=0, frameDelta=2
+[     0.193] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 5ms, polish=0, sync=0, render=4, swap=0, frameDelta=13
+[     0.204] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 6ms, polish=0, sync=0, render=5, swap=0, frameDelta=12
+[     0.225] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 5ms, polish=0, sync=0, render=4, swap=0, frameDelta=21
+[     0.243] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 8ms, polish=0, sync=0, render=7, swap=0, frameDelta=18
+[     0.257] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 7ms, polish=0, sync=0, render=6, swap=0, frameDelta=14
+[     0.260] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 3ms, polish=0, sync=0, render=3, swap=0, frameDelta=3
+[     0.277] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 9ms, polish=0, sync=0, render=8, swap=0, frameDelta=16
+[     0.290] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 6ms, polish=0, sync=0, render=6, swap=0, frameDelta=13
+[     0.303] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 5ms, polish=0, sync=0, render=5, swap=0, frameDelta=14
+[     0.313] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 3ms, polish=0, sync=0, render=3, swap=0, frameDelta=9
+[     0.324] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 5ms, polish=0, sync=0, render=5, swap=0, frameDelta=12
+[     0.334] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 2ms, polish=0, sync=0, render=2, swap=0, frameDelta=9
+[     0.351] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 2ms, polish=0, sync=0, render=2, swap=0, frameDelta=16
+[     0.367] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 3ms, polish=0, sync=0, render=3, swap=0, frameDelta=17
+[     0.383] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 3ms, polish=0, sync=0, render=3, swap=0, frameDelta=16
+[     0.406] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 3ms, polish=0, sync=0, render=3, swap=0, frameDelta=23
+[     0.415] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 3ms, polish=0, sync=0, render=3, swap=0, frameDelta=9
+[     0.423] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 2ms, polish=0, sync=0, render=2, swap=0, frameDelta=8
+[     0.470] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 1ms, polish=0, sync=0, render=1, swap=0, frameDelta=46
+[     0.484] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 3ms, polish=0, sync=0, render=2, swap=0, frameDelta=15
+[     0.488] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 2ms, polish=0, sync=0, render=2, swap=0, frameDelta=4
+[     0.502] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 3ms, polish=0, sync=0, render=3, swap=0, frameDelta=14
+[     0.518] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 4ms, polish=0, sync=0, render=3, swap=0, frameDelta=15
+[     0.530] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 2ms, polish=0, sync=0, render=2, swap=0, frameDelta=13
+[     0.548] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 2ms, polish=0, sync=0, render=2, swap=0, frameDelta=18
+[     0.566] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 4ms, polish=0, sync=0, render=3, swap=0, frameDelta=18
+[     0.579] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 3ms, polish=0, sync=0, render=3, swap=0, frameDelta=12
+[     0.596] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 3ms, polish=0, sync=0, render=3, swap=0, frameDelta=17
+[     0.613] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 2ms, polish=0, sync=0, render=2, swap=0, frameDelta=16
+[     0.630] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 3ms, polish=0, sync=0, render=3, swap=0, frameDelta=18
+[     0.641] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 3ms, polish=0, sync=0, render=3, swap=0, frameDelta=11
+[     0.661] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 3ms, polish=0, sync=0, render=3, swap=0, frameDelta=20
+[     0.678] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 4ms, polish=0, sync=0, render=4, swap=0, frameDelta=17
+[     0.694] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 4ms, polish=0, sync=0, render=3, swap=0, frameDelta=16
+[     0.718] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 3ms, polish=0, sync=0, render=3, swap=0, frameDelta=24
+[     0.757] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 2ms, polish=0, sync=0, render=2, swap=0, frameDelta=39
+[     0.768] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 4ms, polish=0, sync=0, render=4, swap=0, frameDelta=11
+[     0.851] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 5ms, polish=0, sync=0, render=5, swap=0, frameDelta=82
+[     0.867] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 5ms, polish=0, sync=0, render=5, swap=0, frameDelta=16
+[     0.941] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 6ms, polish=0, sync=0, render=6, swap=0, frameDelta=74
+[     0.985] qt.scenegraph.time.renderloop: Frame rendered with 'software' renderloop in 5ms, polish=0, sync=0, render=5, swap=0, frameDelta=45

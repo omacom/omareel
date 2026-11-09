@@ -1,0 +1,192 @@
+omareel: application font Inter at 13 px
+[     0.000] qt.multimedia.ffmpeg: Using Qt multimedia with FFmpeg version n9.0.2 GPL version 3 or later
+[     0.000] qt.multimedia.ffmpeg: Available HW decoding frameworks:
+[     0.000] qt.multimedia.ffmpeg:      cuda
+[     0.000] qt.multimedia.ffmpeg: Available HW encoding frameworks:
+[     0.000] qt.multimedia.ffmpeg:      cuda
+[     0.003] qt.multimedia.pipewire.registry: Failed to connect to pipewire instance "Host is down"
+[     0.004] default: PulseAudioService: pa_context_connect() failed
+[     0.004] qt.multimedia.ffmpeg.mediadataholder: Using custom network timeout: 20000ms
+[     0.005] qt.multimedia.ffmpeg.mediadataholder: Using custom network timeout: 20000ms
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from '/tmp/omareel-nested/r04be2/gap-bundle/camera.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf63.1.102
+  Duration: 00:00:10.00, start: 0.000000, bitrate: 56 kb/s
+  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 640x480 [SAR 1:1 DAR 4:3], 52 kb/s, 30 fps, 30 tbr, 15360 tbn (default)
+    Metadata:
+      handler_name    : VideoHandler
+      encoder         : Lavc63.1.102 libx264
+[     0.009] qt.multimedia.ffmpeg.metadata:    checking: language und
+[     0.009] qt.multimedia.ffmpeg.metadata:        adding QMediaMetaData::Language
+[     0.009] qt.multimedia.ffmpeg.metadata:    checking: handler_name VideoHandler
+[     0.009] qt.multimedia.ffmpeg.metadata:    checking: encoder Lavc63.1.102 libx264
+[     0.009] qt.multimedia.ffmpeg.metadata:    checking: major_brand isom
+[     0.009] qt.multimedia.ffmpeg.metadata:    checking: minor_version 512
+[     0.009] qt.multimedia.ffmpeg.metadata:    checking: compatible_brands isomiso2avc1mp41
+[     0.009] qt.multimedia.ffmpeg.metadata:    checking: encoder Lavf63.1.102
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from '/tmp/omareel-nested/r04be2/gap-bundle/screen.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf63.1.102
+  Duration: 00:00:10.00, start: 0.000000, bitrate: 8768 kb/s
+  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 1920x1080 [SAR 1:1 DAR 16:9], 8761 kb/s, 60 fps, 60 tbr, 15360 tbn (default)
+    Metadata:
+      handler_name    : VideoHandler
+      encoder         : Lavc63.1.102 libx264
+[     0.010] qt.multimedia.ffmpeg.metadata:    checking: language und
+[     0.010] qt.multimedia.ffmpeg.metadata:        adding QMediaMetaData::Language
+[     0.010] qt.multimedia.ffmpeg.metadata:    checking: handler_name VideoHandler
+[     0.010] qt.multimedia.ffmpeg.metadata:    checking: encoder Lavc63.1.102 libx264
+[     0.010] qt.multimedia.ffmpeg.metadata:    checking: major_brand isom
+[     0.010] qt.multimedia.ffmpeg.metadata:    checking: minor_version 512
+[     0.010] qt.multimedia.ffmpeg.metadata:    checking: compatible_brands isomiso2avc1mp41
+[     0.010] qt.multimedia.ffmpeg.metadata:    checking: encoder Lavf63.1.102
+[     0.291] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] polishAndSync: start, elapsed since last call: 103 ms
+[     0.376] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 85 ms
+[     0.376] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 0ms, sync=0, render=0, swap=0
+[     0.376] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 0 ms
+[     0.466] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 89ms, sync=10, render=3, swap=76
+[     0.466] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] Frame prepared, polish=2 ms, lock=0 ms, blockedForSync=172 ms, animations=0 ms
+[     0.466] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 89 ms
+[     0.467] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 1ms, sync=0, render=0, swap=1
+[     0.467] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 1 ms
+[     0.467] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] polishAndSync: start, elapsed since last call: 176 ms
+[     0.531] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 63ms, sync=0, render=0, swap=63
+[     0.531] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 64 ms
+[     0.592] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 60ms, sync=0, render=0, swap=60
+[     0.592] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] Frame prepared, polish=0 ms, lock=0 ms, blockedForSync=124 ms, animations=0 ms
+[     0.592] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 60 ms
+[     0.594] qt.multimedia.ffmpeg.playbackengine: Create PlaybackEngine
+[     0.594] qt.multimedia.ffmpeg.playbackengine: Create codec for stream: 0 trackType: VideoStream
+[     0.595] qt.multimedia.ffmpeg.hwaccel: No hw acceleration found for codec id h264
+[     0.595] qt.multimedia.playbackengine.codec: "No HW decoder found"
+[     0.595] qt.multimedia.playbackengine.codec: found decoder "h264" for id h264
+[     0.596] qt.multimedia.ffmpeg.streamdecoder: Create stream decoder, trackType VideoStream absSeekPos: 0
+[     0.596] qt.multimedia.ffmpeg.demuxer: Create demuxer. pos: 0 loop offset: 0 loop index: 0 loops: 1
+[     0.596] qt.multimedia.ffmpeg.demuxer: Activate demuxing stream 0 , trackType: VideoStream
+[     0.596] qt.multimedia.ffmpeg.playbackengine: Create PlaybackEngine
+[     0.596] qt.multimedia.ffmpeg.playbackengine: Create codec for stream: 0 trackType: VideoStream
+[     0.596] qt.multimedia.ffmpeg.hwaccel: No hw acceleration found for codec id h264
+[     0.596] qt.multimedia.playbackengine.codec: "No HW decoder found"
+[     0.596] qt.multimedia.playbackengine.codec: found decoder "h264" for id h264
+[     0.597] qt.multimedia.ffmpeg.hwaccel: Selected format with no conversion yuv420p
+[     0.597] qt.multimedia.ffmpeg.streamdecoder: Create stream decoder, trackType VideoStream absSeekPos: 0
+[     0.597] qt.multimedia.ffmpeg.demuxer: Create demuxer. pos: 0 loop offset: 0 loop index: 0 loops: 1
+[     0.597] qt.multimedia.ffmpeg.demuxer: Activate demuxing stream 0 , trackType: VideoStream
+[     0.597] qt.multimedia.ffmpeg.hwaccel: Selected format with no conversion yuv420p
+[     0.606] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] polishAndSync: start, elapsed since last call: 139 ms
+[     0.656] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 64ms, sync=0, render=0, swap=64
+[     0.656] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 64 ms
+[     0.657] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] Frame prepared, polish=0 ms, lock=0 ms, blockedForSync=49 ms, animations=0 ms
+[     0.722] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 65ms, sync=0, render=0, swap=65
+[     0.722] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] polishAndSync: start, elapsed since last call: 116 ms
+[     0.722] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 66 ms
+[     0.789] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 66ms, sync=0, render=0, swap=66
+[     0.789] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] Frame prepared, polish=0 ms, lock=0 ms, blockedForSync=66 ms, animations=0 ms
+[     0.792] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] polishAndSync: start, elapsed since last call: 69 ms
+[     0.792] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 69 ms
+[     0.859] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 67ms, sync=0, render=0, swap=66
+[     0.859] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] Frame prepared, polish=0 ms, lock=0 ms, blockedForSync=67 ms, animations=0 ms
+[     0.859] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 67 ms
+[     0.860] qt.multimedia.ffmpeg.playbackengine: Delay of demuxer initialization: 266130us
+[     0.860] qt.multimedia.ffmpeg.playbackengine: Delay of demuxer initialization: 263801us
+[     0.862] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] polishAndSync: start, elapsed since last call: 70 ms
+[     0.926] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 66ms, sync=0, render=0, swap=66
+[     0.926] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 66 ms
+[     0.927] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] Frame prepared, polish=4 ms, lock=0 ms, blockedForSync=60 ms, animations=0 ms
+[     0.930] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] polishAndSync: start, elapsed since last call: 67 ms
+[     0.987] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 60ms, sync=0, render=0, swap=59
+[     0.987] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 60 ms
+[     0.987] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] Frame prepared, polish=0 ms, lock=0 ms, blockedForSync=57 ms, animations=0 ms
+[     0.988] qt.multimedia.ffmpeg.demuxer: Seeking to offset 0us from media start.
+[     0.989] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] polishAndSync: start, elapsed since last call: 59 ms
+[     1.054] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 66ms, sync=0, render=16, swap=50
+[     1.054] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 66 ms
+[     1.054] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] Frame prepared, polish=0 ms, lock=0 ms, blockedForSync=64 ms, animations=0 ms
+[     1.054] qt.multimedia.ffmpeg.playbackengine: Delay of demuxer initialization: 66834us
+[     1.055] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] polishAndSync: start, elapsed since last call: 65 ms
+[     1.121] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 67ms, sync=0, render=0, swap=66
+[     1.121] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 67 ms
+[     1.122] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] Frame prepared, polish=0 ms, lock=0 ms, blockedForSync=66 ms, animations=0 ms
+[     1.128] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] polishAndSync: start, elapsed since last call: 73 ms
+[     1.186] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 65ms, sync=0, render=0, swap=64
+[     1.186] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 65 ms
+[     1.187] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] Frame prepared, polish=0 ms, lock=0 ms, blockedForSync=58 ms, animations=0 ms
+[     1.194] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] polishAndSync: start, elapsed since last call: 65 ms
+[     1.252] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 65ms, sync=0, render=0, swap=65
+[     1.252] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 65 ms
+[     1.253] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] Frame prepared, polish=0 ms, lock=0 ms, blockedForSync=58 ms, animations=0 ms
+[     1.257] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] polishAndSync: start, elapsed since last call: 62 ms
+[     1.319] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 66ms, sync=0, render=1, swap=64
+[     1.319] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 66 ms
+[     1.319] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] Frame prepared, polish=0 ms, lock=0 ms, blockedForSync=61 ms, animations=0 ms
+[     1.321] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] polishAndSync: start, elapsed since last call: 64 ms
+[     1.384] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 65ms, sync=0, render=0, swap=64
+[     1.384] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 65 ms
+[     1.384] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] Frame prepared, polish=0 ms, lock=0 ms, blockedForSync=62 ms, animations=0 ms
+[     1.385] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] polishAndSync: start, elapsed since last call: 63 ms
+[     1.451] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 67ms, sync=0, render=0, swap=66
+[     1.451] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 67 ms
+[     1.451] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] Frame prepared, polish=0 ms, lock=0 ms, blockedForSync=66 ms, animations=0 ms
+[     1.456] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] polishAndSync: start, elapsed since last call: 70 ms
+[     1.516] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 64ms, sync=0, render=0, swap=63
+[     1.516] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 64 ms
+[     1.516] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] Frame prepared, polish=0 ms, lock=0 ms, blockedForSync=59 ms, animations=0 ms
+[     1.516] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] polishAndSync: start, elapsed since last call: 59 ms
+[     1.584] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 68ms, sync=0, render=0, swap=67
+[     1.584] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 68 ms
+[     1.584] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] Frame prepared, polish=0 ms, lock=0 ms, blockedForSync=68 ms, animations=0 ms
+[     1.588] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] polishAndSync: start, elapsed since last call: 72 ms
+[     1.650] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 66ms, sync=0, render=0, swap=64
+[     1.650] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 66 ms
+[     1.650] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] Frame prepared, polish=0 ms, lock=0 ms, blockedForSync=62 ms, animations=0 ms
+[     1.652] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] polishAndSync: start, elapsed since last call: 63 ms
+[     1.715] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 65ms, sync=0, render=0, swap=64
+[     1.715] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 65 ms
+[     1.715] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] Frame prepared, polish=0 ms, lock=0 ms, blockedForSync=63 ms, animations=0 ms
+[     1.717] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] polishAndSync: start, elapsed since last call: 65 ms
+[     1.781] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 65ms, sync=0, render=0, swap=64
+[     1.781] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 65 ms
+[     1.781] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] Frame prepared, polish=0 ms, lock=0 ms, blockedForSync=64 ms, animations=0 ms
+[     1.783] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] polishAndSync: start, elapsed since last call: 66 ms
+[     1.847] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 65ms, sync=0, render=0, swap=65
+[     1.847] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 65 ms
+[     1.847] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] Frame prepared, polish=0 ms, lock=0 ms, blockedForSync=64 ms, animations=0 ms
+[     1.847] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] polishAndSync: start, elapsed since last call: 64 ms
+[     1.916] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 69ms, sync=0, render=0, swap=68
+[     1.916] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 69 ms
+[     1.916] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] Frame prepared, polish=0 ms, lock=0 ms, blockedForSync=69 ms, animations=0 ms
+[     1.919] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] polishAndSync: start, elapsed since last call: 71 ms
+[     1.980] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 63ms, sync=0, render=0, swap=62
+[     1.980] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 63 ms
+[     1.980] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] Frame prepared, polish=0 ms, lock=0 ms, blockedForSync=61 ms, animations=0 ms
+[     1.981] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] polishAndSync: start, elapsed since last call: 62 ms
+[     2.046] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 65ms, sync=0, render=0, swap=64
+[     2.046] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 65 ms
+[     2.046] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] Frame prepared, polish=0 ms, lock=0 ms, blockedForSync=64 ms, animations=0 ms
+[     2.051] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] polishAndSync: start, elapsed since last call: 69 ms
+[     2.112] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 66ms, sync=0, render=0, swap=65
+[     2.112] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 66 ms
+[     2.112] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] Frame prepared, polish=0 ms, lock=0 ms, blockedForSync=61 ms, animations=0 ms
+[     2.115] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] polishAndSync: start, elapsed since last call: 64 ms
+[     2.178] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 66ms, sync=0, render=0, swap=65
+[     2.178] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 66 ms
+[     2.178] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] Frame prepared, polish=0 ms, lock=0 ms, blockedForSync=63 ms, animations=0 ms
+[     2.181] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] polishAndSync: start, elapsed since last call: 65 ms
+[     2.244] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 65ms, sync=0, render=0, swap=65
+[     2.244] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 66 ms
+[     2.245] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] Frame prepared, polish=0 ms, lock=0 ms, blockedForSync=63 ms, animations=0 ms
+[     2.247] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] polishAndSync: start, elapsed since last call: 66 ms
+[     2.311] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 66ms, sync=0, render=0, swap=66
+[     2.311] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 67 ms
+[     2.312] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] Frame prepared, polish=0 ms, lock=0 ms, blockedForSync=64 ms, animations=0 ms
+[     2.314] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] polishAndSync: start, elapsed since last call: 66 ms
+[     2.377] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 65ms, sync=0, render=1, swap=64
+[     2.377] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: start, elapsed since last call: 65 ms
+[     2.377] qt.scenegraph.time.renderloop: [window 0xbc5317311260][gui thread] Frame prepared, polish=0 ms, lock=0 ms, blockedForSync=63 ms, animations=0 ms
+[     2.443] qt.scenegraph.time.renderloop: [window 0xbc5317311260][render thread 0xbc5317b66750] syncAndRender: frame rendered in 66ms, sync=0, render=0, swap=65

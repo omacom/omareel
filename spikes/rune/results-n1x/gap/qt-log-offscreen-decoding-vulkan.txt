@@ -1,0 +1,90 @@
+omareel: application font Inter at 13 px
+[     0.000] qt.multimedia.ffmpeg: Using Qt multimedia with FFmpeg version n9.0.2 GPL version 3 or later
+[     0.000] qt.multimedia.ffmpeg: Available HW decoding frameworks:
+[     0.000] qt.multimedia.ffmpeg:      vulkan
+[     0.000] qt.multimedia.ffmpeg: Available HW encoding frameworks:
+[     0.000] qt.multimedia.ffmpeg:      cuda
+[     0.015] qt.multimedia.ffmpeg.mediadataholder: Using custom network timeout: 20000ms
+[     0.015] qt.multimedia.ffmpeg.mediadataholder: Using custom network timeout: 20000ms
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from '/tmp/omareel-nested/lb/camera.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf63.1.102
+  Duration: 00:00:10.00, start: 0.000000, bitrate: 56 kb/s
+  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 640x480 [SAR 1:1 DAR 4:3], 52 kb/s, 30 fps, 30 tbr, 15360 tbn (default)
+    Metadata:
+      handler_name    : VideoHandler
+      encoder         : Lavc63.1.102 libx264
+[     0.016] qt.multimedia.ffmpeg.metadata:    checking: language und
+[     0.017] qt.multimedia.ffmpeg.metadata:        adding QMediaMetaData::Language
+[     0.017] qt.multimedia.ffmpeg.metadata:    checking: handler_name VideoHandler
+[     0.017] qt.multimedia.ffmpeg.metadata:    checking: encoder Lavc63.1.102 libx264
+[     0.017] qt.multimedia.ffmpeg.metadata:    checking: major_brand isom
+[     0.017] qt.multimedia.ffmpeg.metadata:    checking: minor_version 512
+[     0.017] qt.multimedia.ffmpeg.metadata:    checking: compatible_brands isomiso2avc1mp41
+[     0.017] qt.multimedia.ffmpeg.metadata:    checking: encoder Lavf63.1.102
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from '/tmp/omareel-nested/lb/screen.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf63.1.102
+  Duration: 00:00:10.00, start: 0.000000, bitrate: 8768 kb/s
+  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 1920x1080 [SAR 1:1 DAR 16:9], 8761 kb/s, 60 fps, 60 tbr, 15360 tbn (default)
+    Metadata:
+      handler_name    : VideoHandler
+      encoder         : Lavc63.1.102 libx264
+[     0.022] qt.multimedia.ffmpeg.metadata:    checking: language und
+[     0.022] qt.multimedia.ffmpeg.metadata:        adding QMediaMetaData::Language
+[     0.022] qt.multimedia.ffmpeg.metadata:    checking: handler_name VideoHandler
+[     0.022] qt.multimedia.ffmpeg.metadata:    checking: encoder Lavc63.1.102 libx264
+[     0.022] qt.multimedia.ffmpeg.metadata:    checking: major_brand isom
+[     0.022] qt.multimedia.ffmpeg.metadata:    checking: minor_version 512
+[     0.022] qt.multimedia.ffmpeg.metadata:    checking: compatible_brands isomiso2avc1mp41
+[     0.022] qt.multimedia.ffmpeg.metadata:    checking: encoder Lavf63.1.102
+[     0.158] qt.multimedia.ffmpeg.playbackengine: Create PlaybackEngine
+[     0.158] qt.multimedia.ffmpeg.playbackengine: Create codec for stream: 0 trackType: VideoStream
+[     0.159] qt.multimedia.ffmpeg.hwaccel: Found potential codec "h264" for hw accel vulkan ; Checking the hw device...
+[     0.159] qt.multimedia.ffmpeg.hwaccel:     Checking HW context: vulkan
+[     1.077] qt.multimedia.ffmpeg.hwaccel:     Using above hw context.
+[     1.077] qt.multimedia.ffmpeg.hwaccel: HW device is OK
+[     1.077] qt.multimedia.playbackengine.codec: found decoder "h264" for id h264
+[     1.078] qt.multimedia.ffmpeg.streamdecoder: Create stream decoder, trackType VideoStream absSeekPos: 0
+[     1.078] qt.multimedia.ffmpeg.demuxer: Create demuxer. pos: 0 loop offset: 0 loop index: 0 loops: 1
+[     1.078] qt.multimedia.ffmpeg.demuxer: Activate demuxing stream 0 , trackType: VideoStream
+[     1.078] qt.multimedia.ffmpeg.playbackengine: Create PlaybackEngine
+[     1.078] qt.multimedia.ffmpeg.playbackengine: Create codec for stream: 0 trackType: VideoStream
+[     1.078] qt.multimedia.ffmpeg.hwaccel: Found potential codec "h264" for hw accel vulkan ; Checking the hw device...
+[     1.078] qt.multimedia.ffmpeg.hwaccel:     Checking HW context: vulkan
+[     1.078] qt.multimedia.ffmpeg.hwaccel: Selected format vulkan for hw vulkan
+[     1.910] qt.multimedia.ffmpeg.hwaccel:     Using above hw context.
+[     1.910] qt.multimedia.ffmpeg.hwaccel: HW device is OK
+[     1.910] qt.multimedia.playbackengine.codec: found decoder "h264" for id h264
+[     1.911] qt.multimedia.ffmpeg.streamdecoder: Create stream decoder, trackType VideoStream absSeekPos: 0
+[     1.911] qt.multimedia.ffmpeg.demuxer: Create demuxer. pos: 0 loop offset: 0 loop index: 0 loops: 1
+[     1.911] qt.multimedia.ffmpeg.demuxer: Activate demuxing stream 0 , trackType: VideoStream
+[     1.912] qt.multimedia.ffmpeg.hwaccel: Selected format vulkan for hw vulkan
+[     1.930] qt.multimedia.ffmpeg.playbackengine: Delay of demuxer initialization: 1771221us
+[     1.930] qt.multimedia.ffmpeg.playbackengine: Delay of demuxer initialization: 851494us
+[     2.031] qt.multimedia.ffmpeg.demuxer: Seeking to offset 0us from media start.
+[     2.031] qt.multimedia.ffmpeg.playbackengine: Delay of demuxer initialization: 201us
+[     2.033] qt.multimedia.ffmpeg.renderer: Frame session outdated. Source id: [session: 1, object: 3] current id: [session: 2, object: 2]
+[     2.037] qt.multimedia.ffmpeg.streamdecoder: Packet session outdated. Source id: [session: 1, object: 4] current id [session: 2, object: 3]
+[     2.037] qt.multimedia.ffmpeg.streamdecoder: Packet session outdated. Source id: [session: 1, object: 4] current id [session: 2, object: 3]
+[     2.037] qt.multimedia.ffmpeg.streamdecoder: Packet session outdated. Source id: [session: 1, object: 4] current id [session: 2, object: 3]
+[     2.037] qt.multimedia.ffmpeg.streamdecoder: Packet session outdated. Source id: [session: 1, object: 4] current id [session: 2, object: 3]
+[     2.037] qt.multimedia.ffmpeg.streamdecoder: Packet session outdated. Source id: [session: 1, object: 4] current id [session: 2, object: 3]
+[     2.037] qt.multimedia.ffmpeg.streamdecoder: Packet session outdated. Source id: [session: 1, object: 4] current id [session: 2, object: 3]
+[     2.037] qt.multimedia.ffmpeg.streamdecoder: Packet session outdated. Source id: [session: 1, object: 4] current id [session: 2, object: 3]
+[     2.037] qt.multimedia.ffmpeg.streamdecoder: Packet session outdated. Source id: [session: 1, object: 4] current id [session: 2, object: 3]
+[     2.037] qt.multimedia.ffmpeg.streamdecoder: Packet session outdated. Source id: [session: 1, object: 4] current id [session: 2, object: 3]
+[     2.037] qt.multimedia.ffmpeg.streamdecoder: Packet session outdated. Source id: [session: 1, object: 4] current id [session: 2, object: 3]
+[     2.037] qt.multimedia.ffmpeg.streamdecoder: Packet session outdated. Source id: [session: 1, object: 4] current id [session: 2, object: 3]
+[     2.037] qt.multimedia.ffmpeg.streamdecoder: Packet session outdated. Source id: [session: 1, object: 4] current id [session: 2, object: 3]
+[     2.037] qt.multimedia.ffmpeg.streamdecoder: Packet session outdated. Source id: [session: 1, object: 4] current id [session: 2, object: 3]
+[     2.037] qt.multimedia.ffmpeg.streamdecoder: Packet session outdated. Source id: [session: 1, object: 4] current id [session: 2, object: 3]
+[     2.037] qt.multimedia.ffmpeg.streamdecoder: Packet session outdated. Source id: [session: 1, object: 4] current id [session: 2, object: 3]
+[     2.037] qt.multimedia.ffmpeg.streamdecoder: Packet session outdated. Source id: [session: 1, object: 4] current id [session: 2, object: 3]
+[     2.037] qt.multimedia.ffmpeg.streamdecoder: Packet session outdated. Source id: [session: 1, object: 4] current id [session: 2, object: 3]

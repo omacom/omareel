@@ -170,6 +170,76 @@ after it, neither from b81b10a (the 51743e9 profile has both):
   so this is the first launch after a theme change, not every launch; my profile runs cleared the
   cache.
 
+## Qt's gap between the window and the video: the render loop, not CUDA
+
+Qt after at 4f44393 on the `launch` bundle shows its window at 0.6 s but its video at 1.2 s. The
+cause isn't hardware decoding. The GUI thread queues each step of starting playback behind a
+render-thread swap, and every swap here waits 66 ms for the 15 Hz nested window. Raw logs and
+timings are in `results-n1x/gap/`.
+
+**Qt never tries CUDA for decoding.** With `qt.multimedia.ffmpeg*` and `qt.multimedia.playback*`
+logged (`qt-log-nested-default.txt`; on n1x Qt sends its log to journald unless
+`QT_FORCE_STDERR_LOGGING=1` is set, which also means `startup-profile.py`'s scene graph timings
+were never captured here), the decoder is chosen in 2 ms:
+
+| s | |
+|---|---|
+| 0.005 | `setSource` (`mediadataholder`) |
+| 0.466 | window's first frame (render thread: `frame rendered in 89ms ... swap=76`) |
+| 0.594 | `Create PlaybackEngine`, screen and camera |
+| 0.595 | `No hw acceleration found for codec id h264`, `"No HW decoder found"`, software `h264` |
+| 0.860 | `Delay of demuxer initialization: 266130us` (and 263801 us) |
+| 0.988 | `Seeking to offset 0us from media start.` |
+
+Offscreen (`QT_QPA_PLATFORM=offscreen`, no compositor), the same build creates the engines at
+0.135 s, initialises the demuxers in 13 to 14 ms and seeks 20 ms after creation
+(`qt-log-offscreen-default.txt`). In the nested run the demuxer delays are 266 and 67 ms, four
+and one 15 Hz frames. Meanwhile the render loop logs `blockedForSync=172 ms`, `124 ms`, then
+49 to 67 ms every frame, because the scene is redrawn every frame while `editor.loading` runs the
+"Opening recording…" spinner (`Main.qml`, a `RotationAnimator` with infinite loops). That spinner
+only stops when the screen player reports `LoadedMedia` (`handle_media_status` →
+`FINISH_LOADING_CALL`, or after 1.5 s), so it keeps the loop busy while playback starts.
+
+The off-CPU profile of the GUI thread (`offcpu-qt-gui-thread-until1.3.txt`) shows the same: from
+0.48 to 1.35 s it blocks a dozen times for 45 to 151 ms (mostly 60 to 68), in two exposes, two
+more from configure events, frame update requests, and omareel's own queued calls
+(`PlaybackDriver::frameShown`, the `Editor` queue).
+
+### The variants (`launch.py`, 6 runs, warm median, fresh copy of the `launch` bundle each)
+
+| | window | video | gap | play | seek |
+|---|---|---|---|---|---|
+| (a) default | 0.605 s | 1.219 s | 0.614 s | 175 ms | 40 ms |
+| (b) `QT_FFMPEG_DECODING_HW_DEVICE_TYPES=none` | 0.555 s | 1.197 s | 0.642 s | 165 ms | 46 ms |
+| (c) `QT_FFMPEG_DECODING_HW_DEVICE_TYPES=vulkan` | **2.600 s** | 3.254 s | 0.654 s | 165 ms | 43 ms |
+| (d) `QSG_RENDER_LOOP=basic` | **0.456 s** | **0.690 s** | **0.234 s** | **117 ms** | 43 ms |
+
+- (b): Qt warns `Unknown hw device type "none"` and lists no decoding frameworks, so it is an
+  empty list, not the default one. It behaves like the default because the default already falls
+  back to software (CUDA's device creation fails on this GPU).
+- (c): decoding on Vulkan works (`Selected format vulkan`), but checking the Vulkan device takes
+  0.92 s before the first engine (`qt-log-offscreen-decoding-vulkan.txt`) and the window comes 2 s
+  later. Don't.
+- (d): the GUI thread renders itself, so queued playback steps no longer wait for a render-thread
+  swap. The gap drops from 0.61 to 0.23 s and the video shows 0.53 s sooner. The cost: click to
+  the next frame is 19.6 ms instead of 4.3, since the GUI thread now waits on its own swap.
+- Playback works in all four: every play click showed motion, and seeks landed, with no timeouts.
+
+**Fix ideas**, in order:
+
+1. Don't animate while loading. A static "Opening recording…" (or one that starts animating after
+   a few hundred ms) leaves the GUI thread free between frames, so the playback steps run at
+   once. This also helps on fast displays, where the same chain costs a few frames.
+2. Use the basic render loop on NVIDIA (`QSG_RENDER_LOOP=basic` beside the other NVIDIA settings
+   in `configureVideoDecoding()`): 0.61 → 0.23 s here, and the first frame 0.57 → 0.45 s
+   (bottleneck 2). Check that playback stays smooth at 60 Hz first; I couldn't measure smoothness
+   on this capped window.
+3. Leave `QT_FFMPEG_DECODING_HW_DEVICE_TYPES` as it is.
+
+How much of this you'd see on a real 60 Hz monitor I couldn't measure (see the 15 Hz note), but
+the chain is a count of frames: at 16.7 ms a frame, the same dozen blocks come to about 0.15 s,
+which matches foundry2's 0.13 s window-to-video gap.
+
 ## Top bottlenecks, ranked by milliseconds
 
 ### 1. Qt Multimedia probing hardware encoders: 1,830 ms (Qt only)
