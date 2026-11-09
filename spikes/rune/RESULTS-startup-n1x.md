@@ -87,9 +87,9 @@ canary bytes before it; results in `sws-test.txt`.
 Every size omareel passes today is even: recordings are trimmed to even sides
 (`even_capture_region`, `crates/omareel_record/src/recorder/mod.rs:54`), the camera is libx264
 yuv420p, and inserted media is rounded down to even (`preview.rs:654`). So **NV12 output is
-safe as used; no need to switch to yuv420p.** The odd-width case is a latent bug in the API: round
-`width` down to even in `omr_stream_open` (or use a UV stride and buffer of `2 × ceil(w / 2)`), so
-a future caller with an odd canvas can't corrupt the heap.
+safe as used; no need to switch to yuv420p.** The odd-width case was a latent bug in the API;
+2d4f5a6, pushed while this ran, fixes it (the stream rounds down to even and `omr_stream_open`
+refuses an odd size). The measurements here are from f831c8a, before it.
 
 ### Qt after with 0662299
 
