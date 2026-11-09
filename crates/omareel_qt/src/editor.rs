@@ -525,6 +525,9 @@ const PREVIEW_TIMER: i32 = 3;
 const PREVIEW_STATS_TIMER: i32 = 4;
 const FINISH_LOADING_CALL: i32 = 0;
 const ADVANCE_CLIP_CALL: i32 = 1;
+const RELEASE_THUMBNAILS_CALL: i32 = 2;
+/// How long the filmstrip waits for the video's first frame at most (see `thumbnails_held`).
+const THUMBNAIL_HOLD_MS: i32 = 400;
 
 /// The threads that build wallpaper picker thumbnails.
 const WALLPAPER_THUMBNAIL_WORKERS: usize = 2;
@@ -584,6 +587,10 @@ pub struct EditorRust {
     media_player_source: String,
     pending_scrub_position: f64,
     loading: bool,
+    /// The filmstrip and camera strip wait while the editor opens: their decoders took ten cores
+    /// for the first quarter second, and the player's first frame came later for it. They start
+    /// with the screen's first frame, or after [`THUMBNAIL_HOLD_MS`].
+    thumbnails_held: bool,
     preview_stats_enabled: bool,
     preview_stats_frames: i32,
     preview_stats_cost_ns: i64,
@@ -607,6 +614,7 @@ impl EditorRust {
             media_player_source: String::new(),
             pending_scrub_position: -1.0,
             loading: true,
+            thumbnails_held: true,
             preview_stats_enabled: false,
             preview_stats_frames: 0,
             preview_stats_cost_ns: 0,
@@ -708,7 +716,7 @@ impl qobject::Editor {
         }
         self.start_frame_times();
         self.as_mut().rebuild_motion();
-        self.start_camera_thumbnail_build();
+        self.as_mut().call_later(RELEASE_THUMBNAILS_CALL, THUMBNAIL_HOLD_MS);
         self.as_mut().call_later(FINISH_LOADING_CALL, 1500);
     }
 
@@ -807,6 +815,9 @@ impl qobject::Editor {
     /// `startNextVideoThumbnail()`: the queued filmstrip frames, as many at once as
     /// [`omareel_core::editor::thumbnail_workers`] allows, unless playing or scrubbing.
     fn start_next_video_thumbnail(mut self: Pin<&mut Self>) {
+        if self.thumbnails_held {
+            return;
+        }
         let (playing, scrubbing) = (self.transport.playing, self.transport.scrubbing);
         while let Some(job) = self
             .as_mut()
@@ -1962,6 +1973,16 @@ impl qobject::Editor {
         rust.preview_stats_clock = Some(Instant::now());
     }
 
+    /// Starts the filmstrip and the camera strip, once (see `thumbnails_held`).
+    fn release_thumbnails(mut self: Pin<&mut Self>) {
+        if !self.thumbnails_held {
+            return;
+        }
+        self.as_mut().rust_mut().thumbnails_held = false;
+        self.start_camera_thumbnail_build();
+        self.start_next_video_thumbnail();
+    }
+
     fn finish_loading(mut self: Pin<&mut Self>) {
         if qenv::int_value_or_zero("OMAREEL_SCREENSHOT_LOADING") == 1 || !self.loading {
             return;
@@ -1991,6 +2012,7 @@ impl qobject::Editor {
         let cost = Instant::now();
         if player == Player::Screen {
             self.as_mut().rust_mut().preview_stats_frames += 1;
+            self.as_mut().release_thumbnails();
         }
         if player != Player::Camera {
             let transport = self.transport;
@@ -2071,6 +2093,7 @@ impl qobject::Editor {
         match call {
             FINISH_LOADING_CALL => self.finish_loading(),
             ADVANCE_CLIP_CALL => self.advance_clip(),
+            RELEASE_THUMBNAILS_CALL => self.release_thumbnails(),
             _ => {}
         }
     }
