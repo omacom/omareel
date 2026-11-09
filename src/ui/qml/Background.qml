@@ -20,8 +20,11 @@ Item {
         id: gradientCanvas
         anchors.fill: parent
         visible: root.settings.type === "gradient"
-        onWidthChanged: requestPaint()
-        onHeightChanged: requestPaint()
+        // Painted only while shown: a hidden Canvas still repaints on request, a whole-frame
+        // QPainter fill and image copy (an export asked for one every frame).
+        onWidthChanged: if (visible) requestPaint()
+        onHeightChanged: if (visible) requestPaint()
+        onVisibleChanged: if (visible) requestPaint()
         onPaint: {
             const ctx = getContext("2d")
             ctx.reset()
@@ -40,7 +43,7 @@ Item {
         }
         Connections {
             target: root
-            function onSettingsChanged() { gradientCanvas.requestPaint() }
+            function onSettingsChanged() { if (gradientCanvas.visible) gradientCanvas.requestPaint() }
         }
     }
     Image {

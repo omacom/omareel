@@ -24,8 +24,9 @@ fn elapsed_ms(since: Instant) -> i64 {
     i64::try_from(since.elapsed().as_millis()).unwrap_or(i64::MAX)
 }
 
-/// Writes one frame. The deadline is for lack of progress, not for the total time a slow
-/// machine takes to encode.
+/// Writes one frame, straight from `frame` into the pipe (no copy through the process's write
+/// buffer). The deadline is for lack of progress, not for the total time a slow machine takes
+/// to encode.
 pub fn write_encoder_frame(
     process: &mut Process,
     frame: &[u8],
@@ -34,28 +35,24 @@ pub fn write_encoder_frame(
 ) -> Result<(), String> {
     let mut stalled = Instant::now();
     let mut written = 0usize;
-    while written < frame.len() || process.bytes_to_write() > 0 {
+    while written < frame.len() {
         if cancelled() {
             return Err(fail(process, "Export cancelled"));
         }
         if process.state() == ProcessState::NotRunning {
             return Err(fail(process, "Encoder exited before receiving all frames"));
         }
-        if process.bytes_to_write() == 0 {
-            let amount = process.write(&frame[written..]);
-            if amount <= 0 {
-                return Err(fail(process, "Could not write a frame to the encoder"));
-            }
-            written += amount as usize;
-        }
-        // A successful wait drains only part of the buffer, often just one pipe page. Keep
-        // draining before accepting the next frame.
-        if process.wait_for_bytes_written(POLL_MS.min(stall_timeout_ms)) {
-            stalled = Instant::now();
-        } else if process.error() == ProcessError::WriteError {
+        let amount = process.write_stdin_direct(&frame[written..], POLL_MS.min(stall_timeout_ms));
+        if amount < 0 || process.error() == ProcessError::WriteError {
             return Err(fail(process, "Could not write a frame to the encoder"));
         }
-        if elapsed_ms(stalled) >= i64::from(stall_timeout_ms) && process.bytes_to_write() > 0 {
+        if amount > 0 {
+            written += amount as usize;
+            stalled = Instant::now();
+        } else if elapsed_ms(stalled) >= i64::from(stall_timeout_ms) {
+            if process.state() == ProcessState::NotRunning {
+                return Err(fail(process, "Encoder exited before receiving all frames"));
+            }
             return Err(fail(process, "Encoder stopped accepting frames (write timed out)"));
         }
     }
