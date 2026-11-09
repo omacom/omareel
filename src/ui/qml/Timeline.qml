@@ -260,7 +260,7 @@ FocusScope {
                 width: parent.width
                 height: 32
                 Repeater {
-                    model: flick.visibleTickCount
+                    model: OmCountModel { size: flick.visibleTickCount }
                     delegate: Item {
                         id: tickDelegate
                         required property int index
@@ -277,16 +277,13 @@ FocusScope {
                             height: 6
                             color: theme.strokeStrong
                         }
-                        Loader {
-                            active: true
+                        Text {
                             x: 4
                             y: 6
-                            sourceComponent: Text {
-                                text: root.formatRulerTime(tickDelegate.tickTime)
-                                color: theme.textFaint
-                                font.pixelSize: theme.type.caption - 1
-                                font.family: theme.monoFamily
-                            }
+                            text: root.formatRulerTime(tickDelegate.tickTime)
+                            color: theme.textFaint
+                            font.pixelSize: theme.type.caption - 1
+                            font.family: theme.monoFamily
                         }
                     }
                 }
@@ -526,9 +523,9 @@ FocusScope {
                     onPressed: root.forceActiveFocus()
                     onClicked: root.cameraSelected()
                 }
-                OmToolTip {
+                OmLazyToolTip {
                     target: cameraBlock
-                    visible: cameraHover.hovered
+                    shown: cameraHover.hovered
                     text: "Camera settings"
                 }
             }

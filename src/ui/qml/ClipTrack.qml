@@ -142,7 +142,7 @@ Item {
                 readonly property int lastTile: Math.min(Math.ceil(clipBlock.width / tileWidth),
                     Math.ceil((root.viewportX + root.viewportWidth - clipBlock.x) / tileWidth) + 1)
                 Repeater {
-                    model: Math.max(0, filmstrip.lastTile - filmstrip.firstTile)
+                    model: OmCountModel { size: filmstrip.lastTile - filmstrip.firstTile }
                     delegate: Image {
                         required property int index
                         readonly property int tileIndex: filmstrip.firstTile + index
@@ -331,41 +331,53 @@ Item {
                     onClicked: {
                         if (!dragged && !pressedWithControl && !pressedWithShift) {
                             clipBlock.select()
-                            speedMenu.open()
+                            speedMenuLoader.active = true
+                            speedMenuLoader.item.menu.open()
                         }
                     }
                 }
             }
-            OmMenu {
-                id: speedMenu
-                readonly property bool layouts: editor.hasCamera && clipBlock.modelData.kind !== "media"
-                y: clipBadge.y + clipBadge.height + 4
-                x: clipBadge.x + (clipBadge.width - width) / 2
-                width: layouts ? 168 : 120
-                Repeater {
-                    model: speedMenu.layouts ? [{value:"default", label:"Screen & camera"},
-                        {value:"camera", label:"Camera"}, {value:"screen", label:"Screen"}] : []
-                    delegate: OmMenuItem {
-                        required property var modelData
-                        text: modelData.label
-                        checkable: true
-                        checked: clipBlock.modelData.layout === modelData.value
-                        onTriggered: editor.setClipLayout(clipBlock.modelData.id, modelData.value)
-                    }
-                }
-                OmMenuSeparator {
-                    visible: speedMenu.layouts
-                    height: visible ? implicitHeight : 0
-                }
-                Repeater {
-                    model: [0.5,0.75,1,1.2,1.4,1.6,1.8,2,3,4,8,16,24]
-                    delegate: OmMenuItem {
-                        required property real modelData
-                        text: modelData + "×"
-                        font.family: theme.monoFamily
-                        checkable: true
-                        checked: clipBlock.modelData.speed === modelData
-                        onTriggered: editor.setClipSpeed(clipBlock.modelData.id, modelData)
+            // Each clip's menu is made the first time it opens.
+            Loader {
+                id: speedMenuLoader
+                active: false
+                sourceComponent: Component {
+                    // A Loader makes only items: the menu (a popup) goes in one.
+                    Item {
+                        property alias menu: speedMenu
+                        OmMenu {
+                            id: speedMenu
+                            readonly property bool layouts: editor.hasCamera && clipBlock.modelData.kind !== "media"
+                            y: clipBadge.y + clipBadge.height + 4
+                            x: clipBadge.x + (clipBadge.width - width) / 2
+                            width: layouts ? 168 : 120
+                            Repeater {
+                                model: speedMenu.layouts ? [{value:"default", label:"Screen & camera"},
+                                    {value:"camera", label:"Camera"}, {value:"screen", label:"Screen"}] : []
+                                delegate: OmMenuItem {
+                                    required property var modelData
+                                    text: modelData.label
+                                    checkable: true
+                                    checked: clipBlock.modelData.layout === modelData.value
+                                    onTriggered: editor.setClipLayout(clipBlock.modelData.id, modelData.value)
+                                }
+                            }
+                            OmMenuSeparator {
+                                visible: speedMenu.layouts
+                                height: visible ? implicitHeight : 0
+                            }
+                            Repeater {
+                                model: [0.5,0.75,1,1.2,1.4,1.6,1.8,2,3,4,8,16,24]
+                                delegate: OmMenuItem {
+                                    required property real modelData
+                                    text: modelData + "×"
+                                    font.family: theme.monoFamily
+                                    checkable: true
+                                    checked: clipBlock.modelData.speed === modelData
+                                    onTriggered: editor.setClipSpeed(clipBlock.modelData.id, modelData)
+                                }
+                            }
+                        }
                     }
                 }
             }

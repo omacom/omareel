@@ -22,6 +22,8 @@ ApplicationWindow {
     Component.onCompleted: restoreEditorFocus()
     function openExport() {
         topBar.commitProjectName()
+        exportDialogLoader.active = true
+        const exportDialog = exportDialogLoader.item.dialog
         previewPane.grabPreview(function(result) {
             exportDialog.previewGrab = result
             exportDialog.previewUrl = result.url
@@ -152,7 +154,18 @@ ApplicationWindow {
         }
     }
 
-    ExportDialog { id: exportDialog; parent: Overlay.overlay }
+    // Made the first time it opens, not with the editor.
+    Loader {
+        id: exportDialogLoader
+        active: false
+        // A Loader makes only items: the dialog (a popup) goes in one.
+        sourceComponent: Component {
+            Item {
+                property alias dialog: exportDialog
+                ExportDialog { id: exportDialog; parent: Overlay.overlay }
+            }
+        }
+    }
 
     Shortcut { sequence: "Space"; enabled: !window.singleKeyShortcutsBlocked; onActivated: editor.playPause() }
     Shortcut { sequence: "Left"; enabled: !window.singleKeyShortcutsBlocked; onActivated: editor.stepFrames(-1) }

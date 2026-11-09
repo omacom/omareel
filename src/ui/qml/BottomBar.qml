@@ -154,7 +154,7 @@ Rectangle {
                         color: theme.surface
                     }
                 }
-                OmToolTip { target: playButton; visible: playButton.hovered; text: editor.playing ? "Pause" : "Play"; shortcut: "Space" }
+                OmLazyToolTip { target: playButton; shown: playButton.hovered; text: editor.playing ? "Pause" : "Play"; shortcut: "Space" }
             }
             OmIconButton {
                 icon.source: "qrc:/omareel/assets/icons/lucide/skip-forward.svg"
@@ -244,7 +244,7 @@ Rectangle {
                             Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutBack } }
                         }
                     }
-                    OmToolTip { target: shortcutsButton; visible: shortcutsButton.hovered && !shortcutsSheet.visible; text: "Keyboard shortcuts" }
+                    OmLazyToolTip { target: shortcutsButton; shown: shortcutsButton.hovered && !shortcutsSheet.visible; text: "Keyboard shortcuts" }
                 }
             }
         }
@@ -257,7 +257,14 @@ Rectangle {
         x: 12; y: -height - 8
         width: 224
         padding: 8
-        contentItem: ColumnLayout {
+        // Made on first open: the editor's start doesn't build menus nobody has opened.
+        property bool wanted: false
+        onAboutToShow: wanted = true
+        contentItem: Loader { active: overflowMenu.wanted; sourceComponent: overflowContent }
+    }
+    Component {
+        id: overflowContent
+        ColumnLayout {
             spacing: 2
             PanelHeading { text: "Canvas"; Layout.leftMargin: 8; Layout.topMargin: 4; Layout.bottomMargin: 4 }
             Repeater {
@@ -294,7 +301,13 @@ Rectangle {
         y: -height - 8
         width: Math.min(560, root.width - 24)
         padding: 20
-        contentItem: ColumnLayout {
+        property bool wanted: false
+        onAboutToShow: wanted = true
+        contentItem: Loader { active: shortcutsSheet.wanted; sourceComponent: shortcutsContent }
+    }
+    Component {
+        id: shortcutsContent
+        ColumnLayout {
             spacing: 16
             RowLayout {
                 Layout.fillWidth: true

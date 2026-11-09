@@ -52,28 +52,34 @@ Button {
             anchors.centerIn: parent
             width: Math.min(implicitWidth, parent.width)
             spacing: control.spacing
-            Item {
-                visible: control.leadingDot || control.icon.source.toString() !== ""
+            // Icons are made only for buttons that have them: every button made both up front,
+            // about 260 in the editor, most with no source. The Loaders size themselves in the
+            // row, with no Item around them.
+            Loader {
+                visible: active
                 Layout.preferredWidth: control.icon.width
                 Layout.preferredHeight: control.icon.height
                 Layout.alignment: Qt.AlignVCenter
-                // Icons are made only for buttons that have them: every button made both up
-                // front, about 260 in the editor, most with no source.
-                Loader {
-                    anchors.fill: parent
-                    active: !control.leadingDot && control.icon.source.toString() !== ""
-                    sourceComponent: IconImage {
-                        source: control.icon.source
-                        sourceSize: Qt.size(control.icon.width, control.icon.height)
-                        color: control.icon.color
-                        Behavior on color { ColorAnimation { duration: 140 } }
-                    }
+                active: !control.leadingDot && control.icon.source.toString() !== ""
+                sourceComponent: IconImage {
+                    source: control.icon.source
+                    sourceSize: Qt.size(control.icon.width, control.icon.height)
+                    color: control.icon.color
+                    Behavior on color { ColorAnimation { duration: 140 } }
                 }
-                Rectangle {
-                    visible: control.leadingDot
-                    anchors.centerIn: parent
-                    width: 8; height: 8; radius: 4
-                    color: theme.record
+            }
+            Loader {
+                visible: active
+                Layout.preferredWidth: control.icon.width
+                Layout.preferredHeight: control.icon.height
+                Layout.alignment: Qt.AlignVCenter
+                active: control.leadingDot
+                sourceComponent: Item {
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: 8; height: 8; radius: 4
+                        color: theme.record
+                    }
                 }
             }
             Text {
@@ -88,19 +94,16 @@ Button {
                 Layout.alignment: Qt.AlignVCenter
                 Behavior on color { ColorAnimation { duration: 140 } }
             }
-            Item {
-                visible: control.trailingIconSource.toString() !== ""
+            Loader {
+                visible: active
                 Layout.preferredWidth: 14
                 Layout.preferredHeight: 14
                 Layout.alignment: Qt.AlignVCenter
-                Loader {
-                    anchors.fill: parent
-                    active: control.trailingIconSource.toString() !== ""
-                    sourceComponent: IconImage {
-                        source: control.trailingIconSource
-                        sourceSize: Qt.size(14, 14)
-                        color: control.primary ? control.contentColor : theme.textMuted
-                    }
+                active: control.trailingIconSource.toString() !== ""
+                sourceComponent: IconImage {
+                    source: control.trailingIconSource
+                    sourceSize: Qt.size(14, 14)
+                    color: control.primary ? control.contentColor : theme.textMuted
                 }
             }
         }
@@ -121,14 +124,16 @@ Button {
         border.color: control.visualFocus ? Qt.alpha(theme.accent, .8)
                     : control.selected ? theme.strokeStrong : theme.stroke
         Behavior on color { ColorAnimation { duration: 140; easing.type: Easing.OutCubic } }
-        // Light catches the top edge of filled buttons.
-        Rectangle {
-            visible: control.primary
+        // Light catches the top edge of filled buttons (made only for those).
+        Loader {
             anchors.fill: parent
-            radius: parent.radius
-            gradient: Gradient {
-                GradientStop { position: 0; color: Qt.rgba(1, 1, 1, .14) }
-                GradientStop { position: .5; color: Qt.rgba(1, 1, 1, 0) }
+            active: control.primary
+            sourceComponent: Rectangle {
+                radius: theme.controlRadius
+                gradient: Gradient {
+                    GradientStop { position: 0; color: Qt.rgba(1, 1, 1, .14) }
+                    GradientStop { position: .5; color: Qt.rgba(1, 1, 1, 0) }
+                }
             }
         }
     }
