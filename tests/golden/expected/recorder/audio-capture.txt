@@ -1,27 +1,27 @@
 == start desktop
 result	true	positive
 call	["pactl","get-default-sink"]
-call	["ffmpeg","-y","-hide_banner","-nostats","-loglevel","info","-thread_queue_size","1024","-f","pulse","-i","alsa_output.pci-0000_00_1f.3.analog-stereo.monitor","-map","0:a","-c:a","aac","-b:a","192k","-flush_packets","1","-cluster_time_limit","500","$HOME/oracle-scratch/recorder/audio/bundle/audio.mka"]
+call	["ffmpeg","-y","-hide_banner","-nostats","-stats_period","0.05","-loglevel","info","-thread_queue_size","1024","-f","pulse","-i","alsa_output.pci-0000_00_1f.3.analog-stereo.monitor","-map","0:a","-c:a","aac","-b:a","192k","-flush_packets","1","-cluster_time_limit","500","$HOME/oracle-scratch/recorder/audio/bundle/audio.mka"]
 log	"ffmpeg shim log\x0aon stderr\x0a"
 ts	"monotonic_microsec\x09realtime_microsec\x0a{startedUs}\x09{realtime}\x0a"
 bundle	audio.mka.log:f0644 audio.mka.ts:f0644
 == start microphone
 result	true	positive
-call	["ffmpeg","-y","-hide_banner","-nostats","-loglevel","info","-thread_queue_size","1024","-f","pulse","-i","alsa_input.usb-Blue_Yeti-00.analog-stereo","-map","0:a","-af","volumedetect","-c:a","aac","-b:a","192k","-flush_packets","1","-cluster_time_limit","500","$HOME/oracle-scratch/recorder/audio/bundle/audio.mka"]
+call	["ffmpeg","-y","-hide_banner","-nostats","-stats_period","0.05","-loglevel","info","-thread_queue_size","1024","-f","pulse","-i","alsa_input.usb-Blue_Yeti-00.analog-stereo","-map","0:a","-af","volumedetect","-c:a","aac","-b:a","192k","-flush_packets","1","-cluster_time_limit","500","$HOME/oracle-scratch/recorder/audio/bundle/audio.mka"]
 log	"ffmpeg shim log\x0aon stderr\x0a"
 ts	"monotonic_microsec\x09realtime_microsec\x0a{startedUs}\x09{realtime}\x0a"
 bundle	audio.mka.log:f0644 audio.mka.ts:f0644
 == start default microphone
 result	true	positive
 call	["pactl","get-default-source"]
-call	["ffmpeg","-y","-hide_banner","-nostats","-loglevel","info","-thread_queue_size","1024","-f","pulse","-i","alsa_input.default","-map","0:a","-af","volumedetect","-c:a","aac","-b:a","192k","-flush_packets","1","-cluster_time_limit","500","$HOME/oracle-scratch/recorder/audio/bundle/audio.mka"]
+call	["ffmpeg","-y","-hide_banner","-nostats","-stats_period","0.05","-loglevel","info","-thread_queue_size","1024","-f","pulse","-i","alsa_input.default","-map","0:a","-af","volumedetect","-c:a","aac","-b:a","192k","-flush_packets","1","-cluster_time_limit","500","$HOME/oracle-scratch/recorder/audio/bundle/audio.mka"]
 log	"ffmpeg shim log\x0aon stderr\x0a"
 ts	"monotonic_microsec\x09realtime_microsec\x0a{startedUs}\x09{realtime}\x0a"
 bundle	audio.mka.log:f0644 audio.mka.ts:f0644
 == start both
 result	true	positive
 call	["pactl","get-default-sink"]
-call	["ffmpeg","-y","-hide_banner","-nostats","-loglevel","info","-thread_queue_size","1024","-f","pulse","-i","sink.monitor","-thread_queue_size","1024","-f","pulse","-i","alsa_input.usb-Blue_Yeti-00.analog-stereo","-filter_complex","[1:a]volumedetect[m];[0:a][m]amix=inputs=2:duration=longest:normalize=0[a]","-map","[a]","-c:a","aac","-b:a","192k","-flush_packets","1","-cluster_time_limit","500","$HOME/oracle-scratch/recorder/audio/bundle/audio.mka"]
+call	["ffmpeg","-y","-hide_banner","-nostats","-stats_period","0.05","-loglevel","info","-thread_queue_size","1024","-f","pulse","-i","sink.monitor","-thread_queue_size","1024","-f","pulse","-i","alsa_input.usb-Blue_Yeti-00.analog-stereo","-filter_complex","[1:a]volumedetect[m];[0:a][m]amix=inputs=2:duration=longest:normalize=0[a]","-map","[a]","-c:a","aac","-b:a","192k","-flush_packets","1","-cluster_time_limit","500","$HOME/oracle-scratch/recorder/audio/bundle/audio.mka"]
 log	"ffmpeg shim log\x0aon stderr\x0a"
 ts	"monotonic_microsec\x09realtime_microsec\x0a{startedUs}\x09{realtime}\x0a"
 bundle	audio.mka.log:f0644 audio.mka.ts:f0644
@@ -29,7 +29,7 @@ bundle	audio.mka.log:f0644 audio.mka.ts:f0644
 result	true	positive
 call	["pactl","get-default-sink"]
 call	["pactl","get-default-source"]
-call	["ffmpeg","-y","-hide_banner","-nostats","-loglevel","info","-thread_queue_size","1024","-f","pulse","-i","sink.monitor","-thread_queue_size","1024","-f","pulse","-i","source","-filter_complex","[1:a]volumedetect[m];[0:a][m]amix=inputs=2:duration=longest:normalize=0[a]","-map","[a]","-c:a","aac","-b:a","192k","-flush_packets","1","-cluster_time_limit","500","$HOME/oracle-scratch/recorder/audio/bundle/audio.mka"]
+call	["ffmpeg","-y","-hide_banner","-nostats","-stats_period","0.05","-loglevel","info","-thread_queue_size","1024","-f","pulse","-i","sink.monitor","-thread_queue_size","1024","-f","pulse","-i","source","-filter_complex","[1:a]volumedetect[m];[0:a][m]amix=inputs=2:duration=longest:normalize=0[a]","-map","[a]","-c:a","aac","-b:a","192k","-flush_packets","1","-cluster_time_limit","500","$HOME/oracle-scratch/recorder/audio/bundle/audio.mka"]
 log	"ffmpeg shim log\x0aon stderr\x0a"
 ts	"monotonic_microsec\x09realtime_microsec\x0a{startedUs}\x09{realtime}\x0a"
 bundle	audio.mka.log:f0644 audio.mka.ts:f0644
@@ -48,7 +48,7 @@ bundle	(empty)
 == start sink fails, microphone left
 result	true	positive
 call	["pactl","get-default-sink"]
-call	["ffmpeg","-y","-hide_banner","-nostats","-loglevel","info","-thread_queue_size","1024","-f","pulse","-i","mic","-map","0:a","-af","volumedetect","-c:a","aac","-b:a","192k","-flush_packets","1","-cluster_time_limit","500","$HOME/oracle-scratch/recorder/audio/bundle/audio.mka"]
+call	["ffmpeg","-y","-hide_banner","-nostats","-stats_period","0.05","-loglevel","info","-thread_queue_size","1024","-f","pulse","-i","mic","-map","0:a","-af","volumedetect","-c:a","aac","-b:a","192k","-flush_packets","1","-cluster_time_limit","500","$HOME/oracle-scratch/recorder/audio/bundle/audio.mka"]
 log	"ffmpeg shim log\x0aon stderr\x0a"
 ts	"monotonic_microsec\x09realtime_microsec\x0a{startedUs}\x09{realtime}\x0a"
 bundle	audio.mka.log:f0644 audio.mka.ts:f0644
@@ -56,7 +56,7 @@ bundle	audio.mka.log:f0644 audio.mka.ts:f0644
 result	true	positive
 call	["pactl","get-default-sink"]
 call	["pactl","get-default-source"]
-call	["ffmpeg","-y","-hide_banner","-nostats","-loglevel","info","-thread_queue_size","1024","-f","pulse","-i","sink.monitor","-map","0:a","-c:a","aac","-b:a","192k","-flush_packets","1","-cluster_time_limit","500","$HOME/oracle-scratch/recorder/audio/bundle/audio.mka"]
+call	["ffmpeg","-y","-hide_banner","-nostats","-stats_period","0.05","-loglevel","info","-thread_queue_size","1024","-f","pulse","-i","sink.monitor","-map","0:a","-c:a","aac","-b:a","192k","-flush_packets","1","-cluster_time_limit","500","$HOME/oracle-scratch/recorder/audio/bundle/audio.mka"]
 log	"ffmpeg shim log\x0aon stderr\x0a"
 ts	"monotonic_microsec\x09realtime_microsec\x0a{startedUs}\x09{realtime}\x0a"
 bundle	audio.mka.log:f0644 audio.mka.ts:f0644
