@@ -224,6 +224,8 @@ more from configure events, frame update requests, and omareel's own queued call
   swap. The gap drops from 0.61 to 0.23 s and the video shows 0.53 s sooner. The cost: click to
   the next frame is 19.6 ms instead of 4.3, since the GUI thread now waits on its own swap.
 - Playback works in all four: every play click showed motion, and seeks landed, with no timeouts.
+- With the spinner delayed 400 ms (7b04823), same runs: default 0.555 s window, 0.943 s video,
+  0.388 s gap (from 0.614); basic 0.445 s, 0.652 s, 0.207 s (from 0.234).
 
 **Fix ideas**, in order:
 
