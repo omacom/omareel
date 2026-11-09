@@ -484,9 +484,9 @@ fn video_thumbnail_urls_follow_source_times() {
 fn thumbnail_queue_is_bounded() {
     let world = World::new("editor-thumb-queue");
     let mut qt = world.open(&world.bundle("q.omareel"));
-    // Spans starting a hundredth apart sample 200 different frames.
-    for i in 0..200 {
-        let t = f64::from(i) / 150.0;
+    // Spans starting a few milliseconds apart sample more different frames than the limit.
+    for i in 0..500 {
+        let t = f64::from(i) / 330.0;
         qt.run(|d| d.video_thumbnail_url_for_clip(t, t, t + 0.5));
     }
     assert_eq!(qt.document.thumbnails.queue.len(), THUMBNAIL_QUEUE_LIMIT);

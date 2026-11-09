@@ -32,6 +32,10 @@ int omr_probe(const char *path, struct omr_media_info *info);
 // (freed with omr_free); the count, or -1 when the file can't be read.
 long omr_frame_times(const char *path, double **times);
 
+// When each keyframe of the first video stream starts, in seconds from the file's start (as
+// omr_thumbnail's `at`), from the index alone; the count, or -1. Freed with omr_free.
+long omr_keyframe_times(const char *path, double **times);
+
 void omr_free(void *pointer);
 
 // `ffmpeg -ss <at> -i <path> -frames:v 1 -vf scale=W:H:force_original_aspect_ratio=increase,

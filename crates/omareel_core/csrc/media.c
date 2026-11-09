@@ -181,6 +181,38 @@ void omr_free(void *pointer)
 
 // The frame `-ss <seconds> -i <path> -frames:v 1` gives: from the keyframe before the time,
 // the first frame at or after it.
+long omr_keyframe_times(const char *path, double **times)
+{
+    *times = NULL;
+    AVFormatContext *format = NULL;
+    if (avformat_open_input(&format, path, NULL, NULL) < 0) return -1;
+    int index = -1;
+    for (unsigned i = 0; i < format->nb_streams; ++i) {
+        if (format->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+            index = (int)i;
+            break;
+        }
+    }
+    if (index < 0) {
+        avformat_close_input(&format);
+        return -1;
+    }
+    AVStream *stream = format->streams[index];
+    const double base = av_q2d(stream->time_base);
+    const double start = format->start_time == AV_NOPTS_VALUE ? 0 : (double)format->start_time / AV_TIME_BASE;
+    const int entries = avformat_index_get_entries_count(stream);
+    double *out = malloc(sizeof(double) * (size_t)(entries > 0 ? entries : 1));
+    long count = 0;
+    for (int i = 0; out && i < entries; ++i) {
+        const AVIndexEntry *entry = avformat_index_get_entry(stream, i);
+        if (entry && (entry->flags & AVINDEX_KEYFRAME)) out[count++] = (double)entry->timestamp * base - start;
+    }
+    avformat_close_input(&format);
+    if (!out) return -1;
+    *times = out;
+    return count;
+}
+
 static AVFrame *frame_at(AVFormatContext *format, AVCodecContext *decoder, int index, double at)
 {
     AVStream *stream = format->streams[index];
