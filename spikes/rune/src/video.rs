@@ -53,12 +53,16 @@ pub struct Frame {
 /// The matrix ffmpeg would use for this file: the tagged one, or BT.601 for an untagged file (as
 /// swscale assumes, and as omareel's decoder is told for old recordings).
 pub fn color_info(path: &str) -> ColorInfo {
-    let tagged = Command::new("ffprobe")
-        .args(["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=color_space", "-of", "csv=p=0", path])
-        .output()
-        .ok()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
-        .unwrap_or_default();
+    // In process (a few ms); ffprobe when the libraries can't read the file.
+    let tagged = match omareel_core::media_av::probe(path) {
+        Ok(probe) if probe.has_video => probe.color_space,
+        _ => Command::new("ffprobe")
+            .args(["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=color_space", "-of", "csv=p=0", path])
+            .output()
+            .ok()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
+            .unwrap_or_default(),
+    };
     let matrix = if tagged.starts_with("bt709") { Matrix::Bt709 } else { Matrix::Bt601 };
     ColorInfo { matrix, transfer: Transfer::Bt709 }
 }

@@ -1,5 +1,5 @@
 //! The filmstrips' frames and the camera row's strip: `Document::clip_thumbnail_url` queues a
-//! frame it hasn't built (`Effect::StartNextVideoThumbnail`), a worker builds it with ffmpeg
+//! frame it hasn't built (`Effect::StartNextVideoThumbnail`), workers build them with ffmpeg
 //! (`ThumbnailJob`), and `finish_video_thumbnail` moves `video_thumbnail_revision`, after which
 //! every tile asks again (QML binds the tiles' `source` to the revision).
 //!
@@ -27,8 +27,8 @@ pub struct Thumbs {
     urls: RefCell<HashMap<Tile, (i32, String)>>,
     /// The tiles the last view drew.
     wanted: RefCell<Vec<Tile>>,
-    /// The frame a worker is building.
-    job: Option<Receiver<bool>>,
+    /// The frames workers are building (several at once: `thumbnail_workers`).
+    jobs: Vec<(omareel_core::editor::ThumbnailJob, Receiver<bool>)>,
     /// The camera strip: built once on open, again when the camera turns.
     pub camera: Vec<String>,
     camera_job: Option<Receiver<Vec<String>>>,
@@ -79,7 +79,7 @@ impl Thumbs {
     }
 
     pub fn busy(&self) -> bool {
-        self.job.is_some() || self.camera_job.is_some()
+        !self.jobs.is_empty() || self.camera_job.is_some()
     }
 }
 
@@ -87,15 +87,20 @@ impl Thumbs {
 /// picture changed.
 pub fn poll(s: &mut Preview) -> bool {
     let mut changed = false;
-    if let Some(receive) = &s.edit.timeline.thumbs.job {
-        match receive.try_recv() {
+    let mut index = 0;
+    while index < s.edit.timeline.thumbs.jobs.len() {
+        let result = s.edit.timeline.thumbs.jobs[index].1.try_recv();
+        match result {
+            Err(TryRecvError::Empty) => index += 1,
             Ok(ok) => {
-                s.edit.timeline.thumbs.job = None;
-                s.document.finish_video_thumbnail(ok);
+                let (job, _) = s.edit.timeline.thumbs.jobs.remove(index);
+                s.document.finish_video_thumbnail(&job, ok);
                 super::super::handle_effects(s);
             }
-            Err(TryRecvError::Empty) => {}
-            Err(TryRecvError::Disconnected) => s.edit.timeline.thumbs.job = None,
+            Err(TryRecvError::Disconnected) => {
+                let (job, _) = s.edit.timeline.thumbs.jobs.remove(index);
+                s.document.finish_video_thumbnail(&job, false);
+            }
         }
     }
     if let Some(receive) = &s.edit.timeline.thumbs.camera_job {
@@ -167,17 +172,16 @@ pub fn poll(s: &mut Preview) -> bool {
     changed
 }
 
-/// `startNextVideoThumbnail()`: the next queued frame, unless playing or scrubbing or one is
-/// being built.
+/// `startNextVideoThumbnail()`: the queued frames, as many at once as the Document allows,
+/// unless playing or scrubbing.
 pub fn start_next(s: &mut Preview) {
-    if s.edit.timeline.thumbs.job.is_some() {
-        return;
-    }
     let (playing, scrubbing) = (s.playing, s.scrubbing);
-    let Some(job) = s.document.next_video_thumbnail_job(playing, scrubbing) else { return };
-    let (send, receive) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let _ = send.send(job.run());
-    });
-    s.edit.timeline.thumbs.job = Some(receive);
+    while let Some(job) = s.document.next_video_thumbnail_job(playing, scrubbing) {
+        let (send, receive) = std::sync::mpsc::channel();
+        let work = job.clone();
+        std::thread::spawn(move || {
+            let _ = send.send(work.run());
+        });
+        s.edit.timeline.thumbs.jobs.push((job, receive));
+    }
 }

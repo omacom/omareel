@@ -2028,7 +2028,9 @@ dependencies = [
 name = "omareel_core"
 version = "0.0.0"
 dependencies = [
+ "cc",
  "libc",
+ "pkg-config",
 ]
 
 [[package]]

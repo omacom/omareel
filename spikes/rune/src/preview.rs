@@ -91,8 +91,10 @@ pub struct Preview {
     pub(crate) media: Media,
     pub(crate) frame: FrameState,
     pub(crate) kit: rune_kit::Kit,
-    /// The motion track a worker is rebuilding after an edit.
+    /// The motion track a worker is building (on open, and after an edit).
     pub(crate) motion: Option<std::sync::mpsc::Receiver<omareel_core::motion_track::MotionTrack>>,
+    /// The screen's frame times, read by a worker on open.
+    pub(crate) frame_times: Option<std::sync::mpsc::Receiver<Vec<f64>>>,
     /// The editor's transient UI state.
     pub(crate) edit: crate::editor::EditState,
     /// Poll's clock: seconds since start (virtual in headless runs).
@@ -994,14 +996,45 @@ pub(crate) fn play_glyph(playing: bool, color: rune::Color) -> El {
 }
 
 pub fn run(options: Options) -> Result<(), String> {
+    // The theme's fc-match and hyprctl, and the colour probes of both videos (an ffprobe each),
+    // run on threads while the recording opens.
+    omareel_core::theme::prefetch();
+    let bundle_file = |name: &str| omareel_core::compat::qdir::file_path(&omareel_core::compat::qdir::absolute_path(&options.bundle), name);
+    let screen_color = {
+        let path = bundle_file("screen.mp4");
+        std::thread::spawn(move || video::color_info(&path))
+    };
+    let camera_color = {
+        let path = bundle_file("camera.mp4");
+        std::thread::spawn(move || video::color_info(&path))
+    };
     let probes = Probes::new(Arc::new(media_probe::probe_video));
     let mut document = Document::open(&options.bundle, &probes)?;
-    // The editor builds the motion track on a worker and shows the default sample meanwhile;
-    // the spike waits for it.
-    if let Some(job) = document.motion_job() {
-        document.apply_motion(job.run());
+    // The editor builds the motion track and reads the frame times (an ffprobe over every
+    // packet) on workers, as the Qt editor does, and shows the default sample meanwhile; the
+    // preview's measurements wait for both.
+    let mut motion = None;
+    let mut frame_times = None;
+    if options.editor {
+        if let Some(job) = document.motion_job() {
+            let (send, receive) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                let _ = send.send(job.run());
+            });
+            motion = Some(receive);
+        }
+        let (send, receive) = std::sync::mpsc::channel();
+        let video_path = document.video_path().to_owned();
+        std::thread::spawn(move || {
+            let _ = send.send(media_probe::probe_frame_times(&video_path));
+        });
+        frame_times = Some(receive);
+    } else {
+        if let Some(job) = document.motion_job() {
+            document.apply_motion(job.run());
+        }
+        document.set_screen_frame_times(media_probe::probe_frame_times(document.video_path()));
     }
-    document.set_screen_frame_times(media_probe::probe_frame_times(document.video_path()));
     // SPIKE_EXPERIMENT=pick: the first zoom selected and its point being picked (the
     // inspector's "Pick point"), to test the preview's picking headless.
     if std::env::var("SPIKE_EXPERIMENT").is_ok_and(|e| e.contains("pick"))
@@ -1037,8 +1070,8 @@ pub fn run(options: Options) -> Result<(), String> {
         (sw as u32, sh as u32)
     };
     let camera_path = document.camera_video_path().to_owned();
-    let screen_color = video::color_info(document.video_path());
-    let camera_color = video::color_info(&camera_path);
+    let screen_color = screen_color.join().unwrap_or_else(|_| video::color_info(document.video_path()));
+    let camera_color = camera_color.join().unwrap_or_else(|_| video::color_info(&camera_path));
     let upload = options.upload;
     let decode = options.decode.clone();
     eprintln!("preview: screen {}x{} decoded {:?} ({:?}), upload {:?}", screen_size.0, screen_size.1, decode, screen_color.matrix, upload);
@@ -1090,7 +1123,8 @@ pub fn run(options: Options) -> Result<(), String> {
             Preview {
                 mode,
                 kit,
-                motion: None,
+                motion,
+                frame_times,
                 edit: crate::editor::EditState { background_path: background_path.clone(), ..Default::default() },
                 now: 0.0,
                 document,

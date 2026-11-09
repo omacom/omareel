@@ -150,6 +150,16 @@ pub fn poll(s: &mut Preview) -> bool {
             Err(std::sync::mpsc::TryRecvError::Disconnected) => s.motion = None,
         }
     }
+    if let Some(receive) = &s.frame_times {
+        match receive.try_recv() {
+            Ok(times) => {
+                s.frame_times = None;
+                s.document.set_screen_frame_times(times);
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => {}
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => s.frame_times = None,
+        }
+    }
     if s.edit.autosave_at.is_some_and(|at| s.now >= at) {
         s.edit.autosave_at = None;
         s.document.save_now();
@@ -166,7 +176,7 @@ pub fn poll(s: &mut Preview) -> bool {
 /// True while something an area runs needs frames (an export's progress, a drag), so poll keeps
 /// being called.
 pub fn busy(s: &Preview) -> bool {
-    s.edit.autosave_at.is_some() || s.motion.is_some() || dialogs::busy(s) || inspector::busy(s) || timeline::busy(s) || topbar::busy(s)
+    s.edit.autosave_at.is_some() || s.motion.is_some() || s.frame_times.is_some() || dialogs::busy(s) || inspector::busy(s) || timeline::busy(s) || topbar::busy(s)
 }
 
 /// The window's keys (Main.qml's Shortcuts). An open dialog takes keys first, then the areas;
