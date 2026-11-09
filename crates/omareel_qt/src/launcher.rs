@@ -86,8 +86,8 @@ pub mod qobject {
     extern "RustQt" {
         #[qobject]
         #[base = LauncherBase]
-        #[qproperty(QString, capture_exclusion_note, READ = capture_exclusion_note, NOTIFY = capture_exclusion_changed)]
-        #[qproperty(QString, capture_exclusion_reason, READ = capture_exclusion_reason, NOTIFY = capture_exclusion_changed)]
+        #[qproperty(QString, capture_exclusion_note, READ = capture_exclusion_note, CONSTANT)]
+        #[qproperty(QString, capture_exclusion_reason, READ = capture_exclusion_reason, CONSTANT)]
         #[qproperty(QString, self_view_status, READ = self_view_status, NOTIFY = self_view_status_changed)]
         #[qproperty(bool, recording, READ = recording, NOTIFY = recording_changed)]
         #[qproperty(bool, starting_recording, READ = starting_recording, NOTIFY = starting_recording_changed)]
@@ -125,8 +125,6 @@ pub mod qobject {
         fn recording_preferences_changed(self: Pin<&mut Launcher>);
         #[qsignal]
         fn audio_devices_changed(self: Pin<&mut Launcher>);
-        #[qsignal]
-        fn capture_exclusion_changed(self: Pin<&mut Launcher>);
         #[qsignal]
         fn microphone_level_changed(self: Pin<&mut Launcher>);
         #[qsignal]
@@ -411,33 +409,47 @@ fn run_record(program: &str, arguments: &[String], cancel: &AtomicBool) -> Optio
     })
 }
 
+/// The launcher's hyprctl checks, started by [`prefetch_capture_exclusion`].
+static CAPTURE_EXCLUSION: std::sync::Mutex<Option<JoinHandle<capture_exclusion::Status>>> = std::sync::Mutex::new(None);
+
+/// Restores a hardware cursor a killed recorder held and checks the capture-exclusion plugin, on
+/// a thread: main starts it before Qt, and the launcher's constructor takes the answer.
+pub fn prefetch_capture_exclusion() {
+    let application_dir = std::env::current_exe()
+        .ok()
+        .and_then(|path| path.parent().map(|dir| dir.to_string_lossy().into_owned()))
+        .unwrap_or_default();
+    let handle = std::thread::spawn(move || {
+        capture_exclusion::restore_abandoned_hardware_cursor();
+        capture_exclusion::ensure_loaded(&application_dir)
+    });
+    *CAPTURE_EXCLUSION.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(handle);
+}
+
+/// The prefetched checks' answer, or the checks made now.
+fn take_capture_exclusion(application_dir: &str) -> capture_exclusion::Status {
+    let prefetched = CAPTURE_EXCLUSION.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take();
+    if let Some(status) = prefetched.and_then(|handle| handle.join().ok()) {
+        return status;
+    }
+    capture_exclusion::restore_abandoned_hardware_cursor();
+    capture_exclusion::ensure_loaded(application_dir)
+}
+
 impl cxx_qt::Initialize for qobject::Launcher {
     /// `Launcher::Launcher`, after the members LauncherBase holds and its connections.
     fn initialize(mut self: Pin<&mut Self>) {
         // A recorder that was killed mid-recording left hardware cursors held on. That and the
-        // capture-exclusion plugin's check are hyprctl calls, made on a thread so the window
-        // doesn't wait for them; the note, if the plugin is missing, lands well before it shows.
-        let thread = self.qt_thread();
-        let application_dir = qobject::application_dir_path().to_string();
-        std::thread::spawn(move || {
-            capture_exclusion::restore_abandoned_hardware_cursor();
-            let exclusion = capture_exclusion::ensure_loaded(&application_dir);
-            if !exclusion.loaded {
-                let _ = thread.queue(move |mut launcher| {
-                    let screens = usize::try_from(launcher.screen_count()).unwrap_or(0);
-                    {
-                        let mut rust = launcher.as_mut().rust_mut();
-                        rust.capture_exclusion_note = launcher::capture_exclusion_note(screens).into();
-                        rust.capture_exclusion_reason = exclusion.reason.clone();
-                    }
-                    print_error(&format!(
-                        "omareel: {}; recording overlays stay off the recorded screen\n",
-                        exclusion.reason
-                    ));
-                    launcher.capture_exclusion_changed();
-                });
-            }
-        });
+        // capture-exclusion plugin's check are hyprctl calls, which main started on a thread
+        // (prefetch_capture_exclusion) while Qt started; the note is in the window's first layout.
+        let exclusion = take_capture_exclusion(&qobject::application_dir_path().to_string());
+        if !exclusion.loaded {
+            let screens = usize::try_from(self.screen_count()).unwrap_or(0);
+            let mut rust = self.as_mut().rust_mut();
+            rust.capture_exclusion_note = launcher::capture_exclusion_note(screens).into();
+            rust.capture_exclusion_reason = exclusion.reason.clone();
+            print_error(&format!("omareel: {}; recording overlays stay off the recorded screen\n", exclusion.reason));
+        }
         let preferences = RecordingPreferences::load();
         {
             let mut rust = self.as_mut().rust_mut();
