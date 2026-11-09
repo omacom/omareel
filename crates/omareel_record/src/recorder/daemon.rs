@@ -577,8 +577,11 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
             bar_arguments.push("--hidden".into());
         }
         let application = application_file_path();
+        let flags = if options.no_bar { super::waiting_bar::HIDDEN } else { 0 };
         Some(std::thread::spawn(move || {
-            qprocess::start_detached(&application, &bar_arguments, DetachedChannels::default()).is_some()
+            // The bar `omareel record` started before its picker, when there is one.
+            super::waiting_bar::adopt(&application, flags)
+                || qprocess::start_detached(&application, &bar_arguments, DetachedChannels::default()).is_some()
         }))
     } else {
         None
@@ -680,11 +683,12 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
     }
     if options.countdown {
         let countdown_host_timer = Instant::now();
+        // Polled closely: the countdown starts the moment the bar has drawn it.
         while !read_state().value("countdown_ready").to_bool(false)
             && elapsed_ms(&countdown_host_timer) < 3000
             && !stop_requested()
         {
-            msleep(20);
+            msleep(2);
         }
         countdown_end_us = monotonic_us() + 3_000_000;
         update_state(&[("countdown_active", true.into()), ("countdown_end_us", countdown_end_us.into())]);

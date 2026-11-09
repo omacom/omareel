@@ -37,6 +37,15 @@ pub mod ffi {
         /// `omareel __record-bar-ipc <arguments>`.
         #[cxx_name = "recordBarIpc"]
         fn record_bar_ipc(arguments: &QStringList) -> i32;
+        /// The launcher, as it opens: a recording bar waits for the recording (waiting_bar.rs).
+        #[cxx_name = "startWaitingBar"]
+        fn start_waiting_bar();
+        /// The waiting bar: it can take the recorder's signal now.
+        #[cxx_name = "registerWaitingBar"]
+        fn register_waiting_bar();
+        /// The waiting bar, as it stops waiting.
+        #[cxx_name = "unregisterWaitingBar"]
+        fn unregister_waiting_bar();
     }
 }
 
@@ -66,4 +75,20 @@ fn self_view_ipc(arguments: &QStringList) -> i32 {
 
 fn record_bar_ipc(arguments: &QStringList) -> i32 {
     cli::record_bar_ipc(&strings(arguments), &mut std::io::stderr().lock())
+}
+
+fn start_waiting_bar() {
+    // With the webcam, the launcher's self-view host becomes the bar.
+    if omareel_core::recording_preferences::RecordingPreferences::load().webcam_enabled {
+        return;
+    }
+    omareel_record::recorder::waiting_bar::start(&omareel_core::compat::qcoreapplication::application_file_path());
+}
+
+fn register_waiting_bar() {
+    omareel_record::recorder::waiting_bar::register();
+}
+
+fn unregister_waiting_bar() {
+    omareel_record::recorder::waiting_bar::unregister();
 }

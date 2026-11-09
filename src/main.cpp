@@ -317,11 +317,16 @@ static void configureOverlayRule(const QString &scope)
 // Until then it starts Qt, compiles the editor's QML and warms the GL driver and Qt Multimedia.
 // The recorder sends SIGUSR1 once the recording is saved; a recorder that exits without sending
 // it (discarded, failed) ends the wait, and the editor with it.
+//
+// `omareel __record-bar --wait <starter pid>` is the recording bar the same way, started by
+// `omareel record` before its region picker and by the launcher (waiting_bar.rs). The recorder
+// adopts it with SIGUSR1 sent by sigqueue, the value its flags (1: hidden); one nobody adopts
+// quits two seconds after its starter has gone.
 static int s_openPipe[2] = {-1, -1};
 
-static void requestOpen(int)
+static void requestOpen(int, siginfo_t *info, void *)
 {
-    const char byte = 'o';
+    const char byte = char(info && info->si_code == SI_QUEUE ? info->si_value.sival_int & 0x7f : 0);
     [[maybe_unused]] const ssize_t written = ::write(s_openPipe[1], &byte, 1);
 }
 
@@ -330,14 +335,20 @@ static bool waitingEditor(int argc, char **argv)
     return argc == 5 && std::strcmp(argv[1], "edit") == 0 && std::strcmp(argv[2], "--wait") == 0;
 }
 
-// First thing in main: the recorder checks the handler is installed (SigCgt) before signalling.
+static bool waitingBar(int argc, char **argv)
+{
+    return argc == 4 && std::strcmp(argv[1], "__record-bar") == 0 && std::strcmp(argv[2], "--wait") == 0;
+}
+
+// First thing in main: the recorder checks the handler is installed (SigCgt, or the bar's pid
+// file) before signalling.
 static void installOpenRequest()
 {
     if (::pipe2(s_openPipe, O_CLOEXEC | O_NONBLOCK) != 0) return;
     struct sigaction action {};
-    action.sa_handler = requestOpen;
+    action.sa_sigaction = requestOpen;
     sigemptyset(&action.sa_mask);
-    action.sa_flags = SA_RESTART;
+    action.sa_flags = SA_RESTART | SA_SIGINFO;
     ::sigaction(SIGUSR1, &action, nullptr);
 }
 
@@ -387,34 +398,42 @@ static void warmEditor(QQmlApplicationEngine &engine, std::unique_ptr<QQmlCompon
     { QMediaPlayer player; }
 }
 
-static bool waitForOpenRequest(qint64 recorderPid)
+// Waits for the signal: its flags, or -1 when `starterPid` exited without sending it (after
+// `graceMs` more, for a signal on its way).
+static int waitForOpenRequest(qint64 starterPid, int graceMs)
 {
-    bool open = false;
+    int flags = -1;
     QEventLoop loop;
     auto requested = [&] {
         char byte;
-        if (::read(s_openPipe[0], &byte, 1) == 1) open = true;
-        return open;
+        if (flags < 0 && ::read(s_openPipe[0], &byte, 1) == 1) flags = byte;
+        return flags >= 0;
     };
-    if (requested()) return true;
+    if (requested()) return flags;
     QSocketNotifier openNotifier(s_openPipe[0], QSocketNotifier::Read);
     QObject::connect(&openNotifier, &QSocketNotifier::activated, &loop, [&] { if (requested()) loop.quit(); });
-    const int recorder = int(::syscall(SYS_pidfd_open, pid_t(recorderPid), 0));
-    if (recorder < 0) return requested();
-    QSocketNotifier recorderNotifier(recorder, QSocketNotifier::Read);
-    QObject::connect(&recorderNotifier, &QSocketNotifier::activated, &loop, [&] {
-        recorderNotifier.setEnabled(false);
-        // A signal sent just before the recorder exited may still be on its way to a thread.
-        QTimer::singleShot(100, &loop, [&] { requested(); loop.quit(); });
+    const int starter = int(::syscall(SYS_pidfd_open, pid_t(starterPid), 0));
+    if (starter < 0) {
+        QTimer::singleShot(graceMs, &loop, &QEventLoop::quit);
+        loop.exec();
+        requested();
+        return flags;
+    }
+    QSocketNotifier starterNotifier(starter, QSocketNotifier::Read);
+    QObject::connect(&starterNotifier, &QSocketNotifier::activated, &loop, [&] {
+        starterNotifier.setEnabled(false);
+        QTimer::singleShot(graceMs, &loop, [&] { requested(); loop.quit(); });
     });
     loop.exec();
-    ::close(recorder);
-    return open || requested();
+    ::close(starter);
+    requested();
+    return flags;
 }
 
 int main(int argc, char **argv)
 {
-    if (waitingEditor(argc, argv)) installOpenRequest();
+    if (waitingEditor(argc, argv) || waitingBar(argc, argv)) installOpenRequest();
+    if (waitingBar(argc, argv)) omareel::record::registerWaitingBar();
     omareel::cli::installMessageHandler();
     // QProcess resolves executables to absolute paths, but Omarchy's REC indicator intentionally
     // matches an argv[0] beginning with "gpu-screen-recorder". Preserve that public contract.
@@ -508,6 +527,9 @@ int main(int argc, char **argv)
         QObject::connect(&launcher, &Launcher::quitRequested, &app, &QCoreApplication::quit);
         engine.load(QUrl(QStringLiteral("qrc:/qt/qml/Omareel/Launcher.qml")));
         if (engine.rootObjects().isEmpty()) return 2;
+        // A recording bar starts waiting once the launcher is on screen (waiting_bar.rs).
+        if (qEnvironmentVariableIsEmpty("OMAREEL_SCREENSHOT"))
+            QTimer::singleShot(300, &app, [] { omareel::record::startWaitingBar(); });
         configureDebugScreenshot(engine, app);
         return app.exec();
     }
@@ -517,13 +539,31 @@ int main(int argc, char **argv)
     if (command == QLatin1String("__record-bar-ipc")) return omareel::record::recordBarIpc(args.mid(2));
     if (command == QLatin1String("__record-bar")) {
         Theme theme;
-        const int ownerIndex = args.indexOf(QStringLiteral("--owner"));
-        RecordingBar recordingBar(hiddenRecordBar, args.contains(QStringLiteral("--standby")),
-                                  ownerIndex >= 0 ? args.value(ownerIndex + 1).toLongLong() : 0);
-        if (args.contains(QStringLiteral("--standby")) && !recordingBar.ownsStandbyHost()) return 0;
         QQmlApplicationEngine engine;
         reportQmlWarnings(engine);
         engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        bool hidden = hiddenRecordBar;
+        std::unique_ptr<QQmlComponent> warmBar;
+        if (waitingBar(argc, argv)) {
+            warmFonts(theme);
+            warmBar = std::make_unique<QQmlComponent>(&engine, QUrl(QStringLiteral("qrc:/qt/qml/Omareel/RecordingBar.qml")),
+                                                      QQmlComponent::PreferSynchronous);
+            {
+                QOffscreenSurface surface;
+                surface.create();
+                QOpenGLContext context;
+                if (context.create() && context.makeCurrent(&surface)) context.doneCurrent();
+            }
+            { QQuickWindow warm; }
+            const int flags = waitForOpenRequest(args[3].toLongLong(), 2000);
+            omareel::record::unregisterWaitingBar();
+            if (flags < 0) return 0;
+            hidden = (flags & 1) != 0;
+        }
+        const int ownerIndex = args.indexOf(QStringLiteral("--owner"));
+        RecordingBar recordingBar(hidden, args.contains(QStringLiteral("--standby")),
+                                  ownerIndex >= 0 ? args.value(ownerIndex + 1).toLongLong() : 0);
+        if (args.contains(QStringLiteral("--standby")) && !recordingBar.ownsStandbyHost()) return 0;
         engine.rootContext()->setContextProperty(QStringLiteral("recordingBar"), &recordingBar);
         QObject::connect(&recordingBar, &RecordingBar::finished, &app, &QCoreApplication::quit);
         engine.load(QUrl(QStringLiteral("qrc:/qt/qml/Omareel/RecordingBar.qml")));
@@ -711,7 +751,8 @@ int main(int argc, char **argv)
             reportQmlWarnings(*waitingEngine);
             waitingEngine->rootContext()->setContextProperty(QStringLiteral("theme"), waitingTheme.get());
             warmEditor(*waitingEngine, warmMain, *waitingTheme);
-            if (!waitForOpenRequest(args[3].toLongLong())) return 0;
+            // A signal sent just before the recorder exited may still be on its way to a thread.
+            if (waitForOpenRequest(args[3].toLongLong(), 100) < 0) return 0;
         }
         Editor editor(bundle);
         if (!editor.isValid()) {

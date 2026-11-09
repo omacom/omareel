@@ -396,6 +396,7 @@ pub fn pick(mode: CaptureMode, is_supported: &dyn Fn() -> bool) -> Pick {
     if !picker.wait_for_finished(-1) || picker.exit_code() != 0 {
         return Pick { region: None, message: Some("Selection cancelled".into()) };
     }
+    crate::recorder::debug_start_stage("picker_done", 0, "");
     let selection = qstring::trimmed(&qstring::from_utf8(&picker.read_all_standard_output())).to_owned();
     if let Some(name) = selection.strip_prefix("monitor:") {
         if let Some(index) = values.iter().position(|monitor| monitor.name == name) {
