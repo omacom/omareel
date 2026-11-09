@@ -13,6 +13,7 @@ pub mod export;
 pub mod input_log;
 pub mod keystroke_track;
 pub mod layout_timeline;
+pub mod media_av;
 pub mod media_probe;
 pub mod microphone_meter;
 pub mod motion_track;

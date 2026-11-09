@@ -685,7 +685,7 @@ impl qobject::Editor {
     /// The C++ constructor after its timers and connections, which EditorBase made.
     fn open(mut self: Pin<&mut Self>) {
         let probes = Probes::new(Arc::new(media_probe::probe_video));
-        match Document::open(&self.bundle_path, &probes) {
+        match Document::open_preloaded(&self.bundle_path, &probes) {
             Ok(document) => self.as_mut().rust_mut().document = Some(document),
             Err(error) => {
                 self.as_mut().rust_mut().error = error;
@@ -804,26 +804,25 @@ impl qobject::Editor {
         });
     }
 
-    /// `startNextVideoThumbnail()`: the next queued filmstrip frame, unless playing or scrubbing
-    /// or a frame is being built.
+    /// `startNextVideoThumbnail()`: the queued filmstrip frames, as many at once as
+    /// [`omareel_core::editor::thumbnail_workers`] allows, unless playing or scrubbing.
     fn start_next_video_thumbnail(mut self: Pin<&mut Self>) {
         let (playing, scrubbing) = (self.transport.playing, self.transport.scrubbing);
-        let Some(job) = self
+        while let Some(job) = self
             .as_mut()
             .rust_mut()
             .document
             .as_mut()
             .and_then(|document| document.next_video_thumbnail_job(playing, scrubbing))
-        else {
-            return;
-        };
-        let thread = self.qt_thread();
-        self.spawn(move || {
-            let succeeded = job.run();
-            let _ = thread.queue(move |editor| {
-                editor.edit(|document| document.finish_video_thumbnail(succeeded));
+        {
+            let thread = self.qt_thread();
+            self.spawn(move || {
+                let succeeded = job.run();
+                let _ = thread.queue(move |editor| {
+                    editor.edit(|document| document.finish_video_thumbnail(&job, succeeded));
+                });
             });
-        });
+        }
     }
 
     /// The import [`Effect::StartImport`] asks for, then `finishImport()`.

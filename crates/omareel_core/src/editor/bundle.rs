@@ -76,6 +76,23 @@ pub const PROBE_ARGS: [&str; 6] =
 /// Editor.cpp's `probe(path, &error)`: runs ffprobe for up to 15 s. A failure gives ffprobe's
 /// trimmed stderr, which is empty when it could not start or timed out.
 pub fn probe(path: &str) -> Result<MediaInfo, String> {
+    // In process when FFmpeg's libraries can read the file (and its first video stream has a
+    // size, as parse_probe would take it); ffprobe otherwise, for its message.
+    if let Ok(found) = crate::media_av::probe(path) {
+        if found.width > 0 || !found.has_video {
+            let info = MediaInfo {
+                width: found.width,
+                height: found.height,
+                fps: fraction(&found.frame_rate_text),
+                duration: found.format_duration.unwrap_or(0.0),
+                audio: found.has_audio,
+            };
+            if info.width <= 0 || info.height <= 0 || info.duration <= 0.0 {
+                return Err("screen.mp4 has invalid metadata".into());
+            }
+            return Ok(info);
+        }
+    }
     let mut args: Vec<&str> = PROBE_ARGS.to_vec();
     args.push(path);
     match qprocess::run("ffprobe", &args, 15000) {
@@ -250,7 +267,14 @@ pub fn load_bundle(bundle_path: &str, probes: &Probes) -> Result<Bundle, String>
     if !FileInfo::new(bundle_path.as_str()).is_dir() {
         return Err(qstring::arg("Bundle does not exist: %1", &bundle_path));
     }
-    let info = (probes.media)(&video_path)?;
+    // Each probe is an ffprobe of its own (30 ms or more): the camera's runs beside the screen's.
+    let has_camera_file = FileInfo::new(camera_video_path.as_str()).is_file();
+    let (info, camera_probe) = std::thread::scope(|scope| {
+        let camera = has_camera_file.then(|| scope.spawn(|| (probes.media)(&camera_video_path)));
+        let info = (probes.media)(&video_path);
+        (info, camera.map(|probe| probe.join().unwrap_or_else(|_| Err(String::new()))))
+    });
+    let info = info?;
     if info.width <= 0 {
         return Err(String::new());
     }
@@ -275,8 +299,8 @@ pub fn load_bundle(bundle_path: &str, probes: &Probes) -> Result<Bundle, String>
         recording.has_microphone_audio = info.audio && audio.value("mic").to_bool(false);
     }
     let camera_capture = capture_root.value("camera").to_object();
-    if FileInfo::new(camera_video_path.as_str()).is_file() {
-        if let Ok(camera) = (probes.media)(&camera_video_path) {
+    if let Some(camera_probe) = camera_probe {
+        if let Ok(camera) = camera_probe {
             if camera.width > 0 {
                 recording.camera = Some(CameraRecording {
                     width: camera.width,

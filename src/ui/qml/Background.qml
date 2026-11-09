@@ -5,11 +5,16 @@ Item {
     id: root
     required property var settings
     property bool softwareRendering: false
+    // The editor's preview decodes the image off the GUI thread (a wallpaper is 70 ms of WebP
+    // that held up the first frame) and shows the colour until it is ready; an export draws
+    // each frame complete, so it waits for it.
+    property bool loadAsynchronously: false
 
     Rectangle {
         anchors.fill: parent
         color: root.settings.color || Qt.rgba(26/255, 27/255, 38/255, 1)
-        visible: root.settings.type !== "none" && (root.settings.type === "color" || !backgroundImage.visible)
+        visible: root.settings.type !== "none"
+                 && (root.settings.type === "color" || !backgroundImage.visible || backgroundImage.status !== Image.Ready)
     }
     Canvas {
         id: gradientCanvas
@@ -49,7 +54,7 @@ Item {
         // not the wallpaper's own: a 5K WebP is 80 MB of pixels.
         sourceSize: Qt.size(Math.ceil(width * Screen.devicePixelRatio / 256) * 256,
                             Math.ceil(height * Screen.devicePixelRatio / 256) * 256)
-        asynchronous: false
+        asynchronous: root.loadAsynchronously
         layer.enabled: root.settings.blur > 0 && !root.softwareRendering
         layer.effect: MultiEffect {
             blurEnabled: true

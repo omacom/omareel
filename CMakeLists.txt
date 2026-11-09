@@ -34,7 +34,7 @@ pkg_check_modules(LIBEVDEV REQUIRED IMPORTED_TARGET libevdev)
 pkg_check_modules(XKBCOMMON REQUIRED IMPORTED_TARGET xkbcommon)
 # The screen capture's GPU side (crates/omareel_record/csrc): GBM buffers, VA-API encoding through
 # FFmpeg's libraries. Cargo builds it; the executable links what it calls.
-pkg_check_modules(GPU_CAPTURE REQUIRED IMPORTED_TARGET gbm libdrm libva libavcodec libavformat libavfilter libavutil)
+pkg_check_modules(GPU_CAPTURE REQUIRED IMPORTED_TARGET gbm libdrm libva libavcodec libavformat libavfilter libavutil libswscale)
 pkg_check_modules(WAYLAND_CLIENT REQUIRED IMPORTED_TARGET wayland-client)
 qt_standard_project_setup()
 qt_policy(SET QTP0004 NEW)
