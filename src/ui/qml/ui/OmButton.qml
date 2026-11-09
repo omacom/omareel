@@ -57,13 +57,17 @@ Button {
                 Layout.preferredWidth: control.icon.width
                 Layout.preferredHeight: control.icon.height
                 Layout.alignment: Qt.AlignVCenter
-                IconImage {
-                    visible: !control.leadingDot
+                // Icons are made only for buttons that have them: every button made both up
+                // front, about 260 in the editor, most with no source.
+                Loader {
                     anchors.fill: parent
-                    source: control.icon.source
-                    sourceSize: Qt.size(control.icon.width, control.icon.height)
-                    color: control.icon.color
-                    Behavior on color { ColorAnimation { duration: 140 } }
+                    active: !control.leadingDot && control.icon.source.toString() !== ""
+                    sourceComponent: IconImage {
+                        source: control.icon.source
+                        sourceSize: Qt.size(control.icon.width, control.icon.height)
+                        color: control.icon.color
+                        Behavior on color { ColorAnimation { duration: 140 } }
+                    }
                 }
                 Rectangle {
                     visible: control.leadingDot
@@ -89,11 +93,14 @@ Button {
                 Layout.preferredWidth: 14
                 Layout.preferredHeight: 14
                 Layout.alignment: Qt.AlignVCenter
-                IconImage {
+                Loader {
                     anchors.fill: parent
-                    source: control.trailingIconSource
-                    sourceSize: Qt.size(14, 14)
-                    color: control.primary ? control.contentColor : theme.textMuted
+                    active: control.trailingIconSource.toString() !== ""
+                    sourceComponent: IconImage {
+                        source: control.trailingIconSource
+                        sourceSize: Qt.size(14, 14)
+                        color: control.primary ? control.contentColor : theme.textMuted
+                    }
                 }
             }
         }
