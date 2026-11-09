@@ -125,13 +125,20 @@ Button {
             }
         }
     }
-    OmToolTip {
-        id: toolTip
-        objectName: "omButtonToolTip"
-        target: control
-        visible: control.tooltipText !== "" && control.hovered && !control.down
-        text: control.tooltipText
-        shortcut: control.tooltipShortcut
-        placement: control.tooltipPlacement
+    // The tooltip is made the first time it is wanted, then kept: a window holds a hundred
+    // buttons, and making every one's popup up front was much of the editor's QML start.
+    property bool toolTipWanted: false
+    onHoveredChanged: if (hovered && tooltipText !== "") toolTipWanted = true
+    Loader {
+        anchors.fill: parent
+        active: control.toolTipWanted
+        sourceComponent: OmToolTip {
+            objectName: "omButtonToolTip"
+            target: control
+            visible: control.tooltipText !== "" && control.hovered && !control.down
+            text: control.tooltipText
+            shortcut: control.tooltipShortcut
+            placement: control.tooltipPlacement
+        }
     }
 }

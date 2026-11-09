@@ -855,6 +855,10 @@ impl qobject::Editor {
         }
         let thread = self.qt_thread();
         self.spawn(move || {
+            // Each report rebuilds the picker's whole list in QML: a theme's hundred wallpapers
+            // reported one by one rebuilt it a hundred times. At most four a second, and always
+            // once the queue is empty.
+            let mut reported = std::time::Instant::now();
             loop {
                 let job = match queue.state.lock() {
                     Ok(mut state) => {
@@ -877,9 +881,13 @@ impl qobject::Editor {
                     break;
                 };
                 qobject::generate_wallpaper_thumbnail(&qstring(&path), &qstring(&thumbnail));
-                let _ = thread.queue(move |editor| {
-                    editor.edit(|document| document.wallpaper_thumbnail_ready(&thumbnail));
-                });
+                let drained = queue.state.lock().map_or(true, |state| state.0.is_empty());
+                if drained || reported.elapsed() >= std::time::Duration::from_millis(250) {
+                    reported = std::time::Instant::now();
+                    let _ = thread.queue(move |editor| {
+                        editor.edit(|document| document.wallpaper_thumbnail_ready(&thumbnail));
+                    });
+                }
             }
         });
     }
