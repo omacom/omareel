@@ -77,7 +77,8 @@ for n in range(runs):
                QT_MESSAGE_PATTERN='[%{time process}] %{category}: %{message}',
                QT_LOGGING_RULES='qt.scenegraph.time.*=true;qt.scenegraph.general=true;qt.rhi.general=true')
     holder = subprocess.Popen(['sleep', '1000']) if wait else None
-    argv = command + (['--wait', str(holder.pid)] if wait else []) + [bundle]
+    # NO_BUNDLE=1: the command takes no bundle (the launcher: `<app>` alone).
+    argv = command + (['--wait', str(holder.pid)] if wait else []) + ([] if os.environ.get('NO_BUNDLE') == '1' else [bundle])
     if use_perf:
         argv = [perf, 'record', '-q', '-k', 'mono'] + (os.environ['PERF_EVENT'].split() if os.environ.get('PERF_EVENT') else ['-F', freq]) + [ '--call-graph', os.environ.get('CALLGRAPH', 'dwarf,24576'), '-o',
                 os.path.join(run, 'perf.data'), '--'] + argv
