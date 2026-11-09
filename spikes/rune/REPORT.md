@@ -1,5 +1,10 @@
 # Rune spike: report
 
+> **The whole app has since been ported.** `RESULTS-full-port.md` measures the full port against
+> Qt on foundry2 (2026-11-08) and replaces the foundry2 numbers below; `report.html` is the
+> shareable summary. This report covers the first spike: the preview, the export, the bar and a
+> slice of the editor.
+
 omareel's preview, offscreen export and recording bar built with **Rune** (anomalyco/rune,
 `dev` at `8ee3095`, 2026-11-06) over `omareel_core`, plus a slice of the editor (inspector and
 timeline) to see where the interface could go. Measured against the Qt build of this branch on

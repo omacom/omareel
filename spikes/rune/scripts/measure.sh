@@ -9,7 +9,9 @@
 # Preview: frame times from the window surface's commits (WAYLAND_DEBUG, frames.py), CPU, RSS and
 # GPU over the playback (sample.py), and each app's own count of dropped frames. `variants` runs
 # the spike's preview once per way of decoding and uploading frames (VARIANTS overrides the list;
-# SPIKE_EXPERIMENT passes through to the spike).
+# SPIKE_EXPERIMENT passes through to the spike). RUNE_MODE=editor measures the whole Rune editor
+# (default: the preview alone); RUNE_FLAGS adds flags to every Rune preview run, as
+# `--canvas-height 0` for the editor's own layout (the canvas fills its pane).
 # The Qt export needs a display for its GPU path (without one it renders in software).
 set -euo pipefail
 spike="$1"; qt="$2"; bundles="$3"; out="$4"; what="${5:-all}"
@@ -24,8 +26,8 @@ rune_preview() {
     local bundle="$1" n="$2" label="$3" base
     shift 3
     base="$out/rune-$label-preview-$bundle-$n"
-    WAYLAND_DEBUG=client SAMPLE="$base.sample.json" SAMPLE_AFTER=3.2 SAMPLE_SECONDS=8 \
-        nested "$spike" preview "$bundles/$bundle" "$@" --measure 10 --stats "$base.stats.json" > "$base.log" 2>&1 || true
+    WAYLAND_DEBUG=client SAMPLE="$base.sample.json" SAMPLE_AFTER=3.2 SAMPLE_SECONDS=${SAMPLE_SECONDS:-8} \
+        nested "$spike" "${RUNE_MODE:-preview}" "$bundles/$bundle" "$@" ${RUNE_FLAGS:-} --measure 10 --stats "$base.stats.json" > "$base.log" 2>&1 || true
     python3 "$here/frames.py" "$base.log" 9.5 0.3 > "$base.frames.json"
     python3 - "$base" <<'PY'
 import json, sys
