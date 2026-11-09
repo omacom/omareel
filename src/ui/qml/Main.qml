@@ -116,12 +116,22 @@ ApplicationWindow {
         }
     }
 
+    // Shown only when opening takes a while. A spinning indicator redraws every frame, and
+    // with the threaded render loop each redraw holds the GUI thread for the render thread's
+    // swap: the player's set-up steps queued behind them (0.6 s on n1x before the video showed).
     Column {
+        id: loadingIndicator
+        property bool due: false
         anchors.centerIn: parent
         spacing: 10
-        visible: editor.loading
+        visible: editor.loading && due
         opacity: visible ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: 160 } }
+        Timer {
+            interval: 400
+            running: editor.loading && !loadingIndicator.due
+            onTriggered: loadingIndicator.due = true
+        }
         IconImage {
             anchors.horizontalCenter: parent.horizontalCenter
             width: 24; height: 24
@@ -129,7 +139,7 @@ ApplicationWindow {
             sourceSize: Qt.size(24, 24)
             color: theme.accent
             RotationAnimator on rotation {
-                running: editor.loading
+                running: loadingIndicator.visible
                 loops: Animation.Infinite
                 from: 0; to: 360; duration: 720
                 easing.type: Easing.InOutSine
