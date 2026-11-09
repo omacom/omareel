@@ -27,7 +27,16 @@ struct RawInfo {
     error: [c_char; 512],
 }
 
+#[repr(C)]
+struct RawStream {
+    _private: [u8; 0],
+}
+
 unsafe extern "C" {
+    fn omr_stream_open(path: *const c_char, vaapi_device: *const c_char, width: c_int, height: c_int, threads: c_int) -> *mut RawStream;
+    fn omr_stream_seek(stream: *mut RawStream, start: c_double, fps: c_double, preview: c_int) -> c_int;
+    fn omr_stream_next(stream: *mut RawStream, y: *mut u8, uv: *mut u8, time: *mut c_double) -> c_int;
+    fn omr_stream_close(stream: *mut RawStream);
     fn omr_probe(path: *const c_char, info: *mut RawInfo) -> c_int;
     fn omr_frame_times(path: *const c_char, times: *mut *mut c_double) -> c_long;
     fn omr_free(pointer: *mut c_void);
@@ -150,4 +159,57 @@ pub fn thumbnail(path: &str, at: f64, size: (i32, i32), quality: i32, threads: u
             .join()
             .unwrap_or(false)
     })
+}
+
+/// A video decoded for the preview and kept open between seeks: what
+/// `ffmpeg [-hwaccel vaapi] -ss <start> -noaccurate_seek -i <path> -vf fps=<fps>:start_time=0,
+/// scale=<w>:<h>:flags=bilinear,format=nv12 -f rawvideo -` gives, without a process per seek.
+pub struct VideoStream {
+    raw: *mut RawStream,
+    pub width: u32,
+    pub height: u32,
+}
+
+// SAFETY: the decoder is only used by one thread at a time (it moves between them whole).
+unsafe impl Send for VideoStream {}
+
+impl VideoStream {
+    /// Opens `path` for NV12 frames of `width` x `height`, decoded on the VA-API device given, or
+    /// in software with `threads` threads.
+    pub fn open(path: &str, vaapi_device: Option<&str>, width: u32, height: u32, threads: usize) -> Option<VideoStream> {
+        let path = c_path(path)?;
+        let device = vaapi_device.map(c_path).unwrap_or(None);
+        let threads = c_int::try_from(threads).unwrap_or(1);
+        let (w, h) = (c_int::try_from(width).ok()?, c_int::try_from(height).ok()?);
+        // SAFETY: the strings outlive the call; a null device means software decoding.
+        let raw = unsafe { omr_stream_open(path.as_ptr(), device.as_ref().map_or(std::ptr::null(), |d| d.as_ptr()), w, h, threads) };
+        (!raw.is_null()).then_some(VideoStream { raw, width, height })
+    }
+
+    /// The next frames are for `start`, `start + 1/fps`, ... It decodes on from where it is when
+    /// no keyframe lies between. With `preview`, the keyframe a seek starts from comes first, at
+    /// its own time, when the frame for `start` is further on: something close shows at once.
+    pub fn seek(&mut self, start: f64, fps: f64, preview: bool) -> bool {
+        // SAFETY: `raw` is open until drop.
+        unsafe { omr_stream_seek(self.raw, start, fps, c_int::from(preview)) == 0 }
+    }
+
+    /// The next slot's frame into `y` (width*height) and `uv` (half that), and its time; `None`
+    /// at the end or on an error.
+    pub fn next(&mut self, y: &mut [u8], uv: &mut [u8]) -> Option<f64> {
+        let size = self.width as usize * self.height as usize;
+        if y.len() < size || uv.len() < size / 2 {
+            return None;
+        }
+        let mut time = 0.0;
+        // SAFETY: both buffers hold what the C side writes (checked above).
+        (unsafe { omr_stream_next(self.raw, y.as_mut_ptr(), uv.as_mut_ptr(), &mut time) } == 1).then_some(time)
+    }
+}
+
+impl Drop for VideoStream {
+    fn drop(&mut self) {
+        // SAFETY: closed once.
+        unsafe { omr_stream_close(self.raw) };
+    }
 }
