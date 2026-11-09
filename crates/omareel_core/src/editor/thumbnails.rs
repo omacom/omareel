@@ -13,8 +13,9 @@ use crate::compat::qurl;
 use crate::omarchy_paths;
 use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 
-/// How many filmstrip frames may wait to be built.
-pub const THUMBNAIL_QUEUE_LIMIT: usize = 96;
+/// How many filmstrip frames may wait to be built. Each frame asked for can bring its
+/// keyframe's stand-in with it, so this is twice the 96 frames the C++ allowed.
+pub const THUMBNAIL_QUEUE_LIMIT: usize = 192;
 /// How many filmstrip frames a cache directory keeps (the newest).
 pub const THUMBNAIL_CACHE_LIMIT: usize = 512;
 /// The camera strip's frame count.
@@ -275,6 +276,30 @@ pub struct ThumbnailSource {
     pub pending: HashSet<i32>,
     pub failed: HashSet<i32>,
     pub ready: BTreeSet<i32>,
+    /// The video's keyframe times in milliseconds (rounded down, so a frame built there is the
+    /// keyframe itself), read from its index the first time a frame is asked for; `Some(None)`
+    /// when it has none to give.
+    pub keyframes: Option<Option<Vec<i32>>>,
+}
+
+impl ThumbnailSource {
+    /// The keyframe a stand-in for the frame at `milliseconds` comes from: the last one at or
+    /// before it in `first..=last`, else the first in that span. `None` without keyframes, or
+    /// when the frame is within a frame of its keyframe (it decodes alone anyway).
+    fn stand_in_for(&mut self, milliseconds: i32, first: i32, last: i32) -> Option<i32> {
+        let video_path = &self.video_path;
+        let keyframes = self.keyframes.get_or_insert_with(|| {
+            crate::media_av::keyframe_times(video_path)
+                .filter(|times| times.len() > 1)
+                .map(|times| times.iter().map(|t| (t * 1000.0).floor() as i32).collect())
+        });
+        let keyframes = keyframes.as_ref()?;
+        let index = keyframes.partition_point(|&k| k <= milliseconds);
+        let before = index.checked_sub(1).map(|i| keyframes[i]).filter(|&k| k >= first);
+        let stand_in = before.or_else(|| keyframes.get(index).copied().filter(|&k| k <= last))?;
+        let frame_ms = (1000.0 / self.fps.max(1.0)).ceil() as i32;
+        ((stand_in - milliseconds).abs() > frame_ms).then_some(stand_in)
+    }
 }
 
 /// What `thumbnailSource` reads of the document to make a source.
@@ -481,12 +506,23 @@ impl Document {
             return qurl::from_local_file(&path);
         }
         let mut enqueued = false;
+        let mut stand_in = None;
         if !source.pending.contains(&milliseconds)
             && !source.failed.contains(&milliseconds)
             && queue_length < THUMBNAIL_QUEUE_LIMIT
         {
             source.pending.insert(milliseconds);
             enqueued = true;
+            // Building a frame decodes from the keyframe before it, up to a second of video. The
+            // keyframe's own frame decodes alone, so it is built first, ahead of every exact
+            // frame: the nearest-frame fallback below shows it until this one is made.
+            // A stand-in already queued (as another span's own frame) moves to the front.
+            stand_in = source
+                .stand_in_for(milliseconds, first_sample, last_sample)
+                .filter(|k| !source.ready.contains(k) && !source.failed.contains(k));
+            if let Some(k) = stand_in {
+                source.pending.insert(k);
+            }
         }
         let mut nearest: i32 = -1;
         for &ready in source.ready.range(first_sample..=last_sample) {
@@ -496,6 +532,15 @@ impl Document {
         }
         if enqueued {
             self.thumbnails.queue.push_back((key.to_owned(), milliseconds));
+            if let Some(k) = stand_in {
+                let entry = (key.to_owned(), k);
+                if !self.thumbnails.running.contains(&entry) {
+                    if let Some(index) = self.thumbnails.queue.iter().position(|queued| *queued == entry) {
+                        self.thumbnails.queue.remove(index);
+                    }
+                    self.thumbnails.queue.push_front(entry);
+                }
+            }
             self.emit(Effect::StartNextVideoThumbnail);
         }
         if nearest < 0 {

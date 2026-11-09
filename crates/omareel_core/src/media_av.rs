@@ -39,6 +39,7 @@ unsafe extern "C" {
     fn omr_stream_close(stream: *mut RawStream);
     fn omr_probe(path: *const c_char, info: *mut RawInfo) -> c_int;
     fn omr_frame_times(path: *const c_char, times: *mut *mut c_double) -> c_long;
+    fn omr_keyframe_times(path: *const c_char, times: *mut *mut c_double) -> c_long;
     fn omr_free(pointer: *mut c_void);
     fn omr_thumbnail(
         path: *const c_char,
@@ -130,6 +131,23 @@ pub fn frame_times(path: &str) -> Option<Vec<f64>> {
     let mut times: *mut c_double = std::ptr::null_mut();
     // SAFETY: the C side allocates `count` doubles, freed here with its own free.
     let count = unsafe { omr_frame_times(c.as_ptr(), &mut times) };
+    if count < 0 || (count > 0 && times.is_null()) {
+        return None;
+    }
+    let result = if count == 0 { Vec::new() } else { unsafe { std::slice::from_raw_parts(times, count as usize) }.to_vec() };
+    unsafe { omr_free(times.cast()) };
+    Some(result)
+}
+
+/// When each keyframe of the first video stream starts, in seconds from the file's start (the
+/// time [`thumbnail`] takes), read from the index without decoding; `None` when the file can't
+/// be read. A frame there decodes alone, where one between keyframes needs every frame before
+/// it back to the last keyframe.
+pub fn keyframe_times(path: &str) -> Option<Vec<f64>> {
+    let c = c_path(path)?;
+    let mut times: *mut c_double = std::ptr::null_mut();
+    // SAFETY: as frame_times.
+    let count = unsafe { omr_keyframe_times(c.as_ptr(), &mut times) };
     if count < 0 || (count > 0 && times.is_null()) {
         return None;
     }
