@@ -65,6 +65,51 @@ Rune:
 - Colour probes run beside the recording's opening, in process.
 - Filmstrip frames build in parallel.
 
+## Second round: end-to-end tests, n1x, and seeking
+
+The branch was then tested end to end on foundry2 and on n1x (NVIDIA N1X, aarch64), whose own
+write-up is `RESULTS-startup-n1x.md`. Final numbers (3-minute 1440p recording opened fresh; seek
+and video on a 10 s 1080p recording with one-second keyframes):
+
+| | foundry2 Qt | foundry2 Rune | n1x Qt | n1x Rune |
+|---|---|---|---|---|
+| First frame, before | 0.61 s | 0.43 s | 2.59 s | 0.94 s |
+| First frame, after | **0.29 s** | **0.13 s** | **0.58 s** | **0.48 s** |
+| Filmstrip complete, before | 10.7 s | 6.9 s | 14.3 s | 9.3 s |
+| Filmstrip complete, after | **1.6 s** | **1.0 s** | **2.1 s** | **1.4 s** |
+| Editor after Stop, before / after | 743 / **419 ms** | 363 / **243 ms** | 2910 / **922 ms** | 1033 / **853 ms** |
+| Seek, before / after | 22 / 21 ms | 103 / **35 ms** | – / 43 ms | 170 / **86 ms** |
+
+(n1x's display currently caps the nested window at 15 frames/s, which rounds its seek and play
+times to 66 ms steps; first frames aren't affected.)
+
+What the second round changed:
+
+- **Qt on NVIDIA: Qt Multimedia's encoder probe.** The first media player created a VA-API device
+  (through nvidia-vaapi-driver, which sets up CUDA) and a Vulkan device for encoding, which
+  omareel never does through Qt: 1.8 s of kernel time on the main thread, in every Qt process
+  (launcher and bar too). `configureVideoDecoding()` now limits it to CUDA on NVIDIA, as decoding
+  already was. Intel and AMD are unaffected.
+- **Rune's preview decodes in process** (`omr_stream` in `media.c`), its decoders kept in a pool
+  between seeks instead of an ffmpeg process per stream. The idle editor with its decoders holds
+  300 MB instead of 540, playback uses 13 to 23 % less CPU on n1x, and the video shows sooner.
+- **Rune's seeks.** A click started the decoders twice (press and release), a paused seek waited a
+  frame before starting them, and a seek sprang the composition's zoom and cursor to the new time
+  instead of landing them. Paused, the keyframe is shown first (11 to 16 ms on n1x) and the
+  exact frame follows; forward seeks without a keyframe between decode on rather than seek.
+- **Qt's buttons** make their tooltip on first hover and their icons only when they have one
+  (about 390 objects fewer in the editor). No change on foundry2; n1x's QML profile ranked them
+  first.
+- **The wallpaper picker** rebuilt its whole list for every thumbnail made (a hundred times after
+  a theme change); it now refreshes at most four times a second.
+- **Checks:** all Rust (374), Qt (`ctest`, 4/4) and Rune tests pass; `compare-binaries.sh` finds no
+  difference in output or screenshots; the recording parity harness finds only the two ffprobe
+  runs the editor no longer makes; playback and export are unchanged on both machines. n1x
+  showed that an odd NV12 width overran the colour plane (fixed: sizes round to even) and that
+  ffmpeg 9.0.2's libswscale corrupts the heap in its threaded frame API with a colour-matrix
+  change, which the camera encoder's filter uses (`cameracapture` fails there before and after
+  this branch) and `media.c` doesn't.
+
 ## What is left
 
 - Qt: the first frame is now dynamic linking (~50 ms), EGL (~50 ms), QML creation (~85 ms, spread
@@ -72,8 +117,13 @@ Rune:
   frame (~45 ms, plus ~25 ms again when Hyprland sets the scale).
 - Filmstrip: each frame still decodes from its keyframe (up to a second of video). Building the
   keyframe's own frame first, as a stand-in, would fill the strip in a fraction of the time.
-- Rune: the preview still decodes through ffmpeg processes (seek 93 ms against Qt's 13); an
-  in-process decoder like `media.c`'s is the fix.
+- NVIDIA, both apps: driver setup in the kernel. Rune's Vulkan device (about 250 ms) could be
+  created on a thread at the top of `main` (a Rune change); Qt pays NVIDIA's 70 ms first
+  `eglMakeCurrent` on two threads, which `QSG_RENDER_LOOP=basic` avoids (0.57 to 0.45 s, playback
+  not yet checked with it); Hyprland's scale change costs Qt a second expose (110 ms on n1x).
+- n1x: Qt's video shows 0.7 s after its window (cause being measured).
+- Omarchy's `QT_QPA_PLATFORMTHEME=gtk3` costs Qt 30 to 38 ms on n1x; clearing it would lose GTK's
+  file dialogs.
 
 ## Tools
 
