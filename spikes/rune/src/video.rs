@@ -243,7 +243,9 @@ impl Job {
             POOL.gone(&key);
             return false;
         }
-        let (w, h) = (self.width as usize, self.height as usize);
+        // The decoder's size: the one asked for, rounded down to even.
+        let (fw, fh) = (stream.width, stream.height);
+        let (w, h) = (fw as usize, fh as usize);
         let end = self.start + self.length - 1e-6;
         let mut sent = 0u64;
         while !stop.load(Ordering::SeqCst) {
@@ -255,9 +257,9 @@ impl Job {
             }
             let frame = Frame {
                 time,
-                width: self.width,
-                height: self.height,
-                pixels: Pixels::Nv12(ByteFrame { width: self.width, height: self.height, format: Format::Nv12Video, color: self.color, planes: [y, uv] }),
+                width: fw,
+                height: fh,
+                pixels: Pixels::Nv12(ByteFrame { width: fw, height: fh, format: Format::Nv12Video, color: self.color, planes: [y, uv] }),
             };
             if log && sent < 2 {
                 eprintln!(
