@@ -1036,8 +1036,9 @@ pub(crate) fn play_glyph(playing: bool, color: rune::Color) -> El {
 }
 
 pub fn run(options: Options) -> Result<(), String> {
-    // The theme's fc-match and hyprctl, and the colour probes of both videos (an ffprobe each),
-    // run on threads while the recording opens.
+    // The window's GPU device (250 ms on NVIDIA), the theme's fc-match and hyprctl, and the
+    // colour probes of both videos run on threads while the recording opens.
+    rune::warm_gpu(wgpu::Features::empty());
     omareel_core::theme::prefetch();
     let bundle_file = |name: &str| omareel_core::compat::qdir::file_path(&omareel_core::compat::qdir::absolute_path(&options.bundle), name);
     let screen_color = {

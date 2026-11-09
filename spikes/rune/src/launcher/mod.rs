@@ -192,6 +192,8 @@ const SCENES: &[(&str, fn(&mut Launcher))] = &[
 ];
 
 pub fn run(rune_args: Vec<String>) -> Result<(), String> {
+    // The window's GPU device on a thread while the launcher reads its settings and devices.
+    rune::warm_gpu(wgpu::Features::empty());
     let spec = AppSpec {
         poll: Some(poll),
         on_key: Some(on_key),

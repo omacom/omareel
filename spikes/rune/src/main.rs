@@ -34,6 +34,7 @@ mod recording_bar;
 mod setup;
 mod theme;
 mod video;
+mod waiting;
 
 fn value<'a>(args: &'a [String], flag: &str) -> Option<&'a str> {
     args.iter().position(|a| a == flag).and_then(|i| args.get(i + 1)).map(String::as_str)
@@ -61,6 +62,16 @@ fn recording_process(args: &[String]) -> Option<i32> {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+    // The editor and bar started ahead (waiting.rs): the handler first, as the recorder checks
+    // for it before signalling.
+    let waiting_editor = args.len() == 5 && args[1] == "edit" && args[2] == "--wait";
+    let waiting_bar = args.len() == 4 && args[1] == "__record-bar" && args[2] == "--wait";
+    if waiting_editor || waiting_bar {
+        waiting::install();
+    }
+    if waiting_bar {
+        omareel_record::recorder::waiting_bar::register();
+    }
     if let Some(status) = recording_process(&args) {
         std::process::exit(status);
     }
@@ -68,7 +79,30 @@ fn main() {
         // The launcher, with Rune's own flags after `--` (`-- --snap out.png --scene recording`).
         None => launcher::run(Vec::new()),
         Some("--") => launcher::run(args[2..].to_vec()),
+        Some("__record-bar") if waiting_bar => {
+            omareel_core::theme::prefetch();
+            rune::warm_gpu(wgpu::Features::empty());
+            let starter = args[3].parse().unwrap_or(0);
+            let flags = waiting::wait(starter, 2000, 20_000, || rune::warm_gpu(wgpu::Features::empty()));
+            omareel_record::recorder::waiting_bar::unregister();
+            match flags {
+                Some(flags) => recording_bar::run(&if flags & 1 != 0 { vec!["--hidden".to_owned()] } else { Vec::new() }),
+                None => Ok(()),
+            }
+        }
         Some("__record-bar") => recording_bar::run(&args[2..]),
+        Some("edit") if waiting_editor => {
+            // Rune makes the window's GPU device on a thread (warm_gpu), kept warm while the
+            // recording runs (it lapses half a minute after the last call); FFmpeg and the theme too.
+            omareel_core::theme::prefetch();
+            omareel_core::media_av::preload();
+            rune::warm_gpu(wgpu::Features::empty());
+            let recorder = args[3].parse().unwrap_or(0);
+            match waiting::wait(recorder, 100, 20_000, || rune::warm_gpu(wgpu::Features::empty())) {
+                Some(_) => preview::run(preview::Options::editor(&args[4])),
+                None => Ok(()),
+            }
+        }
         Some("edit") if args.len() > 2 => preview::run(preview::Options::editor(&args[2])),
         Some("setup") if args.len() > 2 => setup::run(&args[2]),
         // As `omareel export` (src/main.cpp's exportCommand) and `omareel probe`.

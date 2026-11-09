@@ -35,7 +35,7 @@ seconds = float(os.environ.get('SECONDS_RUN', '4'))
 use_perf = os.environ.get('PERF', '1') == '1'
 freq = os.environ.get('PERF_FREQ', '2999')
 reopen = os.environ.get('REOPEN', '0') == '1'
-wait = float(os.environ.get('WAIT', '0'))
+wait = float(os.environ.get('WAIT') or 0)
 os.makedirs(out, exist_ok=True)
 cache = os.path.join(os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache')), 'omareel', 'omareel')
 stamp = re.compile(r'^\[(\d+):(\d+):(\d+\.\d+)\]\s*(?:\{[^}]*\}\s*)?(.*)')

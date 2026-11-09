@@ -40,6 +40,8 @@ fn configure_overlay_rule(scope: &str) {
 }
 
 pub fn run(args: &[String]) -> Result<(), String> {
+    // Its GPU device on a thread while the recorder's state is read (a waiting bar has one warm).
+    rune::warm_gpu(wgpu::Features::empty());
     // The recorder starts the bar with no terminal: `OMAREEL_RECORDING_BAR_LOG=<file>` keeps
     // what it prints (the camera's lines, `OMAREEL_SELFVIEW_DRAG_LOG`'s).
     if let Some(path) = std::env::var_os("OMAREEL_RECORDING_BAR_LOG")
