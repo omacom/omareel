@@ -176,7 +176,10 @@ unsafe impl Send for VideoStream {}
 impl VideoStream {
     /// Opens `path` for NV12 frames of `width` x `height`, decoded on the VA-API device given, or
     /// in software with `threads` threads.
+    /// NV12 needs an even size (its colour plane is half the width, in pairs): an odd one is
+    /// rounded down, and `width` and `height` say what the frames are.
     pub fn open(path: &str, vaapi_device: Option<&str>, width: u32, height: u32, threads: usize) -> Option<VideoStream> {
+        let (width, height) = ((width & !1).max(2), (height & !1).max(2));
         let path = c_path(path)?;
         let device = vaapi_device.map(c_path).unwrap_or(None);
         let threads = c_int::try_from(threads).unwrap_or(1);

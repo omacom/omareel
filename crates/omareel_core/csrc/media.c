@@ -362,6 +362,8 @@ static enum AVPixelFormat pick_vaapi(AVCodecContext *context, const enum AVPixel
 
 struct omr_stream *omr_stream_open(const char *path, const char *vaapi_device, int width, int height, int threads)
 {
+    // NV12's colour plane is half the width in pairs: an odd size would overrun its rows.
+    if (width < 2 || height < 2 || (width & 1) || (height & 1)) return NULL;
     struct omr_stream *s = calloc(1, sizeof *s);
     if (!s) return NULL;
     s->width = width;
