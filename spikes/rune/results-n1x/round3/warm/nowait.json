@@ -1,0 +1,28 @@
+{
+ "editor_wait": "0",
+ "record_rc": 0,
+ "waiting_editor": [],
+ "editor_cpu_percent": [],
+ "daemon_cpu_percent": [
+  5.99
+ ],
+ "editor_rss_mb": [],
+ "editor_alive_before_stop": true,
+ "editor_window_ms": 719.8,
+ "editor_alive_after_3s": true,
+ "capture": {
+  "conversion": "cpu",
+  "drops": 0,
+  "frames": 304,
+  "measuredFps": 15.067154007049936
+ },
+ "bundle_files": [
+  "capture.json",
+  "input.jsonl",
+  "project.json",
+  "recording.json",
+  "screen.mp4",
+  "screen.mp4.ts",
+  "thumb.jpg"
+ ]
+}

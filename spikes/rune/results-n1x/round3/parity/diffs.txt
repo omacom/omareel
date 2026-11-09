@@ -1,0 +1,156 @@
+# recording-parity.py, 291db4c (old) against this round (new), on n1x. Per case: what differs, then
+# the program calls only one side made (- old, + new). A reordered call shows as - and +.
+
+## cli: same
+
+## fullscreen-nobar: calls, input_count, raw_counts
+  +__record-daemon ffmpeg: <ROOT>/shims/ffmpeg -hide_banner -loglevel error -f lavfi -i color=size=256x256:rate=1 -frames:v 1 -c:v h264_nvenc -f null -
+  -__record-daemon ffmpeg: <ROOT>/shims/ffmpeg -hide_banner -loglevel error -f lavfi -i color=size=256x256:rate=1 -frames:v 1 -c:v h264_nvenc -f null -
+  -__record-daemon ffprobe: <ROOT>/shims/ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 <BUNDLE>/screen.mp4
+  input_count: old 11
+               new 10
+  raw_counts: old {"frames": 30, "packets": 31, "first_frame_ms": 120.073, "ttff_ms": 295.009}
+              new {"frames": 29, "packets": 30, "first_frame_ms": 110.35, "ttff_ms": 197.439}
+
+## region-nobar-odd: calls, raw_counts
+  -__record-daemon ffprobe: <ROOT>/shims/ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 <BUNDLE>/screen.mp4
+  raw_counts: old {"frames": 4, "packets": 5, "first_frame_ms": 99.505, "ttff_ms": 292.533}
+              new {"frames": 4, "packets": 5, "first_frame_ms": 91.936, "ttff_ms": 180.41}
+
+## window-nobar: calls, raw_counts
+  -__record-daemon ffprobe: <ROOT>/shims/ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 <BUNDLE>/screen.mp4
+  raw_counts: old {"frames": 4, "packets": 5, "first_frame_ms": 92.018, "ttff_ms": 307.794}
+              new {"frames": 4, "packets": 5, "first_frame_ms": 83.45, "ttff_ms": 191.389}
+
+## fullscreen-bar: calls, input_count, input_positions, raw_counts
+  -__record-daemon ffprobe: <ROOT>/shims/ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 <BUNDLE>/screen.mp4
+  input_count: old 11
+               new 9
+  input_positions: old [[200, 150], [400, 300], [600, 200], [800, 450]]
+                   new [[200, 150], [400, 300], [600, 200]]
+  raw_counts: old {"frames": 30, "packets": 31, "first_frame_ms": 86.155, "ttff_ms": 254.726}
+              new {"frames": 27, "packets": 28, "first_frame_ms": 105.437, "ttff_ms": 172.383}
+
+## region-bar: calls, raw_counts
+  +__record-daemon ffmpeg: <ROOT>/shims/ffmpeg -hide_banner -loglevel error -f rawvideo -pix_fmt bgra -s 256x256 -r 1 -i pipe:0 -frames:v 1 -vf hwupload_cuda,scale_cuda=format=nv12 -c:v h264_nvenc -f null -
+  -__record-daemon ffmpeg: <ROOT>/shims/ffmpeg -hide_banner -loglevel error -f rawvideo -pix_fmt bgra -s 256x256 -r 1 -i pipe:0 -frames:v 1 -vf hwupload_cuda,scale_cuda=format=nv12 -c:v h264_nvenc -f null -
+  -__record-daemon ffprobe: <ROOT>/shims/ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 <BUNDLE>/screen.mp4
+  raw_counts: old {"frames": 17, "packets": 18, "first_frame_ms": 105.482, "ttff_ms": 286.178}
+              new {"frames": 16, "packets": 17, "first_frame_ms": 95.073, "ttff_ms": 171.581}
+
+## cancel-nobar: same
+
+## cancel-bar: same
+
+## audio-native: calls, input_count, raw_counts
+  +__record-daemon ffmpeg: <ROOT>/shims/ffmpeg -hide_banner -loglevel error -f rawvideo -pix_fmt bgra -s 256x256 -r 1 -i pipe:0 -frames:v 1 -vf hwupload_cuda,scale_cuda=format=nv12 -c:v h264_nvenc -f null -
+  -__record-daemon ffmpeg: <ROOT>/shims/ffmpeg -hide_banner -loglevel error -f rawvideo -pix_fmt bgra -s 256x256 -r 1 -i pipe:0 -frames:v 1 -vf hwupload_cuda,scale_cuda=format=nv12 -c:v h264_nvenc -f null -
+  -__record-daemon ffmpeg: <ROOT>/shims/ffmpeg -y -hide_banner -nostats -loglevel info -thread_queue_size 1024 -f pulse -i alsa_output.platform-NVDA2014_00.hdmi-stereo.monitor -thread_queue_size 1024 -f pulse -i omareel_parity_mic.monitor -filter_complex [1:a]volumedetect[m];[0:a][m]ami
+  +__record-daemon ffmpeg: <ROOT>/shims/ffmpeg -y -hide_banner -nostats -stats_period 0.05 -loglevel info -thread_queue_size 1024 -f pulse -i alsa_output.platform-NVDA2014_00.hdmi-stereo.monitor -thread_queue_size 1024 -f pulse -i omareel_parity_mic.monitor -filter_complex [1:a]volumede
+  -__record-daemon ffprobe: <ROOT>/shims/ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 <BUNDLE>/screen.mp4
+  input_count: old 7
+               new 5
+  raw_counts: old {"frames": 1, "packets": 2, "first_frame_ms": 111.149, "ttff_ms": 284.391}
+              new {"frames": 1, "packets": 2, "first_frame_ms": 113.618, "ttff_ms": 186.307}
+
+## audio-native-desktop: calls, input_count, raw_counts
+  -__record-daemon ffmpeg: <ROOT>/shims/ffmpeg -y -hide_banner -nostats -loglevel info -thread_queue_size 1024 -f pulse -i alsa_output.platform-NVDA2014_00.hdmi-stereo.monitor -map 0:a -c:a aac -b:a 192k -flush_packets 1 -cluster_time_limit 500 <BUNDLE>/audio.mka
+  +__record-daemon ffmpeg: <ROOT>/shims/ffmpeg -y -hide_banner -nostats -stats_period 0.05 -loglevel info -thread_queue_size 1024 -f pulse -i alsa_output.platform-NVDA2014_00.hdmi-stereo.monitor -map 0:a -c:a aac -b:a 192k -flush_packets 1 -cluster_time_limit 500 <BUNDLE>/audio.mka
+  -__record-daemon ffprobe: <ROOT>/shims/ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 <BUNDLE>/screen.mp4
+  +__record-daemon hyprctl: <ROOT>/shims/hyprctl devices -j
+  -__record-daemon hyprctl: <ROOT>/shims/hyprctl devices -j
+  input_count: old 7
+               new 5
+  raw_counts: old {"frames": 1, "packets": 2, "first_frame_ms": 135.87, "ttff_ms": 327.125}
+              new {"frames": 1, "packets": 2, "first_frame_ms": 103.212, "ttff_ms": 196.552}
+
+## no-plugin-bar: calls, raw_counts
+  -__record-daemon ffprobe: <ROOT>/shims/ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 <BUNDLE>/screen.mp4
+  raw_counts: old {"frames": 3, "packets": 4, "first_frame_ms": 79.345, "ttff_ms": 276.102}
+              new {"frames": 3, "packets": 4, "first_frame_ms": 84.457, "ttff_ms": 174.971}
+
+## gsr-real: calls
+  -__record-daemon ffmpeg: <ROOT>/shims/ffmpeg -y -loglevel error -i <DIR>/Recording <TIME>.omareel/screen.mp4 -frames:v 1 -q:v 3 <DIR>/Recording <TIME>.omareel/thumb.jpg
+
+## gsr-fake-region: calls, input_count, raw_counts
+  -__record-daemon ffprobe: <ROOT>/shims/ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 <BUNDLE>/screen.mp4
+  input_count: old 13
+               new 11
+  raw_counts: old {"frames": null, "packets": 180, "first_frame_ms": 263.54, "ttff_ms": 448.567}
+              new {"frames": null, "packets": 150, "first_frame_ms": 264.392, "ttff_ms": 345.383}
+
+## gsr-fake-fullscreen-bar: calls, raw_counts, state_at_start
+  -__record-daemon ffprobe: <ROOT>/shims/ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 <BUNDLE>/screen.mp4
+  raw_counts: old {"frames": null, "packets": 120, "first_frame_ms": 258.949, "ttff_ms": 461.218}
+              new {"frames": null, "packets": 120, "first_frame_ms": 259.461, "ttff_ms": 351.441}
+  state_at_start: old {"bar_height": 40, "bar_visible": false, "bar_width": 288, "bundle": "<DIR>/Recording <TIME>.omareel", "camera_device": "/dev/video2", "camera_flip_horizontal": false, "camera_height": 1080, "camera_record": false, "camera_rotation": 0, "camera_status": "disabled", "camera_stop": false, "capture_bac
+                  new {"bar_height": 40, "bar_visible": false, "bar_width": 288, "bundle": "<DIR>/Recording <TIME>.omareel", "camera_device": "/dev/video2", "camera_flip_horizontal": false, "camera_height": 1080, "camera_record": false, "camera_rotation": 0, "camera_status": "disabled", "camera_stop": false, "capture_bac
+
+## gsr-fake-audio: calls, raw_counts
+  -__record-daemon ffprobe: <ROOT>/shims/ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 <BUNDLE>/screen.mp4
+  raw_counts: old {"frames": null, "packets": 120, "first_frame_ms": 286.033, "ttff_ms": 493.527}
+              new {"frames": null, "packets": 121, "first_frame_ms": 245.115, "ttff_ms": 346.444}
+
+## gsr-fake-cancel: same
+
+## gsr-fake-fails: calls
+  -__record-daemon ffmpeg: <ROOT>/shims/ffmpeg -y -loglevel error -i <DIR>/Recording <TIME>.omareel/screen.mp4 -frames:v 1 -q:v 3 <DIR>/Recording <TIME>.omareel/thumb.jpg
+
+## mixed-stop: calls, raw_counts
+  +__record-daemon ffmpeg: <ROOT>/shims/ffmpeg -hide_banner -loglevel error -f rawvideo -pix_fmt bgra -s 256x256 -r 1 -i pipe:0 -frames:v 1 -vf hwupload_cuda,scale_cuda=format=nv12 -c:v h264_nvenc -f null -
+  -__record-daemon ffmpeg: <ROOT>/shims/ffmpeg -hide_banner -loglevel error -f rawvideo -pix_fmt bgra -s 256x256 -r 1 -i pipe:0 -frames:v 1 -vf hwupload_cuda,scale_cuda=format=nv12 -c:v h264_nvenc -f null -
+  -__record-daemon ffprobe: <ROOT>/shims/ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 <BUNDLE>/screen.mp4
+  raw_counts: old {"frames": 1, "packets": 2, "first_frame_ms": 70.326, "ttff_ms": 247.429}
+              new {"frames": 1, "packets": 2, "first_frame_ms": 92.422, "ttff_ms": 162.415}
+
+## mixed-cancel: calls
+  +__record-daemon ffmpeg: <ROOT>/shims/ffmpeg -hide_banner -loglevel error -f lavfi -i color=size=256x256:rate=1 -frames:v 1 -c:v h264_nvenc -f null -
+  -__record-daemon ffmpeg: <ROOT>/shims/ffmpeg -hide_banner -loglevel error -f lavfi -i color=size=256x256:rate=1 -frames:v 1 -c:v h264_nvenc -f null -
+
+## stop-and-cancel-usage: calls, input_count, raw_counts
+  +__record-daemon ffmpeg: <ROOT>/shims/ffmpeg -hide_banner -loglevel error -f lavfi -i color=size=256x256:rate=1 -frames:v 1 -c:v h264_nvenc -f null -
+  -__record-daemon ffmpeg: <ROOT>/shims/ffmpeg -hide_banner -loglevel error -f lavfi -i color=size=256x256:rate=1 -frames:v 1 -c:v h264_nvenc -f null -
+  -__record-daemon ffprobe: <ROOT>/shims/ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 <BUNDLE>/screen.mp4
+  input_count: old 6
+               new 5
+  raw_counts: old {"frames": 1, "packets": 2, "first_frame_ms": 82.569, "ttff_ms": 258.693}
+              new {"frames": 1, "packets": 2, "first_frame_ms": 80.022, "ttff_ms": 174.324}
+
+## native-encoder-fails: calls
+  -__record-daemon ffmpeg: <ROOT>/shims/ffmpeg -y -loglevel error -i <DIR>/Recording <TIME>.omareel/screen.mp4 -frames:v 1 -q:v 3 <DIR>/Recording <TIME>.omareel/thumb.jpg
+
+## native-falls-back-to-gsr: same
+
+## gsr-not-capturable-note: calls, raw_counts
+  -__record-daemon ffprobe: <ROOT>/shims/ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 <BUNDLE>/screen.mp4
+  raw_counts: old {"frames": null, "packets": 120, "first_frame_ms": 270.315, "ttff_ms": 487.871}
+              new {"frames": null, "packets": 121, "first_frame_ms": 235.69, "ttff_ms": 350.638}
+
+## webcam-missing-device: calls, input_count, raw_counts
+  -__record-daemon ffprobe: <ROOT>/shims/ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 <BUNDLE>/screen.mp4
+  -__record-daemon ffprobe: <ROOT>/shims/ffprobe -v error -select_streams v:0 -show_entries stream=width,height,r_frame_rate:format=duration -of json <BUNDLE>/camera.mp4
+  input_count: old 6
+               new 5
+  raw_counts: old {"frames": 17, "packets": 18, "first_frame_ms": 115.187, "ttff_ms": 326.039}
+              new {"frames": 17, "packets": 18, "first_frame_ms": 90.512, "ttff_ms": 160.208}
+
+## countdown-nobar: calls, raw_counts
+  -__record-daemon ffprobe: <ROOT>/shims/ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 <BUNDLE>/screen.mp4
+  raw_counts: old {"frames": 1, "packets": 2, "first_frame_ms": 3439.575, "ttff_ms": 3637.268}
+              new {"frames": 1, "packets": 2, "first_frame_ms": 3390.347, "ttff_ms": 3457.628}
+
+## countdown-bar: calls, raw_counts
+  -__record-daemon ffprobe: <ROOT>/shims/ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 <BUNDLE>/screen.mp4
+  raw_counts: old {"frames": 19, "packets": 20, "first_frame_ms": 3351.579, "ttff_ms": 3545.391}
+              new {"frames": 16, "packets": 17, "first_frame_ms": 3406.815, "ttff_ms": 3494.176}
+
+## preferences-gsr: same
+
+## open-editor: calls, editor_argv, files, raw_counts
+  -__record-daemon ffprobe: <ROOT>/shims/ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 <BUNDLE>/screen.mp4
+  editor_argv: old [["<APP>", "edit", "<DIR>/Recording <TIME>.omareel"]]
+               new [["<APP>", "edit", "--wait", "384006", "<DIR>/Recording <TIME>.omareel"]]
+  files: old ["capture.json", "input.jsonl", "recording.json", "screen.mp4", "screen.mp4.ts", "thumb.jpg"]
+         new ["capture.json", "input.jsonl", "project.json", "recording.json", "screen.mp4", "screen.mp4.ts", "thumb.jpg"]
+  raw_counts: old {"frames": 1, "packets": 2, "first_frame_ms": 103.73, "ttff_ms": 300.348}
+              new {"frames": 1, "packets": 2, "first_frame_ms": 109.132, "ttff_ms": 177.72}

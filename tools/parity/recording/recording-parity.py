@@ -484,7 +484,10 @@ try:
         time.sleep(0.2)
     assert found, 'the nested compositor has no window in the outer one'
     selector = 'address:' + found['address']
-    monitor = json.loads(subprocess.run(['hyprctl', '-j', 'monitors'], env=outer, capture_output=True, text=True).stdout)[0]
+    # OUTER_MONITOR=<name> puts the window on that monitor rather than the first one, so a run
+    # on a machine in use stays off the screen being worked on.
+    monitors = json.loads(subprocess.run(['hyprctl', '-j', 'monitors'], env=outer, capture_output=True, text=True).stdout)
+    monitor = next((m for m in monitors if m['name'] == os.environ.get('OUTER_MONITOR')), monitors[0])
     for expression in (f"hl.dispatch(hl.dsp.window.float({{action='enable',window='{selector}'}}))",
                        f"hl.dispatch(hl.dsp.window.resize({{x=1600,y=900,window='{selector}'}}))",
                        f"hl.dispatch(hl.dsp.window.move({{x={monitor['x'] + 60},y={monitor['y'] + 60},window='{selector}'}}))"):

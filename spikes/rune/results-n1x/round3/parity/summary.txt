@@ -1,0 +1,29 @@
+nested output [('WAYLAND-1', 1600, 900, 1)]
+cli: same
+fullscreen-nobar: DIFF calls  counts old={'frames': 30, 'packets': 31, 'first_frame_ms': 120.073, 'ttff_ms': 295.009} new={'frames': 29, 'packets': 30, 'first_frame_ms': 110.35, 'ttff_ms': 197.439}
+region-nobar-odd: DIFF calls  counts old={'frames': 4, 'packets': 5, 'first_frame_ms': 99.505, 'ttff_ms': 292.533} new={'frames': 4, 'packets': 5, 'first_frame_ms': 91.936, 'ttff_ms': 180.41}
+window-nobar: DIFF calls  counts old={'frames': 4, 'packets': 5, 'first_frame_ms': 92.018, 'ttff_ms': 307.794} new={'frames': 4, 'packets': 5, 'first_frame_ms': 83.45, 'ttff_ms': 191.389}
+fullscreen-bar: DIFF calls, input_positions  counts old={'frames': 30, 'packets': 31, 'first_frame_ms': 86.155, 'ttff_ms': 254.726} new={'frames': 27, 'packets': 28, 'first_frame_ms': 105.437, 'ttff_ms': 172.383}
+region-bar: DIFF calls  counts old={'frames': 17, 'packets': 18, 'first_frame_ms': 105.482, 'ttff_ms': 286.178} new={'frames': 16, 'packets': 17, 'first_frame_ms': 95.073, 'ttff_ms': 171.581}
+cancel-nobar: same  counts old=None new=None
+cancel-bar: same  counts old=None new=None
+audio-native: DIFF calls  counts old={'frames': 1, 'packets': 2, 'first_frame_ms': 111.149, 'ttff_ms': 284.391} new={'frames': 1, 'packets': 2, 'first_frame_ms': 113.618, 'ttff_ms': 186.307}
+audio-native-desktop: DIFF calls  counts old={'frames': 1, 'packets': 2, 'first_frame_ms': 135.87, 'ttff_ms': 327.125} new={'frames': 1, 'packets': 2, 'first_frame_ms': 103.212, 'ttff_ms': 196.552}
+no-plugin-bar: DIFF calls  counts old={'frames': 3, 'packets': 4, 'first_frame_ms': 79.345, 'ttff_ms': 276.102} new={'frames': 3, 'packets': 4, 'first_frame_ms': 84.457, 'ttff_ms': 174.971}
+gsr-real: DIFF calls  counts old=None new=None
+gsr-fake-region: DIFF calls  counts old={'frames': None, 'packets': 180, 'first_frame_ms': 263.54, 'ttff_ms': 448.567} new={'frames': None, 'packets': 150, 'first_frame_ms': 264.392, 'ttff_ms': 345.383}
+gsr-fake-fullscreen-bar: DIFF calls, state_at_start  counts old={'frames': None, 'packets': 120, 'first_frame_ms': 258.949, 'ttff_ms': 461.218} new={'frames': None, 'packets': 120, 'first_frame_ms': 259.461, 'ttff_ms': 351.441}
+gsr-fake-audio: DIFF calls  counts old={'frames': None, 'packets': 120, 'first_frame_ms': 286.033, 'ttff_ms': 493.527} new={'frames': None, 'packets': 121, 'first_frame_ms': 245.115, 'ttff_ms': 346.444}
+gsr-fake-cancel: same  counts old=None new=None
+gsr-fake-fails: DIFF calls  counts old=None new=None
+mixed-stop: DIFF calls  counts old={'frames': 1, 'packets': 2, 'first_frame_ms': 70.326, 'ttff_ms': 247.429} new={'frames': 1, 'packets': 2, 'first_frame_ms': 92.422, 'ttff_ms': 162.415}
+mixed-cancel: DIFF calls  counts old=None new=None
+stop-and-cancel-usage: DIFF calls  counts old={'frames': 1, 'packets': 2, 'first_frame_ms': 82.569, 'ttff_ms': 258.693} new={'frames': 1, 'packets': 2, 'first_frame_ms': 80.022, 'ttff_ms': 174.324}
+native-encoder-fails: DIFF calls  counts old=None new=None
+native-falls-back-to-gsr: same  counts old=None new=None
+gsr-not-capturable-note: DIFF calls  counts old={'frames': None, 'packets': 120, 'first_frame_ms': 270.315, 'ttff_ms': 487.871} new={'frames': None, 'packets': 121, 'first_frame_ms': 235.69, 'ttff_ms': 350.638}
+webcam-missing-device: DIFF calls  counts old={'frames': 17, 'packets': 18, 'first_frame_ms': 115.187, 'ttff_ms': 326.039} new={'frames': 17, 'packets': 18, 'first_frame_ms': 90.512, 'ttff_ms': 160.208}
+countdown-nobar: DIFF calls  counts old={'frames': 1, 'packets': 2, 'first_frame_ms': 3439.575, 'ttff_ms': 3637.268} new={'frames': 1, 'packets': 2, 'first_frame_ms': 3390.347, 'ttff_ms': 3457.628}
+countdown-bar: DIFF calls  counts old={'frames': 19, 'packets': 20, 'first_frame_ms': 3351.579, 'ttff_ms': 3545.391} new={'frames': 16, 'packets': 17, 'first_frame_ms': 3406.815, 'ttff_ms': 3494.176}
+preferences-gsr: same  counts old=None new=None
+open-editor: DIFF calls, editor_argv, files  counts old={'frames': 1, 'packets': 2, 'first_frame_ms': 103.73, 'ttff_ms': 300.348} new={'frames': 1, 'packets': 2, 'first_frame_ms': 109.132, 'ttff_ms': 177.72}

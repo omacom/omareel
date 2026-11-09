@@ -1,0 +1,52 @@
+{
+ "runs": [
+  {
+   "first_frame_s": 0.4867,
+   "filmstrip_frames": 0,
+   "filmstrip_first_s": null,
+   "filmstrip_last_s": null,
+   "camera_frames": 0,
+   "camera_last_s": null
+  },
+  {
+   "first_frame_s": 0.482,
+   "filmstrip_frames": 0,
+   "filmstrip_first_s": null,
+   "filmstrip_last_s": null,
+   "camera_frames": 0,
+   "camera_last_s": null
+  },
+  {
+   "first_frame_s": 0.4713,
+   "filmstrip_frames": 0,
+   "filmstrip_first_s": null,
+   "filmstrip_last_s": null,
+   "camera_frames": 0,
+   "camera_last_s": null
+  },
+  {
+   "first_frame_s": 0.4913,
+   "filmstrip_frames": 0,
+   "filmstrip_first_s": null,
+   "filmstrip_last_s": null,
+   "camera_frames": 0,
+   "camera_last_s": null
+  },
+  {
+   "first_frame_s": 0.4797,
+   "filmstrip_frames": 0,
+   "filmstrip_first_s": null,
+   "filmstrip_last_s": null,
+   "camera_frames": 0,
+   "camera_last_s": null
+  }
+ ],
+ "median_after_first": {
+  "first_frame_s": 0.481,
+  "filmstrip_frames": 0.0,
+  "filmstrip_first_s": null,
+  "filmstrip_last_s": null,
+  "camera_frames": 0.0,
+  "camera_last_s": null
+ }
+}

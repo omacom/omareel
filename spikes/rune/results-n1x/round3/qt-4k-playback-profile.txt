@@ -1,0 +1,75 @@
+CPU seconds per process:
+    13.76  ffmpeg decoder (639131)
+
+CPU seconds per thread (top 25):
+     0.78  ffmpeg decoder  av:h264:df10 639193
+     0.76  ffmpeg decoder  av:h264:df14 639197
+     0.72  ffmpeg decoder  av:h264:df8 639191
+     0.72  ffmpeg decoder  av:h264:df5 639188
+     0.72  ffmpeg decoder  av:h264:df2 639185
+     0.72  ffmpeg decoder  av:h264:df6 639189
+     0.69  ffmpeg decoder  av:h264:df9 639192
+     0.69  ffmpeg decoder  av:h264:df15 639198
+     0.69  ffmpeg decoder  av:h264:df7 639190
+     0.69  ffmpeg decoder  av:h264:df4 639187
+     0.69  ffmpeg decoder  av:h264:df0 639183
+     0.69  ffmpeg decoder  av:h264:df3 639186
+     0.68  ffmpeg decoder  av:h264:df1 639184
+     0.67  ffmpeg decoder  av:h264:df12 639195
+     0.65  ffmpeg decoder  av:h264:df13 639196
+     0.62  ffmpeg decoder  av:h264:df11 639194
+     0.46  ffmpeg decoder  omareel 639131
+     0.40  ffmpeg decoder  QSGRenderThread 639211
+     0.11  ffmpeg decoder  QFFmpeg::Stream 639181
+     0.10  ffmpeg decoder  QFFmpeg::Stream 639200
+     0.10  ffmpeg decoder  QFFmpeg::Demuxe 639201
+     0.10  ffmpeg decoder  QFFmpeg::VideoR 639199
+     0.08  ffmpeg decoder  av:h264:df3 639167
+     0.08  ffmpeg decoder  av:h264:df5 639169
+     0.08  ffmpeg decoder  av:h264:df1 639165
+
+ffmpeg decoder (639131): top self functions
+    11.37  [libavcodec.so.63.1.102]
+     0.95  [libc.so.6]
+     0.14  pthread_cond_wait
+     0.12  [libnvidia-eglcore.so.615.78.08]
+     0.11  [libglib-2.0.so.0.9000.1]
+     0.10  memcpy
+     0.06  [libQt6Core.so.6.12.0]
+     0.04  [libQt6Qml.so.6.12.0]
+     0.04  ppoll
+     0.04  [libavutil.so.61.1.102]
+     0.03  [libffmpegmediaplugin.so]
+     0.03  [libQt6Gui.so.6.12.0]
+
+inclusive CPU seconds, the app main thread (0.46 s):
+     0.46  QEventDispatcherGlib::processEvents(QFlags<QEventLoop::ProcessEventsFlag>)
+     0.46  QCoreApplication::exec()
+     0.46  main
+     0.46  __libc_start_main
+     0.46  _start
+     0.46  [libc.so.6]
+     0.46  QEventLoop::exec(QFlags<QEventLoop::ProcessEventsFlag>)
+     0.46  g_main_context_iteration
+     0.46  [libglib-2.0.so.0.9000.1]
+     0.39  [libQt6Core.so.6.12.0]
+     0.38  QCoreApplication::notifyInternal2(QObject*, QEvent*)
+     0.37  QObject::event(QEvent*)
+     0.32  QTimerInfoList::activateTimers()
+     0.32  QTimer::timeout(QTimer::QPrivateSignal)
+     0.31  Omareel$cxxbridge1$198$Editor$timer_fired
+     0.30  QQmlNotifier::emitNotify(QQmlNotifierEndpoint*, void**)
+     0.29  [libQt6Qml.so.6.12.0]
+     0.28  QQmlBinding::update(QFlags<QQmlPropertyData::WriteFlag>)
+     0.27  QQmlBinding::doUpdate(QQmlJavaScriptExpression::DeleteWatcher const&, QFlags<QQmlPropertyData::WriteFlag>, QV4::Scope&)
+     0.26  Omareel$cxxbridge1$198$Editor$composition_changed
+     0.13  QQmlBinding::slowWrite(QQmlPropertyData const&, QQmlPropertyData const&, QV4::Value const&, bool, QFlags<QQmlPropertyData::WriteFlag>)
+     0.11  [libQt6Quick.so.6.12.0]
+     0.11  [memfd:JITCode:QtQml (deleted)]
+     0.11  QQmlBinding::evaluate(bool*)
+     0.11  QQmlJavaScriptExpression::evaluate(QV4::CallData*, bool*)
+     0.07  QQmlPropertyPrivate::write(QObject*, QQmlPropertyData const&, QVariant const&, QQmlRefPointer<QQmlContextData> const&, QFlags<QQmlPropertyData::WriteFlag>)
+     0.07  QQuickRepeater::setModel(QVariant const&)
+     0.06  QCoreApplicationPrivate::sendPostedEvents(QObject*, int, QThreadData*)
+     0.06  Omareel::Editor::qt_static_metacall(QObject*, QMetaObject::Call, int, void**)
+     0.05  [libQt6QmlModels.so.6.12.0]

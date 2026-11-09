@@ -242,6 +242,136 @@ How much of this you'd see on a real 60 Hz monitor I couldn't measure (see the 1
 the chain is a count of frames: at 16.7 ms a frame, the same dozen blocks come to about 0.15 s,
 which matches foundry2's 0.13 s window-to-video gap.
 
+## Third round: the warm editor, the waiting bar, faster Stop, FFmpeg at runtime
+
+This round's commits (c202119 to 46b513c, plus the export work at 7de76e5) against 291db4c, on
+n1x. Nothing broke. The editor opens 0.44 s after Stop instead of 0.93 (0.51 instead of 1.13 with
+audio), the bar shows in 0.33 s instead of 0.64, and with the warm editor the first frame is on
+screen 0.19 s after the signal. Raw data in `results-n1x/round3/`. Same setup as before: nested
+Hyprland windowed on DP-7, which only gets 15 frames a second (see "Regression checks"), so
+anything measured in frames (play, seek) is in 66 ms steps.
+
+### Correctness
+
+- **Tests:** `cargo test --workspace --exclude omareel_qt` 357 passed; `ctest` 4 of 5, the same
+  four `cameracapture` checks as before (ffmpeg's swscale crash on aarch64); `cargo test --release`
+  in `spikes/rune` passes.
+- **No FFmpeg linked:** `ldd omareel` lists 102 libraries, none of them `libav*` or `libsw*`
+  (291db4c: 190, six of them FFmpeg's). Loading the five on first use costs 19 to 22 ms here
+  (`dlopen` with `RTLD_NOW`).
+- **What uses it works:** an export (1080p and 4K, the same pictures as the export results), the
+  editor's probes and filmstrip (every startup run below), the Rune preview (plays in software
+  through `media_av`, `rune-preview-1080p.md`), and real recordings (`ext-image-copy-capture`, 0
+  drops). On n1x the recorder never takes its GPU path: every run logs `gpu=0` (NVIDIA's VA-API is
+  excluded and this ffmpeg has no NVENC), so `gpu_capture.c`'s GPU encode isn't exercised here.
+- **Recording parity** (`tools/parity/recording/recording-parity.py`, 291db4c against this round,
+  `parity/diffs.txt`): every difference is one you listed or follows from one:
+  - the recorder's `ffprobe` for the duration is gone, and so is the thumbnail's `ffmpeg` in the
+    gpu-screen-recorder cases (made in process; the bundles have the same files);
+  - `-stats_period 0.05` on the audio ffmpeg;
+  - `edit --wait <pid>` in `editor_argv`, and `project.json` in `open-editor`'s bundle;
+  - the NVENC encoder probe now runs at a different point among the calls;
+  - `countdown_ready` is true at start in `gsr-fake-fullscreen-bar` (the bar was already waiting);
+  - one missing input position in `fullscreen-bar` (the pointer's start, 800,450), which didn't
+    come back in three reruns of that case: timing.
+
+  Two things were needed to run it on n1x. The nested Hyprland segfaults drawing hardware cursors
+  on NVIDIA (`CPointerManager::renderHWCursorBuffer`) as soon as the recorder turns them back on,
+  which took every later case down with it on both sides; a wrapper that keeps
+  `cursor:no_hardware_cursors` on fixes that. And the harness put its window on the first outer
+  monitor; it now takes `OUTER_MONITOR`, so a run stays off the screen in use. As a side effect,
+  the time to the file's first frame went from 250 to 330 ms down to 160 to 200 ms in most cases.
+
+### The warm editor on NVIDIA
+
+`warm/`, a 20 s fullscreen recording each way:
+
+| | warm editor | `OMAREEL_EDITOR_WAIT=0` |
+|---|---|---|
+| Waiting editor's RSS | 234 MB | |
+| Waiting editor's CPU while recording | 0.0 % | |
+| Recorder's CPU while recording | 5.9 % | 6.0 % |
+| Frames, drops (`capture.drops`) | 304, 0 | 304, 0 |
+| Editor's window after Stop | 433 ms | 720 ms |
+
+No crash and no core dump. With decoding and encoding both set to CUDA on NVIDIA, the throwaway
+QMediaPlayer never touches NVIDIA's VA-API driver.
+
+### Startup (`startup-profile.py`, median of runs 2 to 5 of 5)
+
+| | 291db4c | this round | this round, `WAIT=4` (from the signal) |
+|---|---|---|---|
+| Editor: first frame | 0.515 s | 0.475 s | **0.188 s** |
+| Filmstrip: first frame lands | 0.33 s | 0.70 s | 0.47 s |
+| Filmstrip: filled (each tile its own frame or its keyframe's) | 1.70 s | **0.80 s** | **0.56 s** |
+| Filmstrip: complete (every tile its own frame) | 1.70 s | 1.92 s | 1.68 s |
+| Camera strip complete | 0.25 s | 0.76 s | 0.52 s |
+| Launcher (`NO_BUNDLE=1`): first frame | 0.481 s | 0.463 s | |
+
+The stand-ins fill the strip twice as early. Waiting for the first video frame (or 400 ms) moves
+the filmstrip's and the camera strip's start back by about 0.4 s and finishes the exact frames a
+little later; 126 frames are built instead of 78 (48 stand-ins, keyframes every second).
+
+### Opening, playing, seeking (`launch.py`, 6 runs, warm median)
+
+| | 291db4c | this round | this round, `WAIT=4` |
+|---|---|---|---|
+| Window | 0.545 s | 0.509 s | **0.179 s** |
+| Video showing | 0.985 s | 0.899 s | **0.577 s** |
+| Play to motion, median | 157 ms | 156 ms | 164 ms |
+| Seek, median (rerun) | 16 ms (46 ms) | 45 ms (26 ms) | 52 ms |
+| Idle RSS | 737 MB | 731 MB | 727 MB |
+
+The seeks look like a change between the first two columns and aren't: rerun back to back, the
+order flips (46 against 26 ms). On this window they are mostly a matter of which 66 ms frame they
+land on.
+
+### The recording loop (`loop-timing.py`, 6 runs, median ms)
+
+| | 291db4c | this round | this round, both waits off | 291db4c, audio | this round, audio |
+|---|---|---|---|---|---|
+| Launcher window | 488 | **417** | 429 | 521 | **432** |
+| Region picker | 244 | 177 | 196 | 269 | 158 |
+| Bar, from the click | 644 | **327** | 595 | 631 | **332** |
+| `record --stop` returns | 466 | **266** | 265 | 617 | **369** |
+| Editor window, from Stop | 933 | **440** | 705 | 1126 | **513** |
+
+The waiting bar is worth about 270 ms and the warm editor about 265 ms; the rest of the Stop path
+(the in-process probes, the thumbnail moved after the editor, the 15 ms `record --stop`) another
+230. Audio used to add about 190 ms to the editor's time and now adds about 70, most likely the
+audio ffmpeg's `-stats_period` (I didn't isolate it).
+
+Where Stop goes now, with audio (`loop/after-audio-stop-stages.txt`, median ms after
+`stop_seen`, 6 runs; 291db4c has no such stages):
+
+| stage | ms |
+|---|---|
+| `stop_capture_finished` | 24 |
+| `stop_audio_muxed` | 140 |
+| `stop_camera_stopped` | 140 |
+| `stop_probed` | 263 |
+| `stop_input_written` | 268 |
+| `stop_editor_launch` | 274 |
+| `stop_thumbnail` | 346 |
+
+The biggest step left is `stop_camera_stopped` to `stop_probed`, 123 ms. Loading FFmpeg's libraries
+the first time is about 20 ms of it; the rest is the in-process probing itself or something it
+waits on, which I didn't profile. Worth a look.
+
+### Qt's 4K playback CPU
+
+One perf run of the Qt editor playing `b2160` (`OMAREEL_PREVIEW_STATS=1`, 8 s, frame pointers,
+`qt-4k-playback-profile.txt`): 12.9 s of CPU in 8 s (161 %), of which 11.4 s is `libavcodec`,
+sixteen `av:h264` frame threads at about 0.7 s each. The GUI thread is 0.46 s, the render thread
+0.40 s, `memcpy` 0.10 s. So it isn't a CUDA download or the upload: it's software H.264 decoding of
+every 4K frame at 60 frames a second, since CUDA decoding never starts on the N1X (`No HW decoder
+found`). The 104 % I gave for Rune earlier was its app process alone, with its decoding in separate
+ffmpeg processes (another 131 %); with in-process decoding (b81b10a) Rune's total is 182 %, so Qt
+isn't behind. Only a working hardware decoder would bring this down here.
+
+One more thing seen in passing: the Rune preview's RSS at 1080p was 1,243 MB in this run, against
+788 MB at b81b10a. One run, not looked into.
+
 ## Top bottlenecks, ranked by milliseconds
 
 ### 1. Qt Multimedia probing hardware encoders: 1,830 ms (Qt only)

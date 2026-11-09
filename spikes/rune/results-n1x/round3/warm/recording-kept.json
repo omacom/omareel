@@ -1,0 +1,34 @@
+{
+ "editor_wait": "1",
+ "record_rc": 0,
+ "waiting_editor": [
+  "/home/ryan/.t3/worktrees/omareel/t3-rune-spike-n1x/build/after/omareel edit --wait 629118 /home/ryan/.cache/omareel-spikes/n1x3/warm/keep/Recording 2026-11-09 04-55-58.omareel "
+ ],
+ "editor_cpu_percent": [
+  0.0
+ ],
+ "daemon_cpu_percent": [
+  6.56
+ ],
+ "editor_rss_mb": [
+  234.5
+ ],
+ "editor_alive_before_stop": true,
+ "editor_window_ms": 499.4,
+ "editor_alive_after_3s": true,
+ "capture": {
+  "conversion": "cpu",
+  "drops": 0,
+  "frames": 153,
+  "measuredFps": 15.027117521055512
+ },
+ "bundle_files": [
+  "capture.json",
+  "input.jsonl",
+  "project.json",
+  "recording.json",
+  "screen.mp4",
+  "screen.mp4.ts",
+  "thumb.jpg"
+ ]
+}
