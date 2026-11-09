@@ -27,6 +27,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QIcon>
 #include <QProcess>
 #include <QQuickStyle>
 #include <QQuickItem>
@@ -67,19 +68,12 @@ static QString availableFamily(const QStringList &families, const QStringList &c
     return {};
 }
 
+// The interface face. The monospace one is the theme's (Theme asks fontconfig for it).
 static ResolvedFonts resolveFonts()
 {
-    QProcess match;
-    match.start(QStringLiteral("fc-match"),
-                {QStringLiteral("-f"), QStringLiteral("%{family[0]}"), QStringLiteral("monospace")});
-    QString family;
-    if (match.waitForFinished(1500) && match.exitCode() == 0)
-        family = QString::fromUtf8(match.readAllStandardOutput()).trimmed();
-    if (family.isEmpty()) family = QFontDatabase::systemFont(QFontDatabase::FixedFont).family();
-    qInfo().noquote() << "omareel: fontconfig monospace ->" << family;
     QString ui = ThemeFonts::bundledUiFamily();
     if (ui.isEmpty()) ui = QFontDatabase::systemFont(QFontDatabase::GeneralFont).family();
-    return {ui, family};
+    return {ui, {}};
 }
 
 static int usage(const QString &error = {})
@@ -334,6 +328,11 @@ int main(int argc, char **argv)
     if (recordBar) QLoggingCategory::setFilterRules(QStringLiteral("qt.multimedia.ffmpeg*=false"));
     const bool hiddenRecordBar = recordBar && argc > 2 && QByteArray(argv[2]) == "--hidden";
     const bool graphical = argc == 1 || layerTest || windowTest || recordBar || (argc > 1 && QByteArray(argv[1]) == "edit");
+    // Opening a recording runs ffprobe and reads its project and input log, and the theme asks
+    // fc-match and hyprctl: start them now, so they overlap Qt's own start-up.
+    if (argc == 3 && QByteArray(argv[1]) == "edit")
+        omareel::cli::preloadEditor(QString::fromLocal8Bit(argv[2]).toStdString());
+    if (graphical) omareel::cli::prefetchTheme();
     if (recordBar || layerTest) LayerShellQt::Shell::useLayerShell();
     if (graphical) {
         QQuickStyle::setStyle(QStringLiteral("Basic"));
@@ -365,6 +364,14 @@ int main(int argc, char **argv)
     app.setApplicationName(QStringLiteral("omareel"));
     app.setOrganizationName(QStringLiteral("omareel"));
     app.setApplicationVersion(QStringLiteral(OMAREEL_VERSION));
+    if (graphical) {
+        // Every icon is a bundled SVG, but QQuickIconImage still asks the icon theme for each
+        // (QIconLoader parsing index.theme files and testing every directory of the theme and
+        // its parents): 120 ms of the editor's start. A search path holding no theme ends
+        // those lookups at once (an empty list would mean the system's paths).
+        QIcon::setThemeSearchPaths({QStringLiteral(":/omareel/no-icon-themes")});
+        QIcon::setFallbackSearchPaths({});
+    }
     const ResolvedFonts resolvedFonts = resolveFonts();
     QFont applicationFont(resolvedFonts.ui);
     applicationFont.setPixelSize(qRound(omareel::theme::shellFontBaseSize() * 1.083));
