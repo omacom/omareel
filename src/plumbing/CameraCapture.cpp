@@ -158,6 +158,11 @@ CameraRawFrame Omareel::packCameraFrame(QVideoFrame frame)
         struct Decoder {
             tjhandle handle = tjInitDecompress();
             ~Decoder() { if (handle) tjDestroy(handle); }
+            void reset()
+            {
+                if (handle) tjDestroy(handle);
+                handle = tjInitDecompress();
+            }
         };
         thread_local Decoder decoder;
         int width = 0, height = 0, subsampling = 0, colorspace = 0;
@@ -177,11 +182,18 @@ CameraRawFrame Omareel::packCameraFrame(QVideoFrame frame)
             auto *data = reinterpret_cast<unsigned char *>(result.pixels.data());
             unsigned char *planes[] = {data, data + w*h, data + w*h + chromaWidth*chromaHeight};
             int strides[] = {w, chromaWidth, chromaWidth};
+            // UVC cameras often pad MJPEG frames before the 0xFFD9 EOI marker, which libjpeg
+            // reports as a non-fatal warning; without TJFLAG_STOPONWARNING the planes are
+            // decoded in full while tjDecompressToYUVPlanes returns -1 with TJERR_WARNING.
             valid = tjDecompressToYUVPlanes(decoder.handle, jpeg, bytes, planes, w, strides, h,
-                                           TJFLAG_FASTDCT) == 0;
+                                           TJFLAG_FASTDCT) == 0
+                || tjGetErrorCode(decoder.handle) == TJERR_WARNING;
         }
         frame.unmap();
-        if (!valid) return {};
+        if (!valid) {
+            decoder.reset();
+            return {};
+        }
         result.size = QSize(w,h);
         // JFIF: BT.601, full range, whatever the camera reports.
         result.colorMatrix = QStringLiteral("bt601");
@@ -446,7 +458,15 @@ void CameraEncoder::run()
         }
         CameraRawFrame packed = packCameraFrame(item.frame);
         item.frame = {};
-        if (packed.pixels.isEmpty()) { failure = QStringLiteral("Could not map camera frame"); break; }
+        if (packed.pixels.isEmpty()) {
+            // A single corrupt USB frame mid-stream is dropped rather than killing the recording;
+            // only fail when the camera never delivers a usable frame.
+            if (++m_dropped >= 30 && !launched) {
+                failure = QStringLiteral("Could not map camera frame");
+                break;
+            }
+            continue;
+        }
         if (!launched) {
             const QByteArray header = cameraStreamHeader(packed);
             if (header.isEmpty()) {
@@ -481,6 +501,8 @@ void CameraEncoder::run()
         const QString text = errorText();
         if (!text.isEmpty()) qWarning().noquote() << "Camera ffmpeg:" << text;
     }
+    if (!launched && failure.isEmpty() && m_dropped.load() > 0)
+        failure = QStringLiteral("Could not map camera frame");
     if (!failure.isEmpty()) {
         requestStop();
         process.kill();

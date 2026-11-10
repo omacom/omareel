@@ -588,6 +588,45 @@ private slots:
         QVERIFY(int(uchar(packed.pixels[256])) > 250);
         QVideoFrame broken(std::make_unique<JpegTestBuffer>(QByteArray("invalid JPEG")));
         QVERIFY(packCameraFrame(broken).pixels.isEmpty());
+
+        // A truncated header fails without poisoning the thread-local TurboJPEG handle.
+        QVideoFrame truncatedHeader(std::make_unique<JpegTestBuffer>(jpeg.left(20)));
+        QVERIFY(packCameraFrame(truncatedHeader).pixels.isEmpty());
+        QCOMPARE(packCameraFrame(frame).pixels, packed.pixels);
+
+        // UVC webcams often pad MJPEG payloads with extra bytes before the 0xFFD9 EOI marker,
+        // which triggers a recoverable libjpeg warning (TJERR_WARNING).
+        QVERIFY(jpeg.endsWith(QByteArray("\xff\xd9", 2)));
+        qsizetype bodyEnd = jpeg.size() - 2;
+        while (bodyEnd > 0 && uchar(jpeg[bodyEnd - 1]) == 0xff) --bodyEnd;
+        const QByteArray paddedJpeg = jpeg.left(bodyEnd) + QByteArray(16, '\0') + QByteArray("\xff\xd9", 2);
+        QVideoFrame paddedFrame(std::make_unique<JpegTestBuffer>(paddedJpeg));
+        const auto paddedPacked = packCameraFrame(paddedFrame);
+        QCOMPARE(paddedPacked.size, QSize(16, 8));
+        QCOMPARE(paddedPacked.pixelFormat, QString("yuvj444p"));
+        QCOMPARE(paddedPacked.pixels, packed.pixels);
+    }
+
+    void cameraEncoderSkipsUnmappableFrames()
+    {
+        if (!haveFfmpeg()) QSKIP("ffmpeg is not installed");
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const QSize size(64, 48);
+        const QVideoFrame good = nv12Frame(size, 100);
+        const QVideoFrame bad(std::make_unique<JpegTestBuffer>(QByteArray("invalid JPEG"), size));
+
+        const QString path = directory.filePath(QStringLiteral("camera.mp4"));
+        const EncodeResult result = encode(path, {{good, 1000000}, {bad, 1033333}, {good, 1066666}});
+        QCOMPARE(result.error, QString());
+        QCOMPARE(result.encoded, qint64(2));
+        QCOMPARE(result.dropped, qint64(1));
+
+        const QString failedPath = directory.filePath(QStringLiteral("failed.mp4"));
+        const EncodeResult failed = encode(failedPath, {{bad, 1000000}, {bad, 1033333}});
+        QCOMPARE(failed.error, QStringLiteral("Could not map camera frame"));
+        QCOMPARE(failed.encoded, qint64(0));
+        QCOMPARE(failed.dropped, qint64(2));
     }
 
     void cameraNodesFollowSavedPaths()
