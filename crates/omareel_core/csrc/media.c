@@ -128,8 +128,10 @@ long omr_frame_times(const char *path, double **times)
     if (omr_ff_load() != 0) return -1;
     AVFormatContext *format = NULL;
     struct deadline deadline;
-    // The index and the packets need no decoding, so no avformat_find_stream_info.
-    if (open_input(&format, path, &deadline, 15) < 0) return -1;
+    // The index and the packets need no decoding, so no avformat_find_stream_info. A file read in
+    // full can take a while, so the limit is ffprobe's (media_probe.rs); a scan cut short by it
+    // fails rather than give part of the times as all of them.
+    if (open_input(&format, path, &deadline, 60) < 0) return -1;
     int index = -1;
     // ffprobe -select_streams v:0: the first video stream, which a recording's only one is.
     for (unsigned i = 0; i < format->nb_streams; ++i) {
@@ -166,6 +168,7 @@ long omr_frame_times(const char *path, double **times)
         }
         av_packet_unref(packet);
     }
+    if (deadline_passed(&deadline)) goto fail;
     if (trust_index) {
         for (int i = 0; i < entries; ++i) {
             const AVIndexEntry *entry = avformat_index_get_entry(stream, i);
@@ -193,6 +196,7 @@ long omr_frame_times(const char *path, double **times)
             }
             av_packet_unref(packet);
         }
+        if (deadline_passed(&deadline)) goto fail;
     }
     av_packet_free(&packet);
     avformat_close_input(&format);
@@ -328,7 +332,8 @@ int omr_thumbnail(const char *path, double at, int width, int height, int qualit
     decoder->pkt_timebase = format->streams[index]->time_base;
     decoder->flags2 |= AV_CODEC_FLAG2_FAST;
     if (avcodec_open2(decoder, codec, NULL) < 0) goto done;
-    if (!(frame = frame_at(format, decoder, index, at))) goto done;
+    // Reads cut short by the deadline end the decoding early, which can still leave a frame.
+    if (!(frame = frame_at(format, decoder, index, at)) || deadline_passed(&deadline)) goto done;
 
     // scale=W:H:force_original_aspect_ratio=increase,crop=W:H: cover the box, keep the middle.
     int cover_w = width, cover_h = height;
