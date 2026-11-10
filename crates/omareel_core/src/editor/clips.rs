@@ -126,6 +126,7 @@ impl Document {
 
     /// `trimClip(id, newIn, newOut)`: both ends clamped to the clip's bounds; under 0.1 s is
     /// refused. Trims of one clip coalesce (key `trim-<id>`) whatever coalesced edit is open.
+    /// Unchanged bounds are success without touching history or the saved state.
     pub fn trim_clip(&mut self, id: &str, new_in: f64, new_out: f64) -> bool {
         let index = self.clip_index(id);
         if index < 0 {
@@ -136,6 +137,10 @@ impl Document {
         let new_out = cpp::clamp(new_out, lower, upper);
         if new_out - new_in < 0.1 {
             return false;
+        }
+        let clip = &self.project.clips[index as usize];
+        if clip.in_ == new_in && clip.out == new_out {
+            return true;
         }
         self.snapshot(&format!("trim-{id}"));
         let clip = &mut self.project.clips[index as usize];
@@ -258,7 +263,8 @@ impl Document {
         true
     }
 
-    /// `resetClipTrims(id)`: the clip spans its whole bounds again.
+    /// `resetClipTrims(id)`: the clip spans its whole bounds again. Already reset is success
+    /// without touching history or the saved state.
     pub fn reset_clip_trims(&mut self, id: &str) -> bool {
         let index = self.clip_index(id);
         if index < 0 {
@@ -267,6 +273,10 @@ impl Document {
         let (new_in, new_out) = self.clip_bounds(index);
         if new_out - new_in < 0.1 {
             return false;
+        }
+        let clip = &self.project.clips[index as usize];
+        if clip.in_ == new_in && clip.out == new_out {
+            return true;
         }
         self.snapshot("");
         let clip = &mut self.project.clips[index as usize];
