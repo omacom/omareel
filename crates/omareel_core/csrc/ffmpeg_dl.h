@@ -75,6 +75,7 @@
     X(avformat, av_read_frame) \
     X(avformat, av_write_frame) \
     X(avformat, av_write_trailer) \
+    X(avformat, avformat_alloc_context) \
     X(avformat, avformat_alloc_output_context2) \
     X(avformat, avformat_close_input) \
     X(avformat, avformat_find_stream_info) \
@@ -168,6 +169,7 @@ const char *omr_ff_error(void);
 #define av_read_frame (omr_ff.av_read_frame)
 #define av_write_frame (omr_ff.av_write_frame)
 #define av_write_trailer (omr_ff.av_write_trailer)
+#define avformat_alloc_context (omr_ff.avformat_alloc_context)
 #define avformat_alloc_output_context2 (omr_ff.avformat_alloc_output_context2)
 #define avformat_close_input (omr_ff.avformat_close_input)
 #define avformat_find_stream_info (omr_ff.avformat_find_stream_info)

@@ -1177,9 +1177,12 @@ fn decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &AtomicBoo
         }
         // The next clip's decoder starts a second ahead, so its ffmpeg has started, seeked and
         // decoded its first frame (a third of a second for 4K) by the time it's needed, instead
-        // of the frame loop waiting for it. Started exactly as it would be then.
+        // of the frame loop waiting for it. Started exactly as it would be then. One prepared is
+        // kept until the loop reaches it: a clip shorter than the second would otherwise lose its
+        // decoder to the clip after it and start another at its boundary. Every clip change
+        // clears next_clip, so the clip after is prepared then.
         let ahead_index = work.timeline.clip_at(f64::from(frame + work.fps) / f64::from(work.fps), None);
-        if ahead_index != active_clip && ahead_index != next_clip {
+        if ahead_index != active_clip && next_clip < 0 {
             if let Some(ahead) = usize::try_from(ahead_index).ok().and_then(|index| work.clips.get(index)) {
                 let mut ahead_error = String::new();
                 next_clip = if start_clip_decoder(&mut next_decoder, ahead, work, &mut ahead_error) { ahead_index } else { -1 };

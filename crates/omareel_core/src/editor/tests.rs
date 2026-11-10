@@ -1667,4 +1667,22 @@ fn real_ffmpeg_probes_and_builds_frames() {
     assert_eq!(strip[0], crate::compat::qurl::from_local_file(&world.path("camera-cache/camera-01.jpg")));
     assert_eq!(jpeg_size(&world.path("camera-cache/camera-08.jpg")), Some((112, 72)));
     assert!(build_camera_thumbnails(&format!("{bundle}/missing.mp4"), 1.0, &world.path("other-cache")).is_empty());
+
+    // A video stored turned with a display matrix (a phone's) is left to ffmpeg, which stands it
+    // upright; the in-process decoder would scale the stored, sideways pixels.
+    let turned = format!("{bundle}/turned.mp4");
+    let made = crate::compat::qprocess::run(
+        "ffmpeg",
+        &["-y", "-v", "error", "-display_rotation", "90", "-i", &screen, "-c", "copy", &turned],
+        30000,
+    );
+    if made.is_some_and(|f| f.succeeded()) {
+        assert!(crate::media_av::thumbnail(&screen, 0.3, (160, 90), 4, 1, &world.path("upright.jpg")));
+        assert!(!crate::media_av::thumbnail(&turned, 0.3, (160, 90), 4, 1, &world.path("turned.jpg")));
+        let frame = world.path("turned-cache/0000000300.jpg");
+        assert!(build_video_thumbnail(&turned, "", &frame, 300));
+        assert_eq!(jpeg_size(&frame), Some((160, 90)));
+    } else {
+        eprintln!("ffmpeg could not write a display matrix");
+    }
 }
