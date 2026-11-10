@@ -24,22 +24,41 @@ Item {
     readonly property bool squareCrop: settings.shape !== "rectangle"
     readonly property bool quarterTurn: settings.rotation === 90 || settings.rotation === 270
     readonly property real sourceAspect: sourceWidth / Math.max(1, sourceHeight)
-    readonly property real aspect: squareCrop ? 1 : (quarterTurn ? 1 / sourceAspect : sourceAspect)
+    readonly property real targetAspect: squareCrop ? 1 : (quarterTurn ? 1 / sourceAspect : sourceAspect)
+    // An edit in the paused preview eases from the old bubble to the new, as Rune's preview
+    // springs it; playback and export (no nativePreview) land on each value at once. Only what
+    // the camera settings drive eases, so zoom and the full-frame morph stay frame-exact.
+    readonly property bool easeEdits: nativePreview && !comp.playing
+    property real aspect: targetAspect
+    property real roundness: settings.shape === "round" ? 1 : 0
+    property real cornerSetting: settings.radius
+    property real sizeSetting: settings.size
+    property real offsetX: settings.offset.x
+    property real offsetY: settings.offset.y
+    property real leftness: settings.position.indexOf("left") >= 0 ? 1 : 0
+    property real topness: settings.position.indexOf("top") >= 0 ? 1 : 0
+    Behavior on aspect { enabled: root.easeEdits; NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
+    Behavior on roundness { enabled: root.easeEdits; NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
+    Behavior on cornerSetting { enabled: root.easeEdits; NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
+    Behavior on sizeSetting { enabled: root.easeEdits; NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
+    Behavior on offsetX { enabled: root.easeEdits; NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
+    Behavior on offsetY { enabled: root.easeEdits; NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
+    Behavior on leftness { enabled: root.easeEdits; NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
+    Behavior on topness { enabled: root.easeEdits; NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
     readonly property real zoomProgress: Math.max(0, Math.min(1, (zoomScale - 1.05) / 0.1))
     readonly property real zoomMultiplier: 1 - (1 - settings.scaleDuringZoom) * zoomProgress
 
-    readonly property real bubbleHeight: outputHeight * settings.size * zoomMultiplier
+    readonly property real bubbleHeight: outputHeight * sizeSetting * zoomMultiplier
     readonly property real bubbleWidth: bubbleHeight * aspect
     // The gap to the corner is a share of the shorter side, so it is the same at the side and the
     // bottom, and it ends at the outside of the border.
-    readonly property real marginX: Math.min(outputWidth, outputHeight) * settings.offset.x + sourceBorderWidth
-    readonly property real marginY: Math.min(outputWidth, outputHeight) * settings.offset.y + sourceBorderWidth
-    readonly property real bubbleX: settings.position.indexOf("left") >= 0
-        ? marginX : outputWidth - marginX - bubbleWidth
-    readonly property real bubbleY: settings.position.indexOf("top") >= 0
-        ? marginY : outputHeight - marginY - bubbleHeight
-    readonly property real bubbleRadius: settings.shape === "round" ? Math.min(bubbleWidth, bubbleHeight) / 2
-        : settings.radius * ref
+    readonly property real marginX: Math.min(outputWidth, outputHeight) * offsetX + sourceBorderWidth
+    readonly property real marginY: Math.min(outputWidth, outputHeight) * offsetY + sourceBorderWidth
+    readonly property real bubbleX: marginX * leftness + (outputWidth - marginX - bubbleWidth) * (1 - leftness)
+    readonly property real bubbleY: marginY * topness + (outputHeight - marginY - bubbleHeight) * (1 - topness)
+    // Round is the corner radius at half the shorter side; a shape change blends between them.
+    readonly property real bubbleRadius: Math.min(bubbleWidth, bubbleHeight) / 2 * roundness
+        + cornerSetting * ref * (1 - roundness)
     // Fill covers the whole canvas; square keeps the largest centred square over a blurred copy.
     readonly property real fullSide: Math.min(outputWidth, outputHeight)
     readonly property real fullWidth: fullMode === "square" ? fullSide : outputWidth

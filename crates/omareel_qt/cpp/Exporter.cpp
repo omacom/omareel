@@ -50,15 +50,34 @@ QVariantMap projectMap(const omareel::exporter::ExportJob &job)
 }
 
 // A decoded frame as a QImage over the job's pixels, which it keeps alive until its last copy
-// goes; a null frame is a null image.
-QImage frameImage(::rust::Box<omareel::exporter::DecodedImage> frame)
+// goes; a null frame is a null image. `opaque` frames (the recording and the webcam: h264 through
+// ffmpeg's RGBA, alpha 255 everywhere) are tagged premultiplied, which for them is the same
+// bytes: the scene graph uploads that format as is, where a straight RGBA frame is converted
+// first, a copy of the whole frame on Qt's thread pool every frame (8 threads busy at 4K).
+QImage frameImage(::rust::Box<omareel::exporter::DecodedImage> frame, bool opaque = false)
 {
     using Owner = ::rust::Box<omareel::exporter::DecodedImage>;
     if (frame->isNull()) return QImage();
     auto *owner = new Owner(std::move(frame));
     const ::rust::Slice<const std::uint8_t> pixels = (*owner)->pixels();
     return QImage(pixels.data(), (*owner)->width(), (*owner)->height(), qsizetype((*owner)->width()) * 4,
-                  QImage::Format_RGBA8888, [](void *info) { delete static_cast<Owner *>(info); }, owner);
+                  opaque ? QImage::Format_RGBA8888_Premultiplied : QImage::Format_RGBA8888, [](void *info) { delete static_cast<Owner *>(info); }, owner);
+}
+
+// A decoded YUV frame (the recording, see ExportJob::setYuvScreen) for FrameSource, which keeps
+// the job's pixels alive until it has the next one.
+YuvFrame yuvFrame(::rust::Box<omareel::exporter::DecodedImage> frame)
+{
+    using Owner = ::rust::Box<omareel::exporter::DecodedImage>;
+    auto owner = std::shared_ptr<Owner>(new Owner(std::move(frame)));
+    YuvFrame result;
+    result.planes = (*owner)->pixels().data();
+    result.width = (*owner)->width();
+    result.height = (*owner)->height();
+    result.bt709 = (*owner)->yuvBt709();
+    result.fullRange = (*owner)->yuvFullRange();
+    result.owner = std::shared_ptr<const void>(owner, owner.get());
+    return result;
 }
 
 // The members the frame loop changes, from the job's state after nextFrame.
@@ -112,13 +131,18 @@ bool Exporter::run(const ExportOptions &options, QString *error)
     state.media = job->mediaMap();
     state.cursor = job->cursorMap();
     if (!renderer.init(composition.output_width, composition.output_height, softwareRendering, error)) return false;
+    // On the GPU, the recording comes as YUV and FrameSource converts it: a third of the bytes
+    // through the decoder's pipe and to the GPU, and no RGB conversion in ffmpeg (a 4K frame was
+    // 33 MB of RGBA, which held the whole export to the decoder's pace).
+    // OMAREEL_EXPORT_RGBA=1 keeps the RGBA path, for comparing the two.
+    job->setYuvScreen(!softwareRendering && qgetenv("OMAREEL_EXPORT_RGBA") != "1");
     if (!job->start(softwareRendering, *error)) return false;
 
     QString pipelineError;
     const auto writeFrame = [&](QByteArray bytes) {
         // Export runs on the GUI thread. Keep Cancel and the status responsive while the
-        // encoder catches up: two queued frames, one in the pipe, and two GPU readbacks bound
-        // how far rendering can run ahead.
+        // encoder catches up: the encoder's queue (ENCODE_QUEUE), one frame in the pipe and the
+        // GPU readbacks bound how far rendering can run ahead.
         while (!job->waitEncodeSpace(20)) renderer.processEvents();
         const QString writeError = job->encode(std::move(bytes));
         if (!writeError.isEmpty()) pipelineError = writeError;
@@ -127,7 +151,11 @@ bool Exporter::run(const ExportOptions &options, QString *error)
         if (!job->nextFrame(frame, pipelineError)) break;
         applyFrame(state, *job);
         QByteArray bytes;
-        if (!renderer.renderFrame(frameImage(job->screenImage()), frameImage(job->cameraImage()),
+        ::rust::Box<omareel::exporter::DecodedImage> screen = job->screenImage();
+        QImage screenImage;
+        if (!screen->isNull() && screen->isYuv()) renderer.setScreenYuv(yuvFrame(std::move(screen)));
+        else screenImage = frameImage(std::move(screen), true);
+        if (!renderer.renderFrame(screenImage, frameImage(job->cameraImage(), true),
                                   frameImage(job->insertImage()), &bytes, &pipelineError))
             break;
         if (!bytes.isEmpty()) writeFrame(std::move(bytes));

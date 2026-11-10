@@ -94,6 +94,11 @@ pub fn daemon_arguments(region: &crate::capture::CaptureRegion, options: &Record
 
 /// `Recorder::startDetached(options, &message)`.
 pub fn start_detached(options: &RecordOptions) -> StartOutcome {
+    // The bar starts while the region is picked, so it is ready when the recording is. With the
+    // webcam, the launcher's self-view host becomes the bar instead.
+    if !options.webcam && (!options.no_bar || options.countdown) {
+        super::waiting_bar::start(&application_file_path());
+    }
     let pick = region_picker::pick(options.mode, &screen_capture::is_supported);
     let Some(region) = pick.region else {
         let error = pick.message.unwrap_or_default();

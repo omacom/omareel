@@ -129,6 +129,10 @@ pub struct Document {
     pub(crate) effects: RefCell<Vec<Effect>>,
 }
 
+/// The recording [`Document::preload`] is opening, and its path.
+static PRELOADED: std::sync::Mutex<Option<(String, std::thread::JoinHandle<Result<Document, String>>)>> =
+    std::sync::Mutex::new(None);
+
 impl Document {
     /// `Editor(bundlePath)` up to `m_valid = true`: [`load_bundle`], the document, and the
     /// screen's thumbnail source. A new project queues [`Effect::StartAutosaveTimer`]. The Qt
@@ -137,6 +141,37 @@ impl Document {
     /// [`Document::set_screen_frame_times`]), and the 1.5 s loading timer.
     pub fn open(bundle_path: &str, probes: &Probes) -> Result<Document, String> {
         Document::open_with(bundle_path, probes, Locations::default())
+    }
+
+    /// Starts [`Document::open`] on a thread of its own: its ffprobe runs and the reading of the
+    /// project and the input log take a good part of the editor's start, and an app that knows
+    /// the recording before it has a window can let them overlap its own start-up. The
+    /// document is taken with [`Document::open_preloaded`].
+    pub fn preload(bundle_path: &str, probes: Probes) {
+        let path = qdir::absolute_path(bundle_path);
+        let opening = path.clone();
+        let Ok(thread) = std::thread::Builder::new()
+            .name("omareel-open".into())
+            .spawn(move || Document::open(&opening, &probes))
+        else {
+            return;
+        };
+        if let Ok(mut preloaded) = PRELOADED.lock() {
+            *preloaded = Some((path, thread));
+        }
+    }
+
+    /// [`Document::open`], or the document [`Document::preload`] started for the same bundle.
+    pub fn open_preloaded(bundle_path: &str, probes: &Probes) -> Result<Document, String> {
+        let path = qdir::absolute_path(bundle_path);
+        let preloaded = PRELOADED.lock().ok().and_then(|mut preloaded| preloaded.take());
+        match preloaded {
+            Some((preloaded_path, thread)) if preloaded_path == path => match thread.join() {
+                Ok(opened) => opened,
+                Err(_) => Document::open(bundle_path, probes),
+            },
+            _ => Document::open(bundle_path, probes),
+        }
     }
 
     /// [`Document::open`] with the standard locations given (for tests).

@@ -372,9 +372,111 @@ fn initial_state(
 
 /// `Recorder::daemonMain(arguments)`: the exit status (0 saved or discarded, 2 failed).
 /// `warn` is `qWarning()`, for the warnings the C++ logged through Qt.
+/// `omareel edit --wait <pid> <bundle>` (see main.cpp): the editor, started while recording so
+/// that at Stop it only opens the recording and shows its window. Off with
+/// `OMAREEL_EDITOR_WAIT=0`. Its pid, or `None` when it wasn't started.
+fn start_waiting_editor(application: &str, bundle: &str) -> Option<i64> {
+    if environment_variable("OMAREEL_EDITOR_WAIT") == "0" {
+        return None;
+    }
+    let pid = application_pid().to_string();
+    qprocess::start_detached(application, &["edit", "--wait", pid.as_str(), bundle], DetachedChannels::default())
+}
+
+/// Asks the waiting editor to open the saved recording: SIGUSR1, once its handler is installed
+/// (`SigCgt` in /proc, set first thing in its main), waiting up to 300 ms for that. False when
+/// it has gone or never got that far; the recording is then opened by a new editor.
+fn open_waiting_editor(pid: i64) -> bool {
+    let started = Instant::now();
+    while started.elapsed() < Duration::from_millis(300) {
+        let Ok(command) = std::fs::read(format!("/proc/{pid}/cmdline")) else { return false };
+        if !command.split(|byte| *byte == 0).any(|argument| argument == b"--wait") {
+            return false;
+        }
+        let Ok(status) = std::fs::read_to_string(format!("/proc/{pid}/status")) else { return false };
+        let caught = status
+            .lines()
+            .find_map(|line| line.strip_prefix("SigCgt:"))
+            .and_then(|mask| u64::from_str_radix(mask.trim(), 16).ok())
+            .unwrap_or(0);
+        if caught & (1 << (libc::SIGUSR1 - 1)) != 0 {
+            // SAFETY: kill takes a pid and a signal; the pid is the editor this process started.
+            return unsafe { libc::kill(pid as libc::pid_t, libc::SIGUSR1) } == 0;
+        }
+        msleep(5);
+    }
+    false
+}
+
+/// The recording's length in seconds, as `ffprobe -show_entries format=duration` gives it: read
+/// in process (a millisecond, where ffprobe took 30), with ffprobe when that can't open the file.
+/// `None` for a file without one, or that can't be read.
+fn recorded_duration(video: &str) -> Option<f64> {
+    if let Ok(probe) = omareel_core::media_av::probe(video) {
+        return probe.format_duration;
+    }
+    let mut ffprobe = Process::new();
+    ffprobe.start(
+        "ffprobe",
+        &["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", video],
+    );
+    if !ffprobe.wait_for_finished(10000) || ffprobe.exit_code() != 0 {
+        return None;
+    }
+    let text = qstring::from_utf8(&ffprobe.read_all_standard_output());
+    let (value, ok) = qnumber::to_double_with_ok(qstring::trimmed(&text));
+    ok.then_some(value)
+}
+
+/// What `ffprobe -select_streams v:0 -show_entries stream=width,height,r_frame_rate:format=duration
+/// -of json` says of the camera recording: read in process, with ffprobe when that can't open it.
+/// `None` when neither can.
+fn camera_probe(camera_video: &str) -> Option<Object> {
+    if let Ok(probe) = omareel_core::media_av::probe(camera_video) {
+        let mut document = Object::new();
+        let mut streams = Vec::new();
+        if probe.has_video {
+            let mut stream = Object::new();
+            stream.insert("width", probe.width);
+            stream.insert("height", probe.height);
+            stream.insert("r_frame_rate", probe.frame_rate_text.as_str());
+            streams.push(Value::from(stream));
+        }
+        document.insert("streams", streams);
+        let mut format = Object::new();
+        if let Some(duration) = probe.format_duration {
+            format.insert("duration", qnumber::number_f64(duration, 'f', 6).as_str());
+        }
+        document.insert("format", format);
+        return Some(document);
+    }
+    let mut ffprobe = Process::new();
+    ffprobe.start(
+        "ffprobe",
+        &[
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height,r_frame_rate:format=duration",
+            "-of",
+            "json",
+            camera_video,
+        ],
+    );
+    if !ffprobe.wait_for_finished(10000) || ffprobe.exit_code() != 0 {
+        return None;
+    }
+    Some(qjson::object_from_json(&ffprobe.read_all_standard_output()).unwrap_or_default())
+}
+
 pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
     let daemon_start_us = monotonic_us();
     debug_start_stage("daemon_start", daemon_start_us, "");
+    // The screen capture's encoder needs FFmpeg's libraries, which are opened, not linked: a
+    // thread opens them while the recording is set up.
+    omareel_core::media_av::preload();
     STOP_REQUESTED.store(false, Ordering::SeqCst);
     DISCARD_REQUESTED.store(false, Ordering::SeqCst);
     // SAFETY: the handlers only store to atomics; glibc's signal() installs them with
@@ -478,8 +580,11 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
             bar_arguments.push("--hidden".into());
         }
         let application = application_file_path();
+        let flags = if options.no_bar { super::waiting_bar::HIDDEN } else { 0 };
         Some(std::thread::spawn(move || {
-            qprocess::start_detached(&application, &bar_arguments, DetachedChannels::default()).is_some()
+            // The bar `omareel record` started before its picker, when there is one.
+            super::waiting_bar::adopt(&application, flags)
+                || qprocess::start_detached(&application, &bar_arguments, DetachedChannels::default()).is_some()
         }))
     } else {
         None
@@ -581,11 +686,12 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
     }
     if options.countdown {
         let countdown_host_timer = Instant::now();
+        // Polled closely: the countdown starts the moment the bar has drawn it.
         while !read_state().value("countdown_ready").to_bool(false)
             && elapsed_ms(&countdown_host_timer) < 3000
             && !stop_requested()
         {
-            msleep(20);
+            msleep(2);
         }
         countdown_end_us = monotonic_us() + 3_000_000;
         update_state(&[("countdown_active", true.into()), ("countdown_end_us", countdown_end_us.into())]);
@@ -636,6 +742,8 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
             if native_capture { screen_capture.first_frame_us() } else { first_frame_timestamp(&timestamp_path) };
         debug_start_stage("first_frame", daemon_start_us, &format!("first_frame_us={first_us}"));
     }
+    let waiting_editor =
+        if !capture_loop_failed && !options.no_open { start_waiting_editor(&application, &bundle) } else { None };
     if let Err(warning) = cursor_sampler.start(&region.monitor_name, options.fps) {
         warn(&warning);
     }
@@ -733,6 +841,7 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
         ));
         return if removed { 0 } else { 2 };
     }
+    debug_start_stage("stop_seen", daemon_start_us, "");
     let mut forced_stop = false;
     // The bar and the launcher say Saving while the capture finishes and the audio is muxed.
     let mut stopping = vec![("stopping", Value::from(true))];
@@ -744,6 +853,7 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
         if !screen_capture.finish(&mut error) {
             capture_loop_failed = true;
         }
+        debug_start_stage("stop_capture_finished", daemon_start_us, "");
         if let Some(start) = audio_start.filter(|_| audio_active) {
             let mux = finish_audio_capture(
                 &mut audio_recorder,
@@ -757,6 +867,7 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
             audio_muxed = mux.muxed;
             audio_started_us = mux.first_sample_us;
         }
+        debug_start_stage("stop_audio_muxed", daemon_start_us, "");
         // A killed ffmpeg wrote no report.
         let audio_log = format!("{audio_video}.log");
         if audio_active && options.microphone_audio && audio_recorder.exit_status() == ExitStatus::NormalExit {
@@ -795,6 +906,7 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
             msleep(20);
         }
     }
+    debug_start_stage("stop_camera_stopped", daemon_start_us, "");
     if FileInfo::new(camera_video.clone()).exists() && FileInfo::new(camera_video.clone()).size() == 0 {
         qfile::remove(&camera_video);
     }
@@ -815,21 +927,11 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
     let device_events = evdev_listener.events();
     let first_frame_us = first_frame_timestamp(&timestamp_path);
 
-    let mut ffprobe = Process::new();
-    ffprobe.start(
-        "ffprobe",
-        &["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", &video],
-    );
-    let probe_finished = ffprobe.wait_for_finished(10000);
-    let mut duration_ok = false;
-    let probed_duration = if probe_finished && ffprobe.exit_code() == 0 {
-        let text = qstring::from_utf8(&ffprobe.read_all_standard_output());
-        let (value, ok) = qnumber::to_double_with_ok(qstring::trimmed(&text));
-        duration_ok = ok;
-        value
-    } else {
-        0.0
+    let (duration_ok, probed_duration) = match recorded_duration(&video) {
+        Some(seconds) => (true, seconds),
+        None => (false, 0.0),
     };
+    debug_start_stage("stop_probed", daemon_start_us, "");
     let effective_exit_code = if native_capture {
         if recorder_failed { -1 } else { 0 }
     } else if recorder.exit_status() == ExitStatus::NormalExit {
@@ -870,6 +972,7 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
     }
     // The C++ keeps these writers' messages in `error`, which nothing reads any more.
     ok = write_input_log(&format!("{bundle}/input.jsonl"), &cursor, &device_events, &recorded_region).is_ok() && ok;
+    debug_start_stage("stop_input_written", daemon_start_us, "");
     let mut capture = Object::new();
     capture.insert("version", 1);
     capture.insert("backend", capture_backend.as_str());
@@ -917,23 +1020,7 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
     if options.webcam && FileInfo::new(camera_video.clone()).size() > 0 {
         let camera_timestamp = format!("{camera_video}.ts");
         let camera_first_frame_us = first_frame_timestamp(&camera_timestamp);
-        let mut camera_probe = Process::new();
-        camera_probe.start(
-            "ffprobe",
-            &[
-                "-v",
-                "error",
-                "-select_streams",
-                "v:0",
-                "-show_entries",
-                "stream=width,height,r_frame_rate:format=duration",
-                "-of",
-                "json",
-                &camera_video,
-            ],
-        );
-        if camera_probe.wait_for_finished(10000) && camera_probe.exit_code() == 0 && camera_first_frame_us > 0 {
-            let document = qjson::object_from_json(&camera_probe.read_all_standard_output()).unwrap_or_default();
+        if let Some(document) = camera_probe(&camera_video).filter(|_| camera_first_frame_us > 0) {
             let streams = document.value("streams").to_array();
             let stream = streams.first().map(Value::to_object).unwrap_or_default();
             // camera.mp4 is fragmented: a recorder killed before its first fragment was written
@@ -976,21 +1063,23 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
             qfile::remove(&camera_timestamp);
         }
     }
+    debug_start_stage("stop_camera_probed", daemon_start_us, "");
     ok = write_json(&format!("{bundle}/capture.json"), &capture).is_ok() && ok;
     let mut recording = Object::new();
     recording.insert("overlay_exclusion", if plugin_exclusion { "plugin" } else { "fallback" });
     ok = write_json(&format!("{bundle}/recording.json"), &recording).is_ok() && ok;
 
-    let mut ffmpeg = Process::new();
-    ffmpeg.start(
-        "ffmpeg",
-        &["-y", "-loglevel", "error", "-i", &video, "-frames:v", "1", "-q:v", "3", &format!("{bundle}/thumb.jpg")],
-    );
-    ffmpeg.wait_for_finished(10000);
     if !ok && (!FileInfo::new(video.clone()).is_file() || FileInfo::new(video.clone()).size() == 0) {
         qdir::remove_recursively(&bundle);
     }
     qfile::remove(&state_file_path());
+    if ok && !options.no_open {
+        // The editor first: everything after it can happen while it opens.
+        debug_start_stage("stop_editor_launch", daemon_start_us, "");
+        if !waiting_editor.is_some_and(open_waiting_editor) {
+            qprocess::start_detached(&application, &["edit", bundle.as_str()], DetachedChannels::default());
+        }
+    }
     refresh_indicators();
     if ok {
         if let Some(log) = debug_log.as_mut() {
@@ -1012,9 +1101,6 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
             "omarchy-notification-send",
             &[title, body, "--exec", application.as_str(), "edit", bundle.as_str()],
         );
-        if !options.no_open {
-            qprocess::start_detached(&application, &["edit", bundle.as_str()], DetachedChannels::default());
-        }
     } else {
         let mut detail = if forced_stop {
             "Recording process had to be force-killed. Video may be corrupted.".to_owned()
@@ -1027,6 +1113,16 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
         notify_stop_failure(&detail);
         write_last_error(&detail);
     }
+    // Nothing in omareel reads thumb.jpg, so it no longer holds up the editor.
+    if qdir::file_exists(&bundle) {
+        let mut ffmpeg = Process::new();
+        ffmpeg.start(
+            "ffmpeg",
+            &["-y", "-loglevel", "error", "-i", &video, "-frames:v", "1", "-q:v", "3", &format!("{bundle}/thumb.jpg")],
+        );
+        ffmpeg.wait_for_finished(10000);
+    }
+    debug_start_stage("stop_thumbnail", daemon_start_us, "");
     if let Some(log) = debug_log.as_mut() {
         let _ = log.write_all(if ok { b"omareel: daemon exit=0\n" } else { b"omareel: daemon exit=2\n" });
         let _ = log.flush();

@@ -16,6 +16,7 @@ pub mod files;
 pub mod self_view;
 pub mod start;
 pub mod state;
+pub mod waiting_bar;
 
 use crate::capture::{CaptureMode, CaptureRegion};
 use omareel_core::compat::qjson::Object;

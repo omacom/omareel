@@ -13,12 +13,27 @@ use crate::compat::qurl;
 use crate::omarchy_paths;
 use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 
-/// How many filmstrip frames may wait to be built.
-pub const THUMBNAIL_QUEUE_LIMIT: usize = 96;
+/// How many filmstrip frames may wait to be built. Each frame asked for can bring its
+/// keyframe's stand-in with it, so this is twice the 96 frames the C++ allowed.
+pub const THUMBNAIL_QUEUE_LIMIT: usize = 192;
 /// How many filmstrip frames a cache directory keeps (the newest).
 pub const THUMBNAIL_CACHE_LIMIT: usize = 512;
 /// The camera strip's frame count.
 pub const CAMERA_THUMBNAIL_COUNT: usize = 8;
+
+/// How many filmstrip frames are built at once. Each seeks to the keyframe before its time and
+/// decodes up to it (up to a second of video, for a recording's one-second keyframe interval),
+/// so one at a time filled a 3-minute recording's 78 frames in 10 s. Each build decodes with
+/// `THUMBNAIL_DECODE_THREADS` at a lower priority (see `media_av::thumbnail`), so together they
+/// use about three quarters of the cores, and only what the editor and its players leave.
+pub fn thumbnail_workers() -> usize {
+    let cores = std::thread::available_parallelism().map_or(4, std::num::NonZeroUsize::get);
+    (cores * 3 / 4 / THUMBNAIL_DECODE_THREADS).clamp(2, 8)
+}
+
+/// The decoding threads of one filmstrip frame's ffmpeg (its default, one per core plus one,
+/// spends more starting threads than decoding for the few frames it needs).
+pub const THUMBNAIL_DECODE_THREADS: usize = 2;
 
 /// `int(v)` as the compiled C++ converts a double: x86-64 gives `INT_MIN` out of range (and for
 /// NaN); aarch64 saturates and makes NaN 0, as Rust's `as` does.
@@ -84,6 +99,8 @@ pub fn video_thumbnail_args(video_path: &str, filter: &str, output: &str, millis
     [
         "-v",
         "error",
+        "-threads",
+        &THUMBNAIL_DECODE_THREADS.to_string(),
         "-ss",
         &qnumber::number_f64(f64::from(milliseconds) / 1000.0, 'f', 3),
         "-i",
@@ -113,16 +130,33 @@ pub fn build_video_thumbnail(video_path: &str, filter: &str, path: &str, millise
     if !qdir::mkpath(&target.absolute_path()) {
         return false;
     }
-    let temporary = format!("{path}.{}.tmp.jpg", std::process::id());
-    let args = video_thumbnail_args(video_path, filter, &temporary, milliseconds);
-    let args: Vec<&str> = args.iter().map(String::as_str).collect();
-    let Some(finished) = qprocess::run("ffmpeg", &args, 20000) else {
-        let _ = std::fs::remove_file(&temporary);
-        return false;
-    };
-    if finished.exit_code != 0 || FileInfo::new(temporary.as_str()).size() == 0 {
-        let _ = std::fs::remove_file(&temporary);
-        return false;
+    // One temporary per build: several frames of a directory are built at once.
+    static BUILDS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let build = BUILDS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let temporary = format!("{path}.{}-{build}.tmp.jpg", std::process::id());
+    // Unfiltered frames are decoded in process; turned ones, or a file the libraries can't
+    // read, go to ffmpeg.
+    let in_process = filter.is_empty()
+        && crate::media_av::thumbnail(
+            video_path,
+            f64::from(milliseconds) / 1000.0,
+            (160, 90),
+            4,
+            THUMBNAIL_DECODE_THREADS,
+            &temporary,
+        )
+        && FileInfo::new(temporary.as_str()).size() > 0;
+    if !in_process {
+        let args = video_thumbnail_args(video_path, filter, &temporary, milliseconds);
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        let Some(finished) = qprocess::run("ffmpeg", &args, 20000) else {
+            let _ = std::fs::remove_file(&temporary);
+            return false;
+        };
+        if finished.exit_code != 0 || FileInfo::new(temporary.as_str()).size() == 0 {
+            let _ = std::fs::remove_file(&temporary);
+            return false;
+        }
     }
     if FileInfo::new(path).size() > 0 {
         let _ = std::fs::remove_file(&temporary);
@@ -181,7 +215,13 @@ pub fn build_camera_thumbnails(video_path: &str, duration: f64, cache_directory:
                 continue;
             }
             let timestamp = duration * (index as f64 + 0.5) / CAMERA_THUMBNAIL_COUNT as f64;
-            let args = camera_thumbnail_args(video_path, timestamp, &thumbnail_path(index));
+            let output = thumbnail_path(index);
+            if crate::media_av::thumbnail(video_path, timestamp, (112, 72), 5, THUMBNAIL_DECODE_THREADS, &output)
+                && FileInfo::new(output.as_str()).size() > 0
+            {
+                continue;
+            }
+            let args = camera_thumbnail_args(video_path, timestamp, &output);
             let args: Vec<&str> = args.iter().map(String::as_str).collect();
             match qprocess::run("ffmpeg", &args, 15000) {
                 Some(finished) if finished.exit_code == 0 => {}
@@ -210,6 +250,8 @@ impl CameraThumbnailJob {
 /// result to [`Document::finish_video_thumbnail`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct ThumbnailJob {
+    /// The source's key ("screen", "camera-r0", "media:<path>").
+    pub key: String,
     pub video_path: String,
     pub filter: String,
     pub path: String,
@@ -234,6 +276,30 @@ pub struct ThumbnailSource {
     pub pending: HashSet<i32>,
     pub failed: HashSet<i32>,
     pub ready: BTreeSet<i32>,
+    /// The video's keyframe times in milliseconds (rounded down, so a frame built there is the
+    /// keyframe itself), read from its index the first time a frame is asked for; `Some(None)`
+    /// when it has none to give.
+    pub keyframes: Option<Option<Vec<i32>>>,
+}
+
+impl ThumbnailSource {
+    /// The keyframe a stand-in for the frame at `milliseconds` comes from: the last one at or
+    /// before it in `first..=last`, else the first in that span. `None` without keyframes, or
+    /// when the frame is within a frame of its keyframe (it decodes alone anyway).
+    fn stand_in_for(&mut self, milliseconds: i32, first: i32, last: i32) -> Option<i32> {
+        let video_path = &self.video_path;
+        let keyframes = self.keyframes.get_or_insert_with(|| {
+            crate::media_av::keyframe_times(video_path)
+                .filter(|times| times.len() > 1)
+                .map(|times| times.iter().map(|t| (t * 1000.0).floor() as i32).collect())
+        });
+        let keyframes = keyframes.as_ref()?;
+        let index = keyframes.partition_point(|&k| k <= milliseconds);
+        let before = index.checked_sub(1).map(|i| keyframes[i]).filter(|&k| k >= first);
+        let stand_in = before.or_else(|| keyframes.get(index).copied().filter(|&k| k <= last))?;
+        let frame_ms = (1000.0 / self.fps.max(1.0)).ceil() as i32;
+        ((stand_in - milliseconds).abs() > frame_ms).then_some(stand_in)
+    }
 }
 
 /// What `thumbnailSource` reads of the document to make a source.
@@ -248,8 +314,10 @@ pub(crate) struct ThumbnailContext {
 #[derive(Debug, Default)]
 pub(crate) struct Thumbnails {
     pub sources: BTreeMap<String, ThumbnailSource>,
+    /// Frames waiting or being built, in the order they were asked for.
     pub queue: VecDeque<(String, i32)>,
-    pub running: bool,
+    /// The frames of `queue` being built (at most [`thumbnail_workers`]).
+    pub running: HashSet<(String, i32)>,
     pub revision: i32,
 }
 
@@ -438,12 +506,23 @@ impl Document {
             return qurl::from_local_file(&path);
         }
         let mut enqueued = false;
+        let mut stand_in = None;
         if !source.pending.contains(&milliseconds)
             && !source.failed.contains(&milliseconds)
             && queue_length < THUMBNAIL_QUEUE_LIMIT
         {
             source.pending.insert(milliseconds);
             enqueued = true;
+            // Building a frame decodes from the keyframe before it, up to a second of video. The
+            // keyframe's own frame decodes alone, so it is built first, ahead of every exact
+            // frame: the nearest-frame fallback below shows it until this one is made.
+            // A stand-in already queued (as another span's own frame) moves to the front.
+            stand_in = source
+                .stand_in_for(milliseconds, first_sample, last_sample)
+                .filter(|k| !source.ready.contains(k) && !source.failed.contains(k));
+            if let Some(k) = stand_in {
+                source.pending.insert(k);
+            }
         }
         let mut nearest: i32 = -1;
         for &ready in source.ready.range(first_sample..=last_sample) {
@@ -453,6 +532,15 @@ impl Document {
         }
         if enqueued {
             self.thumbnails.queue.push_back((key.to_owned(), milliseconds));
+            if let Some(k) = stand_in {
+                let entry = (key.to_owned(), k);
+                if !self.thumbnails.running.contains(&entry) {
+                    if let Some(index) = self.thumbnails.queue.iter().position(|queued| *queued == entry) {
+                        self.thumbnails.queue.remove(index);
+                    }
+                    self.thumbnails.queue.push_front(entry);
+                }
+            }
             self.emit(Effect::StartNextVideoThumbnail);
         }
         if nearest < 0 {
@@ -462,23 +550,30 @@ impl Document {
     }
 
     /// `startNextVideoThumbnail()`: the next queued frame to build, unless playing, scrubbing,
-    /// one is being built, or none is queued. Entries whose source is gone are dropped.
+    /// [`thumbnail_workers`] are being built, or none is waiting. Entries whose source is gone
+    /// are dropped. Call it until it gives `None` to start every build that may run.
     pub fn next_video_thumbnail_job(&mut self, playing: bool, scrubbing: bool) -> Option<ThumbnailJob> {
-        if playing || scrubbing || self.thumbnails.running {
+        if playing || scrubbing || self.thumbnails.running.len() >= thumbnail_workers() {
             return None;
         }
-        while let Some((key, milliseconds)) = self.thumbnails.queue.front().cloned() {
+        let mut index = 0;
+        while let Some((key, milliseconds)) = self.thumbnails.queue.get(index).cloned() {
+            if self.thumbnails.running.contains(&(key.clone(), milliseconds)) {
+                index += 1;
+                continue;
+            }
             let Some(source) = self.thumbnail_source(&key) else {
-                self.thumbnails.queue.pop_front();
+                self.thumbnails.queue.remove(index);
                 continue;
             };
             let job = ThumbnailJob {
+                key: key.clone(),
                 video_path: source.video_path.clone(),
                 filter: source.filter.clone(),
                 path: qdir::file_path(&source.cache_directory, &thumbnail_file_name(milliseconds)),
                 milliseconds,
             };
-            self.thumbnails.running = true;
+            self.thumbnails.running.insert((key, milliseconds));
             return Some(job);
         }
         None
@@ -487,9 +582,11 @@ impl Document {
     /// The end of a [`ThumbnailJob`]: the frame is ready (rescanning the directory once more
     /// than 512 are known, since the build trims it) or failed for good; the revision moves and
     /// the next frame may start.
-    pub fn finish_video_thumbnail(&mut self, succeeded: bool) {
-        self.thumbnails.running = false;
-        if let Some((key, finished)) = self.thumbnails.queue.pop_front() {
+    pub fn finish_video_thumbnail(&mut self, job: &ThumbnailJob, succeeded: bool) {
+        let entry = (job.key.clone(), job.milliseconds);
+        self.thumbnails.running.remove(&entry);
+        let position = self.thumbnails.queue.iter().position(|queued| *queued == entry);
+        if let Some((key, finished)) = position.and_then(|index| self.thumbnails.queue.remove(index)) {
             if let Some(source) = self.thumbnail_source(&key) {
                 source.pending.remove(&finished);
                 if !succeeded {
@@ -573,13 +670,13 @@ mod tests {
         assert_eq!(
             video_thumbnail_args("/b/screen.mp4", "", "/c/0000001300.jpg.7.tmp.jpg", 1300),
             [
-                "-v", "error", "-ss", "1.300", "-i", "/b/screen.mp4", "-frames:v", "1", "-an", "-vf",
+                "-v", "error", "-threads", "2", "-ss", "1.300", "-i", "/b/screen.mp4", "-frames:v", "1", "-an", "-vf",
                 "scale=160:90:force_original_aspect_ratio=increase,crop=160:90", "-q:v", "4", "-y",
                 "/c/0000001300.jpg.7.tmp.jpg"
             ]
         );
-        assert_eq!(video_thumbnail_args("v", "hflip,transpose=clock", "o", 5)[10], "hflip,transpose=clock,scale=160:90:force_original_aspect_ratio=increase,crop=160:90");
-        assert_eq!(video_thumbnail_args("v", "", "o", 5)[3], "0.005");
+        assert_eq!(video_thumbnail_args("v", "hflip,transpose=clock", "o", 5)[12], "hflip,transpose=clock,scale=160:90:force_original_aspect_ratio=increase,crop=160:90");
+        assert_eq!(video_thumbnail_args("v", "", "o", 5)[5], "0.005");
         assert_eq!(
             camera_thumbnail_args("/b/camera.mp4", 0.125, "/c/camera-01.jpg"),
             [

@@ -243,6 +243,8 @@ pub struct LauncherRust {
     microphone_device: String,
     chosen_microphone_device: String,
     audio_devices: QList<QVariant>,
+    /// Counts the listings asked for, so a slower, older one doesn't land after a newer one.
+    audio_devices_generation: u64,
     microphone_level: MicrophoneLevel,
     webcam: bool,
     webcam_device: String,
@@ -279,6 +281,7 @@ impl Default for LauncherRust {
             microphone_device: "default_input".into(),
             chosen_microphone_device: "default_input".into(),
             audio_devices: QList::default(),
+            audio_devices_generation: 0,
             microphone_level: MicrophoneLevel::default(),
             webcam: false,
             webcam_device: "/dev/video2".into(),
@@ -406,12 +409,40 @@ fn run_record(program: &str, arguments: &[String], cancel: &AtomicBool) -> Optio
     })
 }
 
+/// The launcher's hyprctl checks, started by [`prefetch_capture_exclusion`].
+static CAPTURE_EXCLUSION: std::sync::Mutex<Option<JoinHandle<capture_exclusion::Status>>> = std::sync::Mutex::new(None);
+
+/// Restores a hardware cursor a killed recorder held and checks the capture-exclusion plugin, on
+/// a thread: main starts it before Qt, and the launcher's constructor takes the answer.
+pub fn prefetch_capture_exclusion() {
+    let application_dir = std::env::current_exe()
+        .ok()
+        .and_then(|path| path.parent().map(|dir| dir.to_string_lossy().into_owned()))
+        .unwrap_or_default();
+    let handle = std::thread::spawn(move || {
+        capture_exclusion::restore_abandoned_hardware_cursor();
+        capture_exclusion::ensure_loaded(&application_dir)
+    });
+    *CAPTURE_EXCLUSION.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(handle);
+}
+
+/// The prefetched checks' answer, or the checks made now.
+fn take_capture_exclusion(application_dir: &str) -> capture_exclusion::Status {
+    let prefetched = CAPTURE_EXCLUSION.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take();
+    if let Some(status) = prefetched.and_then(|handle| handle.join().ok()) {
+        return status;
+    }
+    capture_exclusion::restore_abandoned_hardware_cursor();
+    capture_exclusion::ensure_loaded(application_dir)
+}
+
 impl cxx_qt::Initialize for qobject::Launcher {
     /// `Launcher::Launcher`, after the members LauncherBase holds and its connections.
     fn initialize(mut self: Pin<&mut Self>) {
-        // A recorder that was killed mid-recording left hardware cursors held on.
-        capture_exclusion::restore_abandoned_hardware_cursor();
-        let exclusion = capture_exclusion::ensure_loaded(&qobject::application_dir_path().to_string());
+        // A recorder that was killed mid-recording left hardware cursors held on. That and the
+        // capture-exclusion plugin's check are hyprctl calls, which main started on a thread
+        // (prefetch_capture_exclusion) while Qt started; the note is in the window's first layout.
+        let exclusion = take_capture_exclusion(&qobject::application_dir_path().to_string());
         if !exclusion.loaded {
             let screens = usize::try_from(self.screen_count()).unwrap_or(0);
             let mut rust = self.as_mut().rust_mut();
@@ -714,10 +745,28 @@ impl qobject::Launcher {
     // ---------------------------------------------------------------------------------------
     // Devices.
 
-    /// `refreshAudioDevices`: asks gpu-screen-recorder (up to five seconds), keeps the chosen
-    /// microphone while it is listed, and reopens the meter.
+    /// `refreshAudioDevices`: asks gpu-screen-recorder (up to five seconds) on a thread, so the
+    /// launcher's window doesn't wait for it (20 ms of its start); [`apply_audio_devices`] takes
+    /// the answer.
     fn refresh_audio_devices(mut self: Pin<&mut Self>) {
-        let devices = launcher::audio_devices();
+        let generation = self.audio_devices_generation.wrapping_add(1);
+        self.as_mut().rust_mut().audio_devices_generation = generation;
+        let thread = self.qt_thread();
+        let listed = std::thread::Builder::new().name("omareel-audio-devices".into()).spawn(move || {
+            let devices = launcher::audio_devices();
+            let _ = thread.queue(move |launcher| launcher.apply_audio_devices(generation, devices));
+        });
+        if listed.is_err() {
+            let devices = launcher::audio_devices();
+            self.apply_audio_devices(generation, devices);
+        }
+    }
+
+    /// The listing: keeps the chosen microphone while it is listed, and reopens the meter.
+    fn apply_audio_devices(mut self: Pin<&mut Self>, generation: u64, devices: Vec<AudioDevice>) {
+        if generation != self.audio_devices_generation {
+            return;
+        }
         let selection = launcher::select_microphone(&devices, &self.chosen_microphone_device, &self.microphone_device);
         self.as_mut().rust_mut().audio_devices = audio_device_list(&devices);
         self.as_mut().audio_devices_changed();

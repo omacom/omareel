@@ -1,5 +1,6 @@
 #pragma once
 
+#include "YuvFrame.h"
 #include <QByteArray>
 #include <QImage>
 #include <QObject>
@@ -21,21 +22,24 @@ class QQuickWindow;
 
 namespace Omareel {
 
-// What Composition.qml reads as `comp` while exporting.
+// What Composition.qml reads as `comp` while exporting. The sizes and the project are set before
+// Composition.qml loads and stay put (`setupChanged`, never emitted during the frame loop); the
+// rest changes every frame (`changed`). One signal for both re-read the whole project map into
+// JavaScript for every binding that touches it, every frame (about 1 ms a frame).
 class CompositionState : public QObject
 {
     Q_OBJECT
-    Q_PROPERTY(int outputWidth MEMBER outputWidth NOTIFY changed)
-    Q_PROPERTY(int outputHeight MEMBER outputHeight NOTIFY changed)
-    Q_PROPERTY(int sourceWidth MEMBER sourceWidth NOTIFY changed)
-    Q_PROPERTY(int sourceHeight MEMBER sourceHeight NOTIFY changed)
-    Q_PROPERTY(double captureScale MEMBER captureScale NOTIFY changed)
-    Q_PROPERTY(bool cameraAvailable MEMBER cameraAvailable NOTIFY changed)
+    Q_PROPERTY(int outputWidth MEMBER outputWidth NOTIFY setupChanged)
+    Q_PROPERTY(int outputHeight MEMBER outputHeight NOTIFY setupChanged)
+    Q_PROPERTY(int sourceWidth MEMBER sourceWidth NOTIFY setupChanged)
+    Q_PROPERTY(int sourceHeight MEMBER sourceHeight NOTIFY setupChanged)
+    Q_PROPERTY(double captureScale MEMBER captureScale NOTIFY setupChanged)
+    Q_PROPERTY(bool cameraAvailable MEMBER cameraAvailable NOTIFY setupChanged)
     Q_PROPERTY(bool cameraVisible MEMBER cameraVisible NOTIFY changed)
-    Q_PROPERTY(int cameraSourceWidth MEMBER cameraSourceWidth NOTIFY changed)
-    Q_PROPERTY(int cameraSourceHeight MEMBER cameraSourceHeight NOTIFY changed)
+    Q_PROPERTY(int cameraSourceWidth MEMBER cameraSourceWidth NOTIFY setupChanged)
+    Q_PROPERTY(int cameraSourceHeight MEMBER cameraSourceHeight NOTIFY setupChanged)
     Q_PROPERTY(double time MEMBER time NOTIFY changed)
-    Q_PROPERTY(QVariantMap project MEMBER project NOTIFY changed)
+    Q_PROPERTY(QVariantMap project MEMBER project NOTIFY setupChanged)
     Q_PROPERTY(QVariantMap zoom MEMBER zoom NOTIFY changed)
     Q_PROPERTY(QVariantMap layout MEMBER layout NOTIFY changed)
     Q_PROPERTY(QVariantMap media MEMBER media NOTIFY changed)
@@ -66,6 +70,7 @@ public:
     void notifyChanged() { emit changed(); }
 signals:
     void changed();
+    void setupChanged();
 };
 
 // Renders Composition.qml offscreen for the exporter, one frame at a time. With OpenGL it
@@ -93,6 +98,8 @@ public:
     // Hands the composition the frame's pictures (a null image leaves that layer's as it was),
     // renders it, and returns in *pixels the frame that is ready: this one in software, the one
     // two frames back with OpenGL, or none yet.
+    // The recording's next picture as YUV (instead of `screen` in renderFrame), for the GPU.
+    void setScreenYuv(const YuvFrame &frame);
     bool renderFrame(const QImage &screen, const QImage &camera, const QImage &insert,
                      QByteArray *pixels, QString *error);
     // After the last frame: the frames still being read back, oldest first, one per call; false
@@ -127,7 +134,9 @@ private:
     QQuickItem *m_frameSource = nullptr;
     QQuickItem *m_cameraFrameSource = nullptr;
     QQuickItem *m_mediaFrameSource = nullptr;
-    std::array<ReadbackSlot, 2> m_readbacks;
+    // Four: mapping a readback waits for the GPU to finish that frame, which two in flight did
+    // often enough to cost 2 ms a frame at 4K on the N1X.
+    std::array<ReadbackSlot, 4> m_readbacks;
     qsizetype m_frameBytes = 0;
     QOpenGLExtraFunctions *m_glExtra = nullptr;
     int m_frame = 0;

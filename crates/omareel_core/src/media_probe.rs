@@ -1,5 +1,5 @@
-//! What a video file holds, from ffprobe (`MediaProbe`): inserted clips' size, length, frame rate
-//! and audio, and the frame times of a recording.
+//! What a video file holds (`MediaProbe`): inserted clips' size, length, frame rate and audio,
+//! and the frame times of a recording; from FFmpeg's libraries, else from ffprobe.
 
 use crate::compat::qdir::FileInfo;
 use crate::compat::qjson::{self, Object};
@@ -53,6 +53,11 @@ pub fn probe_video(path: &str) -> Result<VideoInfo, String> {
     let name = FileInfo::new(path).file_name();
     if !FileInfo::new(path).is_file() {
         return Err(format!("{path} does not exist"));
+    }
+    // FFmpeg's libraries answer in process; a file they can't read goes to ffprobe, whose
+    // message the error carries.
+    if let Ok(probe) = crate::media_av::probe(path) {
+        return video_info_from(&name, &probe);
     }
     let mut process = Process::new();
     process.start(
@@ -126,11 +131,50 @@ pub fn probe_video(path: &str) -> Result<VideoInfo, String> {
     Ok(info)
 }
 
+/// [`probe_video`]'s reading of what the libraries found, as it reads ffprobe's JSON.
+fn video_info_from(name: &str, probe: &crate::media_av::Probe) -> Result<VideoInfo, String> {
+    let mut info = VideoInfo { audio: probe.has_audio, ..VideoInfo::default() };
+    if probe.has_video {
+        let mut width = f64::from(probe.width);
+        let height = f64::from(probe.height);
+        if probe.sample_aspect > 0.0 {
+            width *= probe.sample_aspect;
+        }
+        let mut rotation = probe.rotate_tag.as_deref().and_then(qnumber::to_int).unwrap_or(0);
+        if let Some(turned) = probe.rotation {
+            rotation = turned;
+        }
+        let quarter_turn = rotation.wrapping_abs() % 180 == 90;
+        info.width = q_round(if quarter_turn { height } else { width });
+        info.height = q_round(if quarter_turn { width } else { height });
+        let (average, nominal) = (probe.average_frame_rate, probe.frame_rate);
+        info.fps = if average > 0.0 && average <= 240.0 {
+            average
+        } else if nominal > 0.0 {
+            nominal
+        } else {
+            30.0
+        };
+        info.duration = probe.stream_duration.unwrap_or(0.0);
+    }
+    if info.duration <= 0.0 {
+        info.duration = probe.format_duration.unwrap_or(0.0);
+    }
+    if !info.is_valid() {
+        return Err(if probe.has_video { format!("{name} has no playable video") } else { format!("{name} is not a video") });
+    }
+    Ok(info)
+}
+
 /// When each frame of the first video stream starts, in seconds and in order; empty when the file
-/// can't be read. Native screen captures only hold a frame where the screen changed.
+/// can't be read. Native screen captures only hold a frame where the screen changed. Read in
+/// process (from an MP4's index, without reading the file), else by ffprobe over every packet.
 pub fn probe_frame_times(path: &str) -> Vec<f64> {
     if !FileInfo::new(path).is_file() {
         return Vec::new();
+    }
+    if let Some(times) = crate::media_av::frame_times(path) {
+        return times;
     }
     let mut process = Process::new();
     process.start(

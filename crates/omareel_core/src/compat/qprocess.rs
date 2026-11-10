@@ -192,6 +192,10 @@ pub struct Process {
     channel_mode: ChannelMode,
     /// `setStandardOutputFile`: the file the child's standard output is written to (truncated).
     standard_output_file: Option<String>,
+    /// [`set_pipe_capacity`](Process::set_pipe_capacity): the stdin and stdout pipes' size.
+    pipe_capacity: Option<i32>,
+    /// Polls the stdin pipe for room even with nothing buffered ([`write_stdin_direct`]).
+    poll_stdin: bool,
 }
 
 impl Default for Process {
@@ -262,6 +266,8 @@ impl Process {
             error_string: String::new(),
             channel_mode: ChannelMode::Separate,
             standard_output_file: None,
+            pipe_capacity: None,
+            poll_stdin: false,
         }
     }
 
@@ -274,6 +280,14 @@ impl Process {
     /// channels the standard error goes to the file too.
     pub fn set_standard_output_file(&mut self, path: &str) {
         self.standard_output_file = Some(path.to_string());
+    }
+
+    /// Asks the kernel for stdin and stdout pipes of `bytes` (`F_SETPIPE_SZ`, rounded up to a
+    /// page power of two and capped by `/proc/sys/fs/pipe-max-size`; a refusal keeps the
+    /// default 64 KiB), for the next `start`. Not a QProcess feature: a process moving large raw
+    /// frames otherwise crosses the pipe 64 KiB at a time, a wakeup and a syscall each.
+    pub fn set_pipe_capacity(&mut self, bytes: i32) {
+        self.pipe_capacity = Some(bytes);
     }
 
     /// `QProcess::start(program, arguments)`. A failure to start leaves the state NotRunning with
@@ -370,6 +384,12 @@ impl Process {
         self.stdin = take(child.stdin.take().map(OwnedFd::from));
         self.stdout = take(child.stdout.take().map(OwnedFd::from).or(merged_reader));
         self.stderr = take(child.stderr.take().map(OwnedFd::from));
+        if let Some(bytes) = self.pipe_capacity {
+            for fd in [&self.stdin, &self.stdout].into_iter().flatten() {
+                // SAFETY: an open pipe descriptor this process owns; failure leaves it as it was.
+                unsafe { libc::fcntl(fd.as_raw_fd(), libc::F_SETPIPE_SZ, bytes) };
+            }
+        }
         self.pidfd = pidfd_open(child.id());
         self.child = Some(child);
         self.state = ProcessState::Running;
@@ -503,7 +523,7 @@ impl Process {
     /// output pipes and the child. `None` when the deadline passed, `Err` when poll failed.
     fn poll(&mut self, deadline: &Deadline) -> Result<Option<Ready>, ()> {
         let fd = |fd: &Option<OwnedFd>| fd.as_ref().map_or(-1, AsRawFd::as_raw_fd);
-        let stdin = if self.bytes_to_write() > 0 { fd(&self.stdin) } else { -1 };
+        let stdin = if self.bytes_to_write() > 0 || self.poll_stdin { fd(&self.stdin) } else { -1 };
         let mut fds = [
             libc::pollfd { fd: stdin, events: libc::POLLOUT, revents: 0 },
             libc::pollfd { fd: fd(&self.stdout), events: libc::POLLIN, revents: 0 },
@@ -738,6 +758,126 @@ impl Process {
             }
         }
         false
+    }
+
+    /// Fills `data` with the standard output: first what is already buffered, then straight from
+    /// the pipe into `data`, with no copy through the channel buffer and no zero-filling (`data`
+    /// may be uninitialised). The standard error keeps being drained into its buffer meanwhile.
+    /// Returns how many bytes are now initialised at the start of `data`: all of them, or fewer
+    /// at end of file, when the child went, or after `msecs` without any progress (timed out).
+    /// Not a QProcess call: the exporter reads whole raw frames this way.
+    pub fn read_stdout_into(&mut self, data: &mut [std::mem::MaybeUninit<u8>], msecs: i32) -> usize {
+        let mut filled = self.bytes_available().min(data.len());
+        if filled > 0 {
+            let source = &self.stdout_buffer[self.stdout_offset..self.stdout_offset + filled];
+            // SAFETY: `filled` bytes of `data` exist and don't overlap the buffer.
+            unsafe { std::ptr::copy_nonoverlapping(source.as_ptr(), data.as_mut_ptr().cast::<u8>(), filled) };
+            self.stdout_offset += filled;
+            if self.stdout_offset == self.stdout_buffer.len() {
+                self.stdout_buffer.clear();
+                self.stdout_offset = 0;
+            }
+        }
+        let mut deadline = Deadline::new(msecs);
+        while filled < data.len() {
+            let Some(fd) = self.stdout.as_ref().map(AsRawFd::as_raw_fd) else { break };
+            let rest = &mut data[filled..];
+            // SAFETY: `rest` is writable memory of its length; read(2) only writes into it.
+            let r = unsafe { libc::read(fd, rest.as_mut_ptr().cast(), rest.len()) };
+            if r > 0 {
+                filled += r as usize;
+                deadline = Deadline::new(msecs);
+                continue;
+            }
+            if r == 0 {
+                self.stdout = None;
+                break;
+            }
+            match last_errno() {
+                libc::EINTR => continue,
+                libc::EAGAIN => {}
+                _ => {
+                    self.error = ProcessError::ReadError;
+                    self.error_string = "Error reading from process".into();
+                    break;
+                }
+            }
+            let ready = match self.poll(&deadline) {
+                Err(()) => break,
+                Ok(None) => {
+                    self.timed_out();
+                    break;
+                }
+                Ok(Some(ready)) => ready,
+            };
+            if ready.stderr {
+                self.read_from_channel(false);
+            }
+            if ready.stdout {
+                continue;
+            }
+            // A child that went has closed its end, which shows as a ready stdout above, so
+            // here its output is all read.
+            if ready.child {
+                self.process_finished();
+                break;
+            }
+        }
+        filled
+    }
+
+    /// Writes `data` straight to the standard input pipe (nothing goes through the write
+    /// buffer, which must be empty), waiting up to `msecs` for room. Returns how many bytes went:
+    /// some, or 0 when the deadline passed (timed out) or the child went; -1 on a write error,
+    /// which closes the pipe with `WriteError`. The standard output and error keep being drained.
+    /// Not a QProcess call: the exporter feeds whole raw frames this way.
+    pub fn write_stdin_direct(&mut self, data: &[u8], msecs: i32) -> i64 {
+        if self.bytes_to_write() > 0 || self.write_channel_closed || data.is_empty() {
+            return 0;
+        }
+        let deadline = Deadline::new(msecs);
+        loop {
+            let Some(fd) = self.stdin.as_ref().map(AsRawFd::as_raw_fd) else { return -1 };
+            ignore_sigpipe();
+            // SAFETY: `data` is valid for its length.
+            let r = unsafe { libc::write(fd, data.as_ptr().cast(), data.len()) };
+            if r > 0 {
+                return r as i64;
+            }
+            if r < 0 && last_errno() == libc::EINTR {
+                continue;
+            }
+            if r < 0 && last_errno() != libc::EAGAIN {
+                self.stdin = None;
+                self.error = ProcessError::WriteError;
+                self.error_string = "Error writing to process".into();
+                return -1;
+            }
+            self.poll_stdin = true;
+            let polled = self.poll(&deadline);
+            self.poll_stdin = false;
+            let ready = match polled {
+                Err(()) => return 0,
+                Ok(None) => {
+                    self.timed_out();
+                    return 0;
+                }
+                Ok(Some(ready)) => ready,
+            };
+            if ready.stdout {
+                self.read_from_channel(true);
+            }
+            if ready.stderr {
+                self.read_from_channel(false);
+            }
+            if ready.stdin {
+                continue;
+            }
+            if ready.child {
+                self.process_finished();
+                return 0;
+            }
+        }
     }
 
     /// `QProcess::waitForFinished(msecs)` (Qt's default is 30000): true once the child has
@@ -977,6 +1117,31 @@ pub fn start_detached<S: AsRef<str>>(program: &str, arguments: &[S], channels: D
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn moves_large_buffers_through_direct_reads_and_writes() {
+        // 3 MB through cat with 1 MiB pipes: written straight from the buffer, read straight into
+        // uninitialised memory, the output drained while writing so neither side blocks.
+        let input: Vec<u8> = (0..3 * 1024 * 1024).map(|i| (i * 7 % 251) as u8).collect();
+        let mut process = Process::new();
+        process.set_pipe_capacity(1 << 20);
+        process.start("cat", &[] as &[&str]);
+        assert!(process.wait_for_started(5000));
+        let mut written = 0;
+        while written < input.len() {
+            let amount = process.write_stdin_direct(&input[written..], 5000);
+            assert!(amount > 0, "write stalled at {written}");
+            written += amount as usize;
+        }
+        process.close_write_channel();
+        let mut output: Vec<u8> = Vec::with_capacity(input.len());
+        let got = process.read_stdout_into(&mut output.spare_capacity_mut()[..input.len()], 5000);
+        // SAFETY: read_stdout_into initialised the first `got` bytes.
+        unsafe { output.set_len(got) };
+        assert_eq!(got, input.len());
+        assert!(output == input);
+        assert!(process.wait_for_finished(5000));
+    }
 
     #[test]
     fn process_reads_writes_and_reports_exits() {

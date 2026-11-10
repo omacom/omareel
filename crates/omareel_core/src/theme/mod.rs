@@ -59,13 +59,16 @@ impl Theme {
     /// Reads the theme files again. The monospace family and the radius keep their values when
     /// fc-match or hyprctl fail; `OMAREEL_THEME_RADIUS` overrides the radius.
     pub fn reload(&mut self) {
+        // fc-match and hyprctl answer on threads of their own (or already did, from
+        // `prefetch`) while the files are read.
+        let queries = take_prefetched().unwrap_or_else(spawn_queries);
         let sources = Sources::read();
         self.palette = Palette::from_files(&sources.colors, &sources.shell);
         self.theme_name = sources.theme_name;
-        if let Some(mono) = monospace_family() {
+        if let Some(mono) = queries.0.join().ok().flatten() {
             self.mono_family = mono;
         }
-        if let Some(radius) = rounding() {
+        if let Some(radius) = queries.1.join().ok().flatten() {
             self.radius = radius;
         }
         if let Some(radius) = radius_override() {
@@ -79,6 +82,30 @@ impl Theme {
 
     pub fn rounded(&self) -> bool {
         self.radius > 0
+    }
+}
+
+type Queries = (std::thread::JoinHandle<Option<String>>, std::thread::JoinHandle<Option<i32>>);
+
+/// The answers a [`Theme`] asks other programs for, started by [`prefetch`].
+static PREFETCHED: std::sync::Mutex<Option<Queries>> = std::sync::Mutex::new(None);
+
+fn spawn_queries() -> Queries {
+    (std::thread::spawn(monospace_family), std::thread::spawn(rounding))
+}
+
+fn take_prefetched() -> Option<Queries> {
+    PREFETCHED.lock().ok()?.take()
+}
+
+/// Starts the fc-match and hyprctl runs the first [`Theme`] needs (a few milliseconds each, in
+/// turn on the main thread otherwise), for an app to call first thing; the first theme loaded
+/// takes their answers.
+pub fn prefetch() {
+    if let Ok(mut slot) = PREFETCHED.lock() {
+        if slot.is_none() {
+            *slot = Some(spawn_queries());
+        }
     }
 }
 

@@ -27,11 +27,33 @@ pub struct MediaInfo {
     pub audio: bool,
     /// The video says which matrix converts it to RGB.
     pub colour_tagged: bool,
+    /// The matrix for converting the video's YUV to RGB on the GPU, when it is one that path
+    /// knows: BT.709, or BT.601 (also for an untagged video, as ffmpeg assumes and the decoder
+    /// says with `untagged_bt601`). `None` (BT.2020, ...) leaves the conversion to ffmpeg.
+    pub yuv_matrix: Option<YuvMatrix>,
+    /// ffprobe's `color_range` is "pc" (full range); otherwise limited ("tv" or untagged).
+    pub full_range: bool,
+}
+
+/// The YUV to RGB matrix of a YUV frame.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum YuvMatrix {
+    Bt601,
+    Bt709,
 }
 
 impl Default for MediaInfo {
     fn default() -> MediaInfo {
-        MediaInfo { width: 0, height: 0, duration: 0.0, fps: 30.0, audio: false, colour_tagged: false }
+        MediaInfo {
+            width: 0,
+            height: 0,
+            duration: 0.0,
+            fps: 30.0,
+            audio: false,
+            colour_tagged: false,
+            yuv_matrix: Some(YuvMatrix::Bt601),
+            full_range: false,
+        }
     }
 }
 
@@ -61,7 +83,7 @@ pub fn probe(path: &str) -> (MediaInfo, String) {
             "-v",
             "error",
             "-show_entries",
-            "stream=codec_type,width,height,r_frame_rate,color_space:format=duration",
+            "stream=codec_type,width,height,r_frame_rate,color_space,color_range:format=duration",
             "-of",
             "json",
             path,
@@ -86,6 +108,12 @@ pub fn probe(path: &str) -> (MediaInfo, String) {
             result.fps = rate_value(&stream.value("r_frame_rate").to_string_or(""));
             let colour_space = stream.value("color_space").to_string_or("");
             result.colour_tagged = !colour_space.is_empty() && colour_space != "unknown";
+            result.yuv_matrix = match colour_space.as_str() {
+                "" | "unknown" | "smpte170m" | "bt470bg" => Some(YuvMatrix::Bt601),
+                "bt709" => Some(YuvMatrix::Bt709),
+                _ => None,
+            };
+            result.full_range = stream.value("color_range").to_string_or("") == "pc";
         } else if kind == Some("audio") {
             result.audio = true;
         }

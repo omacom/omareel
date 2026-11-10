@@ -447,11 +447,12 @@ fn video_thumbnail_urls_follow_source_times() {
     assert_eq!(job.path, format!("{cache}/0000000300.jpg"));
     assert_eq!(job.milliseconds, 300);
     assert_eq!(job.video_path, qt.document.video_path());
-    // One build at a time.
+    assert_eq!(job.key, "screen");
+    // A frame being built is not handed out twice.
     assert_eq!(qt.document.next_video_thumbnail_job(false, false), None);
     std::fs::create_dir_all(&cache).unwrap();
     std::fs::write(&job.path, b"jpeg").unwrap();
-    qt.run(|d| d.finish_video_thumbnail(true));
+    qt.run(|d| d.finish_video_thumbnail(&job, true));
     assert_eq!(qt.document.video_thumbnail_revision(), 1);
     let first = qt.run(|d| d.video_thumbnail_url(0.25));
     assert_eq!(first, crate::compat::qurl::from_local_file(&job.path));
@@ -460,16 +461,17 @@ fn video_thumbnail_urls_follow_source_times() {
     // 1.25 s rounds to 1.3 s.
     let job = qt.document.next_video_thumbnail_job(false, false).unwrap();
     assert_eq!(job.milliseconds, 400);
-    qt.run(|d| d.finish_video_thumbnail(false));
+    qt.run(|d| d.finish_video_thumbnail(&job, false));
     qt.run(|d| d.video_thumbnail_url(1.25));
-    assert_eq!(qt.document.next_video_thumbnail_job(false, false).unwrap().milliseconds, 1300);
-    qt.run(|d| d.finish_video_thumbnail(false));
+    let job = qt.document.next_video_thumbnail_job(false, false).unwrap();
+    assert_eq!(job.milliseconds, 1300);
+    qt.run(|d| d.finish_video_thumbnail(&job, false));
     // A tight span keeps its samples inside it, short of the last 1.5 frames.
     qt.run(|d| d.video_thumbnail_url_for_clip(0.17, 0.137, 0.181));
-    let tight = qt.document.next_video_thumbnail_job(false, false).unwrap().milliseconds;
-    assert!((137..=180).contains(&tight));
-    assert_eq!(tight, 159);
-    qt.run(|d| d.finish_video_thumbnail(false));
+    let job = qt.document.next_video_thumbnail_job(false, false).unwrap();
+    assert!((137..=180).contains(&job.milliseconds));
+    assert_eq!(job.milliseconds, 159);
+    qt.run(|d| d.finish_video_thumbnail(&job, false));
     // A failed frame is not asked for again; spans under a millisecond and non-finite times
     // give nothing.
     assert_eq!(qt.run(|d| d.video_thumbnail_url_for_clip(0.4, 0.4, 0.4005)), "");
@@ -482,12 +484,41 @@ fn video_thumbnail_urls_follow_source_times() {
 fn thumbnail_queue_is_bounded() {
     let world = World::new("editor-thumb-queue");
     let mut qt = world.open(&world.bundle("q.omareel"));
-    // Spans starting a hundredth apart sample 200 different frames.
-    for i in 0..200 {
-        let t = f64::from(i) / 150.0;
+    // Spans starting a few milliseconds apart sample more different frames than the limit.
+    for i in 0..500 {
+        let t = f64::from(i) / 330.0;
         qt.run(|d| d.video_thumbnail_url_for_clip(t, t, t + 0.5));
     }
     assert_eq!(qt.document.thumbnails.queue.len(), THUMBNAIL_QUEUE_LIMIT);
+}
+
+#[test]
+fn thumbnails_build_several_at_once_and_finish_in_any_order() {
+    let world = World::new("editor-thumb-parallel");
+    let mut qt = world.open(&world.bundle("p.omareel"));
+    for i in 0..10 {
+        qt.run(|d| d.video_thumbnail_url(f64::from(i) * 0.1));
+    }
+    let mut jobs = Vec::new();
+    while let Some(job) = qt.document.next_video_thumbnail_job(false, false) {
+        jobs.push(job);
+    }
+    assert_eq!(jobs.len(), thumbnail_workers());
+    assert_eq!(jobs.iter().map(|job| job.milliseconds).collect::<Vec<_>>(), (0..jobs.len() as i32).map(|i| i * 100).collect::<Vec<_>>());
+    // The second finishes first: its frame leaves the queue, and the next waiting frame starts.
+    let second = jobs.remove(1);
+    qt.run(|d| d.finish_video_thumbnail(&second, false));
+    assert!(!qt.document.thumbnails.queue.contains(&("screen".into(), 100)));
+    assert_eq!(qt.document.thumbnails.queue.front(), Some(&("screen".into(), 0)));
+    let next = qt.document.next_video_thumbnail_job(false, false).unwrap();
+    assert_eq!(next.milliseconds, thumbnail_workers() as i32 * 100);
+    assert_eq!(qt.document.next_video_thumbnail_job(false, false), None);
+    // Playing or scrubbing starts none, however many are free.
+    for job in jobs.drain(..).chain([next]) {
+        qt.run(|d| d.finish_video_thumbnail(&job, false));
+    }
+    assert_eq!(qt.document.next_video_thumbnail_job(true, false), None);
+    assert!(qt.document.next_video_thumbnail_job(false, false).is_some());
 }
 
 #[test]
@@ -745,11 +776,11 @@ fn clip_layouts_are_undoable_and_survive_splits() {
     assert!(job.path.contains("-camera-r0/"), "{}", job.path);
     assert_eq!(job.video_path, qt.document.camera_video_path());
     assert_eq!(job.filter, "");
-    qt.run(|d| d.finish_video_thumbnail(false));
+    qt.run(|d| d.finish_video_thumbnail(&job, false));
     qt.run(|d| d.clip_thumbnail_url(&second, 1.5, 1.0, 2.0));
     let job = qt.document.next_video_thumbnail_job(false, false).unwrap();
     assert!(!job.path.contains("-camera-"), "{}", job.path);
-    qt.run(|d| d.finish_video_thumbnail(false));
+    qt.run(|d| d.finish_video_thumbnail(&job, false));
 
     // A turned camera's frames are turned the same way, in their own cache.
     qt.run(|d| d.set_project_value("camera.rotation", 90.into(), false));
@@ -1636,4 +1667,22 @@ fn real_ffmpeg_probes_and_builds_frames() {
     assert_eq!(strip[0], crate::compat::qurl::from_local_file(&world.path("camera-cache/camera-01.jpg")));
     assert_eq!(jpeg_size(&world.path("camera-cache/camera-08.jpg")), Some((112, 72)));
     assert!(build_camera_thumbnails(&format!("{bundle}/missing.mp4"), 1.0, &world.path("other-cache")).is_empty());
+
+    // A video stored turned with a display matrix (a phone's) is left to ffmpeg, which stands it
+    // upright; the in-process decoder would scale the stored, sideways pixels.
+    let turned = format!("{bundle}/turned.mp4");
+    let made = crate::compat::qprocess::run(
+        "ffmpeg",
+        &["-y", "-v", "error", "-display_rotation", "90", "-i", &screen, "-c", "copy", &turned],
+        30000,
+    );
+    if made.is_some_and(|f| f.succeeded()) {
+        assert!(crate::media_av::thumbnail(&screen, 0.3, (160, 90), 4, 1, &world.path("upright.jpg")));
+        assert!(!crate::media_av::thumbnail(&turned, 0.3, (160, 90), 4, 1, &world.path("turned.jpg")));
+        let frame = world.path("turned-cache/0000000300.jpg");
+        assert!(build_video_thumbnail(&turned, "", &frame, 300));
+        assert_eq!(jpeg_size(&frame), Some((160, 90)));
+    } else {
+        eprintln!("ffmpeg could not write a display matrix");
+    }
 }

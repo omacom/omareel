@@ -51,7 +51,11 @@ for name in ('omarchy-notification-send', 'omarchy-shell'):
     stub.write_text('#!/bin/sh\nexit 0\n')
     stub.chmod(0o755)
 env['PATH'] = str(stubs) + ':' + env['PATH']
-env['OMAREEL_DEBUG'] = '0'
+env['OMAREEL_DEBUG'] = os.environ.get('OMAREEL_NESTED_DEBUG', '0')
+# The private runtime directory has no sound server; OMAREEL_NESTED_AUDIO=1 points PulseAudio
+# clients at the desktop's, for recordings with audio.
+if os.environ.get('OMAREEL_NESTED_AUDIO') == '1' and 'PULSE_SERVER' not in env:
+    env['PULSE_SERVER'] = 'unix:' + str(Path(outer['XDG_RUNTIME_DIR']) / 'pulse' / 'native')
 conf = root / 'hyprland.lua'
 conf.write_text('hl.monitor({ output = "", mode = "1600x900", position = "auto", scale = '
                 + os.environ.get("OMAREEL_NESTED_SCALE", "1") + ' })\n' + """

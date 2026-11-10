@@ -15,7 +15,31 @@ pub mod ffi {
         /// qWarning went; main() calls it first.
         #[cxx_name = "installMessageHandler"]
         fn install_message_handler();
+        /// Starts opening `bundle` for `omareel edit` (its ffprobe runs, the project and the
+        /// input log) on a thread, before Qt starts; the Editor takes the document.
+        #[cxx_name = "preloadEditor"]
+        fn preload_editor(bundle: &str);
+        /// Starts the theme's fc-match and hyprctl runs on threads, for a window to come.
+        #[cxx_name = "prefetchTheme"]
+        fn prefetch_theme();
+        /// The launcher's hyprctl checks (a held hardware cursor, the capture-exclusion plugin)
+        /// on a thread, for its constructor to take (launcher.rs).
+        #[cxx_name = "prefetchLauncher"]
+        fn prefetch_launcher();
     }
+}
+
+fn preload_editor(bundle: &str) {
+    use omareel_core::editor::{Document, Probes};
+    Document::preload(bundle, Probes::new(std::sync::Arc::new(omareel_core::media_probe::probe_video)));
+}
+
+fn prefetch_theme() {
+    omareel_core::theme::prefetch();
+}
+
+fn prefetch_launcher() {
+    crate::launcher::prefetch_capture_exclusion();
 }
 
 fn install_message_handler() {

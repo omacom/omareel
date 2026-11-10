@@ -4,6 +4,7 @@
 #include "Exporter.h"
 #include "render/VideoDecoding.h"
 #include "omareel_qt/src/cli.cxxqt.h"
+extern "C" int omr_ff_preload(void);
 #include "omareel_qt/src/editor.cxxqt.h"
 #include "omareel_qt/src/launcher.cxxqt.h"
 #include "omareel_qt/src/record.cxxqt.h"
@@ -27,15 +28,23 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QIcon>
 #include <QProcess>
 #include <QQuickStyle>
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QScreen>
 #include <QQmlApplicationEngine>
+#include <QQmlComponent>
+#include <QEventLoop>
+#include <QMediaPlayer>
+#include <QOffscreenSurface>
+#include <QOpenGLContext>
+#include <QSocketNotifier>
 #include <QQmlContext>
 #include <QQmlError>
 #include <QStandardPaths>
+#include <QTextLayout>
 #include <QTextStream>
 #include <QTimer>
 #include <QRegularExpression>
@@ -45,6 +54,12 @@
 #include <cstring>
 #include <functional>
 #include <unistd.h>
+#include <csignal>
+#include <fcntl.h>
+#include <sys/syscall.h>
+#include <memory>
+#include <optional>
+#include <thread>
 #include <vector>
 
 #ifndef OMAREEL_VERSION
@@ -67,19 +82,12 @@ static QString availableFamily(const QStringList &families, const QStringList &c
     return {};
 }
 
+// The interface face. The monospace one is the theme's (Theme asks fontconfig for it).
 static ResolvedFonts resolveFonts()
 {
-    QProcess match;
-    match.start(QStringLiteral("fc-match"),
-                {QStringLiteral("-f"), QStringLiteral("%{family[0]}"), QStringLiteral("monospace")});
-    QString family;
-    if (match.waitForFinished(1500) && match.exitCode() == 0)
-        family = QString::fromUtf8(match.readAllStandardOutput()).trimmed();
-    if (family.isEmpty()) family = QFontDatabase::systemFont(QFontDatabase::FixedFont).family();
-    qInfo().noquote() << "omareel: fontconfig monospace ->" << family;
     QString ui = ThemeFonts::bundledUiFamily();
     if (ui.isEmpty()) ui = QFontDatabase::systemFont(QFontDatabase::GeneralFont).family();
-    return {ui, family};
+    return {ui, {}};
 }
 
 static int usage(const QString &error = {})
@@ -222,6 +230,10 @@ static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplicat
 
 static void reportQmlWarnings(QQmlApplicationEngine &engine)
 {
+    // QQmlApplicationEngine installs a file selector, which checks every URL QML loads (each
+    // icon, image and component) for "+selector" directories omareel doesn't have.
+    const QList<QQmlAbstractUrlInterceptor *> interceptors = engine.urlInterceptors();
+    for (QQmlAbstractUrlInterceptor *interceptor : interceptors) engine.removeUrlInterceptor(interceptor);
     QObject::connect(&engine, &QQmlApplicationEngine::warnings, [](const QList<QQmlError> &warnings) {
         for (const QQmlError &warning : warnings)
             QTextStream(stderr) << warning.toString() << '\n';
@@ -291,20 +303,152 @@ static QScreen *recordBarScreen(const QString &recordedMonitor)
     return nullptr;
 }
 
+// Whether Hyprland took a hyprctl request: it answers `ok`, and a refusal comes back with exit
+// status 0 all the same.
+static bool hyprctlAccepted(const QStringList &arguments)
+{
+    QProcess request;
+    request.start(QStringLiteral("hyprctl"), arguments);
+    return request.waitForFinished(3000) && request.exitCode() == 0
+        && request.readAllStandardOutput().trimmed() == "ok";
+}
+
 static void configureOverlayRule(const QString &scope)
 {
-    QProcess rule;
     // Named Lua rules merge effects. Retire the previous rule before adding ours.
     const QString expression = QStringLiteral(
         "hl.layer_rule({ name = '%1-private', enabled = false }); "
         "hl.layer_rule({ name = '%1-display', match = { namespace = '%1' }, no_anim = true })").arg(scope);
-    rule.start(QStringLiteral("hyprctl"), {QStringLiteral("eval"), expression});
-    if (!rule.waitForFinished(3000) || rule.exitCode() != 0)
+    // Hyprland 0.56 with a hyprlang configuration (Omarchy's stable channel) answers eval with
+    // "eval is only supported with the lua config manager" and takes the rule as a keyword.
+    if (!hyprctlAccepted({QStringLiteral("eval"), expression})
+        && !hyprctlAccepted({QStringLiteral("keyword"), QStringLiteral("layerrule"),
+                             QStringLiteral("no_anim on, match:namespace %1").arg(scope)}))
         qWarning().noquote() << "omareel: could not apply the overlay animation rule";
+}
+
+// `omareel edit --wait <recorder pid> <bundle>`: the recorder starts the editor while it records,
+// so that when Stop is pressed the editor only has to open the recording and show its window.
+// Until then it starts Qt, compiles the editor's QML and warms the GL driver and Qt Multimedia.
+// The recorder sends SIGUSR1 once the recording is saved; a recorder that exits without sending
+// it (discarded, failed) ends the wait, and the editor with it.
+//
+// `omareel __record-bar --wait <starter pid>` is the recording bar the same way, started by
+// `omareel record` before its region picker and by the launcher (waiting_bar.rs). The recorder
+// adopts it with SIGUSR1 sent by sigqueue, the value its flags (1: hidden); one nobody adopts
+// quits two seconds after its starter has gone.
+static int s_openPipe[2] = {-1, -1};
+
+static void requestOpen(int, siginfo_t *info, void *)
+{
+    const char byte = char(info && info->si_code == SI_QUEUE ? info->si_value.sival_int & 0x7f : 0);
+    [[maybe_unused]] const ssize_t written = ::write(s_openPipe[1], &byte, 1);
+}
+
+static bool waitingEditor(int argc, char **argv)
+{
+    return argc == 5 && std::strcmp(argv[1], "edit") == 0 && std::strcmp(argv[2], "--wait") == 0;
+}
+
+static bool waitingBar(int argc, char **argv)
+{
+    return argc == 4 && std::strcmp(argv[1], "__record-bar") == 0 && std::strcmp(argv[2], "--wait") == 0;
+}
+
+// First thing in main: the recorder checks the handler is installed (SigCgt, or the bar's pid
+// file) before signalling.
+static void installOpenRequest()
+{
+    if (::pipe2(s_openPipe, O_CLOEXEC | O_NONBLOCK) != 0) return;
+    struct sigaction action {};
+    action.sa_sigaction = requestOpen;
+    sigemptyset(&action.sa_mask);
+    action.sa_flags = SA_RESTART | SA_SIGINFO;
+    ::sigaction(SIGUSR1, &action, nullptr);
+}
+
+// Lays out the printable ASCII range in each family, size and weight the editor's text uses:
+// the font engines and glyph metrics are then cached for its first layout (15 ms of it).
+static void warmFonts(const QObject &theme)
+{
+    QString sample;
+    for (char16_t c = 0x20; c < 0x7f; ++c) sample += QChar(c);
+    sample += QStringLiteral("·—–…×←→↑↓⌘⇧⌥");
+    QList<int> sizes;
+    const QVariantMap type = theme.property("type").toMap();
+    for (const QVariant &size : type) sizes << size.toInt() << size.toInt() - 1;
+    const QStringList families{theme.property("fontFamily").toString(), theme.property("monoFamily").toString()};
+    for (const QString &family : families) {
+        for (const int size : std::as_const(sizes)) {
+            if (size <= 0) continue;
+            for (const QFont::Weight weight : {QFont::Normal, QFont::Medium, QFont::DemiBold, QFont::Bold}) {
+                QFont font(family);
+                font.setPixelSize(size);
+                font.setWeight(weight);
+                QTextLayout layout(sample, font);
+                layout.beginLayout();
+                layout.createLine();
+                layout.endLayout();
+            }
+        }
+    }
+}
+
+static void warmEditor(QQmlApplicationEngine &engine, std::unique_ptr<QQmlComponent> &main, const QObject &theme)
+{
+    warmFonts(theme);
+    // Compiling Main.qml loads every type and import it uses; the engine keeps the compiled
+    // units, so the load after Stop only creates the objects.
+    main = std::make_unique<QQmlComponent>(&engine, QUrl(QStringLiteral("qrc:/qt/qml/Omareel/Main.qml")),
+                                           QQmlComponent::PreferSynchronous);
+    // The driver's first context (and its shader cache) and the scene graph's render loop.
+    {
+        QOffscreenSurface surface;
+        surface.create();
+        QOpenGLContext context;
+        if (context.create() && context.makeCurrent(&surface)) context.doneCurrent();
+    }
+    { QQuickWindow warm; }
+    // Qt Multimedia's backend (the FFmpeg plugin and its hardware probes).
+    { QMediaPlayer player; }
+}
+
+// Waits for the signal: its flags, or -1 when `starterPid` exited without sending it (after
+// `graceMs` more, for a signal on its way).
+static int waitForOpenRequest(qint64 starterPid, int graceMs)
+{
+    int flags = -1;
+    QEventLoop loop;
+    auto requested = [&] {
+        char byte;
+        if (flags < 0 && ::read(s_openPipe[0], &byte, 1) == 1) flags = byte;
+        return flags >= 0;
+    };
+    if (requested()) return flags;
+    QSocketNotifier openNotifier(s_openPipe[0], QSocketNotifier::Read);
+    QObject::connect(&openNotifier, &QSocketNotifier::activated, &loop, [&] { if (requested()) loop.quit(); });
+    const int starter = int(::syscall(SYS_pidfd_open, pid_t(starterPid), 0));
+    if (starter < 0) {
+        QTimer::singleShot(graceMs, &loop, &QEventLoop::quit);
+        loop.exec();
+        requested();
+        return flags;
+    }
+    QSocketNotifier starterNotifier(starter, QSocketNotifier::Read);
+    QObject::connect(&starterNotifier, &QSocketNotifier::activated, &loop, [&] {
+        starterNotifier.setEnabled(false);
+        QTimer::singleShot(graceMs, &loop, [&] { requested(); loop.quit(); });
+    });
+    loop.exec();
+    ::close(starter);
+    requested();
+    return flags;
 }
 
 int main(int argc, char **argv)
 {
+    if (waitingEditor(argc, argv) || waitingBar(argc, argv)) installOpenRequest();
+    if (waitingBar(argc, argv)) omareel::record::registerWaitingBar();
     omareel::cli::installMessageHandler();
     // QProcess resolves executables to absolute paths, but Omarchy's REC indicator intentionally
     // matches an argv[0] beginning with "gpu-screen-recorder". Preserve that public contract.
@@ -327,6 +471,20 @@ int main(int argc, char **argv)
         app.setApplicationVersion(QStringLiteral(OMAREEL_VERSION));
         return omareel::record::daemonMain(app.arguments().mid(2));
     }
+    // Nor do `omareel record` (the keybinding's start and stop, and the launcher's) and the
+    // bar's and self-view's commands: a QGuiApplication's display connection, fonts and D-Bus
+    // registration were 40 ms of each, before Stop even reached the recorder.
+    if (argc > 1 && (std::strcmp(argv[1], "record") == 0 || std::strcmp(argv[1], "__selfview-ipc") == 0
+                     || std::strcmp(argv[1], "__record-bar-ipc") == 0)) {
+        QCoreApplication app(argc, argv);
+        app.setApplicationName(QStringLiteral("omareel"));
+        app.setOrganizationName(QStringLiteral("omareel"));
+        app.setApplicationVersion(QStringLiteral(OMAREEL_VERSION));
+        const QStringList args = app.arguments();
+        if (args[1] == QLatin1String("record")) return omareel::record::recordCommand(args.mid(2));
+        if (args[1] == QLatin1String("__selfview-ipc")) return omareel::record::selfViewIpc(args.mid(2));
+        return omareel::record::recordBarIpc(args.mid(2));
+    }
     const bool exporting = argc > 1 && QByteArray(argv[1]) == "export";
     const bool layerTest = argc > 1 && QByteArray(argv[1]) == "__layer-test";
     const bool windowTest = argc > 1 && QByteArray(argv[1]) == "__window-test";
@@ -334,6 +492,15 @@ int main(int argc, char **argv)
     if (recordBar) QLoggingCategory::setFilterRules(QStringLiteral("qt.multimedia.ffmpeg*=false"));
     const bool hiddenRecordBar = recordBar && argc > 2 && QByteArray(argv[2]) == "--hidden";
     const bool graphical = argc == 1 || layerTest || windowTest || recordBar || (argc > 1 && QByteArray(argv[1]) == "edit");
+    // Opening a recording runs ffprobe and reads its project and input log, and the theme asks
+    // fc-match and hyprctl: start them now, so they overlap Qt's own start-up.
+    if (argc == 3 && QByteArray(argv[1]) == "edit")
+        omareel::cli::preloadEditor(QString::fromLocal8Bit(argv[2]).toStdString());
+    if (graphical) omareel::cli::prefetchTheme();
+    if (argc == 1) omareel::cli::prefetchLauncher();
+    // FFmpeg's libraries are opened, not linked (ffmpeg_dl.h): a window process opens them on a
+    // thread now, so Qt Multimedia's FFmpeg plugin, which links them, finds them loaded.
+    if (graphical || exporting) std::thread([] { omr_ff_preload(); }).detach();
     if (recordBar || layerTest) LayerShellQt::Shell::useLayerShell();
     if (graphical) {
         QQuickStyle::setStyle(QStringLiteral("Basic"));
@@ -365,12 +532,20 @@ int main(int argc, char **argv)
     app.setApplicationName(QStringLiteral("omareel"));
     app.setOrganizationName(QStringLiteral("omareel"));
     app.setApplicationVersion(QStringLiteral(OMAREEL_VERSION));
+    if (graphical) {
+        // Every icon is a bundled SVG, but QQuickIconImage still asks the icon theme for each
+        // (QIconLoader parsing index.theme files and testing every directory of the theme and
+        // its parents): 120 ms of the editor's start. A search path holding no theme ends
+        // those lookups at once (an empty list would mean the system's paths).
+        QIcon::setThemeSearchPaths({QStringLiteral(":/omareel/no-icon-themes")});
+        QIcon::setFallbackSearchPaths({});
+    }
     const ResolvedFonts resolvedFonts = resolveFonts();
     QFont applicationFont(resolvedFonts.ui);
     applicationFont.setPixelSize(qRound(omareel::theme::shellFontBaseSize() * 1.083));
     QGuiApplication::setFont(applicationFont);
     ThemeFonts::setConfiguredFamily(resolvedFonts.ui);
-    if (graphical)
+    if (graphical && qEnvironmentVariable("OMAREEL_DEBUG") == QLatin1String("1"))
         QTextStream(stderr) << "omareel: application font " << resolvedFonts.ui
                             << " at " << applicationFont.pixelSize() << " px\n";
     const QStringList args = app.arguments();
@@ -385,6 +560,9 @@ int main(int argc, char **argv)
         QObject::connect(&launcher, &Launcher::quitRequested, &app, &QCoreApplication::quit);
         engine.load(QUrl(QStringLiteral("qrc:/qt/qml/Omareel/Launcher.qml")));
         if (engine.rootObjects().isEmpty()) return 2;
+        // A recording bar starts waiting once the launcher is on screen (waiting_bar.rs).
+        if (qEnvironmentVariableIsEmpty("OMAREEL_SCREENSHOT"))
+            QTimer::singleShot(300, &app, [] { omareel::record::startWaitingBar(); });
         configureDebugScreenshot(engine, app);
         return app.exec();
     }
@@ -394,13 +572,34 @@ int main(int argc, char **argv)
     if (command == QLatin1String("__record-bar-ipc")) return omareel::record::recordBarIpc(args.mid(2));
     if (command == QLatin1String("__record-bar")) {
         Theme theme;
-        const int ownerIndex = args.indexOf(QStringLiteral("--owner"));
-        RecordingBar recordingBar(hiddenRecordBar, args.contains(QStringLiteral("--standby")),
-                                  ownerIndex >= 0 ? args.value(ownerIndex + 1).toLongLong() : 0);
-        if (args.contains(QStringLiteral("--standby")) && !recordingBar.ownsStandbyHost()) return 0;
+        // The bar outlives the engine, as its bindings read it while the engine tears down; it
+        // is made after the wait, which already uses the engine.
+        std::optional<RecordingBar> bar;
         QQmlApplicationEngine engine;
         reportQmlWarnings(engine);
         engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        bool hidden = hiddenRecordBar;
+        std::unique_ptr<QQmlComponent> warmBar;
+        if (waitingBar(argc, argv)) {
+            warmFonts(theme);
+            warmBar = std::make_unique<QQmlComponent>(&engine, QUrl(QStringLiteral("qrc:/qt/qml/Omareel/RecordingBar.qml")),
+                                                      QQmlComponent::PreferSynchronous);
+            {
+                QOffscreenSurface surface;
+                surface.create();
+                QOpenGLContext context;
+                if (context.create() && context.makeCurrent(&surface)) context.doneCurrent();
+            }
+            { QQuickWindow warm; }
+            const int flags = waitForOpenRequest(args[3].toLongLong(), 2000);
+            omareel::record::unregisterWaitingBar();
+            if (flags < 0) return 0;
+            hidden = (flags & 1) != 0;
+        }
+        const int ownerIndex = args.indexOf(QStringLiteral("--owner"));
+        RecordingBar &recordingBar = bar.emplace(hidden, args.contains(QStringLiteral("--standby")),
+                                                 ownerIndex >= 0 ? args.value(ownerIndex + 1).toLongLong() : 0);
+        if (args.contains(QStringLiteral("--standby")) && !recordingBar.ownsStandbyHost()) return 0;
         engine.rootContext()->setContextProperty(QStringLiteral("recordingBar"), &recordingBar);
         QObject::connect(&recordingBar, &RecordingBar::finished, &app, &QCoreApplication::quit);
         engine.load(QUrl(QStringLiteral("qrc:/qt/qml/Omareel/RecordingBar.qml")));
@@ -576,15 +775,31 @@ int main(int argc, char **argv)
     }
     if (command == QLatin1String("export")) return exportCommand(args.mid(2));
     if (command == QLatin1String("edit")) {
-        if (args.size() != 3) return usage(QStringLiteral("edit requires a bundle"));
-        Editor editor(QDir(args[2]).absolutePath());
+        const bool waiting = waitingEditor(argc, argv);
+        if (args.size() != 3 && !waiting) return usage(QStringLiteral("edit requires a bundle"));
+        const QString bundle = QDir(args[waiting ? 4 : 2]).absolutePath();
+        std::unique_ptr<Theme> waitingTheme;
+        std::unique_ptr<QQmlApplicationEngine> waitingEngine;
+        std::unique_ptr<QQmlComponent> warmMain;
+        if (waiting) {
+            waitingTheme = std::make_unique<Theme>();
+            waitingEngine = std::make_unique<QQmlApplicationEngine>();
+            reportQmlWarnings(*waitingEngine);
+            waitingEngine->rootContext()->setContextProperty(QStringLiteral("theme"), waitingTheme.get());
+            warmEditor(*waitingEngine, warmMain, *waitingTheme);
+            // A signal sent just before the recorder exited may still be on its way to a thread.
+            if (waitForOpenRequest(args[3].toLongLong(), 100) < 0) return 0;
+        }
+        Editor editor(bundle);
         if (!editor.isValid()) {
             QTextStream(stderr) << "omareel: " << editor.errorString() << '\n';
             return 1;
         }
-        Theme theme;
-        QQmlApplicationEngine engine;
-        reportQmlWarnings(engine);
+        std::unique_ptr<Theme> ownTheme = waiting ? std::move(waitingTheme) : std::make_unique<Theme>();
+        Theme &theme = *ownTheme;
+        std::unique_ptr<QQmlApplicationEngine> ownEngine = waiting ? std::move(waitingEngine) : std::make_unique<QQmlApplicationEngine>();
+        QQmlApplicationEngine &engine = *ownEngine;
+        if (!waiting) reportQmlWarnings(engine);
         engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
         engine.rootContext()->setContextProperty(QStringLiteral("editor"), &editor);
         engine.rootContext()->setContextProperty(QStringLiteral("comp"), &editor);

@@ -130,6 +130,11 @@ QByteArray ExportRenderer::mapReadback(ReadbackSlot &slot, QString *error)
     return bytes;
 }
 
+void ExportRenderer::setScreenYuv(const YuvFrame &frame)
+{
+    QMetaObject::invokeMethod(m_frameSource, "setYuvFrame", Qt::DirectConnection, Q_ARG(Omareel::YuvFrame, frame));
+}
+
 bool ExportRenderer::renderFrame(const QImage &screen, const QImage &camera, const QImage &insert,
                                  QByteArray *pixels, QString *error)
 {
@@ -177,7 +182,7 @@ bool ExportRenderer::renderFrame(const QImage &screen, const QImage &camera, con
     m_renderControl->endFrame();
     m_timing.renderNs += stageTimer.nsecsElapsed();
     stageTimer.restart();
-    // Two buffers: this frame's readback starts as the one two frames back is collected.
+    // This frame's readback starts as the one m_readbacks.size() frames back is collected.
     auto &slot = m_readbacks[frame % int(m_readbacks.size())];
     if (slot.frame >= 0) {
         QString mapError;

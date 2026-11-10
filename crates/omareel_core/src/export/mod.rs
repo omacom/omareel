@@ -2,8 +2,8 @@
 //!
 //! [`ExportJob`] loads the bundle and works out the output ([`ExportJob::prepare`]), then, once
 //! the caller's renderer is ready, starts ffmpeg ([`ExportJob::start`]): a decode thread turns the
-//! recording, the webcam video and inserted clips into RGBA frames three frames ahead, and for
-//! MP4 an encode thread feeds an ffmpeg encoder two frames behind. The caller runs the frame
+//! recording, the webcam video and inserted clips into RGBA frames [`DECODE_AHEAD`] frames ahead,
+//! and for MP4 an encode thread feeds an ffmpeg encoder [`ENCODE_QUEUE`] frames behind. The caller runs the frame
 //! loop: [`next_frame`](ExportJob::next_frame) gives each frame's pictures and updates
 //! [`state`](ExportJob::state), the caller renders them and hands the pixels to
 //! [`encode`](ExportJob::encode), waiting with [`wait_encode_space`](ExportJob::wait_encode_space)
@@ -60,12 +60,23 @@ pub struct ExportOptions {
     pub timing: bool,
 }
 
-/// A decoded frame: tightly packed RGBA rows, shared by the frames that repeat it.
+/// A decoded frame, shared by the frames that repeat it: tightly packed RGBA rows, or with
+/// `yuv` the planes of a YUV 4:2:0 frame (Y at `width` x `height`, then U and V at half each
+/// way) for the renderer to convert with that matrix and range.
 #[derive(Clone, Debug)]
 pub struct Image {
     pub width: i32,
     pub height: i32,
     pub pixels: Arc<Vec<u8>>,
+    pub yuv: Option<YuvLayout>,
+}
+
+/// How a YUV [`Image`] converts to RGB.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct YuvLayout {
+    pub matrix: plan::YuvMatrix,
+    /// Full range (0-255); otherwise limited (16-235 luma, 16-240 chroma).
+    pub full_range: bool,
 }
 
 /// The pictures of one frame for the composition; a missing one leaves that layer as it was.
@@ -135,6 +146,14 @@ struct EncodeShared {
     write_ns: AtomicI64,
 }
 
+/// How many decoded frames the decode thread keeps ready. Six rather than three: when a clip
+/// starts or the webcam rewinds, a new ffmpeg takes a few frames' time to deliver its first, and
+/// the rendering should not wait for it (a 4K frame is 33 MB, so this is about 200 MB at most).
+pub const DECODE_AHEAD: usize = 6;
+/// How many rendered frames wait for the encoder: enough that a frame x264 takes longer over
+/// doesn't stall the rendering.
+pub const ENCODE_QUEUE: usize = 4;
+
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
@@ -169,6 +188,8 @@ struct DecodePlan {
     height: i32,
     fps: i32,
     total_frames: i32,
+    /// The recording's frames come as YUV in this layout ([`ExportJob::set_yuv_screen`]).
+    screen_yuv: Option<YuvLayout>,
 }
 
 pub struct ExportJob {
@@ -201,6 +222,7 @@ pub struct ExportJob {
     camera_decode_height: i32,
     state: CompositionState,
     software_rendering: bool,
+    yuv_screen: bool,
     raw_file: Option<TemporaryFile>,
     click_file: Option<TemporaryFile>,
     encoded_file: Option<TemporaryFile>,
@@ -395,6 +417,7 @@ impl ExportJob {
             camera_decode_height,
             state,
             software_rendering: false,
+            yuv_screen: false,
             raw_file: None,
             click_file: None,
             encoded_file: None,
@@ -476,6 +499,14 @@ impl ExportJob {
 
     fn is_cancelled(&self) -> bool {
         self.cancelled.load(Ordering::SeqCst)
+    }
+
+    /// Asks for the recording's frames as YUV 4:2:0 ([`Image::yuv`]) rather than RGBA, for a
+    /// renderer that converts on the GPU; before [`start`](Self::start). Ignored for a video in a
+    /// matrix that path doesn't know ([`MediaInfo::yuv_matrix`]); the webcam and inserted clips
+    /// stay RGBA.
+    pub fn set_yuv_screen(&mut self, yuv: bool) {
+        self.yuv_screen = yuv;
     }
 
     /// Once the renderer is ready: the temporary files, the encoder's arguments (with the audio
@@ -672,6 +703,11 @@ impl ExportJob {
             height: self.height,
             fps: self.fps,
             total_frames: self.total_frames,
+            screen_yuv: if self.yuv_screen && !self.gif {
+                self.media.yuv_matrix.map(|matrix| YuvLayout { matrix, full_range: self.media.full_range })
+            } else {
+                None
+            },
         };
         let shared = Arc::clone(&self.decode);
         let cancelled = Arc::clone(&self.cancelled);
@@ -729,9 +765,9 @@ impl ExportJob {
         })
     }
 
-    /// Whether the encoder can take another frame, waiting up to `timeout_ms` for it: two
-    /// queued frames, one in the pipe, and two GPU readbacks bound how far rendering can run
-    /// ahead. Also true once the encoder failed or the export was cancelled, so that
+    /// Whether the encoder can take another frame, waiting up to `timeout_ms` for it:
+    /// [`ENCODE_QUEUE`] queued frames, one in the pipe, and the caller's GPU readbacks bound how
+    /// far rendering can run ahead. Also true once the encoder failed or the export was cancelled, so that
     /// [`encode`](Self::encode) can say so. Always true for GIF.
     pub fn wait_encode_space(&self, timeout_ms: u64) -> bool {
         if self.gif {
@@ -743,7 +779,7 @@ impl ExportJob {
             .encode
             .space
             .wait_timeout_while(queue, Duration::from_millis(timeout_ms), |q| {
-                !(q.frames.len() < 2
+                !(q.frames.len() < ENCODE_QUEUE
                     || abort.load(Ordering::SeqCst)
                     || !q.error.is_empty()
                     || cancelled.load(Ordering::SeqCst))
@@ -925,6 +961,7 @@ type Encoders = std::vec::IntoIter<(&'static str, Vec<String>)>;
 fn start_encoder(process: &mut Process, encoders: &mut Encoders, shared: &EncodeShared) -> bool {
     let Some((name, args)) = encoders.next() else { return false };
     lock(&shared.queue).encoder = name.to_owned();
+    process.set_pipe_capacity(decoder::PIPE_CAPACITY);
     process.start("ffmpeg", &args);
     process.wait_for_started(10000)
 }
@@ -1032,15 +1069,52 @@ fn push_error(shared: &DecodeShared, error: String) {
     lock(&shared.queue).packets.push_back(DecodedPacket::failed(error));
 }
 
-fn image(pixels: Vec<u8>, width: i32, height: i32) -> Image {
-    Image { width, height, pixels: Arc::new(pixels) }
+fn image(pixels: Vec<u8>, width: i32, height: i32, yuv: Option<YuvLayout>) -> Image {
+    Image { width, height, pixels: Arc::new(pixels), yuv }
 }
 
-/// The decode thread: one decoder for the clip playing (restarted at each clip) and one for
-/// the webcam video (rewound when the camera time goes back), three frames ahead of the frame
-/// loop.
+/// Starts `decoder` on `clip`: the recording at the decode size, or an inserted video scaled to
+/// its own size.
+fn start_clip_decoder(decoder: &mut FfmpegDecoder, clip: &Clip, work: &DecodePlan, error: &mut String) -> bool {
+    decoder.set_yuv(!clip.is_media() && work.screen_yuv.is_some());
+    if clip.is_media() {
+        let info = work.inserts.get(&clip.media).copied().unwrap_or_default();
+        let (width, height) = plan::insert_decode_size(work.width, work.height, &info);
+        // Always scaled: the filter fixes the frame size whatever rotation or sample aspect the
+        // file carries.
+        decoder.start(
+            &qdir::file_path(&work.bundle, &clip.media),
+            clip.in_,
+            clip.out - clip.in_,
+            f64::from(work.fps) / clip.speed,
+            width,
+            height,
+            true,
+            false,
+            error,
+        )
+    } else {
+        decoder.start(
+            &work.video_path,
+            clip.in_,
+            clip.out - clip.in_,
+            f64::from(work.fps) / clip.speed,
+            work.decode_width,
+            work.decode_height,
+            work.decode_width != work.media.width || work.decode_height != work.media.height,
+            !work.media.colour_tagged,
+            error,
+        )
+    }
+}
+
+/// The decode thread: one decoder for the clip playing (a new one at each clip, started a
+/// second ahead) and one for the webcam video (rewound when the camera time goes back),
+/// [`DECODE_AHEAD`] frames ahead of the frame loop.
 fn decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &AtomicBool) {
     let mut decoder = FfmpegDecoder::new();
+    let mut next_decoder = FfmpegDecoder::new();
+    let mut next_clip = -1;
     let mut camera_decoder = FfmpegDecoder::new();
     let mut active_clip = -1;
     // The last frame of the recording and of the current inserted clip, kept apart so a clip
@@ -1082,45 +1156,42 @@ fn decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &AtomicBoo
         let Some(clip) = usize::try_from(clip_index).ok().and_then(|index| work.clips.get(index)) else { break };
         let mut decode_error = String::new();
         if clip_index != active_clip {
-            let started = if clip.is_media() {
-                let info = work.inserts.get(&clip.media).copied().unwrap_or_default();
-                let (width, height) = plan::insert_decode_size(work.width, work.height, &info);
-                insert_decoded = None;
-                // Always scaled: the filter fixes the frame size whatever rotation or sample
-                // aspect the file carries.
-                decoder.start(
-                    &qdir::file_path(&work.bundle, &clip.media),
-                    clip.in_,
-                    clip.out - clip.in_,
-                    f64::from(work.fps) / clip.speed,
-                    width,
-                    height,
-                    true,
-                    false,
-                    &mut decode_error,
-                )
+            // The decoder started ahead for this clip, or a new one.
+            let started = if next_clip == clip_index {
+                std::mem::swap(&mut decoder, &mut next_decoder);
+                // The finished clip's ffmpeg.
+                next_decoder.cancel();
+                true
             } else {
-                decoder.start(
-                    &work.video_path,
-                    clip.in_,
-                    clip.out - clip.in_,
-                    f64::from(work.fps) / clip.speed,
-                    work.decode_width,
-                    work.decode_height,
-                    work.decode_width != work.media.width || work.decode_height != work.media.height,
-                    !work.media.colour_tagged,
-                    &mut decode_error,
-                )
+                start_clip_decoder(&mut decoder, clip, work, &mut decode_error)
             };
+            next_clip = -1;
+            if clip.is_media() {
+                insert_decoded = None;
+            }
             if !started {
                 push_error(shared, decode_error);
                 break;
             }
             active_clip = clip_index;
         }
+        // The next clip's decoder starts a second ahead, so its ffmpeg has started, seeked and
+        // decoded its first frame (a third of a second for 4K) by the time it's needed, instead
+        // of the frame loop waiting for it. Started exactly as it would be then. One prepared is
+        // kept until the loop reaches it: a clip shorter than the second would otherwise lose its
+        // decoder to the clip after it and start another at its boundary. Every clip change
+        // clears next_clip, so the clip after is prepared then.
+        let ahead_index = work.timeline.clip_at(f64::from(frame + work.fps) / f64::from(work.fps), None);
+        if ahead_index != active_clip && next_clip < 0 {
+            if let Some(ahead) = usize::try_from(ahead_index).ok().and_then(|index| work.clips.get(index)) {
+                let mut ahead_error = String::new();
+                next_clip = if start_clip_decoder(&mut next_decoder, ahead, work, &mut ahead_error) { ahead_index } else { -1 };
+            }
+        }
         let shown = if clip.is_media() { &mut insert_decoded } else { &mut decoded };
         if let Some(next) = decoder.read_frame(&mut decode_error) {
-            *shown = Some(image(next, decoder.width(), decoder.height()));
+            let yuv = if decoder.yuv() { work.screen_yuv } else { None };
+            *shown = Some(image(next, decoder.width(), decoder.height(), yuv));
             if !clip.is_media() {
                 *lock(&shared.acceleration) = decoder.acceleration();
             }
@@ -1162,7 +1233,7 @@ fn decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &AtomicBoo
             }
             while !camera_eof && camera_frame < wanted {
                 if let Some(next) = camera_decoder.read_frame(&mut decode_error) {
-                    camera_decoded = Some(image(next, camera_decoder.width(), camera_decoder.height()));
+                    camera_decoded = Some(image(next, camera_decoder.width(), camera_decoder.height(), None));
                     camera_frame += 1;
                 } else {
                     camera_eof = true;
@@ -1185,7 +1256,7 @@ fn decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &AtomicBoo
         let queue = lock(&shared.queue);
         let mut queue = shared
             .space
-            .wait_while(queue, |q| !(q.packets.len() < 3 || stopped()))
+            .wait_while(queue, |q| !(q.packets.len() < DECODE_AHEAD || stopped()))
             .unwrap_or_else(PoisonError::into_inner);
         if stopped() {
             break;

@@ -46,6 +46,7 @@ Item {
         visible: !composition.backgroundCovered
         settings: comp.project.background
         softwareRendering: comp.softwareRendering
+        loadAsynchronously: composition.nativePreview
     }
 
     Item {

@@ -122,6 +122,12 @@ void LauncherBase::startDetachedSelfViewHost(std::int64_t &pid)
     environment.remove(QStringLiteral("OMAREEL_SCREENSHOT"));
     environment.remove(QStringLiteral("OMAREEL_SCREENSHOT_LIVE"));
     process.setProcessEnvironment(environment);
+    // Its Qt, camera and encoder messages would land in the terminal the launcher ran from, and
+    // keep coming after the launcher quits; the recorder's bars write nowhere too.
+    if (qEnvironmentVariable("OMAREEL_DEBUG") != QLatin1String("1")) {
+        process.setStandardOutputFile(QProcess::nullDevice());
+        process.setStandardErrorFile(QProcess::nullDevice());
+    }
     qint64 started = pid;
     process.startDetached(&started);
     pid = started;
