@@ -15,12 +15,42 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 static void set_error(char *error, size_t size, const char *path, int code)
 {
     char text[AV_ERROR_MAX_STRING_SIZE] = {0};
     av_strerror(code, text, sizeof text);
     snprintf(error, size, "%s: %s", path, text);
+}
+
+// The programs these replace ran with time limits (ffprobe 10-15 s, ffmpeg 15-20 s). A file that
+// stalls (a hung mount, a pathological stream) must not hold an editor worker for ever, so each
+// open and read here carries a deadline through FFmpeg's interrupt callback: past it, opening and
+// reading fail with AVERROR_EXIT, and media_av.rs falls back to the program and its own limit.
+struct deadline {
+    struct timespec at;
+};
+
+static int deadline_passed(void *opaque)
+{
+    const struct deadline *deadline = opaque;
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return now.tv_sec > deadline->at.tv_sec || (now.tv_sec == deadline->at.tv_sec && now.tv_nsec >= deadline->at.tv_nsec);
+}
+
+// avformat_open_input on a context whose reads give up `limit` seconds from now; `deadline`
+// must outlive the context.
+static int open_input(AVFormatContext **format, const char *path, struct deadline *deadline, int limit)
+{
+    clock_gettime(CLOCK_MONOTONIC, &deadline->at);
+    deadline->at.tv_sec += limit;
+    if (!(*format = avformat_alloc_context())) return AVERROR(ENOMEM);
+    (*format)->interrupt_callback.callback = deadline_passed;
+    (*format)->interrupt_callback.opaque = deadline;
+    // Frees the context and clears *format when it fails.
+    return avformat_open_input(format, path, NULL, NULL);
 }
 
 static double seconds(int64_t value, AVRational base)
@@ -38,7 +68,8 @@ int omr_probe(const char *path, struct omr_media_info *info)
         return AVERROR(ENOSYS);
     }
     AVFormatContext *format = NULL;
-    int code = avformat_open_input(&format, path, NULL, NULL);
+    struct deadline deadline;
+    int code = open_input(&format, path, &deadline, 15);
     if (code < 0) {
         set_error(info->error, sizeof info->error, path, code);
         return code;
@@ -96,8 +127,9 @@ long omr_frame_times(const char *path, double **times)
     *times = NULL;
     if (omr_ff_load() != 0) return -1;
     AVFormatContext *format = NULL;
+    struct deadline deadline;
     // The index and the packets need no decoding, so no avformat_find_stream_info.
-    if (avformat_open_input(&format, path, NULL, NULL) < 0) return -1;
+    if (open_input(&format, path, &deadline, 15) < 0) return -1;
     int index = -1;
     // ffprobe -select_streams v:0: the first video stream, which a recording's only one is.
     for (unsigned i = 0; i < format->nb_streams; ++i) {
@@ -186,7 +218,8 @@ long omr_keyframe_times(const char *path, double **times)
     *times = NULL;
     if (omr_ff_load() != 0) return -1;
     AVFormatContext *format = NULL;
-    if (avformat_open_input(&format, path, NULL, NULL) < 0) return -1;
+    struct deadline deadline;
+    if (open_input(&format, path, &deadline, 15) < 0) return -1;
     int index = -1;
     for (unsigned i = 0; i < format->nb_streams; ++i) {
         if (format->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
@@ -267,7 +300,8 @@ int omr_thumbnail(const char *path, double at, int width, int height, int qualit
     AVPacket *packet = NULL;
     struct SwsContext *scaler = NULL;
     FILE *file = NULL;
-    if (avformat_open_input(&format, path, NULL, NULL) < 0) goto done;
+    struct deadline deadline;
+    if (open_input(&format, path, &deadline, 20) < 0) goto done;
     int index = -1;
     for (unsigned i = 0; i < format->nb_streams; ++i) {
         if (format->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
@@ -276,6 +310,15 @@ int omr_thumbnail(const char *path, double at, int width, int height, int qualit
         }
     }
     if (index < 0) goto done;
+    // A video stored turned, with a display matrix to stand it upright (a phone's), goes to
+    // ffmpeg, which applies the matrix; this scales the stored pixels as they are.
+    const AVCodecParameters *parameters = format->streams[index]->codecpar;
+    const AVPacketSideData *matrix = av_packet_side_data_get(parameters->coded_side_data, parameters->nb_coded_side_data,
+                                                             AV_PKT_DATA_DISPLAYMATRIX);
+    if (matrix && matrix->size >= 9 * sizeof(int32_t)) {
+        const double rotation = av_display_rotation_get((const int32_t *)matrix->data);
+        if (!isnan(rotation) && fabs(rotation) > 0.5) goto done;
+    }
     for (unsigned i = 0; i < format->nb_streams; ++i)
         if ((int)i != index) format->streams[i]->discard = AVDISCARD_ALL;
     const AVCodec *codec = avcodec_find_decoder(format->streams[index]->codecpar->codec_id);
