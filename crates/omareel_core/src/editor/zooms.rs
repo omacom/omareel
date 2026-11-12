@@ -2,13 +2,13 @@
 //! `setZoomTargetFromPreview`, `removeZoom`, `selectZoomsInOutputRange`, `moveSelectedZooms`,
 //! `removeSelectedZooms`, `regenerateZooms`).
 
+use super::markers::generate_visible_zooms;
 use super::{Document, Effect};
 use crate::compat::cpp;
 use crate::compat::geometry::PointF;
 use crate::compat::qdir;
 use crate::compat::qround::q_fuzzy_is_null;
 use crate::project::ZoomSegment;
-use crate::zoom_timeline;
 use std::collections::HashSet;
 
 /// What `setZoomTarget` makes of its `QVariant`: `Auto` when `target.toString()` is "auto" in
@@ -190,7 +190,7 @@ impl Document {
     pub fn regenerate_zooms(&mut self) {
         self.snapshot("");
         let clicks: Vec<f64> = self.input.click_downs(true).iter().map(|click| click.time).collect();
-        self.project.zooms = zoom_timeline::generate(&clicks, self.recording.source_duration);
+        self.project.zooms = generate_visible_zooms(&clicks, &self.project.clips, self.recording.source_duration);
         self.selected_zoom_id = self.project.zooms.first().map(|zoom| zoom.id.clone()).unwrap_or_default();
         self.selected_zoom_ids =
             if self.selected_zoom_id.is_empty() { Vec::new() } else { vec![self.selected_zoom_id.clone()] };

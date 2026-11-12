@@ -175,6 +175,9 @@ ApplicationWindow {
     Shortcut { sequence: "S"; enabled: !window.singleKeyShortcutsBlocked; onActivated: editor.splitAtPlayhead() }
     Shortcut { sequence: "Z"; enabled: !window.singleKeyShortcutsBlocked; onActivated: editor.addZoomAt(editor.position) }
     Shortcut { sequence: "I"; enabled: !window.singleKeyShortcutsBlocked; onActivated: bottomBar.openInsertDialog() }
+    Shortcut { sequence: "M"; enabled: !window.singleKeyShortcutsBlocked; onActivated: editor.jumpToMarker(1) }
+    Shortcut { sequence: "Shift+M"; enabled: !window.singleKeyShortcutsBlocked; onActivated: editor.jumpToMarker(-1) }
+    Shortcut { sequence: "Ctrl+M"; enabled: !window.singleKeyShortcutsBlocked; onActivated: editor.addMarkerAt(editor.position, "") }
     Shortcut {
         sequence: "Delete"
         enabled: !window.singleKeyShortcutsBlocked

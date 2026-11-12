@@ -13,6 +13,7 @@
 pub mod audio;
 pub mod daemon;
 pub mod files;
+pub mod marks;
 pub mod self_view;
 pub mod start;
 pub mod state;

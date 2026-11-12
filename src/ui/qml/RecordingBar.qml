@@ -12,7 +12,7 @@ ApplicationWindow {
     objectName: "recordingBarWindow"
     visible: false
     // The window leaves room for the discard confirmation to unfold; the pill stays centred.
-    width: recordingBar.webcam ? 448 : 288
+    width: recordingBar.webcam ? 560 : 400
     height: 40
     font.family: theme.fontFamily
     font.pixelSize: theme.type.body
@@ -75,21 +75,64 @@ ApplicationWindow {
                 Layout.leftMargin: 6
                 Layout.preferredWidth: 8; Layout.preferredHeight: 8
                 radius: 4
-                color: theme.record
+                // Paused: a steady, muted dot instead of the pulsing red one.
+                color: recordingBar.paused ? theme.textMuted : theme.record
                 SequentialAnimation on opacity {
+                    running: !recordingBar.paused
                     loops: Animation.Infinite
                     NumberAnimation { from: 1; to: .25; duration: 800; easing.type: Easing.InOutSine }
                     NumberAnimation { from: .25; to: 1; duration: 800; easing.type: Easing.InOutSine }
                 }
+                Binding on opacity { when: recordingBar.paused; value: 1 }
             }
             Label {
+                id: elapsedLabel
                 Layout.leftMargin: 4
                 Layout.rightMargin: 6
-                text: recordingBar.elapsed
-                color: theme.textStrong
+                text: recordingBar.paused ? "Paused" : recordingBar.elapsed
+                color: recordingBar.paused ? theme.textMuted : theme.textStrong
                 font.family: theme.monoFamily
                 font.pixelSize: theme.type.body
                 font.weight: Font.Medium
+            }
+
+            BarIcon {
+                id: markerButton
+                objectName: "markerButton"
+                iconSource: "qrc:/omareel/assets/icons/lucide/flag.svg"
+                onClicked: recordingBar.addMarker()
+                Accessible.name: "Add marker"
+            }
+            BarIcon {
+                id: retakeButton
+                objectName: "retakeButton"
+                iconSource: "qrc:/omareel/assets/icons/lucide/undo-2.svg"
+                onClicked: recordingBar.retake()
+                Accessible.name: "Retake: cut back to the last marker"
+            }
+            BarIcon {
+                objectName: "pauseButton"
+                iconSource: recordingBar.paused ? "qrc:/omareel/assets/icons/lucide/play.svg"
+                                                : "qrc:/omareel/assets/icons/lucide/pause.svg"
+                on: recordingBar.paused
+                onClicked: recordingBar.togglePause()
+                Accessible.name: recordingBar.paused ? "Resume recording" : "Pause recording"
+            }
+            // A marker or retake (from here or a keybind) lights its button for a moment.
+            Connections {
+                target: recordingBar
+                function onMarkAdded(kind) {
+                    const button = kind === "retake" ? retakeButton : markerButton
+                    button.on = true
+                    markFlash.target = button
+                    markFlash.restart()
+                }
+            }
+            Timer {
+                id: markFlash
+                property var target: null
+                interval: 700
+                onTriggered: if (target) target.on = false
             }
 
             Rectangle {
