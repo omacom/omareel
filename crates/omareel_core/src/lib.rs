@@ -27,4 +27,5 @@ pub mod project;
 pub mod recording_preferences;
 pub mod theme;
 pub mod transcript;
+pub mod transitions;
 pub mod zoom_timeline;

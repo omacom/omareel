@@ -133,6 +133,26 @@ ColumnLayout {
             text: "Silences over a second shrink to 0.4 s, unless something changes on screen or you click, scroll, move the pointer or press a shortcut."
         }
         EditorButton {
+            objectName: "speedUpQuietButton"
+            Layout.fillWidth: true
+            enabled: editor.quietCount > 0
+            text: !editor.quietReady ? "Looking for quiet parts…"
+                : editor.quietCount > 0 ? "Speed up " + editor.quietCount
+                    + (editor.quietCount === 1 ? " quiet part" : " quiet parts")
+                    + " · saves " + Math.max(1, Math.round(editor.quietSaved)) + " s"
+                : "No quiet parts to speed up"
+            onClicked: editor.speedUpQuietParts()
+        }
+        Text {
+            Layout.fillWidth: true
+            wrapMode: Text.Wrap
+            textFormat: Text.PlainText
+            color: theme.textMuted
+            font.family: theme.fontFamily
+            font.pixelSize: theme.type.small
+            text: "Stretches of 3 s or more without speech while the screen keeps changing (an install, a build, scrolling) play 2× to 24× as fast, about 2 s each."
+        }
+        EditorButton {
             objectName: "removeFillersButton"
             Layout.fillWidth: true
             enabled: editor.fillerCount > 0

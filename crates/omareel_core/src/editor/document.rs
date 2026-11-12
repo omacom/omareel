@@ -105,6 +105,8 @@ pub struct Document {
     pub(crate) speech: Option<Vec<(f64, f64)>>,
     /// The silences the screen stays still through (`transcript::stillness`), once checked.
     pub(crate) still: Option<Vec<(f64, f64)>>,
+    /// The silences the screen moves in, once checked ("speed up quiet parts").
+    pub(crate) moving: Option<Vec<(f64, f64)>>,
     pub(crate) inserts: HashMap<String, VideoInfo>,
     pub(crate) probe_video: ProbeVideo,
     pub(crate) history: History,
@@ -271,6 +273,7 @@ impl Document {
             caption_cues: Vec::new(),
             speech: None,
             still: None,
+            moving: None,
             inserts,
             probe_video,
             history: History::default(),
@@ -351,7 +354,8 @@ impl Document {
         self.config_location.clone().unwrap_or_else(|| qstandardpaths::writable_location(Location::Config))
     }
 
-    pub(crate) fn cache_location(&self) -> String {
+    /// Where the editor keeps its caches (filmstrips, measurements).
+    pub fn cache_location(&self) -> String {
         self.cache_location.clone().unwrap_or_else(|| qstandardpaths::writable_location(Location::Cache))
     }
 

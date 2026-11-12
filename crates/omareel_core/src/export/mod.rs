@@ -226,6 +226,7 @@ pub struct ExportJob {
     motion: MotionTrack,
     keystrokes: KeystrokeTrack,
     captions: Vec<crate::captions::Cue>,
+    cuts: Vec<crate::transitions::Cut>,
     gif: bool,
     fps: i32,
     width: i32,
@@ -412,6 +413,7 @@ impl ExportJob {
         let camera_decode_width = if camera_enabled { even_scaled(camera_media.width, camera_decode_scale) } else { 0 };
         let camera_decode_height = if camera_enabled { even_scaled(camera_media.height, camera_decode_scale) } else { 0 };
 
+        let cuts = crate::transitions::cuts(&project.clips, &project.transition);
         // Composition.qml reads the state as it loads.
         let mut state = CompositionState::initial(&project);
         state.output_width = width;
@@ -444,6 +446,7 @@ impl ExportJob {
             motion,
             keystrokes,
             captions,
+            cuts,
             gif,
             fps,
             width,
@@ -633,7 +636,9 @@ impl ExportJob {
             // do not start at zero need no timestamp arithmetic.
             let mut audio_segments: Vec<String> = Vec::new();
             let mut any_audio = false;
-            for clip in &project.clips {
+            // Fades at the cuts with a transition, so the sound does not click there.
+            let fades = crate::transitions::audio_fades(&project.clips, &project.transition);
+            for (clip, &fade) in project.clips.iter().zip(&fades) {
                 let length = (clip.out - clip.in_) / clip.speed;
                 if clip.is_media() && self.inserts.get(&clip.media).is_some_and(|info| info.audio) {
                     let input = next_input;
@@ -658,11 +663,8 @@ impl ExportJob {
                         next_input += 1;
                         encoder_args.extend(["-i".into(), self.video_path.clone()]);
                     }
-                    audio_segments.push(plan::audio_segment(
-                        &plan::source_audio(source_input, clip.in_, clip.out),
-                        clip.speed,
-                        length,
-                    ));
+                    let segment = plan::audio_segment(&plan::source_audio(source_input, clip.in_, clip.out), clip.speed, length);
+                    audio_segments.push(segment + &plan::declick(fade, length));
                     any_audio = true;
                 } else {
                     audio_segments.push(plan::silent_segment(length));
@@ -835,6 +837,7 @@ impl ExportJob {
             motion: &self.motion,
             keystrokes: &self.keystrokes,
             captions: &self.captions,
+            cuts: &self.cuts,
             camera_width: self.camera_media.width,
             camera_duration: self.camera_media.duration,
             camera_offset: self.camera_offset,

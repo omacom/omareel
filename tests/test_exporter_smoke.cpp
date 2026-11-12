@@ -381,6 +381,62 @@ private slots:
         QVERIFY(sheet.pixelColor(2, 2).value() < 40);
     }
 
+    // A zoom punch at the cut between two recording clips grows the screen past its frame for
+    // a moment, and the sound fades across the cut; without a transition nothing changes.
+    void zoomPunchShowsAcrossACut()
+    {
+        if (QStandardPaths::findExecutable(QStringLiteral("ffmpeg")).isEmpty()
+            || QStandardPaths::findExecutable(QStringLiteral("ffprobe")).isEmpty())
+            QSKIP("ffmpeg/ffprobe unavailable");
+        QTemporaryDir temporary;
+        QVERIFY(temporary.isValid());
+        const QString bundle = temporary.filePath(QStringLiteral("cut.omareel"));
+        QVERIFY(QDir().mkpath(bundle));
+        QVERIFY(makeToneVideo(QStringLiteral("blue"), QDir(bundle).filePath(QStringLiteral("screen.mp4")), 2.0,
+                              QStringLiteral("640x360"), 440, 48000, 2));
+        QFile capture(QDir(bundle).filePath(QStringLiteral("capture.json")));
+        QVERIFY(capture.open(QIODevice::WriteOnly));
+        capture.write(R"({"fps":30,"first_frame_us":1000})");
+        capture.close();
+        QFile input(QDir(bundle).filePath(QStringLiteral("input.jsonl")));
+        QVERIFY(input.open(QIODevice::WriteOnly));
+        input.close();
+
+        // 0.4 s cut out of the middle: the cut plays at 0.8 s.
+        QJsonObject project = ProjectJson::defaults(QStringLiteral("Cut"), 2.0);
+        project.insert(QStringLiteral("clips"), QJsonArray{ProjectJson::clip(QStringLiteral("a"), 0.0, 0.8),
+                                                           ProjectJson::clip(QStringLiteral("b"), 1.2, 2.0)});
+        ProjectJson::set(project, {"background", "type"}, QStringLiteral("color"));
+        ProjectJson::set(project, {"background", "color"}, QStringLiteral("#00c000"));
+        ProjectJson::set(project, {"frame", "shadow", "enabled"}, false);
+        ProjectJson::set(project, {"cursor", "visible"}, false);
+        const QString projectPath = QDir(bundle).filePath(QStringLiteral("project.json"));
+        QString error;
+        QVERIFY2(ProjectJson::save(project, projectPath, &error), qPrintable(error));
+        const QString plain = temporary.filePath(QStringLiteral("plain.mp4"));
+        QVERIFY2(exportBundle(bundle, plain, &error), qPrintable(error));
+
+        project.insert(QStringLiteral("transition"), QStringLiteral("zoom-punch"));
+        QVERIFY2(ProjectJson::save(project, projectPath, &error), qPrintable(error));
+        const QString punched = temporary.filePath(QStringLiteral("punch.mp4"));
+        QVERIFY2(exportBundle(bundle, punched, &error), qPrintable(error));
+        QVERIFY(qAbs(probeDuration(punched) - 1.6) < 0.05);
+
+        // The 16:9 screen fills x 64..576 of the 640x360 canvas; 6% bigger at the cut, it
+        // reaches x 49.
+        for (const double t : {0.5, 0.8, 1.4})
+            QVERIFY2(isGreen(pixelAt(plain, t, 58, 180)), qPrintable(QString::number(t)));
+        QVERIFY(isGreen(pixelAt(punched, 0.5, 58, 180)));
+        QVERIFY(isBlue(pixelAt(punched, 0.8, 58, 180)));
+        QVERIFY(isGreen(pixelAt(punched, 1.4, 58, 180)));
+        QVERIFY(isBlue(pixelAt(punched, 0.8, 320, 180)));
+
+        // The tone dips at the cut only with the transition.
+        const double steady = maxVolume(punched, 0.3, 0.6);
+        QVERIFY2(maxVolume(punched, 0.795, 0.805) < steady - 3.0, qPrintable(QString::number(steady)));
+        QVERIFY(maxVolume(plain, 0.795, 0.805) > maxVolume(plain, 0.3, 0.6) - 3.0);
+    }
+
     void cameraLayoutsRenderFullFrame()
     {
         if (QStandardPaths::findExecutable(QStringLiteral("ffmpeg")).isEmpty()

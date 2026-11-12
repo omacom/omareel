@@ -206,6 +206,9 @@ pub mod ffi {
         /// `{lines, opacity, position, size}`; no lines when no caption shows.
         #[cxx_name = "captionMap"]
         fn caption_map(self: &ExportJob) -> QMap_QString_QVariant;
+        /// `{scale}`: the transition at a cut.
+        #[cxx_name = "transitionMap"]
+        fn transition_map(self: &ExportJob) -> QMap_QString_QVariant;
         /// Before `start`: the recording's frames as YUV (see `DecodedImage`) when the
         /// renderer converts them on the GPU.
         #[cxx_name = "setYuvScreen"]
@@ -411,6 +414,11 @@ pub(crate) fn caption_map(
     ])
 }
 
+/// The transition map Composition.qml scales the screen by.
+pub(crate) fn transition_map(frame: &omareel_core::transitions::TransitionFrame) -> QMap<QMapPair_QString_QVariant> {
+    map([("scale", QVariant::from(&frame.scale))])
+}
+
 fn qstring(text: &str) -> QString {
     QString::from(text)
 }
@@ -596,6 +604,10 @@ impl ExportJob {
         let Some(s) = self.state() else { return QMap::default() };
         let settings = self.job.as_ref().and_then(|job| job.project().captions.clone()).unwrap_or_default();
         caption_map(&s.caption, &settings)
+    }
+
+    fn transition_map(&self) -> QMap<QMapPair_QString_QVariant> {
+        transition_map(&self.state().map(|s| s.transition).unwrap_or_default())
     }
 
     fn set_yuv_screen(&mut self, yuv: bool) {

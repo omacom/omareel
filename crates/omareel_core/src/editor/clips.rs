@@ -93,6 +93,7 @@ impl Document {
         left.out = source;
         right.in_ = source;
         right.id = self.next_id("c");
+        right.transition = None;
         self.selected_clip_id = right.id.clone();
         self.project.clips[i] = left;
         self.project.clips.insert(i + 1, right);
@@ -436,6 +437,7 @@ impl Document {
                     left.out = source;
                     right.in_ = source;
                     right.id = self.next_id("c");
+                    right.transition = None;
                     self.project.clips[i] = left;
                     self.project.clips.insert(i + 1, right);
                 }
