@@ -204,6 +204,10 @@ pub struct FrameRequest {
     pub width: i32,
     /// 0 for the project's frame rate.
     pub fps: i32,
+    /// `--preset`, `--aspect`, `--reframe`: as for `omareel export`, for these frames only.
+    pub preset: String,
+    pub aspect: String,
+    pub reframe: String,
 }
 
 /// The most frames one `omareel frame` renders.
@@ -217,6 +221,21 @@ pub fn parse_frame_args(args: &[String]) -> Result<FrameRequest, String> {
         let arg = args[i].as_str();
         if arg == "--sheet" {
             request.sheet = true;
+        } else if matches!(arg, "--preset" | "--aspect" | "--reframe") {
+            i += 1;
+            let Some(value) = args.get(i) else { return Err(format!("{arg} requires a value")) };
+            match arg {
+                "--preset" if super::presets::find(value).is_none() => {
+                    return Err(format!("unknown export preset {value} (try {})", super::presets::ids()))
+                }
+                "--preset" => request.preset = value.clone(),
+                "--aspect" if !crate::project::allowed_aspects().contains(&value.as_str()) => {
+                    return Err(format!("unknown aspect {value} (try {})", crate::project::allowed_aspects().join(", ")))
+                }
+                "--aspect" => request.aspect = value.clone(),
+                _ if value != "follow" && value != "off" => return Err("--reframe takes follow or off".into()),
+                _ => request.reframe = value.clone(),
+            }
         } else if matches!(arg, "-o" | "--at" | "--count" | "--width" | "--fps") {
             i += 1;
             let Some(value) = args.get(i) else { return Err(format!("{arg} requires a value")) };
@@ -407,6 +426,8 @@ mod tests {
         });
         let sheet = parse_frame_args(&args("b --count 12 --sheet -o s.jpg --fps 30")).unwrap();
         assert_eq!((sheet.count, sheet.sheet, sheet.fps), (12, true, 30));
+        let shaped = parse_frame_args(&args("b --count 4 --sheet -o s.jpg --preset shorts --aspect 1:1 --reframe off")).unwrap();
+        assert_eq!((shaped.preset.as_str(), shaped.aspect.as_str(), shaped.reframe.as_str()), ("shorts", "1:1", "off"));
         for (line, error) in [
             ("", "frame requires a bundle"),
             ("b --at 1", "frame requires -o <file.png|file.jpg>"),
@@ -421,6 +442,8 @@ mod tests {
             ("b --at 1 -o x.png --zoom", "unknown frame option --zoom"),
             ("b c --at 1 -o x.png", "unexpected argument c"),
             ("b --count 3 --sheet -o s%d.png", "--sheet writes one file; drop the %d"),
+            ("b --at 1 -o x.png --reframe centre", "--reframe takes follow or off"),
+            ("b --at 1 -o x.png --aspect 2:1", "unknown aspect 2:1 (try auto, 16:9, 1:1, 4:3, 9:16, 3:4, 4:5)"),
         ] {
             assert_eq!(parse_frame_args(&args(line)), Err(error.to_owned()), "{line}");
         }

@@ -35,6 +35,10 @@ struct StillOptions {
     int count = 0;
     int width = 0;
     int fps = 0;
+    // As `omareel export --preset/--aspect/--reframe`, for these stills only.
+    QString preset;
+    QString aspect;
+    QString reframe;
     // Takes each still as it is rendered (its index, the still), instead of the list holding
     // them all; false stops with the error it set. Without it the stills are listed.
     std::function<bool(int, const struct Still &, QString *)> take;

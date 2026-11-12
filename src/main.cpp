@@ -342,6 +342,9 @@ static int frameCommand(const QStringList &arguments)
     for (const double time : request.times) options.times.append(time);
     options.count = request.count;
     options.fps = request.fps;
+    options.preset = request.preset;
+    options.aspect = request.aspect;
+    options.reframe = request.reframe;
     const int stills = request.count > 0 ? request.count : int(request.times.size());
     const omareel::exporter::SheetGrid grid = omareel::exporter::sheetGrid(stills, request.width);
     // A sheet's --width is the sheet's; each tile renders at its share.

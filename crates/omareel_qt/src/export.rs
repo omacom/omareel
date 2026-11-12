@@ -96,6 +96,9 @@ pub mod ffi {
         sheet: bool,
         width: i32,
         fps: i32,
+        preset: QString,
+        aspect: QString,
+        reframe: QString,
     }
 
     /// A contact sheet's grid (`export::still::SheetGrid`).
@@ -326,6 +329,9 @@ fn parse_frame_args(arguments: &QStringList) -> FrameRequest {
             sheet: request.sheet,
             width: request.width,
             fps: request.fps,
+            preset: qstring(&request.preset),
+            aspect: qstring(&request.aspect),
+            reframe: qstring(&request.reframe),
         },
         Err(message) => FrameRequest {
             error: qstring(&message),
@@ -336,6 +342,9 @@ fn parse_frame_args(arguments: &QStringList) -> FrameRequest {
             sheet: false,
             width: 0,
             fps: 0,
+            preset: QString::default(),
+            aspect: QString::default(),
+            reframe: QString::default(),
         },
     }
 }

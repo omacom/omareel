@@ -248,7 +248,7 @@ bool Exporter::renderStills(const StillOptions &options, QList<Still> *stills, d
     job->setStills(::rust::Slice<const double>(options.times.constData(), size_t(options.times.size())), options.count);
     // The output's name only tells an export MP4 from GIF; stills are neither.
     const omareel::exporter::ExportOptions jobOptions{options.bundlePath, QStringLiteral("still.png"), options.fps,
-        options.width, QString(), 0, 0, false, QString(), QString(), QString()};
+        options.width, QString(), 0, 0, false, options.preset, options.aspect, options.reframe};
     if (!job->prepare(jobOptions, *m_cancel, *error)) return false;
     if (duration) *duration = job->outputDuration();
     const bool softwareRendering = isSoftwareRendering();
