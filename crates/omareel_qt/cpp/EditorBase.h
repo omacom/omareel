@@ -132,9 +132,12 @@ QString textUrlPath(const QString &text);
 // missing).
 bool zoomTarget(const QVariant &target, double &x, double &y);
 // exportTo's settings, read with QVariant's conversions.
-void exportSettings(const QVariantMap &settings, int &fps, int &height, QString &quality);
+void exportSettings(const QVariantMap &settings, int &fps, int &height, QString &quality, QString &aspect,
+    QString &reframe);
 bool softwareRendering();
 void copyToClipboard(const QString &text);
+// The file as a text/uri-list (and its path as text) on Qt's clipboard, for when wl-copy can't.
+void copyFileToClipboard(const QString &path);
 void openFolder(const QString &directory);
 // OmarchyPaths::generateWallpaperThumbnail: a 400x240 JPEG of the wallpaper, unless one is there.
 // Safe off the GUI thread.

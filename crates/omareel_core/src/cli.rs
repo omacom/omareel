@@ -18,7 +18,9 @@ commands:\n\
 \x20     Open a recording bundle in the editor.\n\
 \x20 export <bundle> -o <file.mp4|file.gif|file.srt|file.vtt> [options]\n\
 \x20     Export with --fps N, --width W, --quality LEVEL, --gif-fps N,\n\
-\x20     --gif-width W, or --timing. .srt and .vtt write the captions.\n\
+\x20     --gif-width W, --aspect A, --reframe follow|off, or --timing. .srt and\n\
+\x20     .vtt write the captions. --preset youtube|shorts|x|github-gif|slack sets\n\
+\x20     them all for one platform (and the file name when -o is left out).\n\
 \x20 frame <bundle> --at SECONDS [--at ...] -o <file.png|file.jpg> [options]\n\
 \x20     Render the export's frames at output times (12.5 or 1:02.5) as images\n\
 \x20     (out-1.png, out-2.png... for several, or use %d). --count N instead\n\

@@ -10,17 +10,21 @@ use super::Document;
 use crate::camera_timeline::map_camera_time;
 use crate::compat::cpp;
 use crate::compat::qjson::Object;
+use crate::compat::geometry::PointF;
 use crate::keystroke_track::KeystrokePill;
 use crate::motion_track::{MotionSample, RippleSample};
 use crate::overlay_track;
+use crate::reframe::{self, ReframeWindow};
 
-/// `zoom`: `{scale, cx, cy, velocity}`, all doubles.
+/// `zoom`: `{scale, cx, cy, velocity}`, all doubles; a reframing project adds `reframe: true`
+/// and the window `rx`, `ry`, `rw`, `rh` (as the exporter's [`crate::export::composition::Zoom`]).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PreviewZoom {
     pub scale: f64,
     pub cx: f64,
     pub cy: f64,
     pub velocity: f64,
+    pub reframe: Option<ReframeWindow>,
 }
 
 /// `layout`: `{cameraFull, bubble}`, doubles.
@@ -77,7 +81,25 @@ impl Document {
 
     pub fn preview_zoom(&self) -> PreviewZoom {
         let s = self.motion.as_ref().map_or_else(MotionSample::default, |motion| motion.sample(self.source_position()));
-        PreviewZoom { scale: s.zoom_scale, cx: s.zoom_cx, cy: s.zoom_cy, velocity: s.zoom_center_velocity }
+        let reframe = self.preview_reframe(&s);
+        PreviewZoom { scale: s.zoom_scale, cx: s.zoom_cx, cy: s.zoom_cy, velocity: s.zoom_center_velocity, reframe }
+    }
+
+    /// The reframe window to draw, shaped for the project as it is now: the motion track is
+    /// rebuilt off the GUI thread after an edit, so until then its window is refitted to the
+    /// current canvas ([`reframe::refit`]), or made up around the cursor when reframing has just
+    /// been turned on, and turning it off (or a canvas of the recording's shape) drops it at once.
+    fn preview_reframe(&self, sample: &MotionSample) -> Option<ReframeWindow> {
+        let (width, height) = (self.recording.source_width, self.recording.source_height);
+        if self.showing_insert() || !reframe::active(&self.project, width, height) {
+            return None;
+        }
+        let base = reframe::base_size(&self.project, width, height);
+        let time = self.source_position();
+        self.motion.as_ref().and_then(|motion| motion.reframe_for(time, base)).or_else(|| {
+            let cursor = reframe::to_crop(PointF::new(sample.cursor_x, sample.cursor_y), &self.project.crop);
+            Some(reframe::provisional(cursor, sample.zoom_scale, base))
+        })
     }
 
     pub fn preview_layout(&self) -> PreviewLayout {

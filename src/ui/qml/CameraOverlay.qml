@@ -35,7 +35,9 @@ Item {
     property real sizeSetting: settings.size
     property real offsetX: settings.offset.x
     property real offsetY: settings.offset.y
-    property real leftness: settings.position.indexOf("left") >= 0 ? 1 : 0
+    // Centred along the edge, whatever the corner (a reframed portrait, see Composition.qml).
+    property bool centered: false
+    property real leftness: centered ? .5 : settings.position.indexOf("left") >= 0 ? 1 : 0
     property real topness: settings.position.indexOf("top") >= 0 ? 1 : 0
     Behavior on aspect { enabled: root.easeEdits; NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
     Behavior on roundness { enabled: root.easeEdits; NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }

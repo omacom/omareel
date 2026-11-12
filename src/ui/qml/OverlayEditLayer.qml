@@ -13,12 +13,15 @@ Item {
     // Takes the keyboard focus when an overlay is pressed, so Delete and the keys work.
     property Item focusTarget: null
     readonly property real handleSize: 14 / Math.max(.0001, viewScale)
-    readonly property var crop: editor.project.crop
+    // What the frame shows (the crop, or the reframe window), and the zoom and a transition's
+    // punch as the composition applies them.
+    readonly property var crop: composition.viewCrop
     readonly property real frameX: (width - composition.videoWidth) / 2
     readonly property real frameY: (height - composition.videoHeight) / 2
-    readonly property real zoomScale: editor.zoom.scale
-    readonly property real originX: frameX + editor.zoom.cx * composition.videoWidth
-    readonly property real originY: frameY + editor.zoom.cy * composition.videoHeight
+    readonly property real zoomScale: composition.zoomScale
+    readonly property real originX: frameX + composition.zoomOrigin.x * composition.videoWidth
+    readonly property real originY: frameY + composition.zoomOrigin.y * composition.videoHeight
+    readonly property real cutScale: composition.cutScale
     readonly property var selected: {
         const items = editor.visibleOverlays
         for (let i = 0; i < items.length; ++i)
@@ -31,13 +34,14 @@ Item {
         if (item.anchor !== "screen") return Qt.point(x * width, y * height)
         const bx = frameX + (x - crop.x) / Math.max(.0001, crop.w) * composition.videoWidth
         const by = frameY + (y - crop.y) / Math.max(.0001, crop.h) * composition.videoHeight
-        return Qt.point(originX + zoomScale * (bx - originX), originY + zoomScale * (by - originY))
+        const zx = originX + zoomScale * (bx - originX), zy = originY + zoomScale * (by - originY)
+        return Qt.point(width / 2 + cutScale * (zx - width / 2), height / 2 + cutScale * (zy - height / 2))
     }
     // 0–1 units per canvas pixel, across and down.
     function unitsPerPixel(item) {
         if (item.anchor !== "screen") return Qt.point(1 / width, 1 / height)
-        return Qt.point(crop.w / Math.max(.0001, zoomScale * composition.videoWidth),
-                        crop.h / Math.max(.0001, zoomScale * composition.videoHeight))
+        return Qt.point(crop.w / Math.max(.0001, cutScale * zoomScale * composition.videoWidth),
+                        crop.h / Math.max(.0001, cutScale * zoomScale * composition.videoHeight))
     }
     function bounds(item) {
         if (item.kind === "card") return Qt.rect(0, 0, width, height)

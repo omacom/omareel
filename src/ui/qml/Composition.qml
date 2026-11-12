@@ -14,18 +14,45 @@ Item {
     width: comp.outputWidth
     height: comp.outputHeight
     property real ref: height / 1080
+    // Auto-reframe (crates/omareel_core/src/reframe.rs): the frame fills the canvas with a
+    // window of the crop that follows the action; a zoom is part of that window, not a scale.
+    readonly property bool reframed: comp.zoom.reframe === true
+    readonly property bool portrait: height > width
+    readonly property var viewCrop: reframed
+        ? ({ x: comp.project.crop.x + comp.zoom.rx * comp.project.crop.w,
+             y: comp.project.crop.y + comp.zoom.ry * comp.project.crop.h,
+             w: comp.zoom.rw * comp.project.crop.w,
+             h: comp.zoom.rh * comp.project.crop.h })
+        : comp.project.crop
+    // The cursor, ripples, zoom and zoom targets are normalised to the whole recording (as in
+    // input.jsonl); they are drawn where the crop, or the reframe window, shows them. Without a
+    // crop or reframing this is the identity.
+    function inView(point) {
+        const c = viewCrop
+        return Object.assign({}, point, { x: (point.x - c.x) / Math.max(.0001, c.w),
+                                          y: (point.y - c.y) / Math.max(.0001, c.h) })
+    }
+    // The frame's scale and its fixed point (normalised to the frame) for a zoom; reframed, a
+    // zoom is the window's size instead. PreviewPane maps clicks back through these.
+    readonly property real zoomScale: reframed ? 1 : comp.zoom.scale
+    readonly property point zoomOrigin: {
+        const o = inView({ x: comp.zoom.cx, y: comp.zoom.cy })
+        return Qt.point(Math.max(0, Math.min(1, o.x)), Math.max(0, Math.min(1, o.y)))
+    }
     // The cursor keeps the size it had on screen: one logical screen pixel is captureScale
     // source pixels, and the (cropped) source is drawn at videoWidth output pixels. A small
     // region therefore gets a proportionally large cursor instead of a microscopic one.
     property real cursorRef: (comp.captureScale > 0 ? comp.captureScale : 1)
-                             * videoWidth / Math.max(1, comp.sourceWidth * comp.project.crop.w)
+                             * videoWidth / Math.max(1, comp.sourceWidth * viewCrop.w)
     property bool noBackground: comp.project.background.type === "none"
     property real pad: noBackground ? 0 : Math.min(width, height) * comp.project.frame.padding
     property real availableWidth: width - 2 * pad
     property real availableHeight: height - 2 * pad
     property real borderWidth: !noBackground && comp.project.frame.border.enabled
                                ? comp.project.frame.border.width * ref : 0
-    property real sourceAspect: (comp.sourceWidth * comp.project.crop.w) / Math.max(1, comp.sourceHeight * comp.project.crop.h)
+    // The shape of what the frame shows: the crop, or reframed the window, which has the
+    // canvas's shape (reframe.rs), so the frame is the canvas scaled down inside the padding.
+    property real sourceAspect: (comp.sourceWidth * viewCrop.w) / Math.max(1, comp.sourceHeight * viewCrop.h)
     property real videoWidth: noBackground ? width
         : Math.max(1, Math.min(availableWidth - 2 * borderWidth,
                               (availableHeight - 2 * borderWidth) * sourceAspect))
@@ -68,10 +95,10 @@ Item {
         }
         transform: [
             Scale {
-                origin.x: frame.x + comp.zoom.cx * frame.width
-                origin.y: frame.y + comp.zoom.cy * frame.height
-                xScale: comp.zoom.scale
-                yScale: comp.zoom.scale
+                origin.x: frame.x + composition.zoomOrigin.x * frame.width
+                origin.y: frame.y + composition.zoomOrigin.y * frame.height
+                xScale: composition.zoomScale
+                yScale: composition.zoomScale
             },
             // A transition's punch at a cut grows the whole shot from the canvas centre.
             Scale {
@@ -88,7 +115,7 @@ Item {
             width: composition.videoWidth
             height: composition.videoHeight
             settings: comp.project.frame
-            crop: comp.project.crop
+            crop: composition.viewCrop
             softwareRendering: comp.softwareRendering
             ref: composition.ref
             unframed: composition.noBackground
@@ -101,7 +128,7 @@ Item {
             height: frame.height
             visible: composition.screenOverlays.length > 0
             items: composition.screenOverlays
-            space: comp.project.crop
+            space: composition.viewCrop
             ref: composition.ref
             colors: comp.project.renderTheme
             softwareRendering: comp.softwareRendering
@@ -113,8 +140,8 @@ Item {
             y: frame.y
             width: frame.width
             height: frame.height
-            cursor: comp.cursor
-            ripples: comp.ripples
+            cursor: composition.inView(comp.cursor)
+            ripples: comp.ripples.map(r => composition.inView(r))
             settings: comp.project.cursor
             ref: composition.cursorRef
         }
@@ -133,6 +160,8 @@ Item {
         sourceHeight: comp.cameraSourceHeight
         softwareRendering: comp.softwareRendering
         nativePreview: composition.nativePreview
+        // A reframed portrait keeps the bubble centred along the bottom (or top), under the action.
+        centered: composition.reframed && composition.portrait
     }
     MediaLayer {
         id: mediaLayer
@@ -174,5 +203,8 @@ Item {
         settings: comp.project.keystrokes
         colors: comp.project.renderTheme
         ref: composition.ref
+        // Above a centred bubble at the bottom.
+        bottomInset: cameraOverlay.centered && cameraOverlay.visible && cameraOverlay.topness < .5
+            ? cameraOverlay.bubbleHeight + cameraOverlay.marginY : 0
     }
 }

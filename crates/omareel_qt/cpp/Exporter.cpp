@@ -157,7 +157,8 @@ bool Exporter::run(const ExportOptions &options, QString *error)
 {
     ::rust::Box<omareel::exporter::ExportJob> job = omareel::exporter::newExportJob();
     const omareel::exporter::ExportOptions jobOptions{options.bundlePath, options.outputPath, options.fps,
-        options.width, options.quality, options.gifFps, options.gifWidth, options.timing};
+        options.width, options.quality, options.gifFps, options.gifWidth, options.timing, options.preset,
+        options.aspect, options.reframe};
     if (!job->prepare(jobOptions, *m_cancel, *error)) return false;
     const int totalFrames = job->totalFrames();
 
@@ -232,7 +233,7 @@ bool Exporter::renderStills(const StillOptions &options, QList<Still> *stills, d
     job->setStills(::rust::Slice<const double>(options.times.constData(), size_t(options.times.size())), options.count);
     // The output's name only tells an export MP4 from GIF; stills are neither.
     const omareel::exporter::ExportOptions jobOptions{options.bundlePath, QStringLiteral("still.png"), options.fps,
-        options.width, QString(), 0, 0, false};
+        options.width, QString(), 0, 0, false, QString(), QString(), QString()};
     if (!job->prepare(jobOptions, *m_cancel, *error)) return false;
     if (duration) *duration = job->outputDuration();
     const bool softwareRendering = isSoftwareRendering();

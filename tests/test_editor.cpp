@@ -394,6 +394,79 @@ private slots:
         QCOMPARE(editor.clips().size(), 2);
     }
 
+    // Regression: picking a zoom target stored crop coordinates without reframing and recording
+    // coordinates with it. Targets are normalised to the whole recording either way, and the
+    // marker shows the target where it was picked.
+    void pickedZoomTargetsAreInRecordingCoordinates()
+    {
+        QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));
+        Editor editor(m_bundle);
+        QVERIFY(editor.isValid());
+        Theme theme;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("editor"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("comp"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import QtQuick
+            import QtQuick.Window
+            import Omareel
+            Window {
+                width: 900; height: 600; visible: true
+                PreviewPane { anchors.fill: parent; cropMode: false }
+            })", QUrl());
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        std::unique_ptr<QObject> object(component.create());
+        auto *window = qobject_cast<QQuickWindow *>(object.get());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        auto *composition = window->findChild<QQuickItem *>(QStringLiteral("previewComposition"));
+        auto *marker = window->findChild<QQuickItem *>(QStringLiteral("zoomTargetMarker"));
+        QVERIFY(composition && marker);
+
+        // The right half of the recording, and a zoom that isn't active at the playhead.
+        editor.setProjectValue(QStringLiteral("crop.w"), 0.5, false);
+        editor.setProjectValue(QStringLiteral("crop.x"), 0.5, false);
+        QCOMPARE(editor.projectMap().value(QStringLiteral("crop")).toMap().value(QStringLiteral("x")).toDouble(), 0.5);
+        const QString id = editor.addZoomAt(1.2, 0.5);
+        QVERIFY(!id.isEmpty());
+        editor.seek(0);
+        const auto pick = [&](double u, double v) {
+            editor.setSelectedZoomId(id);
+            editor.setPickingZoomTarget(true);
+            const double videoWidth = composition->property("videoWidth").toDouble();
+            const double videoHeight = composition->property("videoHeight").toDouble();
+            const QPointF local(composition->width() / 2 + (u - .5) * videoWidth,
+                                composition->height() / 2 + (v - .5) * videoHeight);
+            const QPoint point = composition->mapToScene(local).toPoint();
+            QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, point);
+            return point;
+        };
+        const auto target = [&] {
+            for (const QVariant &zoom : editor.zooms())
+                if (zoom.toMap().value(QStringLiteral("id")).toString() == id)
+                    return zoom.toMap().value(QStringLiteral("target")).toMap();
+            return QVariantMap();
+        };
+        const auto markerAt = [&](QPoint point) {
+            const QPointF centre = marker->mapToScene(QPointF(marker->width() / 2, marker->height() / 2));
+            return marker->isVisible() && std::abs(centre.x() - point.x()) <= 1.5 && std::abs(centre.y() - point.y()) <= 1.5;
+        };
+
+        // The middle of the cropped frame is three quarters across the recording.
+        QPoint point = pick(.5, .5);
+        QTRY_VERIFY(!editor.pickingZoomTarget());
+        QCOMPARE(qRound(target().value(QStringLiteral("x")).toDouble() * 100), 75);
+        QCOMPARE(qRound(target().value(QStringLiteral("y")).toDouble() * 100), 50);
+        QTRY_VERIFY(markerAt(point));
+        point = pick(.2, .3);
+        QTRY_VERIFY(!editor.pickingZoomTarget());
+        QCOMPARE(qRound(target().value(QStringLiteral("x")).toDouble() * 100), 60);
+        QCOMPARE(qRound(target().value(QStringLiteral("y")).toDouble() * 100), 30);
+        QTRY_VERIFY(markerAt(point));
+    }
+
     void zoomTrackDragUsesTrackCoordinates()
     {
         QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));

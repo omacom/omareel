@@ -13,6 +13,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonValue>
+#include <QMimeData>
 #include <QProcess>
 #include <QQuickWindow>
 #include <QSize>
@@ -124,6 +125,9 @@ void EditorBase::startExport(const omareel::exporter::ExportOptions &request)
     options.gifFps = request.gif_fps;
     options.gifWidth = request.gif_width;
     options.timing = request.timing;
+    options.preset = request.preset;
+    options.aspect = request.aspect;
+    options.reframe = request.reframe;
     m_exporter = new Exporter(this);
     connect(m_exporter, &Exporter::progress, this, [this](int frame, int total) { exportProgressed(frame, total); });
     // The finished exporter is released before the editor hears about it, so a handler that
@@ -169,8 +173,11 @@ bool EditorShims::zoomTarget(const QVariant &target, double &x, double &y)
     return false;
 }
 
-void EditorShims::exportSettings(const QVariantMap &settings, int &fps, int &height, QString &quality)
+void EditorShims::exportSettings(const QVariantMap &settings, int &fps, int &height, QString &quality,
+    QString &aspect, QString &reframe)
 {
+    aspect = settings.value(QStringLiteral("aspect")).toString();
+    reframe = settings.value(QStringLiteral("reframe")).toString();
     fps = settings.value(QStringLiteral("fps"), 0).toInt();
     quality = settings.value(QStringLiteral("quality")).toString();
     height = settings.value(QStringLiteral("height"), 0).toInt();
@@ -185,6 +192,15 @@ bool EditorShims::softwareRendering()
 void EditorShims::copyToClipboard(const QString &text)
 {
     if (QGuiApplication::clipboard()) QGuiApplication::clipboard()->setText(text);
+}
+
+void EditorShims::copyFileToClipboard(const QString &path)
+{
+    if (!QGuiApplication::clipboard()) return;
+    auto *data = new QMimeData;
+    data->setUrls({QUrl::fromLocalFile(QFileInfo(path).absoluteFilePath())});
+    data->setText(path);
+    QGuiApplication::clipboard()->setMimeData(data);
 }
 
 void EditorShims::openFolder(const QString &directory)

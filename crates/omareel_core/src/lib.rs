@@ -27,6 +27,7 @@ pub mod probe;
 pub mod project;
 pub mod recording_marks;
 pub mod recording_preferences;
+pub mod reframe;
 pub mod theme;
 pub mod transcript;
 pub mod transitions;

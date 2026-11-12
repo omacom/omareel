@@ -12,6 +12,7 @@ omareel record [--region|--fullscreen|--window] [options]
 omareel record --marker [LABEL] | --retake [SECONDS] | --pause
 omareel edit BUNDLE.omareel
 omareel export BUNDLE.omareel -o OUTPUT.mp4|OUTPUT.gif|OUTPUT.srt|OUTPUT.vtt [options]
+omareel export BUNDLE.omareel --preset youtube|shorts|x|github-gif|slack [-o OUTPUT]
 omareel transcribe BUNDLE.omareel [--backend NAME] [--force]
 omareel probe BUNDLE.omareel
 omareel describe BUNDLE.omareel
@@ -215,6 +216,24 @@ original file is retained.
 Exports `.mp4` or `.gif`. Common options are `--fps N`, `--width W`, and `--quality LEVEL`.
 Quality may be `low`, `medium`, `high`, `best`, `web-low`, `web-high`, `social`, or `studio`.
 GIF-specific overrides are `--gif-fps N` and `--gif-width W`.
+`--aspect A` (`auto`, `16:9`, `9:16`, `1:1`, `4:5`, `4:3`, `3:4`) and `--reframe follow|off`
+change the canvas and [auto-reframe](#auto-reframe) for this export only; the project keeps its own.
+
+`--preset ID` exports for one platform. It sets the format, size, frame rate, quality, aspect and
+reframing, and without `-o` names the file `<project name>-<suffix>` in the recordings directory
+(created if needed). The options above still override it, and the preset never changes
+`project.json`.
+
+| Preset | File | Size | Rate | Quality | Canvas |
+| --- | --- | --- | --- | --- | --- |
+| `youtube` | `-youtube.mp4` | 1920×1080 | 60 | social | 16:9 |
+| `shorts` | `-shorts.mp4` | 1080×1920 | 60 | social | 9:16, reframed |
+| `x` | `-x.mp4` | 1080 high | 30 | social | the recording's |
+| `github-gif` | `-github.gif` | 480 high | 15 | studio | the recording's |
+| `slack` | `-slack.mp4` | 720 high | 30 | web-high | the recording's |
+
+A preset's format must match `-o`: `github-gif` writes `.gif`, the others `.mp4`.
+
 Add `--timing` to print average decode wait, upload, render, readback, encoder-write, and
 end-to-end throughput measurements.
 
@@ -516,6 +535,28 @@ screen layer in the composition, fed by a second preview player seeking ahead to
 and, in the export, the next clip's decoder (already started ahead) handing over its first
 frames during the overlap, plus an `acrossfade` of the two segments in the audio mix.
 
+## Auto-reframe
+
+A 16:9 screen squeezed into a 9:16 or 1:1 canvas is a thin, unreadable strip. **Reframe**
+(beside Crop in the bottom bar, available once the canvas has another shape than the recording)
+fills the canvas with a window of the screen that follows the action instead:
+
+- while a zoom is active, the window tightens with the zoom and centres on what it is about (a
+  fixed target, or the click), even near a screen edge; an automatic zoom also keeps the cursor
+  in the window as it moves;
+- otherwise it follows the smoothed cursor, once the cursor leaves the middle half of the window
+  (a dead zone, so small movements don't pan);
+- it moves on the zoom spring (Zoom panel), so pans feel like the zooms;
+- near a screen edge it rests flush against the edge, and it never leaves the recording.
+
+The window is worked out per moment from the recording and project alone, so the preview, the
+export, and the software renderer show the same frame. In a reframed vertical canvas the camera
+bubble moves to the middle of its edge, and keystroke pills at the bottom sit above it. Padding,
+corners, and the background still apply (the frame keeps the canvas's shape inside the padding);
+choose **Remove background** for edge-to-edge video. A canvas of the recording's own shape (within
+2%) has nothing to reframe: the toggle is unavailable, and a project set to reframe one looks
+exactly as if it weren't.
+
 ## Inserted videos
 
 Press `I`, click the film button beside the scissors, or use **Insert video at playhead** in the
@@ -710,6 +751,23 @@ project; bundles without it open as they always did.
 cutting never moves a marker; a marker whose moment no clip shows stays in the project but is
 hidden from the timeline. `kind` is left out for plain markers.
 
+`project.json` keys that are left out when unset, so older projects stay byte for byte as they
+were: `"reframe": "follow"` turns on [auto-reframe](#auto-reframe) (any other value, or none,
+fits the whole recording into the canvas). The canvas shape is `"aspect"` (`"9:16"` and so on;
+none for the recording's own).
+
+A zoom's fixed `"target"` (`{"x": …, "y": …}`, or `"auto"`) is normalised to the whole recording,
+0..1 across `screen.mp4` like the positions in `input.jsonl`, whatever the crop or reframing. Picking
+a target in the preview stores it that way.
+
+### After an export
+
+The export dialog's **Preset** menu applies the presets above to one export; **Save to project**
+writes the preset's aspect, reframing and format settings into the project (one undo step) so the
+editor previews them. When an export finishes, **Show in folder** opens its folder, **Copy** puts
+the file on the clipboard (a `file://` URI as `text/uri-list` through `wl-copy`), to paste into
+a chat or file manager, and **Copy path** copies its path as text.
+
 ## Environment
 
 - `OMAREEL_DEBUG=1` appends `gpu-screen-recorder` stderr to `/tmp/omareel.log`.
@@ -759,7 +817,7 @@ hidden from the timeline. `kind` is left out for plain markers.
   first, to exercise playing-state seeks after end-of-media.
 - `OMAREEL_SCREENSHOT_PROJECT_VALUES=JSON` applies path/value pairs through the editor before
   capture, for example `{"camera.rotation":180}`.
-- `OMAREEL_SCREENSHOT_VIEW=export|aspect|background-expanded|background-gradient-3|background-gradient-7|rail-tooltip|camera-proof|agent|agent-polish` opens a transient
+- `OMAREEL_SCREENSHOT_VIEW=export|export-shorts|aspect|background-expanded|background-gradient-3|background-gradient-7|rail-tooltip|camera-proof|agent|agent-polish` opens a transient
   editor surface before capture.
 
 Example:

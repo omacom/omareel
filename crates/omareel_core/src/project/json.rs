@@ -274,6 +274,10 @@ impl Project {
         if allowed_aspects().contains(&aspect.as_str()) {
             p.aspect = aspect;
         }
+        let reframe = source.value("reframe").to_string_or("");
+        if crate::reframe::MODES.contains(&reframe.as_str()) {
+            p.reframe = reframe;
+        }
         let crop = source.value("crop").to_object();
         p.crop = RectF::new(
             crop.value("x").to_double(0.0),
@@ -674,6 +678,10 @@ impl Project {
         // Projects without markers keep the bytes they had before markers existed.
         if !markers.is_empty() {
             root.insert("markers", markers);
+        }
+        // Written only when set, so projects that don't reframe stay as they were.
+        if !self.reframe.is_empty() {
+            root.insert("reframe", self.reframe.as_str());
         }
         root
     }

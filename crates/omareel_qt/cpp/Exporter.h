@@ -22,6 +22,9 @@ struct ExportOptions {
     int gifFps = 0;
     int gifWidth = 0;
     bool timing = false;
+    QString preset;   // an export preset's id (crates/omareel_core/src/export/presets.rs)
+    QString aspect;   // the project's aspect for this export only
+    QString reframe;  // "follow" or "off" for this export only
 };
 
 // What `omareel frame` renders: stills at output times, or `count` spread over the output.

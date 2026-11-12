@@ -22,8 +22,11 @@ cursor-following zooms. Finished projects export to MP4 or GIF.
   cursor-following auto zooms.
 - Optional zoom-punch transitions that hide the jump at each cut, with the sound faded across it.
 - Aspect presets, padding, rounded corners, inset borders, and configurable shadows.
+- Auto-reframe for vertical and square canvases: the screen fills the frame and follows the
+  cursor and zooms, identically in the preview and the export.
 - Camera rotation, horizontal flip, independent shadow/border styling, and 720p/1080p capture.
-- Hardware-accelerated MP4 export with CPU fallback, plus GIF export.
+- Hardware-accelerated MP4 export with CPU fallback, plus GIF export, with presets for YouTube,
+  Shorts, X, GitHub GIFs, and Slack, and copy-to-clipboard of the finished file.
 - `omareel frame` renders any moment of the finished video, or a labelled contact sheet, as an
   image without exporting: a quick check of an edit for people and AI agents.
 - Speech to text with the dictation engine chosen in Omarchy: captions, SRT/WebVTT subtitles,
@@ -100,6 +103,7 @@ omareel frame Recording.omareel --at 12.5 -o frame.png
 omareel frame Recording.omareel --count 12 --sheet -o sheet.jpg
 omareel transcribe Recording.omareel
 omareel export Recording.omareel -o recording.srt
+omareel export Recording.omareel --preset shorts   # 1080×1920, reframed
 omareel probe Recording.omareel
 omareel describe Recording.omareel
 omareel apply Recording.omareel edits.json
