@@ -194,9 +194,13 @@ fn mark_command(arguments: &[String], out: &mut dyn Write, err: &mut dyn Write) 
                 },
                 None => None,
             };
-            marks::add_retake(seconds, "").map(|mark| {
-                let cut = (mark.monotonic_us - mark.from_us) as f64 / 1_000_000.0;
-                format!("Retake at {}: the last {} s will be cut", clock(mark.monotonic_us), qnumber::number_f64(cut, 'f', 1))
+            // The cut's recorded seconds: paused time inside it is cut anyway and not counted.
+            marks::add_retake(seconds, "").map(|(mark, cut)| {
+                format!(
+                    "Retake at {}: the last {} s recorded will be cut",
+                    clock(mark.monotonic_us),
+                    qnumber::number_f64(cut, 'f', 1)
+                )
             })
         }
         "--pause" if value.is_none() => {

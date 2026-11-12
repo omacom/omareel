@@ -90,7 +90,9 @@ bar) leave marks the editor uses when it first opens the recording:
   right-clicking) a tag renames or deletes it.
 - `omareel record --retake [SECONDS]` says "that didn't go well". The take since the last
   marker, retake or resume is cut, or the last 5 seconds when there is none; with `SECONDS`,
-  exactly that much. The new project starts with that span cut out of its clips and a retake
+  exactly that much. Seconds count recorded time only: a retake of 5 seconds made 2 seconds
+  after resuming also cuts the 3 seconds before the pause (the command prints how many recorded
+  seconds it cuts). The new project starts with that span cut out of its clips and a retake
   marker where the cut ends; nothing is deleted, so dragging the clips' trim handles brings it
   back.
 - `omareel record --pause` pauses the recording, and run again resumes it. The bar shows
@@ -98,9 +100,17 @@ bar) leave marks the editor uses when it first opens the recording:
   video holds the frame from before the pause, so nothing on screen meanwhile is recorded. With
   the gpu-screen-recorder fallback the paused time is still captured. Either way the new project
   starts with the paused time cut, and input while paused (clicks, keys, scrolls, pointer moves)
-  is left out of `input.jsonl`, so it makes no clicks, keystrokes or zooms. The audio and camera
-  keep recording to stay in sync and are cut with the video. A marker or retake made while
-  paused belongs to the moment the pause began.
+  is left out of `input.jsonl`, so it makes no clicks, keystrokes or zooms. A marker or retake
+  made while paused belongs to the moment the pause began.
+
+  **Paused time is cut, not erased.** The microphone and desktop audio and `camera.mp4` keep
+  recording while paused (they stay in sync with the video that way), and so does the screen
+  with the gpu-screen-recorder fallback. The new project never plays a paused span, but the
+  bundle still holds it: someone with the bundle can hear what was said, and see the camera (and
+  with the fallback the screen), during a pause. Pause to leave something out of the edit, not to
+  keep it private; stop the recording for that. Exports only contain what the project plays.
+  When a recording was paused from its first frame to the stop, the new project keeps just its
+  first tenth of a second, with the audio and camera turned off.
 
 Bind them like the toggle, for example:
 
@@ -111,8 +121,20 @@ o.bind("SUPER + ALT + P", "Omareel pause", "omareel record --pause")
 ```
 
 The shortcut that ran a command, or the click on a bar button, is left out of `input.jsonl` too,
-so it never shows in the keystroke overlay or makes a zoom. Generated zooms only come from clicks
-that a clip still shows, and **Regenerate zooms** follows the current clips the same way.
+so it never shows in the keystroke overlay or makes a zoom. To leave real input alone, only
+these count:
+
+- for a command: the last key pressed with **Super** held in the second before the command ran,
+  with the modifiers held for it and their releases (Hyprland's global binds use Super, apps'
+  shortcuts almost never do). A command run any other way, such as from a bind without Super, a
+  macro key, or typed in a terminal, leaves every key in `input.jsonl`;
+- for a bar button: the click on it, the last press on the bar's box (from the pointer's
+  position) released at most three seconds before the mark, however long it was held. When the
+  bar's monitor is unknown, no click is left out.
+
+Input while paused is left out either way. A command run after the recording began stopping is
+refused (status 2, "The recording is stopping"). Generated zooms only come from clicks that a
+clip still shows, and **Regenerate zooms** follows the current clips the same way.
 
 ## Launcher window
 
@@ -256,8 +278,11 @@ moment in monotonic microseconds, the clock of `input.jsonl` and of `capture.jso
 ```
 
 A retake cuts `from`..`t`; a pause runs to the next resume, or to the end without one. `label`
-is left out when empty, and `"via":"bar"` marks one made with a bar button. The editor reads the
-file only when it makes the project; bundles without it open as they always did.
+is left out when empty, and `"via":"bar"` marks one made with a bar button. `at` is when the
+mark was made, when that differs from `t`: a marker or retake made while paused has the pause's
+start as `t`, and a pause or resume has the moment it was asked for as `at`. Marks made after
+`capture.json`'s `stopped_us` are ignored. The editor reads the file only when it makes the
+project; bundles without it open as they always did.
 
 `project.json` keeps markers in `markers`, left out while there are none:
 `[{"id": "m1", "time": 3.5, "label": "good take"}, {"id": "m2", "time": 9.0, "label": "",
