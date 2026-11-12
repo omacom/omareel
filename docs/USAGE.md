@@ -147,8 +147,11 @@ the start, well under a second at 1080p.
   instead of `--at`.
 - `--sheet` puts the frames on one contact sheet, a near-square grid with each tile labelled
   with its time (`mm:ss.s`).
-- `--width W` sets each still's width, or the whole sheet's (1920 by default); the height
-  follows the project's aspect. `--fps N` picks the frame grid as for `export`.
+- `--width W` sets each still's width, or the whole sheet's (1920 by default; a sheet of many
+  tiles can come out a few pixels wider, as tiles stay even and at least 16 px wide); the
+  height follows the project's aspect. `--fps N` picks the frame grid as for `export`.
+  Stills use the MP4 export's frame rate and size; for a GIF's frames, pass its `--fps` and
+  `--width`.
 
 OUTPUT ends in `.png`, `.jpg` or `.webp`. Each written path is printed on stdout; errors go to
 stderr with a non-zero exit (2 for bad arguments, 1 when rendering or writing fails).

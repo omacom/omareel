@@ -219,6 +219,11 @@ bool Exporter::renderStills(const StillOptions &options, QList<Still> *stills, d
 {
     m_cancel->reset();
     stills->clear();
+    // With nothing asked for, the job would not be in still mode: it would export.
+    if (options.times.isEmpty() && options.count <= 0) {
+        *error = QStringLiteral("No frames asked for");
+        return false;
+    }
     ::rust::Box<omareel::exporter::ExportJob> job = omareel::exporter::newExportJob();
     job->setStills(::rust::Slice<const double>(options.times.constData(), size_t(options.times.size())), options.count);
     // The output's name only tells an export MP4 from GIF; stills are neither.
@@ -265,7 +270,12 @@ bool Exporter::renderStills(const StillOptions &options, QList<Still> *stills, d
                            QImage::Format_RGBX8888);
         QImage image = softwareRendering ? frame.convertToFormat(QImage::Format_RGB888)
                                          : frame.flipped(Qt::Vertical).convertToFormat(QImage::Format_RGB888);
-        stills->append({std::move(image), times[size_t(still)]});
+        Still rendered{std::move(image), times[size_t(still)]};
+        if (options.take) {
+            if (!options.take(still, rendered, error)) { ok = false; break; }
+        } else {
+            stills->append(std::move(rendered));
+        }
         emit progress(still + 1, count);
     }
     job->finishDecoder();

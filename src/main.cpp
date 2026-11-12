@@ -312,13 +312,14 @@ static int frameCommand(const QStringList &arguments)
     // A sheet's --width is the sheet's; each tile renders at its share.
     options.width = request.sheet ? grid.tile_width : request.width;
     const QString output = QFileInfo(request.output).absoluteFilePath();
+    // Bad arguments, found before anything renders: exit status 2, as for the others.
     if (!QFileInfo(QFileInfo(output).absolutePath()).isDir()) {
         QTextStream(stderr) << "omareel: no directory " << QFileInfo(output).absolutePath() << '\n';
-        return 1;
+        return 2;
     }
     if (!QImageWriter::supportedImageFormats().contains(QFileInfo(output).suffix().toLower().toLatin1())) {
         QTextStream(stderr) << "omareel: this Qt cannot write ." << QFileInfo(output).suffix() << " images\n";
-        return 1;
+        return 2;
     }
 
     Exporter exporter;
@@ -328,6 +329,25 @@ static int frameCommand(const QStringList &arguments)
             QTextStream(stderr) << '\r' << "Rendering " << frame << '/' << total << (frame == total ? "\n" : "")
                                 << Qt::flush;
         });
+    }
+    const auto save = [](const QImage &image, const QString &path) {
+        const bool jpeg = path.endsWith(QStringLiteral(".jpg"), Qt::CaseInsensitive)
+                       || path.endsWith(QStringLiteral(".jpeg"), Qt::CaseInsensitive);
+        if (image.save(path, nullptr, jpeg ? 90 : -1)) {
+            QTextStream(stdout) << path << Qt::endl;
+            return true;
+        }
+        return false;
+    };
+    // Separate stills are written as they render, so only one is held at a time and an
+    // unwritable output stops at the first. A sheet's tiles are small; it keeps them.
+    const QStringList paths = omareel::exporter::stillOutputPaths(output, stills);
+    if (!request.sheet) {
+        options.take = [&](int index, const Still &still, QString *error) {
+            if (save(still.image, paths[index])) return true;
+            *error = QStringLiteral("could not write %1").arg(paths[index]);
+            return false;
+        };
     }
     QList<Still> rendered;
     double duration = 0.0;
@@ -341,22 +361,10 @@ static int frameCommand(const QStringList &arguments)
             QTextStream(stderr) << "omareel: " << time << " s is past the end (" << duration
                                 << " s); showing the last frame\n";
     }
-    const auto save = [](const QImage &image, const QString &path) {
-        const bool jpeg = path.endsWith(QStringLiteral(".jpg"), Qt::CaseInsensitive)
-                       || path.endsWith(QStringLiteral(".jpeg"), Qt::CaseInsensitive);
-        if (image.save(path, nullptr, jpeg ? 90 : -1)) {
-            QTextStream(stdout) << path << '\n';
-            return true;
-        }
-        QTextStream(stderr) << "omareel: could not write " << path << '\n';
-        return false;
-    };
-    if (request.sheet) return save(Exporter::contactSheet(rendered, grid.columns, grid.gap), output) ? 0 : 1;
-    const QStringList paths = omareel::exporter::stillOutputPaths(output, int(rendered.size()));
-    for (qsizetype i = 0; i < rendered.size(); ++i) {
-        if (!save(rendered[i].image, paths[i])) return 1;
-    }
-    return 0;
+    if (!request.sheet) return 0;
+    if (save(Exporter::contactSheet(rendered, grid.columns, grid.gap), output)) return 0;
+    QTextStream(stderr) << "omareel: could not write " << output << '\n';
+    return 1;
 }
 
 static QScreen *recordBarScreen(const QString &recordedMonitor)
