@@ -334,15 +334,17 @@ Polish this recording so it is tight and easy to follow:
 2. Trim the start and the end: dead time before the first action, and reaching for the stop
    button at the end.
 3. Cut long idle stretches and pauses, leaving a beat on each side. If there is speech, use
-   `trim-pauses`. When what happens on screen matters (a build, a page loading), speed the
-   stretch up instead of cutting it.
+   `trim-pauses`, then `speed-up-quiet` for silent stretches where the screen keeps changing (a
+   build, a page loading). Keep the moments the person marked (`markers`), and never bring back
+   what they cut while recording (`recording_cuts`).
 4. Check the zooms: keep the automatic ones that help, fix or remove the ones that don't, and
    zoom where something small matters. After big cuts, consider `regenerate-zooms`.
 5. Turn on keystrokes if keyboard shortcuts are part of what is shown.
 6. Look at a contact sheet of the result, and fix what looks wrong.
 
-Keep the person's content: never cut speech or the moments where results appear. Don't change
-the background, the style, the music or the export settings.
+Keep the person's content: never cut speech or the moments where results appear. If a password,
+key or other secret shows, blur it. Don't change the background, the style, the music, the audio
+cleanup or the export settings, and add no other annotations.
 ";
 
 const ASK: &str = "\

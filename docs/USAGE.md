@@ -265,6 +265,8 @@ the start, well under a second at 1080p.
   height follows the project's aspect. `--fps N` picks the frame grid as for `export`.
   Stills use the MP4 export's frame rate and size; for a GIF's frames, pass its `--fps` and
   `--width`.
+- `--preset ID`, `--aspect A` and `--reframe follow|off` shape the stills as they shape an
+  export, for these stills only: `--preset shorts` shows the vertical, reframed video.
 
 OUTPUT ends in `.png`, `.jpg` or `.webp`. Each written path is printed on stdout; errors go to
 stderr with a non-zero exit (2 for bad arguments, 1 when rendering or writing fails).
@@ -311,7 +313,22 @@ Prints the edited timeline as JSON, for scripts and AI agents:
   it plays (an empty list when it was cut).
 - `settings`: the rest of `project.json` (background, frame, cursor, keystrokes, audio, camera,
   export settings), whose dotted paths `apply`'s `set` takes.
-- `allowed`: the clip speeds, layouts and fits the editor offers.
+- `allowed`: the clip speeds, layouts and fits the editor offers, and the transition styles,
+  overlay kinds, blur styles, loudness targets, aspects, and export presets (`id`,
+  `description`, `format`, `aspect`, `reframe`).
+- `overlays` (when there are any): each annotation's `id`, `kind`, `anchor`, its `source` span
+  (screen items) and the `output` spans where it shows, and its fields as `project.json` has
+  them, an arrow's ends named `tail` and `head`.
+- `markers` (when there are any): `id`, `label`, `kind` (`marker` or `retake`), the `source`
+  time and the `output` times where it plays.
+- `recording_cuts` (when the bundle has `markers.jsonl` with retakes or pauses): what the
+  recorder cut out of the first project, each with its `kind`, `source` span, and the `output`
+  spans where it plays again (normally none).
+- `transitions`: the project's `style` and every cut (`clip` after it, `output` time, `style`).
+- `reframe`: `mode` (`follow` or `off`) and whether it is `active` (the canvas has another shape
+  than the recording).
+- `audio_cleanup`: `denoise`, `strength`, `loudness`, and `denoise_available` (the recording has
+  microphone sound).
 - `transcript` (once the recording is transcribed): the engine, whether word times are
   `measured` or `estimated`, and each phrase's `text` with its `source` span and the `output`
   spans where it plays.
@@ -369,6 +386,35 @@ which no edit moves.
 | `remove-fillers` | (needs a transcript with measured word times) |
 | `set` | `path` (dotted, e.g. `background.blur`), `value` |
 | `set-chapters` | any of `chapters` (`[{"at", "title"}, ...]`, replacing the list), `title`, `description` |
+| `add-overlay` | `kind` (`text`, `box`, `arrow`, `badge`, `blur`, `card`), `from`, `to`, optional `anchor` (`screen` or `frame`), `rect` (`{"x", "y", "w", "h"}`), and the kind's fields (below); returns the overlay with its `id` |
+| `edit-overlay` | `id`, any of `from`, `to`, `anchor`, and the kind's fields (`rect` may give only some of x, y, w, h) |
+| `remove-overlay` | `id` |
+| `blur` | `from`, `to`, `rect`, optional `style` (`pixelate` or `blur`), `amount` (0–1): a blur overlay |
+| `add-marker` | `at`, optional `label`; returns its `id` |
+| `rename-marker` | `id`, `label` |
+| `remove-marker` | `id` |
+| `transition` | `style`: `none` or `zoom-punch`, at every cut |
+| `cut-transition` | `clip` or `at` (the clip after the cut), `style`: `none`, `zoom-punch`, or `null` to follow the project |
+| `speed-up-quiet` | optional `target` (seconds each quiet part plays in, default 2), `min` (the shortest part, default 3 s) |
+| `reframe` | `mode`: `follow` or `off` |
+| `audio-cleanup` | any of `denoise` (true or false), `strength` (0.1–1), `loudness` (`"off"`, `-16`, `-14`) |
+
+Overlay fields by kind: `text`: `text`, `size` (8–400 px at 1080p), `color` (`#rrggbb`, or `""`
+for the theme's), `background` (`pill` or `none`); `box`: `color`, `width`, `radius`,
+`spotlight` (0–1); `arrow`: `tail` and `head` (`{"x", "y"}`), `color`, `width`; `badge`:
+`number`, `color`; `blur`: `style`, `amount`; `card`: `title`, `subtitle`. All but `blur` take
+`fadeIn` and `fadeOut` (0–5 s). A field the kind doesn't have is an error. `screen` items
+(the default for box, arrow, badge and blur) belong to the recording: their `rect` and arrow
+ends are 0–1 of the recording's full frame, before the crop, so they follow the crop, zooms and
+reframing, and they are stored at source times; given output times, they get the recording span
+those times show. `frame` items (the default for text and card) are 0–1 of the canvas and stay
+at output times. A blur is always `screen` and a card always `frame`. The export hides a blur's
+region in the decoded recording before anything is drawn, from a frame before its span to a
+frame after it.
+
+`trim-pauses` and `speed-up-quiet` measure the speech and the screen as the editor does, and
+share the editor's measurement cache. A run that makes footage cut while recording (a retake or
+a pause in `markers.jsonl`) play again says so in `warnings`.
 
 `set-chapters` writes `chapters.json`, storing each `at` as a source time whichever timeline
 it is given in, and only once the whole list has applied; with everything empty it removes the
@@ -816,7 +862,8 @@ is left out when empty, and `"via":"bar"` marks one made with a bar button. `at`
 mark was made, when that differs from `t`: a marker or retake made while paused has the pause's
 start as `t`, and a pause or resume has the moment it was asked for as `at`. Marks made after
 `capture.json`'s `stopped_us` are ignored. The editor reads the file only when it makes the
-project; bundles without it open as they always did.
+project (as does `omareel export` of a bundle without `project.json`); bundles without it open
+as they always did.
 
 `project.json` keeps markers in `markers`, left out while there are none:
 `[{"id": "m1", "time": 3.5, "label": "good take"}, {"id": "m2", "time": 9.0, "label": "",
