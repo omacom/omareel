@@ -122,6 +122,7 @@ fn exporter_txt() {
             project: &project,
             motion: &motion,
             keystrokes: &keystrokes,
+            captions: &[],
             camera_width,
             camera_duration,
             camera_offset,

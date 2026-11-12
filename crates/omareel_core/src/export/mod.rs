@@ -211,6 +211,7 @@ pub struct ExportJob {
     camera_enabled: bool,
     motion: MotionTrack,
     keystrokes: KeystrokeTrack,
+    captions: Vec<crate::captions::Cue>,
     gif: bool,
     fps: i32,
     width: i32,
@@ -313,6 +314,11 @@ impl ExportJob {
         let camera_enabled = camera_media.width > 0 && (project.camera.enabled || camera_full_frame);
         let motion = MotionTrack::build(media.duration, media.width, media.height, input.events(), &project, capture_fps);
         let keystrokes = KeystrokeTrack::build(input.events(), &project.keystrokes);
+        // Captions need a transcript; one that does not read leaves them out.
+        let captions = match (project.captions.as_ref().is_some_and(|c| c.enabled), crate::transcript::Transcript::load(&bundle)) {
+            (true, Ok(Some(transcript))) => crate::captions::build_cues(&transcript, &project.clips),
+            _ => Vec::new(),
+        };
 
         let output = options.output_path.as_bytes();
         let gif = output.len() >= 4 && output[output.len() - 4..].eq_ignore_ascii_case(b".gif");
@@ -406,6 +412,7 @@ impl ExportJob {
             camera_enabled,
             motion,
             keystrokes,
+            captions,
             gif,
             fps,
             width,
@@ -752,6 +759,7 @@ impl ExportJob {
             project: &self.project,
             motion: &self.motion,
             keystrokes: &self.keystrokes,
+            captions: &self.captions,
             camera_width: self.camera_media.width,
             camera_duration: self.camera_media.duration,
             camera_offset: self.camera_offset,

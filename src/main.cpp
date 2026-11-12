@@ -123,7 +123,7 @@ static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplicat
         {QStringLiteral("background"), 0}, {QStringLiteral("shape"), 1},
         {QStringLiteral("cursor"), 2}, {QStringLiteral("zoom"), 3},
         {QStringLiteral("clip"), 4}, {QStringLiteral("camera"), 5},
-        {QStringLiteral("keystrokes"), 6}, {QStringLiteral("audio"), 7}
+        {QStringLiteral("keystrokes"), 6}, {QStringLiteral("audio"), 7}, {QStringLiteral("speech"), 8}
     };
     const QString panel = qEnvironmentVariable("OMAREEL_SCREENSHOT_PANEL").toLower();
     if (panels.contains(panel)) {

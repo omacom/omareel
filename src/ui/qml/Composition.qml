@@ -119,6 +119,12 @@ Item {
         softwareRendering: comp.softwareRendering
         nativePreview: composition.nativePreview
     }
+    CaptionOverlay {
+        visible: !composition.mediaActive
+        caption: comp.caption
+        colors: comp.project.renderTheme
+        ref: composition.ref
+    }
     KeystrokeOverlay {
         visible: comp.project.keystrokes.enabled && comp.keystrokePills.length > 0
             && !composition.screenCovered
