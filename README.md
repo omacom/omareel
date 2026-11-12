@@ -166,12 +166,18 @@ want the bar to appear.
 | `Shift+Left` / `Shift+Right` | Seek one second |
 | `S` | Split the selected clip at the playhead |
 | `Z` | Add a zoom at the playhead |
+| `I` | Insert a video at the playhead |
 | `T` / `R` / `A` / `N` / `B` | Add text, a box, an arrow, a step number, or a blur region |
 | `Shift+T` | Add a title card |
+| `M` / `Shift+M` | Jump to the next / previous marker |
+| `Ctrl+M` | Add a marker at the playhead |
 | `Delete` | Delete the selected time range, annotation, zoom, or clip |
+| `Backspace` | Delete the selected time range |
 | `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / redo |
 | `Ctrl+S` | Save now |
 | `Ctrl+E` | Open export |
+| `Ctrl+Shift+P` | Polish with your coding agent |
+| `?` | Show the shortcuts |
 
 ## Bundle format
 

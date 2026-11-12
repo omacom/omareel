@@ -451,6 +451,7 @@ from `omarchy-agent-account-home` when unset. Other agents Omarchy offers aren't
 | `Ctrl+S` | Save |
 | `Ctrl+E` | Export |
 | `Ctrl+Shift+P` | Polish with the coding agent |
+| `?` | Show the shortcuts |
 
 The timeline fits the full recording at 1×. Scroll either wheel axis or touchpad axis to zoom
 around the pointer, up to 16×; right-button drag pans the zoomed timeline. The bottom toolbar's

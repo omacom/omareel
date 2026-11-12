@@ -31,6 +31,7 @@ Rectangle {
         {key:"Backspace", action:"Remove range"},
         {key:"Ctrl Z", action:"Undo"}, {key:"Ctrl Shift Z", action:"Redo"},
         {key:"Ctrl S", action:"Save"}, {key:"Ctrl E", action:"Export"},
+        {key:"Ctrl Shift P", action:"Polish with AI"},
         {key:"Scroll", action:"Zoom timeline at pointer"},
         {key:"Right drag", action:"Pan timeline"},
         {key:"Esc", action:"Cancel point picking"}, {key:"?", action:"Show shortcuts"}
