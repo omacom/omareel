@@ -193,12 +193,35 @@ struct DecodePlan {
     screen_yuv: Option<YuvLayout>,
 }
 
-/// The export's sound: the inputs to open after the video's, and the `-filter_complex` that
-/// ends in `[aout]`.
+/// The export's sound: the inputs to open after the video's, and what its `-filter_complex`
+/// (ending in `[aout]`) is made of.
 #[derive(Clone, Debug, PartialEq)]
 struct AudioGraph {
     inputs: Vec<String>,
-    filter: String,
+    /// The program: the clips' sound, which loudness normalisation measures and normalises.
+    prelude: String,
+    segments: Vec<String>,
+    volume: f64,
+    click_times: Vec<f64>,
+    click_input: i32,
+    output_duration: f64,
+}
+
+impl AudioGraph {
+    /// The whole graph, with the program normalised by `master` when given. The volume then
+    /// trims the normalised level, up to 100%: the target is the ceiling, its peaks already at
+    /// the limit (and the preview's players go no louder either).
+    fn filter(&self, master: Option<&str>) -> String {
+        plan::mastered_audio_filter(
+            &self.prelude,
+            &self.segments,
+            master,
+            if master.is_some() { self.volume.min(1.0) } else { self.volume },
+            &self.click_times,
+            self.click_input,
+            self.output_duration,
+        )
+    }
 }
 
 /// The loudness measurement's thread and what it reports.
@@ -590,13 +613,10 @@ impl ExportJob {
             .map(String::from)
             .into();
             if let Some(audio) = audio {
-                encoder_args.extend(audio.inputs);
+                encoder_args.extend(audio.inputs.iter().cloned());
                 encoder_args.extend([
                     "-filter_complex".into(),
-                    match &master {
-                        Some(master) => plan::with_master(&audio.filter, master),
-                        None => audio.filter,
-                    },
+                    audio.filter(master.as_deref()),
                     "-map".into(),
                     "0:v:0".into(),
                     "-map".into(),
@@ -708,7 +728,7 @@ impl ExportJob {
         };
         let cleanup = &project.audio.cleanup;
         let denoise = if use_source_audio && cleanup.denoise && self.capture_mic {
-            let model = audio_cleanup::model_file(&runtime_directory())?;
+            let model = audio_cleanup::model_file(&audio_cleanup::default_model_directory())?;
             Some(audio_cleanup::denoise_filter(&model, cleanup.strength))
         } else {
             None
@@ -738,8 +758,15 @@ impl ExportJob {
         if sources.segments.is_empty() && click_times.is_empty() {
             return Ok(None);
         }
-        let filter = plan::audio_filter(&sources.segments, volume, &click_times, click_input, self.output_duration);
-        Ok(Some(AudioGraph { inputs, filter }))
+        Ok(Some(AudioGraph {
+            inputs,
+            prelude: sources.prelude,
+            segments: sources.segments,
+            volume,
+            click_times,
+            click_input,
+            output_duration: self.output_duration,
+        }))
     }
 
     /// The loudness the export normalises its sound to, in LUFS.
@@ -748,22 +775,23 @@ impl ExportJob {
     }
 
     /// Starts measuring the export's loudness on a thread of its own (the first of the two
-    /// loudness passes, over the finished mix), when the project normalises its sound and there
-    /// is any: true then. Before [`start`](Self::start), which otherwise measures first itself.
+    /// loudness passes, over the program: the clips' sound, before the volume and without the
+    /// click sound), when the project normalises its sound and there is any: true then. Before [`start`](Self::start), which otherwise measures first itself.
     /// [`cancel`](Self::cancel) stops it.
     pub fn start_loudness_measure(&mut self) -> Result<bool, String> {
         if self.loudness.is_some() {
             return Ok(true);
         }
         let Some(target) = self.loudness_target() else { return Ok(false) };
-        let Some(graph) = self.audio_graph()? else { return Ok(false) };
+        // Only the clips' sound is normalised; clicks alone keep their level.
+        let Some(graph) = self.audio_graph()?.filter(|graph| !graph.segments.is_empty()) else { return Ok(false) };
         let mut args: Vec<String> =
             ["-hide_banner", "-nostdin", "-nostats", "-v", "info", "-progress", "pipe:1"].map(String::from).into();
         // Input 0 stands in for the video, so the graph's input numbers hold.
         args.extend(["-f", "lavfi", "-t", "0.1", "-i", "anullsrc=r=48000:cl=stereo"].map(String::from));
-        args.extend(graph.inputs);
+        args.extend(graph.inputs.iter().cloned());
         args.push("-filter_complex".into());
-        args.push(plan::with_master(&graph.filter, &audio_cleanup::loudness_measure_filter(target)));
+        args.push(plan::program_measure_filter(&graph.prelude, &graph.segments, &audio_cleanup::loudness_measure_filter(target)));
         args.extend(["-map", "[aout]", "-f", "null", "-"].map(String::from));
         let progress = Arc::new(AtomicU64::new(0f64.to_bits()));
         let result = Arc::new((Mutex::new(None), Condvar::new()));

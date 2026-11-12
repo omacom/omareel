@@ -206,20 +206,36 @@ The Audio panel's **Cleanup** section makes a laptop-microphone recording sound 
   RNNoise, a speech denoiser. **Strength** (10–100%, default 85%) sets how much of the
   denoised sound replaces the original. It is offered when the recording has microphone sound.
   The recording keeps the microphone and the system audio in one track, so system audio is
-  filtered too, which can dull music or effects; inserted videos are never filtered.
+  filtered too, which can dull music or effects; inserted videos are never filtered. The
+  recording is denoised as one continuous stream before it is cut into clips, so cuts lose
+  nothing.
 - **Loudness** evens the export out to a standard level: **−16 LUFS** (podcasts, YouTube) or
-  **−14 LUFS** (social video). Export measures the finished mix first (the export shows
+  **−14 LUFS** (social video). It normalises the *program*: the clips' sound, the recording's
+  and inserted videos' alike, as edited. Export measures the program first (the export shows
   "Measuring loudness"), then applies one gain to all of it, keeping the true peak under
   −1.5 dBTP after encoding (loudnorm limits at −2 dBTP, and only when the gain alone would pass
-  it).
+  it). The click sound is not part of the program: it is mixed in afterwards at its usual level
+  (peaks of −22 dBFS), so normalising never makes the clicks louder; where a click lands on a
+  peak the two can reach about −1.2 dBTP.
+- **Volume** (the Audio panel's slider) applies after normalisation, as a trim on the normalised
+  level: at 100% the export sits at the target, at 50% 6 dB under it, and above 100% it stays at
+  the target (its peaks are already at the limit). With loudness off it sets the clips' level as
+  before. It never changes the click sound.
 
 The preview plays the cleaned sound once it has been made in the background (a few seconds for
-a few minutes of recording); until then it plays the recording as it was. **Hear original**
-switches the preview back to the recorded sound for comparing, without changing the project.
-The preview's loudness is measured over the whole recording, the export's over the edited mix,
-so they can differ slightly when cuts remove much louder or quieter parts. Cleaned sound is
-cached in `~/.cache/omareel/omareel/audio-cleanup/`, beside the filmstrips (the last three versions
-per recording).
+a few minutes of recording); until then it plays the recording as it was. It is made the way
+export makes it: the recording denoised as a whole, and, with loudness on, the program measured
+as export measures it and that gain applied to the recording's sound and to each inserted
+video's, with Volume on top. After an edit that changes the program's sound the preview keeps
+playing what it has while it measures again, and keeps those files when the new measurement is
+within 0.5 LU of theirs. **Hear original** switches the preview back to the recorded sound for
+comparing, without changing the project.
+
+Cleaned sound is cached in `~/.cache/omareel/omareel/audio-cleanup/`, beside the filmstrips:
+the last three versions per file and their loudness measurements. Anything unused for 30 days
+goes, a deleted recording's included, and the oldest entries go first once the cache passes
+2 GB. The RNNoise model is written to `$XDG_RUNTIME_DIR`, or to `~/.cache/omareel/` (made
+private to you) without one, and is checked byte for byte before each use.
 
 `project.json` stores the choice as `audio.cleanup`, written only once something is switched on:
 

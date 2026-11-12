@@ -1,19 +1,33 @@
 //! Audio cleanup in the editor: the `audio.cleanup` edit, and the cleaned sound the preview
 //! plays so it can be heard before exporting.
 //!
-//! When cleanup is on, the document asks for a cache file of the recording's sound, cleaned
-//! ([`CleanAudioJob`], `<cache>/audio-cleanup/<recording>-<settings>.m4a`), with
-//! [`Effect::StartCleanAudio`]. Once the file is there it hands it to the screen player with
-//! [`Effect::SetScreenAudioSource`]: the player keeps showing the recording's picture and plays
+//! When cleanup is on, the document asks for the cleaned sound ([`CleanAudioJob`], cache files
+//! under `<cache>/audio-cleanup/`) with [`Effect::StartCleanAudio`]: the recording's sound,
+//! denoised and normalised, and, when normalising, each inserted video's sound with the same
+//! gain. The gain comes from measuring the edited program as export does, so what the preview
+//! plays is what the export will sound like; the Volume slider then sets the players' volume,
+//! which is where export applies it too (after normalising).
+//!
+//! Once the files are there it hands them to the players with [`Effect::SetScreenAudioSource`]
+//! and [`Effect::InsertAudioSourcesChanged`]: each player keeps showing its picture and plays
 //! that file's sound in its place, on the same timeline. Until then (or after a change, until
-//! the new file is ready) the preview plays what it played before. [`Document::set_clean_audio_bypass`]
-//! switches back to the recording's own sound for comparing, without editing the project.
+//! the new files are ready) the preview plays what it played before.
+//! [`Document::set_clean_audio_bypass`] switches back to the files' own sound for comparing,
+//! without editing the project.
+//!
+//! Every job has an id of its own. A job for settings nobody wants any more is cancelled; one
+//! for an older edit of the same settings runs to its end (its work is mostly reusable) and
+//! the next one starts after it. Results are matched to jobs by id, so a cancelled job that
+//! finishes late never touches the one that replaced it.
 
 use super::thumbnails::video_fingerprint;
 use super::{Document, Effect};
-use crate::audio_cleanup::{cache_directory, CleanAudioJob, CleanSettings};
-use crate::compat::qdir::{self, FileInfo};
+use crate::audio_cleanup::{
+    cache_directory, CleanAudioJob, CleanAudioResult, CleanSettings, InsertSound, LoudnessMeasurement, ProgramSound,
+};
+use crate::compat::qdir;
 use crate::project::{AudioCleanup, Project};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -42,21 +56,48 @@ impl CleanAudioStatus {
     }
 }
 
+/// What the settings and the edit ask the cleaned sound to be.
+#[derive(Clone, Debug, PartialEq)]
+struct Request {
+    /// Identifies the request: the settings and, when normalising, the program and its files.
+    key: String,
+    settings: CleanSettings,
+    program: ProgramSound,
+    inserts: Vec<InsertSound>,
+}
+
+/// A job started and not finished yet.
+#[derive(Debug)]
+struct Running {
+    id: u64,
+    key: String,
+    settings: CleanSettings,
+    cancel: Arc<AtomicBool>,
+}
+
 /// The document's side of the cleaned preview sound.
 #[derive(Debug, Default)]
 pub struct CleanAudio {
     fingerprint: Option<String>,
-    /// The cache file the settings ask for; empty for none.
-    wanted: String,
+    /// The inserted videos' fingerprints, by bundle-relative path.
+    insert_fingerprints: HashMap<String, String>,
+    wanted: Option<Request>,
+    /// The request the latest finished job made its files for, its settings, and what it made.
+    done: Option<(String, CleanSettings, CleanAudioResult)>,
     /// The file the screen player's sound comes from; empty for the recording's own.
     playing: String,
-    /// The file a job is making.
-    running: String,
-    /// A file that could not be made, and why.
+    /// The files the media player's sound comes from, by inserted video.
+    playing_inserts: HashMap<String, String>,
+    /// What the files playing now were normalised with, and for which settings.
+    applied: Option<(CleanSettings, LoudnessMeasurement)>,
+    running: Option<Running>,
+    /// Jobs cancelled but not finished yet: cancelled again when the editor closes.
+    cancelled: Vec<(u64, Arc<AtomicBool>)>,
+    next_id: u64,
+    /// A request that could not be made, and why.
     failed: String,
     error: String,
     bypass: bool,
-    cancel: Option<Arc<AtomicBool>>,
 }
 
 impl Document {
@@ -97,11 +138,10 @@ impl Document {
 
     pub fn clean_audio_status(&self) -> CleanAudioStatus {
         let clean = &self.clean_audio;
-        if clean.wanted.is_empty() {
-            CleanAudioStatus::Off
-        } else if clean.failed == clean.wanted {
+        let Some(wanted) = &clean.wanted else { return CleanAudioStatus::Off };
+        if clean.failed == wanted.key {
             CleanAudioStatus::Failed
-        } else if FileInfo::new(&clean.wanted).is_file() {
+        } else if clean.done.as_ref().is_some_and(|(key, _, _)| *key == wanted.key) {
             CleanAudioStatus::Ready
         } else {
             CleanAudioStatus::Preparing
@@ -118,6 +158,12 @@ impl Document {
         &self.clean_audio.playing
     }
 
+    /// The file the preview's sound of the inserted video `media` (bundle-relative) comes
+    /// from; empty for the video's own.
+    pub fn insert_audio_source(&self, media: &str) -> &str {
+        self.clean_audio.playing_inserts.get(media).map_or("", String::as_str)
+    }
+
     pub fn clean_audio_bypass(&self) -> bool {
         self.clean_audio.bypass
     }
@@ -132,45 +178,93 @@ impl Document {
         }
     }
 
-    /// Brings the preview's sound in line with the cleanup settings: asks for the file they
-    /// need ([`Effect::StartCleanAudio`]) and switches the screen player to it, or back to the
-    /// recording, with [`Effect::SetScreenAudioSource`]. Called after every change, and by the
-    /// Qt side once the screen player is loaded.
-    pub fn refresh_clean_audio(&mut self) {
-        let before = self.clean_audio_status();
-        let wanted = match self.clean_settings() {
-            Some(settings) => {
+    /// What the current settings and edit ask for; `None` when cleanup does nothing.
+    fn clean_audio_request(&mut self) -> Option<Request> {
+        let settings = self.clean_settings()?;
+        let fingerprint =
+            self.clean_audio.fingerprint.get_or_insert_with(|| video_fingerprint(&self.video_path)).clone();
+        let mut program = ProgramSound {
+            clips: Vec::new(),
+            insert_audio: Vec::new(),
+            use_source_audio: self.project.audio.desktop || self.project.audio.mic,
+        };
+        let mut inserts = Vec::new();
+        let mut key = format!("{fingerprint}|{}", settings.key());
+        // The program only matters to the loudness.
+        if let Some(target) = settings.loudness {
+            program.clips = self.project.clips.clone();
+            let clips = program.clips.clone();
+            for clip in &clips {
+                if !clip.is_media() || program.insert_audio.contains(&clip.media) || !self.insert_info(&clip.media).audio {
+                    continue;
+                }
+                let path = qdir::file_path(&self.recording.bundle_path, &clip.media);
                 let fingerprint = self
                     .clean_audio
-                    .fingerprint
-                    .get_or_insert_with(|| video_fingerprint(&self.video_path))
+                    .insert_fingerprints
+                    .entry(clip.media.clone())
+                    .or_insert_with(|| video_fingerprint(&path))
                     .clone();
-                qdir::file_path(&cache_directory(&self.cache_location()), &settings.cache_name(&fingerprint))
+                program.insert_audio.push(clip.media.clone());
+                inserts.push(InsertSound { media: clip.media.clone(), fingerprint });
             }
-            None => String::new(),
-        };
-        let changed = wanted != self.clean_audio.wanted;
+            let denoise = settings.denoise.map(|_| "denoise");
+            if let Some((inputs, filter)) = program.measure_graph(&self.recording.bundle_path, &self.video_path, denoise, target) {
+                key += &format!("|{}|{filter}", inputs.join(" "));
+            }
+            for insert in &inserts {
+                key += &format!("|{}", insert.fingerprint);
+            }
+        }
+        Some(Request { key: qdir::sha256_hex(key.as_bytes()), settings, program, inserts })
+    }
+
+    /// Brings the preview's sound in line with the cleanup settings and the edit: asks for
+    /// the files they need ([`Effect::StartCleanAudio`]) and switches the players to them, or
+    /// back to their own sound, with [`Effect::SetScreenAudioSource`] and
+    /// [`Effect::InsertAudioSourcesChanged`]. Called after every change, and by the Qt side
+    /// once the screen player is loaded.
+    pub fn refresh_clean_audio(&mut self) {
+        let before = self.clean_audio_status();
+        let wanted = self.clean_audio_request();
+        let changed = wanted.as_ref().map(|request| &request.key) != self.clean_audio.wanted.as_ref().map(|request| &request.key);
         if changed {
-            // Other settings, another try.
+            // Another request, another try.
             self.clean_audio.failed.clear();
             self.clean_audio.error.clear();
         }
         self.clean_audio.wanted = wanted.clone();
-        let ready = !wanted.is_empty() && FileInfo::new(&wanted).is_file();
-        // While a new file is made, the preview keeps what it played.
-        let playing = if wanted.is_empty() || self.clean_audio.bypass {
-            String::new()
-        } else if ready {
-            wanted.clone()
+        let done = match (&wanted, &self.clean_audio.done) {
+            (Some(request), Some((key, _, result))) if *key == request.key => Some(result.clone()),
+            _ => None,
+        };
+        // The same settings for an older edit: within a little of the gain the new one will
+        // have, so it plays while that is made.
+        let close = match (&wanted, &self.clean_audio.done) {
+            (Some(request), Some((_, settings, result))) if *settings == request.settings => Some(result),
+            _ => None,
+        };
+        // While new files are made, the preview keeps what it played.
+        let (playing, playing_inserts) = if wanted.is_none() || self.clean_audio.bypass {
+            (String::new(), HashMap::new())
+        } else if let Some(result) = done.as_ref().or(close) {
+            (result.recording.clone(), result.inserts.iter().cloned().collect())
         } else {
-            self.clean_audio.playing.clone()
+            (self.clean_audio.playing.clone(), self.clean_audio.playing_inserts.clone())
         };
         if playing != self.clean_audio.playing {
             self.clean_audio.playing = playing.clone();
             self.emit(Effect::SetScreenAudioSource(playing));
         }
-        if !wanted.is_empty() && !ready && self.clean_audio.running != wanted && self.clean_audio.failed != wanted {
-            self.emit(Effect::StartCleanAudio);
+        if playing_inserts != self.clean_audio.playing_inserts {
+            self.clean_audio.playing_inserts = playing_inserts;
+            self.emit(Effect::InsertAudioSourcesChanged);
+        }
+        if let Some(request) = &wanted {
+            let waiting = self.clean_audio.running.as_ref().is_some_and(|running| running.settings == request.settings);
+            if done.is_none() && self.clean_audio.failed != request.key && !waiting {
+                self.emit(Effect::StartCleanAudio);
+            }
         }
         if changed || self.clean_audio_status() != before {
             self.emit(Effect::CleanAudioChanged);
@@ -178,49 +272,80 @@ impl Document {
     }
 
     /// The job [`Effect::StartCleanAudio`] asks for, to run off the GUI thread and hand to
-    /// [`Document::finish_clean_audio`]; `None` when nothing needs making. A job still making
-    /// a file nobody wants any more is cancelled.
+    /// [`Document::finish_clean_audio`] with its id; `None` when nothing needs making, or while
+    /// a job for the same settings runs (the next one starts when it ends). A job for other
+    /// settings is cancelled.
     pub fn clean_audio_job(&mut self) -> Option<CleanAudioJob> {
-        let settings = self.clean_settings()?;
-        let wanted = self.clean_audio.wanted.clone();
-        if wanted.is_empty() || FileInfo::new(&wanted).is_file() || self.clean_audio.running == wanted {
+        let request = self.clean_audio.wanted.clone()?;
+        if self.clean_audio.done.as_ref().is_some_and(|(key, _, _)| *key == request.key) || self.clean_audio.failed == request.key {
             return None;
         }
-        self.cancel_clean_audio();
+        if let Some(running) = &self.clean_audio.running {
+            if running.settings == request.settings {
+                return None;
+            }
+            self.cancel_running_clean_audio();
+        }
+        self.clean_audio.next_id += 1;
+        let id = self.clean_audio.next_id;
         let cancelled = Arc::new(AtomicBool::new(false));
-        self.clean_audio.cancel = Some(Arc::clone(&cancelled));
-        self.clean_audio.running = wanted.clone();
+        self.clean_audio.running =
+            Some(Running { id, key: request.key.clone(), settings: request.settings, cancel: Arc::clone(&cancelled) });
+        let previous = self
+            .clean_audio
+            .applied
+            .filter(|(settings, _)| *settings == request.settings)
+            .map(|(_, measured)| measured);
         Some(CleanAudioJob {
+            id,
+            bundle: self.recording.bundle_path.clone(),
             video_path: self.video_path.clone(),
-            output_path: wanted,
-            settings,
-            duration: self.recording.source_duration,
+            fingerprint: self.clean_audio.fingerprint.clone().unwrap_or_default(),
+            cache_directory: cache_directory(&self.cache_location()),
+            settings: request.settings,
+            program: request.program,
+            inserts: request.inserts,
+            previous,
             cancelled,
         })
     }
 
-    /// A [`CleanAudioJob`] for `path` finished with `result`.
-    pub fn finish_clean_audio(&mut self, path: &str, result: Result<String, String>) {
-        if self.clean_audio.running == path {
-            self.clean_audio.running.clear();
-            self.clean_audio.cancel = None;
-        }
-        if let Err(error) = result {
-            if error != "cancelled" && self.clean_audio.wanted == path {
-                self.clean_audio.failed = path.to_owned();
-                self.clean_audio.error = error;
-                self.emit(Effect::CleanAudioChanged);
+    /// The [`CleanAudioJob`] `id` finished with `result`. A job cancelled since is only
+    /// forgotten: what it says is about settings nobody wants.
+    pub fn finish_clean_audio(&mut self, id: u64, result: Result<CleanAudioResult, String>) {
+        self.clean_audio.cancelled.retain(|(cancelled, _)| *cancelled != id);
+        let Some(running) = self.clean_audio.running.take_if(|running| running.id == id) else { return };
+        match result {
+            Ok(result) => {
+                if let Some(measured) = result.applied {
+                    self.clean_audio.applied = Some((running.settings, measured));
+                }
+                self.clean_audio.done = Some((running.key, running.settings, result));
+            }
+            Err(error) => {
+                if error != "cancelled" && self.clean_audio.wanted.as_ref().is_some_and(|wanted| wanted.key == running.key) {
+                    self.clean_audio.failed = running.key;
+                    self.clean_audio.error = error;
+                    self.emit(Effect::CleanAudioChanged);
+                }
             }
         }
-        // Switches to the file, or asks for the one the settings want now.
+        // Switches to the files, or asks for the ones the edit wants now.
         self.refresh_clean_audio();
     }
 
-    /// Stops a job making cleaned sound (when the settings moved on, or the editor closes).
+    fn cancel_running_clean_audio(&mut self) {
+        if let Some(running) = self.clean_audio.running.take() {
+            running.cancel.store(true, Ordering::SeqCst);
+            self.clean_audio.cancelled.push((running.id, running.cancel));
+        }
+    }
+
+    /// Stops every job making cleaned sound (when the editor closes).
     pub fn cancel_clean_audio(&mut self) {
-        if let Some(cancel) = self.clean_audio.cancel.take() {
+        self.cancel_running_clean_audio();
+        for (_, cancel) in &self.clean_audio.cancelled {
             cancel.store(true, Ordering::SeqCst);
         }
-        self.clean_audio.running.clear();
     }
 }

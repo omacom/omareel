@@ -3,21 +3,25 @@
 //!
 //! Noise suppression is RNNoise, through ffmpeg's `arnndn`, with GregorR's "somnolent-hogwash"
 //! model (speech in a recording environment: fans, air conditioning, computers), built into
-//! the binary and written next to the export's other temporary files when a filter needs it.
-//! On synthetic noisy speech it lowered the noise floor by 11-20 dB where `afftdn` managed 0-2
-//! dB at any setting (docs/USAGE.md has the numbers); `anlmdn` corrupts the heap in ffmpeg 9.0.
+//! the binary and written to a directory private to the user ([`default_model_directory`]) when
+//! a filter needs it. On synthetic noisy speech it lowered the noise floor by 11-20 dB where
+//! `afftdn` managed 0-2 dB at any setting (docs/USAGE.md has the numbers); `anlmdn` corrupts the
+//! heap in ffmpeg 9.0. It runs over the recording's whole sound once, before the clips cut it.
 //!
-//! Loudness normalisation is two-pass: [`loudness_measure_filter`] measures the finished mix,
-//! and [`loudness_apply_filter`] applies the gain that brings it to the target, linearly when
-//! the gain keeps the true peak under [`TRUE_PEAK`], otherwise with loudnorm's limiter.
+//! Loudness normalisation is two-pass: [`loudness_measure_filter`] measures the program (the
+//! clips' joined sound, before the volume and the click sound), and [`loudness_apply_filter`]
+//! applies the gain that brings it to the target, linearly when the gain keeps the true peak
+//! under [`TRUE_PEAK`], otherwise with loudnorm's limiter. The volume trims after it.
 //!
-//! Export puts both into its audio graph; the editor renders the cleaned recording to a cache
-//! file ([`CleanAudioJob`]) that the preview plays instead of the recording's own sound.
+//! Export puts both into its audio graph; the editor renders the cleaned sound of the recording
+//! and of inserted videos to cache files ([`CleanAudioJob`]) that the preview plays in place of
+//! their own, measured the way export measures.
 
 use crate::compat::qdir::{self, FileInfo};
 use crate::compat::qjson;
 use crate::compat::qnumber::number_f64;
 use crate::compat::qprocess::{Process, ProcessState};
+use crate::compat::qstandardpaths::{self, Location};
 use crate::compat::{qfile, qsavefile, qstring};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -58,34 +62,70 @@ pub fn escape_filter_value(value: &str) -> String {
     graph
 }
 
-/// Writes [`MODEL`] into `directory` (once per model: the name carries its hash) and returns its
-/// path.
+/// Writes [`MODEL`] into `directory`, a private one ([`private_directory`]), and returns its
+/// path. A file already there is used only when it holds exactly the model (its name carries
+/// the model's hash); anything else in its place is replaced.
 pub fn model_file(directory: &str) -> Result<String, String> {
+    let failed = |error: String| format!("Could not prepare noise reduction: {error}");
+    private_directory(directory).map_err(failed)?;
     let name = format!("omareel-rnnoise-{}.rnnn", &qdir::sha256_hex(MODEL)[..12]);
     let path = qdir::file_path(directory, &name);
-    if FileInfo::new(&path).size() == MODEL.len() as i64 {
+    if FileInfo::new(&path).size() == MODEL.len() as i64 && qfile::read_all(&path).is_ok_and(|bytes| bytes == MODEL) {
         return Ok(path);
     }
-    qdir::mkpath(directory);
-    qsavefile::save(&path, MODEL).map_err(|error| format!("Could not prepare noise reduction: {error}"))?;
+    qsavefile::save(&path, MODEL).map_err(|error| failed(error.to_string()))?;
     Ok(path)
 }
 
-/// Where [`model_file`] puts the model by default: the runtime directory, or the temporary one.
-pub fn default_model_directory() -> String {
-    match qdir::env_var("XDG_RUNTIME_DIR") {
-        Some(runtime) if !runtime.is_empty() && FileInfo::new(&runtime).is_writable() => runtime,
-        _ => qdir::temp_path(),
+/// Makes sure `directory` exists, belongs to this user and only this user can use it (0700):
+/// created that way, or an existing one of ours tightened to it. Another user's directory, or
+/// one others may write to that cannot be tightened, is refused.
+pub fn private_directory(directory: &str) -> Result<(), String> {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    let path = std::path::Path::new(directory);
+    if !path.is_dir() {
+        std::fs::create_dir_all(path).map_err(|error| format!("{directory}: {error}"))?;
     }
+    // Not through a symlink someone else could point elsewhere.
+    let metadata = std::fs::symlink_metadata(path).map_err(|error| format!("{directory}: {error}"))?;
+    // SAFETY: geteuid has no failure mode.
+    let me = unsafe { libc::geteuid() };
+    if !metadata.is_dir() || metadata.uid() != me {
+        return Err(format!("{directory} is not a directory of this user's"));
+    }
+    if metadata.mode() & 0o077 != 0 {
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
+            .map_err(|error| format!("{directory}: {error}"))?;
+    }
+    Ok(())
+}
+
+/// Where [`model_file`] puts the model by default: the runtime directory (private to the user
+/// by the XDG specification) when it is one of the user's own, otherwise `omareel` in the
+/// user's cache directory (~/.cache/omareel), made private. Never a shared temporary directory.
+pub fn default_model_directory() -> String {
+    use std::os::unix::fs::MetadataExt;
+    if let Some(runtime) = qdir::env_var("XDG_RUNTIME_DIR").filter(|runtime| !runtime.is_empty()) {
+        // SAFETY: geteuid has no failure mode.
+        let me = unsafe { libc::geteuid() };
+        let private = std::fs::symlink_metadata(&runtime)
+            .is_ok_and(|metadata| metadata.is_dir() && metadata.uid() == me && metadata.mode() & 0o022 == 0);
+        if private {
+            return runtime;
+        }
+    }
+    qdir::file_path(&qstandardpaths::writable_location(Location::GenericCache), "omareel")
 }
 
 /// The noise suppression filter for 48 kHz audio: RNNoise with the model at `model_path`, its
 /// result mixed with the original by `strength` (1: all denoised). arnndn's output runs one
-/// 10 ms frame (480 samples) late, wet and dry alike; the trim takes that back, so the sound
-/// stays on the picture.
+/// 10 ms frame (480 samples) late, wet and dry alike, and it does not flush that frame at the
+/// end: 480 samples of padding push the last real ones out, and the trim takes the delay back,
+/// so the sound keeps its length and stays on the picture. It is for a whole recording, once
+/// ([`crate::export::plan::audio_inputs`]): a denoiser per clip would lose 10 ms at every cut.
 pub fn denoise_filter(model_path: &str, strength: f64) -> String {
     format!(
-        "arnndn=m={}:mix={},atrim=start_sample=480,asetpts=PTS-STARTPTS",
+        "apad=pad_len=480,arnndn=m={}:mix={},atrim=start_sample=480,asetpts=PTS-STARTPTS",
         escape_filter_value(model_path),
         number_f64(strength, 'g', 6)
     )
@@ -134,7 +174,12 @@ pub fn parse_loudnorm(log: &str) -> Option<LoudnessMeasurement> {
 }
 
 /// The second pass: loudnorm with the first pass's measurement, back at 48 kHz (loudnorm works
-/// at 192 kHz). `None` for silence, which is left alone.
+/// at 192 kHz). When the gain alone would pass the true peak loudnorm turns dynamic, and then
+/// stamps its output frames with times that run slow (0.02 s for each 0.1 s frame): an encoder
+/// downstream of a mix makes them one-sample packets, misplacing the sound. The timestamps are
+/// counted again from the samples. The format is pinned to the clips' (48 kHz float stereo):
+/// otherwise the mix with the mono click sound after it negotiates the whole export down to
+/// mono. `None` for silence, which is left alone.
 pub fn loudness_apply_filter(target: f64, measured: &LoudnessMeasurement) -> Option<String> {
     if !measured.integrated.is_finite() || measured.integrated < SILENCE_LUFS {
         return None;
@@ -143,7 +188,7 @@ pub fn loudness_apply_filter(target: f64, measured: &LoudnessMeasurement) -> Opt
     // loudnorm only stays linear when the range it aims for is at least the measured one.
     let range = measured.range.clamp(LOUDNESS_RANGE, 50.0).max(LOUDNESS_RANGE);
     Some(format!(
-        "loudnorm=I={}:TP={}:LRA={}:measured_I={}:measured_TP={}:measured_LRA={}:measured_thresh={}:offset={}:linear=true:print_format=none,aresample=48000",
+        "loudnorm=I={}:TP={}:LRA={}:measured_I={}:measured_TP={}:measured_LRA={}:measured_thresh={}:offset={}:linear=true:print_format=none,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,asetpts=N/SR/TB",
         number_f64(target, 'g', 6),
         number_f64(TRUE_PEAK, 'g', 6),
         number(range, 1.0, 50.0),
@@ -210,16 +255,14 @@ pub struct CleanSettings {
 }
 
 impl CleanSettings {
-    /// The cache file's name for the recording `fingerprint`
-    /// ([`crate::editor::video_fingerprint`]): it changes with the settings and the model.
-    pub fn cache_name(&self, fingerprint: &str) -> String {
-        let key = format!(
-            "v1|{}|{}|{}",
+    /// What identifies these settings in cache keys: they and the model.
+    pub fn key(&self) -> String {
+        format!(
+            "v2|{}|{}|{}",
             self.denoise.map_or("off".into(), |strength| number_f64(strength, 'g', 6)),
             self.loudness.map_or("off".into(), |target| number_f64(target, 'g', 6)),
             &qdir::sha256_hex(MODEL)[..12]
-        );
-        format!("{fingerprint}-{}.m4a", &qdir::sha256_hex(key.as_bytes())[..12])
+        )
     }
 }
 
@@ -228,118 +271,290 @@ pub fn cache_directory(cache_location: &str) -> String {
     qdir::file_path(cache_location, "audio-cleanup")
 }
 
-/// How many cleaned versions of one recording stay cached, so switching back is instant.
-const KEEP_PER_RECORDING: usize = 3;
+/// A cache file's name: the fingerprint of the file it was made from
+/// ([`crate::editor::video_fingerprint`]), `-`, a hash of how, and `suffix`.
+fn cache_name(fingerprint: &str, how: &str, suffix: &str) -> String {
+    format!("{fingerprint}-{}{suffix}", &qdir::sha256_hex(how.as_bytes())[..16])
+}
 
-/// Renders a recording's sound, cleaned, to an AAC file on the recording's timeline (time 0 is
-/// the recording's start, as the screen player counts it) for the editor's preview. It runs
-/// ffmpeg at a low priority, measuring the loudness first when it normalises; the measurement
-/// covers the whole recording, where export measures the edited mix, so the two can differ by
-/// a little when edits remove much louder or quieter parts.
+/// How many cleaned versions of one file stay cached, so switching back is instant.
+const KEEP_PER_FILE: usize = 3;
+/// How many loudness measurements of one recording stay cached (a few bytes each).
+const KEEP_MEASUREMENTS_PER_FILE: usize = 50;
+/// A cache entry unused this long goes.
+const CACHE_MAX_AGE: std::time::Duration = std::time::Duration::from_secs(30 * 24 * 3600);
+/// The cache stays under this size, the least recently used entries going first.
+const CACHE_MAX_BYTES: u64 = 2 << 30;
+/// A partial file nobody wrote to this long is a crashed render's leftover.
+const PART_MAX_AGE: std::time::Duration = std::time::Duration::from_secs(3600);
+
+/// The edited program's sound, as export joins it ([`crate::export::plan::audio_inputs`]): what
+/// loudness normalisation measures, so the preview normalises with the gain the export will.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ProgramSound {
+    pub clips: Vec<crate::project::Clip>,
+    /// The inserted videos (bundle-relative paths) that have sound.
+    pub insert_audio: Vec<String>,
+    /// The recording's sound is in the program (`audio.desktop` or `audio.mic`).
+    pub use_source_audio: bool,
+}
+
+impl ProgramSound {
+    /// The measuring pass's filter graph and inputs (from input 0), denoising with `denoise`.
+    pub fn measure_graph(&self, bundle: &str, video_path: &str, denoise: Option<&str>, target: f64) -> Option<(Vec<String>, String)> {
+        let has_audio = |media: &str| self.insert_audio.iter().any(|path| path == media);
+        let sources = crate::export::plan::audio_inputs(&self.clips, &has_audio, self.use_source_audio, bundle, video_path, 0, denoise);
+        if sources.segments.is_empty() {
+            return None;
+        }
+        let filter =
+            crate::export::plan::program_measure_filter(&sources.prelude, &sources.segments, &loudness_measure_filter(target));
+        Some((sources.arguments, filter))
+    }
+}
+
+/// One inserted video whose sound the preview plays cleaned.
+#[derive(Clone, Debug, PartialEq)]
+pub struct InsertSound {
+    /// Its bundle-relative path, as clips name it.
+    pub media: String,
+    pub fingerprint: String,
+}
+
+/// What a [`CleanAudioJob`] made: the files the preview plays in place of the recording's and
+/// the inserted videos' own sound (empty or missing: their own), and the loudness it applied.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct CleanAudioResult {
+    pub recording: String,
+    /// (bundle-relative path, cleaned file) of each inserted video.
+    pub inserts: Vec<(String, String)>,
+    /// The measurement the normalisation used; `None` without normalisation or sound.
+    pub applied: Option<LoudnessMeasurement>,
+}
+
+/// Two measurements this close normalise alike to the ear (well under 1 dB apart): the preview
+/// keeps the files it has instead of making them again after every small edit.
+pub fn close_enough(a: &LoudnessMeasurement, b: &LoudnessMeasurement) -> bool {
+    (a.integrated - b.integrated).abs() <= 0.5
+        && (a.true_peak - b.true_peak).abs() <= 0.5
+        && (a.range - b.range).abs() <= 1.0
+        && (a.threshold - b.threshold).abs() <= 1.0
+}
+
+/// Makes the preview's cleaned sound at a low priority: the recording's, denoised (as one
+/// continuous stream, like export) and normalised, and, when normalising, each inserted video's
+/// with the same gain. The gain comes from measuring the edited program, exactly as export's
+/// measuring pass does, so the preview and the export agree; the measurement is cached.
 #[derive(Clone, Debug)]
 pub struct CleanAudioJob {
+    /// Tells this job from any other, finished ones included.
+    pub id: u64,
+    pub bundle: String,
     pub video_path: String,
-    /// The finished file; written next to it first, then renamed.
-    pub output_path: String,
+    /// The recording's [`crate::editor::video_fingerprint`].
+    pub fingerprint: String,
+    pub cache_directory: String,
     pub settings: CleanSettings,
-    /// The recording's length in seconds, for progress.
-    pub duration: f64,
+    /// The program to measure when normalising.
+    pub program: ProgramSound,
+    pub inserts: Vec<InsertSound>,
+    /// What the files playing now were normalised with: used again when the program measures
+    /// [`close_enough`] to it.
+    pub previous: Option<LoudnessMeasurement>,
     pub cancelled: Arc<AtomicBool>,
 }
 
 impl CleanAudioJob {
-    /// The source chain: the recording's first audio track on its own timeline, at 48 kHz
-    /// stereo, denoised when asked.
-    fn chain(&self, model: Option<&str>, start: f64) -> String {
-        let mut chain = format!(
-            "[0:a:0]asetpts=PTS-{}/TB,aresample=48000:async=1:first_pts=0,aformat=sample_fmts=fltp:channel_layouts=stereo",
-            number_f64(start, 'f', 6)
-        );
-        if let (Some(strength), Some(model)) = (self.settings.denoise, model) {
-            chain += ",";
-            chain += &denoise_filter(model, strength);
-        }
-        chain
-    }
-
-    /// Makes the file; `Err("cancelled")` when cancelled.
-    pub fn run(&self) -> Result<String, String> {
-        let directory = FileInfo::new(&self.output_path).absolute_path();
-        qdir::mkpath(&directory);
+    /// Makes the files; `Err("cancelled")` when cancelled. Files already made are used again
+    /// (and count as used, for the cache's eviction).
+    pub fn run(&self) -> Result<CleanAudioResult, String> {
+        let directory = &self.cache_directory;
+        private_directory(directory)?;
         let model = match self.settings.denoise {
-            Some(_) => Some(model_file(&directory)?),
+            Some(_) => Some(model_file(&default_model_directory())?),
             None => None,
         };
-        let start = container_start(&self.video_path);
-        let mut chain = self.chain(model.as_deref(), start);
-        let base: Vec<String> = ["-n", "10", "ffmpeg", "-hide_banner", "-nostdin", "-nostats", "-progress", "pipe:1"]
-            .map(String::from)
-            .into();
+        let denoise = self.settings.denoise.zip(model.as_deref()).map(|(strength, model)| denoise_filter(model, strength));
+        let mut result = CleanAudioResult::default();
+        let mut apply = None;
         if let Some(target) = self.settings.loudness {
-            let mut args = base.clone();
-            args.extend(["-v".into(), "info".into(), "-i".into(), self.video_path.clone(), "-filter_complex".into()]);
-            args.push(format!("{chain},{}[a]", loudness_measure_filter(target)));
-            args.extend(["-map", "[a]", "-f", "null", "-"].map(String::from));
-            let log = run_ffmpeg("nice", &args, self.duration, &self.cancelled, &mut |_| {})?;
-            let measured = parse_loudnorm(&log).ok_or("Could not measure the loudness")?;
-            if let Some(apply) = loudness_apply_filter(target, &measured) {
-                chain = format!("{chain},{apply}");
+            if let Some(measured) = self.measure(target, denoise.as_deref())? {
+                let applied = match self.previous {
+                    Some(previous) if close_enough(&previous, &measured) => previous,
+                    _ => measured,
+                };
+                apply = loudness_apply_filter(target, &applied);
+                result.applied = apply.is_some().then_some(applied);
             }
         }
-        let partial = format!("{}.part.m4a", self.output_path);
-        let mut args = base;
-        args.extend(["-v".into(), "error".into(), "-y".into(), "-i".into(), self.video_path.clone(), "-filter_complex".into()]);
-        args.push(format!("{chain}[a]"));
+        let chain = |source: &str, cleanup: &[Option<&str>]| {
+            let cleanup: Vec<&str> = cleanup.iter().flatten().copied().collect();
+            crate::export::plan::recording_audio_chain(source, &cleanup.join(","))
+                .trim_end_matches(',')
+                .to_owned()
+        };
+        if denoise.is_some() || apply.is_some() {
+            let how = format!("recording|{}|{}", self.settings.key(), apply.as_deref().unwrap_or(""));
+            let output = qdir::file_path(directory, &cache_name(&self.fingerprint, &how, ".m4a"));
+            self.render(&self.video_path, &chain("[0:a:0]", &[denoise.as_deref(), apply.as_deref()]), &output)?;
+            result.recording = output;
+        }
+        if let Some(apply) = &apply {
+            for insert in &self.inserts {
+                let how = format!("insert|{apply}");
+                let output = qdir::file_path(directory, &cache_name(&insert.fingerprint, &how, ".m4a"));
+                let source = qdir::file_path(&self.bundle, &insert.media);
+                self.render(&source, &chain("[0:a:0]", &[Some(apply)]), &output)?;
+                result.inserts.push((insert.media.clone(), output));
+            }
+        }
+        let mut keep: Vec<String> = result.inserts.iter().map(|(_, path)| path.clone()).collect();
+        keep.push(result.recording.clone());
+        prune_cache(directory, &keep);
+        Ok(result)
+    }
+
+    /// The program's loudness, from the cache or measured (and cached); `None` when it has
+    /// no sound.
+    fn measure(&self, target: f64, denoise: Option<&str>) -> Result<Option<LoudnessMeasurement>, String> {
+        let Some((inputs, filter)) = self.program.measure_graph(&self.bundle, &self.video_path, denoise, target) else {
+            return Ok(None);
+        };
+        // The graph names the model's path and the inserts' paths, and the fingerprints say
+        // whether the files changed.
+        let fingerprints: Vec<&str> = self.inserts.iter().map(|insert| insert.fingerprint.as_str()).collect();
+        let how = format!("measure|{}|{filter}|{}", self.settings.key(), fingerprints.join(","));
+        let cached = qdir::file_path(&self.cache_directory, &cache_name(&self.fingerprint, &how, ".loudness.json"));
+        if let Some(measured) = qfile::read_all(&cached).ok().and_then(|bytes| parse_loudnorm(&qstring::from_utf8(&bytes))) {
+            touch(&cached);
+            return Ok(Some(measured));
+        }
+        let mut args: Vec<String> =
+            ["-n", "10", "ffmpeg", "-hide_banner", "-nostdin", "-nostats", "-v", "info"].map(String::from).into();
+        args.extend(inputs);
+        args.extend(["-filter_complex".into(), filter, "-map".into(), "[aout]".into(), "-f".into(), "null".into(), "-".into()]);
+        let log = run_ffmpeg("nice", &args, 0.0, &self.cancelled, &mut |_| {})?;
+        let measured = parse_loudnorm(&log).ok_or("Could not measure the loudness")?;
+        // The report as loudnorm wrote it, for parse_loudnorm to read back.
+        let report = format!(
+            "{{\"input_i\" : \"{}\", \"input_tp\" : \"{}\", \"input_lra\" : \"{}\", \"input_thresh\" : \"{}\", \"target_offset\" : \"{}\"}}\n",
+            measured.integrated, measured.true_peak, measured.range, measured.threshold, measured.offset
+        );
+        let _ = qsavefile::save(&cached, report.as_bytes());
+        Ok(Some(measured))
+    }
+
+    /// Renders `input`'s first audio track through `chain` to `output` (AAC), unless it is
+    /// there already. The render goes to a partial file of this job's own, renamed into place
+    /// only when the job is still wanted, so jobs for the same file never share one.
+    fn render(&self, input: &str, chain: &str, output: &str) -> Result<(), String> {
+        if FileInfo::new(output).is_file() {
+            touch(output);
+            return Ok(());
+        }
+        let partial = format!("{output}.{}-{}.part.m4a", self.id, &crate::editor::random_uuid()[..8]);
+        let mut args: Vec<String> =
+            ["-n", "10", "ffmpeg", "-hide_banner", "-nostdin", "-nostats", "-v", "error", "-n", "-i"].map(String::from).into();
+        args.push(input.to_owned());
+        args.extend(["-filter_complex".into(), format!("{chain}[a]")]);
         args.extend(["-map", "[a]", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart"].map(String::from));
         args.push(partial.clone());
-        let result = run_ffmpeg("nice", &args, self.duration, &self.cancelled, &mut |_| {});
+        let result = run_ffmpeg("nice", &args, 0.0, &self.cancelled, &mut |_| {});
+        if self.cancelled.load(Ordering::SeqCst) {
+            qfile::remove(&partial);
+            return Err("cancelled".into());
+        }
         if let Err(error) = result {
             qfile::remove(&partial);
             return Err(error);
         }
-        qfile::remove(&self.output_path);
-        if !qfile::rename(&partial, &self.output_path) {
+        if std::fs::rename(&partial, output).is_err() {
             qfile::remove(&partial);
             return Err("Could not keep the cleaned audio".into());
         }
-        prune_cache(&directory, &self.output_path);
-        Ok(self.output_path.clone())
+        Ok(())
     }
 }
 
-/// The container's start time in seconds (where the screen player's 0 is), 0 when unknown.
-fn container_start(path: &str) -> f64 {
-    let Some(probe) = crate::compat::qprocess::run(
-        "ffprobe",
-        &["-v", "error", "-show_entries", "format=start_time", "-of", "csv=p=0", path],
-        15000,
-    ) else {
-        return 0.0;
-    };
-    let start = String::from_utf8_lossy(&probe.stdout).trim().parse::<f64>().unwrap_or(0.0);
-    if start.is_finite() { start } else { 0.0 }
+/// Marks a cache entry as just used: eviction goes by when entries were last used.
+fn touch(path: &str) {
+    if let Ok(file) = std::fs::File::options().append(true).open(path) {
+        let _ = file.set_modified(std::time::SystemTime::now());
+    }
 }
 
-/// Keeps the newest [`KEEP_PER_RECORDING`] files of `kept`'s recording (its name up to the first
-/// `-`), `kept` among them, and removes leftovers of interrupted renders.
-fn prune_cache(directory: &str, kept: &str) {
-    let kept_name = FileInfo::new(kept).file_name();
-    let Some(prefix) = kept_name.split('-').next().map(|p| format!("{p}-")) else { return };
+/// Keeps the cache in bounds; `keep` (the files just made or used) always stays. Removes
+/// partial files nobody has written to for an hour (a crashed render's), anything unused for
+/// [`CACHE_MAX_AGE`], all but the newest [`KEEP_PER_FILE`] cleaned versions of each file (and
+/// [`KEEP_MEASUREMENTS_PER_FILE`] measurements), then the least recently used entries until the
+/// whole is under [`CACHE_MAX_BYTES`]. Other recordings' entries count too: a deleted
+/// recording's go by age and size.
+pub fn prune_cache(directory: &str, keep: &[String]) {
+    prune_cache_at(directory, keep, std::time::SystemTime::now(), CACHE_MAX_BYTES)
+}
+
+fn prune_cache_at(directory: &str, keep: &[String], now: std::time::SystemTime, max_bytes: u64) {
     let Ok(entries) = std::fs::read_dir(directory) else { return };
-    let mut siblings: Vec<(std::time::SystemTime, std::path::PathBuf)> = Vec::new();
+    let kept: Vec<String> = keep.iter().filter(|path| !path.is_empty()).map(|path| FileInfo::new(path).file_name()).collect();
+    let age = |modified: std::time::SystemTime| now.duration_since(modified).unwrap_or_default();
+    // (last used, size, path, name) of each entry that may go.
+    let mut candidates: Vec<(std::time::SystemTime, u64, std::path::PathBuf, String)> = Vec::new();
+    let mut total = 0u64;
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
-        if !name.starts_with(&prefix) || name == kept_name {
+        let Ok(metadata) = entry.metadata() else { continue };
+        if !metadata.is_file() {
             continue;
         }
+        let modified = metadata.modified().unwrap_or(std::time::UNIX_EPOCH);
         if name.ends_with(".part.m4a") {
+            if age(modified) > PART_MAX_AGE {
+                let _ = std::fs::remove_file(entry.path());
+            } else {
+                total += metadata.len();
+            }
             continue;
         }
-        let modified = entry.metadata().and_then(|m| m.modified()).unwrap_or(std::time::UNIX_EPOCH);
-        siblings.push((modified, entry.path()));
+        if !name.ends_with(".m4a") && !name.ends_with(".loudness.json") {
+            continue;
+        }
+        if !kept.contains(&name) && age(modified) > CACHE_MAX_AGE {
+            let _ = std::fs::remove_file(entry.path());
+            continue;
+        }
+        total += metadata.len();
+        if !kept.contains(&name) {
+            candidates.push((modified, metadata.len(), entry.path(), name));
+        }
     }
-    siblings.sort_by(|a, b| b.0.cmp(&a.0));
-    for (_, path) in siblings.into_iter().skip(KEEP_PER_RECORDING - 1) {
+    // Newest first; per file (the fingerprint before the first '-') and kind, all but the
+    // newest few go, counting the kept ones.
+    candidates.sort_by(|a, b| b.0.cmp(&a.0));
+    let group = |name: &str| {
+        let fingerprint = name.split('-').next().unwrap_or("").to_owned();
+        (fingerprint, name.ends_with(".loudness.json"))
+    };
+    let mut counts: std::collections::HashMap<(String, bool), usize> = std::collections::HashMap::new();
+    for name in &kept {
+        *counts.entry(group(name)).or_default() += 1;
+    }
+    let mut remaining = Vec::new();
+    for candidate in candidates {
+        let key = group(&candidate.3);
+        let limit = if key.1 { KEEP_MEASUREMENTS_PER_FILE } else { KEEP_PER_FILE };
+        let count = counts.entry(key).or_default();
+        *count += 1;
+        if *count > limit {
+            total -= candidate.1;
+            let _ = std::fs::remove_file(&candidate.2);
+        } else {
+            remaining.push(candidate);
+        }
+    }
+    // Over the size limit: the least recently used first.
+    while total > max_bytes {
+        let Some((_, size, path, _)) = remaining.pop() else { break };
+        total -= size;
         let _ = std::fs::remove_file(path);
     }
 }
@@ -361,16 +576,17 @@ mod tests {
     fn filter_strings() {
         assert_eq!(
             denoise_filter("/run/m.rnnn", 0.85),
-            "arnndn=m=/run/m.rnnn:mix=0.85,atrim=start_sample=480,asetpts=PTS-STARTPTS"
+            "apad=pad_len=480,arnndn=m=/run/m.rnnn:mix=0.85,atrim=start_sample=480,asetpts=PTS-STARTPTS"
         );
-        assert!(denoise_filter("/run/m.rnnn", 1.0).starts_with("arnndn=m=/run/m.rnnn:mix=1,"));
+        assert!(denoise_filter("/run/m.rnnn", 1.0).contains(",arnndn=m=/run/m.rnnn:mix=1,"));
         assert_eq!(loudness_measure_filter(-16.0), "loudnorm=I=-16:TP=-2:LRA=11:print_format=json");
         let measured =
             LoudnessMeasurement { integrated: -27.61, true_peak: -4.47, range: 18.06, threshold: -39.2, offset: 0.58 };
         assert_eq!(
             loudness_apply_filter(-14.0, &measured).unwrap(),
             "loudnorm=I=-14:TP=-2:LRA=18.06:measured_I=-27.61:measured_TP=-4.47:measured_LRA=18.06:\
-             measured_thresh=-39.20:offset=0.58:linear=true:print_format=none,aresample=48000"
+             measured_thresh=-39.20:offset=0.58:linear=true:print_format=none,aresample=48000,\
+             aformat=sample_fmts=fltp:channel_layouts=stereo,asetpts=N/SR/TB"
         );
         let narrow = LoudnessMeasurement { range: 4.0, ..measured };
         assert!(loudness_apply_filter(-16.0, &narrow).unwrap().contains(":LRA=11.00:"));
@@ -394,12 +610,93 @@ mod tests {
     }
 
     #[test]
-    fn cache_names_follow_the_settings() {
+    fn cache_keys_follow_the_settings() {
         let a = CleanSettings { denoise: Some(0.85), loudness: None };
         let b = CleanSettings { denoise: Some(0.85), loudness: Some(-16.0) };
-        assert_ne!(a.cache_name("f00d"), b.cache_name("f00d"));
-        assert_eq!(a.cache_name("f00d"), a.cache_name("f00d"));
-        assert!(a.cache_name("f00d").starts_with("f00d-") && a.cache_name("f00d").ends_with(".m4a"));
+        assert_ne!(a.key(), b.key());
+        assert_eq!(a.key(), a.key());
+        assert!(cache_name("f00d", &a.key(), ".m4a").starts_with("f00d-"));
+        assert_ne!(cache_name("f00d", &a.key(), ".m4a"), cache_name("f00d", &b.key(), ".m4a"));
+    }
+
+    #[test]
+    fn the_model_goes_to_a_private_directory_and_is_checked_before_use() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("omareel-model-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let models = dir.join("cache/omareel").to_string_lossy().into_owned();
+        let path = model_file(&models).unwrap();
+        let mode = |path: &str| std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(&models), 0o700);
+        assert_eq!(std::fs::read(&path).unwrap(), MODEL);
+        // Something else of the same size in its place is replaced, not used.
+        let mut forged = MODEL.to_vec();
+        forged[100] ^= 0xff;
+        std::fs::write(&path, &forged).unwrap();
+        assert_eq!(model_file(&models).unwrap(), path);
+        assert_eq!(std::fs::read(&path).unwrap(), MODEL);
+        // A directory of ours others could use is closed to them.
+        std::fs::set_permissions(&models, std::fs::Permissions::from_mode(0o777)).unwrap();
+        model_file(&models).unwrap();
+        assert_eq!(mode(&models), 0o700);
+        // The default: never the shared temporary directory.
+        let default = default_model_directory();
+        assert!(!default.starts_with(&qdir::temp_path()) || default == qdir::env_var("XDG_RUNTIME_DIR").unwrap_or_default(),
+                "{default}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn the_cache_stays_in_bounds() {
+        use std::time::{Duration, SystemTime};
+        let dir = std::env::temp_dir().join(format!("omareel-clean-cache-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let now = SystemTime::now();
+        let make = |name: &str, bytes: usize, age_hours: u64| {
+            let path = dir.join(name);
+            std::fs::write(&path, vec![0u8; bytes]).unwrap();
+            let file = std::fs::File::options().append(true).open(&path).unwrap();
+            file.set_modified(now - Duration::from_secs(age_hours * 3600)).unwrap();
+            path.to_string_lossy().into_owned()
+        };
+        let exists = |name: &str| dir.join(name).exists();
+        // An interrupted render's leftover goes; one being written stays.
+        make("aaaa-1.m4a.7-x.part.m4a", 10, 2);
+        make("aaaa-2.m4a.8-y.part.m4a", 10, 0);
+        // Another recording, deleted long ago: unused for 40 days.
+        make("dead-1.m4a", 10, 40 * 24);
+        make("dead-1.loudness.json", 10, 40 * 24);
+        // This recording: the kept one and the newest two others stay.
+        let kept = make("aaaa-0.m4a", 10, 5);
+        for (i, age) in [1, 2, 3, 4].iter().enumerate() {
+            make(&format!("aaaa-{}.m4a", i + 1), 10, *age);
+        }
+        make("aaaa-9.loudness.json", 10, 1);
+        // Two other recordings, used recently.
+        make("bbbb-1.m4a", 100, 6);
+        make("cccc-1.m4a", 100, 7);
+        // Not the cache's: left alone.
+        make("notes.txt", 10, 50 * 24);
+        let dir_path = dir.to_string_lossy().into_owned();
+        prune_cache_at(&dir_path, std::slice::from_ref(&kept), now, 1 << 20);
+        assert!(!exists("aaaa-1.m4a.7-x.part.m4a") && exists("aaaa-2.m4a.8-y.part.m4a"));
+        assert!(!exists("dead-1.m4a") && !exists("dead-1.loudness.json"));
+        assert!(exists("aaaa-0.m4a") && exists("aaaa-1.m4a") && exists("aaaa-2.m4a"));
+        assert!(!exists("aaaa-3.m4a") && !exists("aaaa-4.m4a"));
+        assert!(exists("aaaa-9.loudness.json") && exists("bbbb-1.m4a") && exists("cccc-1.m4a") && exists("notes.txt"));
+        // Over the size limit: the least recently used go first, never the kept one.
+        prune_cache_at(&dir_path, std::slice::from_ref(&kept), now, 140);
+        assert!(!exists("cccc-1.m4a") && !exists("bbbb-1.m4a"), "the oldest two");
+        assert!(exists("aaaa-0.m4a") && exists("aaaa-1.m4a"));
+        prune_cache_at(&dir_path, std::slice::from_ref(&kept), now, 0);
+        assert!(exists("aaaa-0.m4a") && exists("aaaa-2.m4a.8-y.part.m4a"));
+        assert!(!exists("aaaa-1.m4a") && !exists("aaaa-9.loudness.json"));
+        // Using an entry makes it the newest.
+        touch(&kept);
+        let modified = std::fs::metadata(&kept).unwrap().modified().unwrap();
+        assert!(now.duration_since(modified).unwrap_or_default() < Duration::from_secs(60));
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     fn have_ffmpeg() -> bool {
@@ -472,6 +769,38 @@ mod tests {
         (path, espeak)
     }
 
+    /// A job for the recording `video` (whole, one clip) in `dir`, with `settings`.
+    fn job(dir: &std::path::Path, video: &str, duration: f64, settings: CleanSettings) -> CleanAudioJob {
+        CleanAudioJob {
+            id: 1,
+            bundle: dir.to_string_lossy().into_owned(),
+            video_path: video.to_owned(),
+            fingerprint: crate::editor::video_fingerprint(video),
+            cache_directory: dir.join("cache").to_string_lossy().into_owned(),
+            settings,
+            program: ProgramSound {
+                clips: vec![crate::project::Clip { id: "c".into(), in_: 0.0, out: duration, speed: 1.0, ..Default::default() }],
+                insert_audio: Vec::new(),
+                use_source_audio: true,
+            },
+            inserts: Vec::new(),
+            previous: None,
+            cancelled: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    fn duration_of(path: &str) -> f64 {
+        let probe = crate::compat::qprocess::run(
+            "ffprobe", &["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path], 15000).unwrap();
+        String::from_utf8_lossy(&probe.stdout).trim().parse().unwrap()
+    }
+
+    fn leftovers(dir: &std::path::Path) -> Vec<String> {
+        std::fs::read_dir(dir.join("cache"))
+            .map(|entries| entries.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).filter(|n| n.contains(".part")).collect())
+            .unwrap_or_default()
+    }
+
     #[test]
     fn denoising_lowers_the_noise_floor() {
         if !have_ffmpeg() {
@@ -481,15 +810,11 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("omareel-denoise-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let (video, speech) = noisy_recording(&dir);
-        let output = dir.join("clean.m4a").to_string_lossy().into_owned();
-        let job = CleanAudioJob {
-            video_path: video.clone(),
-            output_path: output.clone(),
-            settings: CleanSettings { denoise: Some(0.85), loudness: None },
-            duration: 12.0,
-            cancelled: Arc::new(AtomicBool::new(false)),
-        };
-        assert_eq!(job.run(), Ok(output.clone()));
+        let job = job(&dir, &video, 12.0, CleanSettings { denoise: Some(0.85), loudness: None });
+        let result = job.run().unwrap();
+        let output = result.recording.clone();
+        assert!(output.starts_with(&job.cache_directory) && FileInfo::new(&output).is_file());
+        assert_eq!(result.applied, None);
         // The noise alone (0.2-1.8 s) and the voice over it (3-8 s), before and after.
         let (noise_before, noise_after) = (rms_db(&video, 0.2, 1.8), rms_db(&output, 0.2, 1.8));
         let (voice_before, voice_after) = (rms_db(&video, 3.0, 8.0), rms_db(&output, 3.0, 8.0));
@@ -499,21 +824,104 @@ mod tests {
             assert!(voice_before - voice_after <= 3.0, "the voice fell {:.1} dB", voice_before - voice_after);
         }
         // Same length: the preview plays it on the recording's timeline.
-        let probe = crate::compat::qprocess::run(
-            "ffprobe", &["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", &output], 15000).unwrap();
-        let duration: f64 = String::from_utf8_lossy(&probe.stdout).trim().parse().unwrap();
+        let duration = duration_of(&output);
         assert!((duration - 12.0).abs() < 0.1, "duration {duration}");
+        // Made once: a second run finds it.
+        assert_eq!(job.run().unwrap(), result);
 
-        // Loudness on its own: the whole recording at -16 LUFS.
-        let loud = dir.join("loud.m4a").to_string_lossy().into_owned();
-        let job = CleanAudioJob {
-            output_path: loud.clone(),
-            settings: CleanSettings { denoise: speech.then_some(1.0), loudness: Some(-16.0) },
-            ..job
-        };
-        assert_eq!(job.run(), Ok(loud.clone()));
-        let lufs = integrated_lufs(&loud);
+        // Loudness too: the whole recording at -16 LUFS, measured once.
+        let loud = CleanAudioJob { settings: CleanSettings { denoise: speech.then_some(1.0), loudness: Some(-16.0) }, ..job.clone() };
+        let result = loud.run().unwrap();
+        assert!(result.applied.is_some());
+        let lufs = integrated_lufs(&result.recording);
         assert!((lufs + 16.0).abs() <= 1.0, "integrated loudness {lufs}");
+        let measurements = std::fs::read_dir(&job.cache_directory)
+            .unwrap()
+            .flatten()
+            .filter(|e| e.file_name().to_string_lossy().ends_with(".loudness.json"))
+            .count();
+        assert_eq!(measurements, 1);
+        assert!(leftovers(&dir).is_empty());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    // W1 -> W2 -> W1 in the editor left two jobs making the same file through the same partial
+    // file. Two jobs for one file now each write their own, and both end with the whole file.
+    #[test]
+    fn jobs_for_the_same_file_do_not_share_a_partial_file() {
+        if !have_ffmpeg() {
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!("omareel-clean-twice-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (video, _) = noisy_recording(&dir);
+        let first = job(&dir, &video, 12.0, CleanSettings { denoise: Some(0.5), loudness: Some(-14.0) });
+        let second = CleanAudioJob { id: 2, ..first.clone() };
+        let runs = [first, second].map(|job| std::thread::spawn(move || job.run()));
+        let [a, b] = runs.map(|run| run.join().unwrap().unwrap());
+        assert_eq!(a.recording, b.recording);
+        assert!((duration_of(&a.recording) - 12.0).abs() < 0.1);
+        assert!(leftovers(&dir).is_empty(), "{:?}", leftovers(&dir));
+        // A job cancelled once its render is done does not put its file in place.
+        let cancelled = job(&dir, &video, 12.0, CleanSettings { denoise: Some(0.3), loudness: None });
+        cancelled.cancelled.store(true, Ordering::SeqCst);
+        assert_eq!(cancelled.run(), Err("cancelled".into()));
+        assert!(leftovers(&dir).is_empty());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    // The preview normalises inserted videos with the program's gain, like export, and keeps
+    // the recording's sound where the screen player has it (ffmpeg's timestamps already count
+    // from the container's start).
+    #[test]
+    fn inserted_videos_get_the_programs_gain() {
+        if !have_ffmpeg() {
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!("omareel-clean-inserts-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("media")).unwrap();
+        // The recording: 3 s, a tone from 0.5 s, in a container that starts at 1 s.
+        let video = dir.join("screen.mp4").to_string_lossy().into_owned();
+        let insert = dir.join("media/clip.mp4").to_string_lossy().into_owned();
+        for (path, graph, offset) in [
+            (&video, "sine=f=440:d=2.5:sample_rate=48000,volume=0.1,adelay=500:all=1,apad=whole_dur=3", "1"),
+            (&insert, "sine=f=660:d=2:sample_rate=48000,volume=0.5", "0"),
+        ] {
+            let made = crate::compat::qprocess::run(
+                "ffmpeg",
+                &["-y", "-v", "error", "-f", "lavfi", "-i", "color=c=black:s=64x64:r=30:d=3", "-f", "lavfi", "-i", graph,
+                  "-map", "0:v", "-map", "1:a", "-c:v", "libx264", "-preset", "ultrafast", "-c:a", "aac", "-shortest",
+                  "-output_ts_offset", offset, path],
+                60000,
+            )
+            .unwrap();
+            assert!(made.succeeded(), "{}", String::from_utf8_lossy(&made.stderr));
+        }
+        let mut job = job(&dir, &video, 3.0, CleanSettings { denoise: None, loudness: Some(-16.0) });
+        job.program.clips.push(crate::project::Clip {
+            id: "m".into(), in_: 0.0, out: 2.0, speed: 1.0, media: "media/clip.mp4".into(), ..Default::default()
+        });
+        job.program.insert_audio = vec!["media/clip.mp4".into()];
+        job.inserts = vec![InsertSound { media: "media/clip.mp4".into(), fingerprint: crate::editor::video_fingerprint(&insert) }];
+        let result = job.run().unwrap();
+        let [(media, cleaned_insert)] = &result.inserts[..] else { panic!("{result:?}") };
+        assert_eq!(media, "media/clip.mp4");
+        // One gain for both.
+        let recording_gain = rms_db(&result.recording, 1.0, 2.5) - rms_db(&video, 1.0, 2.5);
+        let insert_gain = rms_db(cleaned_insert, 0.5, 1.5) - rms_db(&insert, 0.5, 1.5);
+        assert!(recording_gain > 3.0, "the quiet program is raised: {recording_gain:.1} dB");
+        assert!((recording_gain - insert_gain).abs() < 0.3, "recording {recording_gain:.1} dB, insert {insert_gain:.1} dB");
+        // The tone still starts where the screen player has it: silence until 0.5 s, then the
+        // tone, in the recording and in its cleaned sound alike (it was a second early).
+        for path in [&video, &result.recording] {
+            assert!(rms_db(path, 0.05, 0.45) < -70.0, "{path} before the tone");
+            assert!(rms_db(path, 0.52, 0.6) > -50.0, "{path} at the tone");
+        }
+        // A measurement close to the one playing keeps it: nothing is made again.
+        let applied = result.applied.unwrap();
+        let nudged = LoudnessMeasurement { integrated: applied.integrated + 0.3, ..applied };
+        let again = CleanAudioJob { id: 2, previous: Some(nudged), ..job.clone() };
+        assert_eq!(again.run().unwrap().applied, Some(nudged));
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -524,16 +932,11 @@ mod tests {
         }
         let dir = std::env::temp_dir().join(format!("omareel-denoise-cancel-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let output = dir.join("clean.m4a").to_string_lossy().into_owned();
-        let job = CleanAudioJob {
-            video_path: dir.join("missing.mp4").to_string_lossy().into_owned(),
-            output_path: output.clone(),
-            settings: CleanSettings { denoise: None, loudness: Some(-16.0) },
-            duration: 1.0,
-            cancelled: Arc::new(AtomicBool::new(true)),
-        };
+        let missing = dir.join("missing.mp4").to_string_lossy().into_owned();
+        let job = job(&dir, &missing, 1.0, CleanSettings { denoise: None, loudness: Some(-16.0) });
+        job.cancelled.store(true, Ordering::SeqCst);
         assert_eq!(job.run(), Err("cancelled".into()));
-        assert!(!FileInfo::new(&output).exists());
+        assert!(leftovers(&dir).is_empty());
         let _ = std::fs::remove_dir_all(dir);
     }
 }

@@ -179,18 +179,18 @@ pub fn click_output_times(input: &InputLog, clips: &[Clip]) -> Vec<f64> {
 /// A clip's audio, brought to one format and to exactly the clip's output length, so a source
 /// with other rates or channels, or audio that ends early, cannot shift the clips after it.
 pub fn audio_segment(source: &str, speed: f64, length: f64) -> String {
-    cleaned_audio_segment(source, speed, length, None)
-}
-
-/// [`audio_segment`] with `cleanup` (filters for 48 kHz stereo, such as the denoiser) before
-/// the speed change.
-pub fn cleaned_audio_segment(source: &str, speed: f64, length: f64, cleanup: Option<&str>) -> String {
     let length = number_f64(length, 'f', 6);
-    let cleanup = cleanup.map(|filters| format!("{filters},")).unwrap_or_default();
     format!(
-        "{source},aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,{cleanup}{},apad=whole_dur={length},atrim=end={length}",
+        "{source},aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,{},apad=whole_dur={length},atrim=end={length}",
         atempo(speed)
     )
+}
+
+/// The recording's whole sound as one stream on its own timeline (0 is the container's start,
+/// as ffmpeg's input timestamps count it), at 48 kHz stereo, through `cleanup` (filters such as
+/// the denoiser, which then hears the recording continuously instead of clip by clip).
+pub fn recording_audio_chain(source: &str, cleanup: &str) -> String {
+    format!("{source}aresample=48000:async=1:first_pts=0,aformat=sample_fmts=fltp:channel_layouts=stereo,{cleanup}")
 }
 
 /// The export's audio sources: the inputs to open after the video's, from `first_input` on,
@@ -198,15 +198,23 @@ pub fn cleaned_audio_segment(source: &str, speed: f64, length: f64, cleanup: Opt
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct AudioInputs {
     pub arguments: Vec<String>,
+    /// Chains the segments read from, each ending in `;`, to come first in the graph: the
+    /// recording's denoised sound, split once per recording clip. Empty without denoising.
+    pub prelude: String,
     pub segments: Vec<String>,
     /// The next input number free after these.
     pub next_input: i32,
 }
 
-/// One audio segment per clip: the recording's audio (through `denoise` when given), an
-/// inserted video's own audio, or silence. Each inserted clip opens its file at its in point,
-/// so containers that do not start at zero need no timestamp arithmetic. `insert_has_audio`
-/// says whether an inserted clip's file (its bundle-relative path) has sound.
+/// One audio segment per clip: the recording's audio, an inserted video's own audio, or
+/// silence. Each inserted clip opens its file at its in point, so containers that do not start
+/// at zero need no timestamp arithmetic. `insert_has_audio` says whether an inserted clip's
+/// file (its bundle-relative path) has sound.
+///
+/// With `denoise` (a [`crate::audio_cleanup::denoise_filter`]) the recording's sound goes
+/// through it once, whole, in the [`AudioInputs::prelude`], and each recording clip cuts its
+/// part from that: a denoiser per clip would start each clip without the sound before it and
+/// lose the end it still holds back at the cut.
 pub fn audio_inputs(
     clips: &[Clip],
     insert_has_audio: &dyn Fn(&str) -> bool,
@@ -219,6 +227,7 @@ pub fn audio_inputs(
     let mut result = AudioInputs { next_input: first_input, ..AudioInputs::default() };
     let mut source_input = -1;
     let mut any_audio = false;
+    let mut recording_clips = 0;
     for clip in clips {
         let length = (clip.out - clip.in_) / clip.speed;
         if clip.is_media() && insert_has_audio(&clip.media) {
@@ -240,15 +249,19 @@ pub fn audio_inputs(
                 result.next_input += 1;
                 result.arguments.extend(["-i".into(), video_path.to_owned()]);
             }
-            result.segments.push(cleaned_audio_segment(
+            let source = match denoise {
+                Some(_) => format!("[rec{recording_clips}]"),
+                None => format!("[{source_input}:a:0]"),
+            };
+            recording_clips += 1;
+            result.segments.push(audio_segment(
                 &format!(
-                    "[{source_input}:a:0]atrim=start={}:end={},asetpts=PTS-STARTPTS",
+                    "{source}atrim=start={}:end={},asetpts=PTS-STARTPTS",
                     number_f64(clip.in_, 'f', 6),
                     number_f64(clip.out, 'f', 6)
                 ),
                 clip.speed,
                 length,
-                denoise,
             ));
             any_audio = true;
         } else {
@@ -258,13 +271,14 @@ pub fn audio_inputs(
     if !any_audio {
         result.segments.clear();
     }
+    if let (Some(denoise), true) = (denoise, recording_clips > 0) {
+        let outputs: String = (0..recording_clips).map(|i| format!("[rec{i}]")).collect();
+        result.prelude = format!(
+            "{},asplit=outputs={recording_clips}{outputs};",
+            recording_audio_chain(&format!("[{source_input}:a:0]"), denoise)
+        );
+    }
     result
-}
-
-/// `filter` (an [`audio_filter`]) with `master` applied to the finished mix, before `[aout]`.
-pub fn with_master(filter: &str, master: &str) -> String {
-    let body = filter.strip_suffix("[aout]").unwrap_or(filter);
-    format!("{body},{master}[aout]")
 }
 
 pub fn silent_segment(length: f64) -> String {
@@ -278,21 +292,44 @@ pub fn silent_segment(length: f64) -> String {
 /// order, or none when no clip has audio) with a click sound from input `click_input` at each
 /// of `clicks`, padded or cut to the output's length.
 pub fn audio_filter(segments: &[String], volume: f64, clicks: &[f64], click_input: i32, output_duration: f64) -> String {
+    mastered_audio_filter("", segments, None, volume, clicks, click_input, output_duration)
+}
+
+/// The clips' sound, joined: the program loudness normalisation measures and normalises
+/// (without the click sound, which keeps its own level, and before the volume).
+fn program_audio(prelude: &str, segments: &[String]) -> String {
+    let mut filter = prelude.to_owned();
+    let mut clip_labels = String::new();
+    for (i, segment) in segments.iter().enumerate() {
+        filter += &format!("{segment}[a{i}];");
+        clip_labels += &format!("[a{i}]");
+    }
+    filter + &format!("{clip_labels}concat=n={}:v=0:a=1", segments.len())
+}
+
+/// The loudness measuring pass's graph: exactly the sound [`mastered_audio_filter`] normalises,
+/// through `measure`, into `[aout]`.
+pub fn program_measure_filter(prelude: &str, segments: &[String], measure: &str) -> String {
+    format!("{},{measure}[aout]", program_audio(prelude, segments))
+}
+
+/// [`audio_filter`] after `prelude` ([`AudioInputs::prelude`]), with the clips' joined sound
+/// through `master` (the loudness normalisation) before the volume, so the volume trims the
+/// normalised level; the click sound is mixed in after, at its own level.
+pub fn mastered_audio_filter(
+    prelude: &str,
+    segments: &[String],
+    master: Option<&str>,
+    volume: f64,
+    clicks: &[f64],
+    click_input: i32,
+    output_duration: f64,
+) -> String {
     let mut filter = String::new();
     let mut mix_labels: Vec<String> = Vec::new();
     if !segments.is_empty() {
-        let mut clip_labels: Vec<String> = Vec::new();
-        for (i, segment) in segments.iter().enumerate() {
-            let label = format!("a{i}");
-            filter += &format!("{segment}[{label}];");
-            clip_labels.push(format!("[{label}]"));
-        }
-        filter += &format!(
-            "{}concat=n={}:v=0:a=1,volume={}[source];",
-            clip_labels.concat(),
-            segments.len(),
-            number_f64(volume, 'g', 8)
-        );
+        let master = master.map(|master| format!("{master},")).unwrap_or_default();
+        filter += &format!("{},{master}volume={}[source];", program_audio(prelude, segments), number_f64(volume, 'g', 8));
         mix_labels.push("[source]".into());
     }
     if !clicks.is_empty() {
@@ -603,14 +640,130 @@ mod tests {
     }
 
     #[test]
-    fn denoising_reaches_only_the_recording() {
+    fn denoising_runs_once_over_the_whole_recording() {
         let has_audio = |media: &str| media == "media/talk.mp4";
+        let plain = audio_inputs(&mixed_clips(), &has_audio, true, "/b", "/b/screen.mp4", 1, None);
         let inputs = audio_inputs(&mixed_clips(), &has_audio, true, "/b", "/b/screen.mp4", 1, Some("DN"));
-        assert!(inputs.segments[0].contains("channel_layouts=stereo,DN,atempo=1,apad"));
-        assert!(!inputs.segments[1].contains("DN"));
-        assert!(inputs.segments[3].contains("channel_layouts=stereo,DN,atempo=0.5,apad"));
-        assert_eq!(with_master("X[a0];[a0]amix=inputs=1,atrim=duration=1.000000[aout]", "LN"),
-                   "X[a0];[a0]amix=inputs=1,atrim=duration=1.000000,LN[aout]");
+        assert_eq!(inputs.arguments, plain.arguments);
+        // One denoiser over the recording's whole sound, split once per recording clip.
+        assert_eq!(
+            inputs.prelude,
+            "[1:a:0]aresample=48000:async=1:first_pts=0,aformat=sample_fmts=fltp:channel_layouts=stereo,DN,\
+             asplit=outputs=2[rec0][rec1];"
+        );
+        assert_eq!(inputs.segments[0], plain.segments[0].replace("[1:a:0]", "[rec0]"));
+        assert_eq!(inputs.segments[1], plain.segments[1]);
+        assert_eq!(inputs.segments[2], plain.segments[2]);
+        assert_eq!(inputs.segments[3], plain.segments[3].replace("[1:a:0]", "[rec1]"));
+        assert!(!inputs.segments.iter().any(|segment| segment.contains("DN")));
+        // No recording clip with sound: nothing to denoise.
+        let none = audio_inputs(&mixed_clips(), &has_audio, false, "/b", "/b/screen.mp4", 1, Some("DN"));
+        assert_eq!(none.prelude, "");
+    }
+
+    #[test]
+    fn loudness_normalises_the_program_before_the_volume_and_the_clicks() {
+        let segments = ["S0".to_string(), "S1".to_string()];
+        // Without a master it is audio_filter's graph.
+        assert_eq!(
+            mastered_audio_filter("", &segments, None, 0.5, &[0.5], 3, 4.25),
+            audio_filter(&segments, 0.5, &[0.5], 3, 4.25)
+        );
+        assert_eq!(
+            mastered_audio_filter("P;", &segments, Some("LN"), 0.5, &[0.5], 3, 4.25),
+            "P;S0[a0];S1[a1];[a0][a1]concat=n=2:v=0:a=1,LN,volume=0.5[source];\
+             [3:a]atrim=duration=0.03,asetpts=PTS-STARTPTS,volume=0.25,adelay=500:all=1[click0];\
+             [source][click0]amix=inputs=2:normalize=0:duration=longest,apad=pad_dur=4.250000,\
+             atrim=duration=4.250000[aout]"
+        );
+        // The measuring pass hears exactly what LN gets: no volume, no clicks.
+        assert_eq!(program_measure_filter("P;", &segments, "M"), "P;S0[a0];S1[a1];[a0][a1]concat=n=2:v=0:a=1,M[aout]");
+    }
+
+    /// Mono 32-bit float samples of `path` (any format ffmpeg reads) through `filter`.
+    fn samples(args: &[&str]) -> Vec<f32> {
+        let mut all: Vec<&str> = vec!["-v", "error"];
+        all.extend_from_slice(args);
+        all.extend_from_slice(&["-ac", "1", "-f", "f32le", "-"]);
+        let out = crate::compat::qprocess::run("ffmpeg", &all, 60000).unwrap();
+        assert!(out.succeeded(), "{}", String::from_utf8_lossy(&out.stderr));
+        out.stdout.chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect()
+    }
+
+    fn window_db(samples: &[f32], at: usize, length: usize) -> f64 {
+        let window = &samples[at.min(samples.len())..(at + length).min(samples.len())];
+        let power: f64 = window.iter().map(|&s| f64::from(s) * f64::from(s)).sum::<f64>() / window.len().max(1) as f64;
+        10.0 * power.log10()
+    }
+
+    // arnndn holds back 10 ms it never flushes: a denoiser per clip left 10 ms of silence before
+    // every cut. The recording denoised once and then cut sounds like the whole recording denoised,
+    // right up to each cut.
+    #[test]
+    fn denoised_cuts_keep_their_sound() {
+        use crate::compat::qstandardpaths::find_executable;
+        if find_executable("ffmpeg").is_empty() {
+            eprintln!("ffmpeg unavailable");
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!("omareel-denoise-cuts-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let source = dir.join("sound.wav").to_string_lossy().into_owned();
+        // Speech-like: a 180 Hz tone with harmonics, its level moving, over a little hiss.
+        let made = crate::compat::qprocess::run(
+            "ffmpeg",
+            &["-y", "-v", "error", "-f", "lavfi", "-i",
+              "aevalsrc='(0.3*sin(2*PI*180*t)+0.15*sin(2*PI*360*t)+0.08*sin(2*PI*540*t))*(0.7+0.3*sin(2*PI*2*t))+0.01*(random(0)-0.5)':s=48000:d=6",
+              "-ac", "2", &source],
+            30000,
+        )
+        .unwrap();
+        assert!(made.succeeded(), "{}", String::from_utf8_lossy(&made.stderr));
+        let model = crate::audio_cleanup::model_file(&dir.join("model").to_string_lossy()).unwrap();
+        // Half denoised: RNNoise takes a tone for noise, and the half left is what shows a gap.
+        let denoise = crate::audio_cleanup::denoise_filter(&model, 0.5);
+        // Three cuts, one clip out of order.
+        let clips = [(0.5, 2.0), (3.0, 4.0), (2.5, 3.0), (4.5, 6.0)]
+            .map(|(in_, out)| Clip { id: format!("c{in_}"), in_, out, speed: 1.0, ..Clip::default() });
+        let output_duration: f64 = clips.iter().map(|clip| clip.out - clip.in_).sum();
+        // The export's graph for these clips of `source`.
+        let export = |source: &str, denoise: Option<&str>| {
+            let inputs = audio_inputs(&clips, &|_| false, true, "/b", source, 0, denoise);
+            let graph = mastered_audio_filter(&inputs.prelude, &inputs.segments, None, 1.0, &[], -1, output_duration);
+            let mut args: Vec<&str> = inputs.arguments.iter().map(String::as_str).collect();
+            args.extend(["-filter_complex", &graph, "-map", "[aout]"]);
+            samples(&args)
+        };
+        let cut = export(&source, Some(&denoise));
+        // The whole recording denoised, then cut the same way, and the recording cut as it is.
+        let whole = dir.join("whole.wav").to_string_lossy().into_owned();
+        let filter = format!("aformat=sample_fmts=fltp:channel_layouts=stereo,{denoise}");
+        let made = crate::compat::qprocess::run(
+            "ffmpeg", &["-y", "-v", "error", "-i", &source, "-af", &filter, "-c:a", "pcm_f32le", &whole], 60000).unwrap();
+        assert!(made.succeeded(), "{}", String::from_utf8_lossy(&made.stderr));
+        assert_eq!(samples(&["-i", &whole]).len(), samples(&["-i", &source]).len(), "the denoised sound keeps its length");
+        let expected = export(&whole, None);
+        let recorded = export(&source, None);
+        assert!((cut.len() as f64 - output_duration * 48000.0).abs() <= 2.0, "{} samples", cut.len());
+        // 2 ms windows over the 20 ms before and after each cut.
+        let window = 96;
+        let mut output_start = 0usize;
+        for clip in &clips {
+            let length = ((clip.out - clip.in_) * 48000.0).round() as usize;
+            for offset in (0..960).step_by(window).chain((length - 960..length - window + 1).step_by(window)) {
+                let at = output_start + offset;
+                let (heard, expected, recorded) =
+                    (window_db(&cut, at, window), window_db(&expected, at, window), window_db(&recorded, at, window));
+                assert!(
+                    (heard - expected).abs() < 0.5 && heard > recorded - 12.0,
+                    "clip {}-{} at +{offset}: {heard:.1} dB, denoised whole {expected:.1} dB, recorded {recorded:.1} dB",
+                    clip.in_,
+                    clip.out
+                );
+            }
+            output_start += length;
+        }
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

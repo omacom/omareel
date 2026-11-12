@@ -499,6 +499,8 @@ pub mod qobject {
         #[inherit]
         fn playback_set_screen_audio_source(self: Pin<&mut Editor>, path: &QString);
         #[inherit]
+        fn playback_set_media_audio_source(self: Pin<&mut Editor>, path: &QString);
+        #[inherit]
         fn playback_position(self: &Editor, player: i32) -> i64;
         #[inherit]
         fn playback_position_ready(self: &Editor, player: i32) -> bool;
@@ -788,6 +790,7 @@ impl qobject::Editor {
             Effect::StartImport(source) => self.start_import(&source),
             Effect::GenerateWallpaperThumbnail { path, thumbnail } => self.generate_wallpaper_thumbnail(path, thumbnail),
             Effect::SetScreenAudioSource(path) => self.as_mut().playback_set_screen_audio_source(&qstring(&path)),
+            Effect::InsertAudioSourcesChanged => self.as_mut().update_insert_audio_source(),
             Effect::StartCleanAudio => self.start_clean_audio(),
             Effect::CleanAudioChanged => self.as_mut().clean_audio_changed(),
         }
@@ -860,6 +863,14 @@ impl qobject::Editor {
         }
     }
 
+    /// The media player plays the cleaned sound of the inserted video it holds, when there is one.
+    fn update_insert_audio_source(mut self: Pin<&mut Self>) {
+        let path = self.document.as_ref().map_or(String::new(), |document| {
+            document.insert_audio_source(&self.media_player_source).to_owned()
+        });
+        self.as_mut().playback_set_media_audio_source(&qstring(&path));
+    }
+
     /// The cleaned preview sound [`Effect::StartCleanAudio`] asks for, made off the GUI thread
     /// (ffmpeg at a low priority), then `finish_clean_audio`.
     fn start_clean_audio(mut self: Pin<&mut Self>) {
@@ -868,7 +879,7 @@ impl qobject::Editor {
         self.spawn(move || {
             let result = job.run();
             let _ = thread.queue(move |editor| {
-                editor.edit(|document| document.finish_clean_audio(&job.output_path, result));
+                editor.edit(|document| document.finish_clean_audio(job.id, result));
             });
         });
     }
@@ -1884,6 +1895,7 @@ impl qobject::Editor {
         self.as_mut().rust_mut().media_player_source = path.to_owned();
         let file = qstring(&qdir::file_path(&self.bundle_path, path));
         self.as_mut().playback_load_media(&file);
+        self.as_mut().update_insert_audio_source();
         self.composition_changed();
     }
 

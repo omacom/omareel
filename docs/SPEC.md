@@ -281,9 +281,11 @@ Exporter pipeline (`crates/omareel_qt/cpp/Exporter`, over `crates/omareel_core/s
   -movflags +faststart out.mp4`. Quality tiers: low/medium/high/best → cq 30/26/22/18.
 - Encode GIF: two-pass palette: write frames to a temp raw file, then
   `ffmpeg -i raw -vf "fps,scale,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" -loop 0 out.gif`.
-- Audio cleanup (`audio.cleanup`): the recording's clips go through `arnndn` (RNNoise, built-in
-  model) before their speed change; loudness normalisation measures the mix with `loudnorm`
-  first (a separate ffmpeg pass, reported as `measuring`), then appends the measured linear pass.
+- Audio cleanup (`audio.cleanup`): the recording's sound goes through `arnndn` (RNNoise, built-in
+  model) once, whole, then `asplit` into the recording clips' segments; loudness normalisation
+  measures the program (the clips' concatenated sound, before `volume` and without clicks) with
+  `loudnorm` first (a separate ffmpeg pass, reported as `measuring`), then puts the measured
+  linear pass between the concat and `volume`; clicks are mixed in after.
 - Progress callbacks (frames done/total), cancel support.
 - Headless `omareel export` must work with `QT_QPA_PLATFORM=offscreen` fallback if no Wayland.
 

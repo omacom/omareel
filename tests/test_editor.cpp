@@ -1777,6 +1777,64 @@ private slots:
         QVERIFY(editor.screenAudioSourceForTests().isEmpty());
     }
 
+    // With loudness normalisation the inserted video's sound is made with the program's gain
+    // and played in place of its own, following the media player. Nothing plays here (seeks
+    // only, at volume 0): the test makes no sound.
+    void insertedVideosPlayTheirCleanedSound()
+    {
+        const QString bundle = m_temporary.filePath(QStringLiteral("cleaned-insert.omareel"));
+        QVERIFY(QDir(bundle).mkpath(QStringLiteral("media")));
+        QFile::copy(QDir(m_bundle).filePath(QStringLiteral("input.jsonl")), QDir(bundle).filePath(QStringLiteral("input.jsonl")));
+        const auto make = [](const QString &tone, const QString &path) {
+            QProcess process;
+            process.start(QStringLiteral("ffmpeg"), {QStringLiteral("-y"), QStringLiteral("-v"), QStringLiteral("error"),
+                QStringLiteral("-f"), QStringLiteral("lavfi"), QStringLiteral("-i"), QStringLiteral("testsrc2=size=320x180:rate=30"),
+                QStringLiteral("-f"), QStringLiteral("lavfi"), QStringLiteral("-i"), tone,
+                QStringLiteral("-t"), QStringLiteral("3"), QStringLiteral("-c:v"), QStringLiteral("libx264"),
+                QStringLiteral("-c:a"), QStringLiteral("aac"), path});
+            return process.waitForFinished(30000) && process.exitCode() == 0;
+        };
+        QVERIFY(make(QStringLiteral("sine=f=300:sample_rate=48000,volume=0.02"), QDir(bundle).filePath(QStringLiteral("screen.mp4"))));
+        QVERIFY(make(QStringLiteral("sine=f=500:sample_rate=48000,volume=0.05"), QDir(bundle).filePath(QStringLiteral("media/clip.mp4"))));
+        QFile capture(QDir(bundle).filePath(QStringLiteral("capture.json")));
+        QVERIFY(capture.open(QIODevice::WriteOnly));
+        capture.write(R"({"fps":30,"first_frame_us":1000000,"audio":{"desktop":true,"mic":false}})");
+        capture.close();
+        QJsonObject project = ProjectJson::defaults(QStringLiteral("Inserted"), 3.0);
+        QJsonObject insert = ProjectJson::clip(QStringLiteral("m1"), 0.0, 2.0);
+        insert.insert(QStringLiteral("media"), QStringLiteral("media/clip.mp4"));
+        project.insert(QStringLiteral("clips"), QJsonArray{ProjectJson::clip(QStringLiteral("c1"), 0.0, 3.0), insert});
+        ProjectJson::set(project, {"audio", "volume"}, 0.0);
+        ProjectJson::set(project, {"audio", "cleanup"}, QJsonObject{{QStringLiteral("loudness"), QStringLiteral("-16")}});
+        QString error;
+        QVERIFY2(ProjectJson::save(project, QDir(bundle).filePath(QStringLiteral("project.json")), &error),
+                 qPrintable(error));
+        const QByteArray cacheHome = qgetenv("XDG_CACHE_HOME");
+        qputenv("XDG_CACHE_HOME", m_temporary.filePath(QStringLiteral("cache")).toUtf8());
+        const auto restore = qScopeGuard([&] { qputenv("XDG_CACHE_HOME", cacheHome); });
+
+        Editor editor(bundle);
+        QVERIFY2(editor.isValid(), qPrintable(editor.errorString()));
+        QVideoSink sink;
+        QObject holder;
+        holder.setProperty("videoSink", QVariant::fromValue(&sink));
+        editor.attachVideoOutput(&holder);
+        QTRY_VERIFY_WITH_TIMEOUT(editor.playerMediaStatusForTests() >= QMediaPlayer::LoadedMedia, 15000);
+        QTRY_COMPARE_WITH_TIMEOUT(editor.cleanAudioStatus(), QStringLiteral("ready"), 30000);
+        QTRY_VERIFY_WITH_TIMEOUT(editor.screenAudioSourceForTests().contains(QStringLiteral("audio-cleanup")), 10000);
+        // Into the inserted clip: its cleaned sound loads and goes where its picture is.
+        editor.seek(4.0);
+        QTRY_VERIFY_WITH_TIMEOUT(editor.mediaAudioSourceForTests().contains(QStringLiteral("audio-cleanup")), 10000);
+        editor.seek(4.5);
+        QTRY_VERIFY2_WITH_TIMEOUT(qAbs(editor.mediaAudioPositionMsForTests() - 1500) < 100,
+                                  qPrintable(QString::number(editor.mediaAudioPositionMsForTests())), 5000);
+        QVERIFY(!editor.playing());
+        editor.setCleanAudioBypass(true);
+        QTRY_VERIFY_WITH_TIMEOUT(editor.mediaAudioSourceForTests().isEmpty(), 2000);
+        editor.setCleanAudioBypass(false);
+        QTRY_VERIFY_WITH_TIMEOUT(!editor.mediaAudioSourceForTests().isEmpty(), 5000);
+    }
+
 private:
     bool makeVideo(const QString &path, const QString &source, double seconds)
     {

@@ -7,6 +7,7 @@ use super::*;
 use crate::compat::qdir::tests::TempDir;
 use crate::compat::qjson::{Object, Value};
 use crate::compat::qround::q_fuzzy_compare;
+use crate::audio_cleanup::{CleanAudioResult, LoudnessMeasurement};
 use crate::project::{AudioCleanup, Clip, Project};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -1751,29 +1752,29 @@ fn audio_cleanup_is_one_undo_step_and_prepares_the_preview() {
     let job = qt.document.clean_audio_job().expect("a job");
     assert_eq!(job.settings.denoise, Some(0.85));
     assert_eq!(job.settings.loudness, None);
-    assert!(job.output_path.starts_with(&world.path("cache/audio-cleanup/")));
-    assert!(qt.document.clean_audio_job().is_none(), "one job per file");
-    // The job's file appears; the screen player switches to it.
-    std::fs::create_dir_all(std::path::Path::new(&job.output_path).parent().unwrap()).unwrap();
-    std::fs::write(&job.output_path, b"m4a").unwrap();
-    qt.document.finish_clean_audio(&job.output_path, Ok(job.output_path.clone()));
+    assert_eq!(job.cache_directory, world.path("cache/audio-cleanup"));
+    assert!(qt.document.clean_audio_job().is_none(), "one job at a time");
+    // The job's file is made; the screen player switches to it.
+    let file = world.path("cache/audio-cleanup/denoised.m4a");
+    qt.document.finish_clean_audio(job.id, Ok(CleanAudioResult { recording: file.clone(), ..Default::default() }));
     let effects = qt.drain();
-    assert_eq!(sources(&effects), [job.output_path.clone()]);
+    assert_eq!(sources(&effects), [file.clone()]);
     assert_eq!(qt.document.clean_audio_status(), CleanAudioStatus::Ready);
 
     // Comparing with the original is no edit.
     assert_eq!(sources(&act(&mut qt, |d| d.set_clean_audio_bypass(true))), [String::new()]);
-    assert_eq!(sources(&act(&mut qt, |d| d.set_clean_audio_bypass(false))), [job.output_path.clone()]);
+    assert_eq!(sources(&act(&mut qt, |d| d.set_clean_audio_bypass(false))), [file.clone()]);
     assert_eq!(qt.undo_steps(), 1);
 
     // New settings: the old file keeps playing while the new one is made, and a failure says why.
     let effects = act(&mut qt, |d| d.set_project_value("audio.cleanup.loudness", "-16".into(), false));
     assert!(effects.contains(&Effect::StartCleanAudio));
     assert!(sources(&effects).is_empty());
-    assert_eq!(qt.document.screen_audio_source(), job.output_path);
+    assert_eq!(qt.document.screen_audio_source(), file);
     let louder = qt.document.clean_audio_job().expect("a job for the new settings");
     assert_eq!(louder.settings.loudness, Some(-16.0));
-    qt.document.finish_clean_audio(&louder.output_path, Err("ffmpeg failed".into()));
+    assert_ne!(louder.id, job.id);
+    qt.document.finish_clean_audio(louder.id, Err("ffmpeg failed".into()));
     qt.drain();
     assert_eq!(qt.document.clean_audio_status(), CleanAudioStatus::Failed);
     assert_eq!(qt.document.clean_audio_error(), "ffmpeg failed");
@@ -1781,13 +1782,103 @@ fn audio_cleanup_is_one_undo_step_and_prepares_the_preview() {
     // Undo goes back to the file there is.
     act(&mut qt, |d| d.undo());
     assert_eq!(qt.document.clean_audio_status(), CleanAudioStatus::Ready);
-    assert_eq!(qt.document.screen_audio_source(), job.output_path);
+    assert_eq!(qt.document.screen_audio_source(), file);
     // Off: the recording's own sound.
     assert_eq!(sources(&act(&mut qt, |d| d.set_audio_cleanup(AudioCleanup::default()))), [String::new()]);
     assert_eq!(qt.document.clean_audio_status(), CleanAudioStatus::Off);
     assert!(qt.document.save_now());
     let saved = std::fs::read_to_string(qt.document.project_path()).unwrap();
     assert!(!saved.contains("cleanup"));
+}
+
+// Settings W1, then W2, then W1 again cancelled the first job and started a third for the same
+// file; the first job's late "cancelled" (matched by its file) then disowned the third, which
+// nothing could stop any more, and closing the editor waited for it.
+#[test]
+fn a_cancelled_job_never_disowns_the_one_that_replaced_it() {
+    let world = World::new("audio-cleanup-w1w2w1");
+    let mut qt = sound_bundle(&world, "Voice.omareel", true);
+    let w1 = AudioCleanup { denoise: true, ..AudioCleanup::default() };
+    let w2 = AudioCleanup { denoise: true, strength: 0.5, ..AudioCleanup::default() };
+    act(&mut qt, |d| d.set_audio_cleanup(w1.clone()));
+    let first = qt.document.clean_audio_job().expect("W1");
+    assert!(act(&mut qt, |d| d.set_audio_cleanup(w2.clone())).contains(&Effect::StartCleanAudio));
+    let second = qt.document.clean_audio_job().expect("W2");
+    assert!(first.cancelled.load(Ordering::SeqCst), "W1 is not wanted any more");
+    assert!(act(&mut qt, |d| d.set_audio_cleanup(w1.clone())).contains(&Effect::StartCleanAudio));
+    let third = qt.document.clean_audio_job().expect("W1 again");
+    assert!(second.cancelled.load(Ordering::SeqCst));
+    assert!(!third.cancelled.load(Ordering::SeqCst));
+    assert_eq!(third.settings, first.settings);
+    assert!(first.id != third.id && second.id != third.id);
+    assert!(qt.document.clean_audio_job().is_none(), "one job for W1 at a time");
+
+    // The cancelled ones finish late, one of them even with a file: neither touches the third.
+    let effects = act(&mut qt, |d| d.finish_clean_audio(first.id, Err("cancelled".into())));
+    assert!(!effects.contains(&Effect::StartCleanAudio));
+    let stale = CleanAudioResult { recording: world.path("cache/audio-cleanup/stale.m4a"), ..Default::default() };
+    let effects = act(&mut qt, |d| d.finish_clean_audio(second.id, Ok(stale)));
+    assert!(sources(&effects).is_empty() && !effects.contains(&Effect::StartCleanAudio));
+    assert_eq!(qt.document.clean_audio_status(), CleanAudioStatus::Preparing);
+    assert!(qt.document.clean_audio_job().is_none(), "the third still runs");
+    // Closing the editor stops it.
+    qt.document.cancel_clean_audio();
+    assert!(third.cancelled.load(Ordering::SeqCst));
+}
+
+/// A recording with sound from the microphone, normalised to -16 LUFS.
+fn loud_bundle(world: &World) -> Qt {
+    let mut qt = sound_bundle(world, "Loud.omareel", true);
+    act(&mut qt, |d| d.set_audio_cleanup(AudioCleanup { loudness: "-16".into(), ..AudioCleanup::default() }));
+    qt
+}
+
+// Normalising measures the edited program, as export does: an edit asks for a new measurement,
+// after the job running for the same settings, which is not cancelled, and the preview plays
+// that job's sound meanwhile.
+#[test]
+fn edits_measure_the_program_again_after_the_running_job() {
+    let world = World::new("audio-cleanup-edits");
+    let mut qt = loud_bundle(&world);
+    let job = qt.document.clean_audio_job().expect("a loudness job");
+    assert_eq!(job.program.clips, qt.document.project().clips);
+    assert!(job.program.use_source_audio);
+    let id = qt.document.project().clips[0].id.clone();
+    let effects = act(&mut qt, |d| {
+        d.set_clip_speed(&id, 2.0);
+    });
+    assert!(!effects.contains(&Effect::StartCleanAudio), "it waits for the running job");
+    assert!(!job.cancelled.load(Ordering::SeqCst));
+    assert!(qt.document.clean_audio_job().is_none());
+    let file = world.path("cache/audio-cleanup/at-1x.m4a");
+    let measured = LoudnessMeasurement { integrated: -30.0, true_peak: -12.0, range: 3.0, threshold: -40.0, offset: 0.0 };
+    let result = CleanAudioResult { recording: file.clone(), inserts: Vec::new(), applied: Some(measured) };
+    let effects = act(&mut qt, |d| d.finish_clean_audio(job.id, Ok(result)));
+    assert!(effects.contains(&Effect::StartCleanAudio), "now the edit's");
+    assert_eq!(sources(&effects), [file.clone()], "the last sound plays meanwhile");
+    assert_eq!(qt.document.clean_audio_status(), CleanAudioStatus::Preparing);
+    let next = qt.document.clean_audio_job().expect("the edit's job");
+    assert_eq!(next.program.clips[0].speed, 2.0);
+    assert_eq!(next.previous, Some(measured), "a close measurement keeps the playing files");
+    // Its result adds an inserted video's sound.
+    let result = CleanAudioResult {
+        recording: file.clone(),
+        inserts: vec![("media/clip.mp4".into(), world.path("cache/audio-cleanup/clip.m4a"))],
+        applied: Some(measured),
+    };
+    let effects = act(&mut qt, |d| d.finish_clean_audio(next.id, Ok(result)));
+    assert!(effects.contains(&Effect::InsertAudioSourcesChanged));
+    assert_eq!(qt.document.insert_audio_source("media/clip.mp4"), world.path("cache/audio-cleanup/clip.m4a"));
+    assert_eq!(qt.document.insert_audio_source("media/other.mp4"), "");
+    assert_eq!(qt.document.clean_audio_status(), CleanAudioStatus::Ready);
+    // Bypassed, the inserted video plays its own sound too.
+    assert!(act(&mut qt, |d| d.set_clean_audio_bypass(true)).contains(&Effect::InsertAudioSourcesChanged));
+    assert_eq!(qt.document.insert_audio_source("media/clip.mp4"), "");
+    // Edits that leave the sound alone ask for nothing.
+    act(&mut qt, |d| d.set_clean_audio_bypass(false));
+    let effects = act(&mut qt, |d| d.set_project_value("frame.padding", 0.2.into(), false));
+    assert!(!effects.contains(&Effect::StartCleanAudio));
+    assert_eq!(qt.document.clean_audio_status(), CleanAudioStatus::Ready);
 }
 
 /// No effect at all about cleaned sound.

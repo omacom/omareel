@@ -34,19 +34,22 @@ PlaybackDriver::PlaybackDriver(QObject *parent): QObject(parent)
             [this](QMediaPlayer::PlaybackState state) { emit playbackStateChanged(Camera, state); });
     connect(&m_mediaPlayer, &QMediaPlayer::playbackStateChanged, this,
             [this](QMediaPlayer::PlaybackState state) { emit playbackStateChanged(Media, state); });
-    // The screen's sound from another file: it starts once that file has loaded, and follows the
-    // screen player from then on.
-    connect(&m_screenSoundPlayer, &QMediaPlayer::mediaStatusChanged, this,
-            [this](QMediaPlayer::MediaStatus status) {
-        const bool active = !m_screenSoundPlayer.source().isEmpty()
-            && status != QMediaPlayer::NoMedia && status != QMediaPlayer::LoadingMedia
-            && status != QMediaPlayer::InvalidMedia;
-        if (active == m_screenSoundActive) return;
-        m_screenSoundActive = active;
-        followScreen(true);
-        applyScreenAudio();
-    });
-    connect(&m_player, &QMediaPlayer::playbackStateChanged, this, [this] { followScreen(true); });
+    // A player's sound from another file: it starts once that file has loaded, and follows the
+    // player from then on.
+    for (const Player which : {Screen, Media}) {
+        OtherSound &other = otherSound(which);
+        connect(&other.player, &QMediaPlayer::mediaStatusChanged, this,
+                [this, which, &other](QMediaPlayer::MediaStatus status) {
+            const bool active = !other.player.source().isEmpty()
+                && status != QMediaPlayer::NoMedia && status != QMediaPlayer::LoadingMedia
+                && status != QMediaPlayer::InvalidMedia;
+            if (active == other.active) return;
+            other.active = active;
+            follow(which, true);
+            applyAudio(which);
+        });
+        connect(&player(which), &QMediaPlayer::playbackStateChanged, this, [this, which] { follow(which, true); });
+    }
 }
 
 PlaybackDriver::~PlaybackDriver() = default;
@@ -68,7 +71,8 @@ void PlaybackDriver::loadScreen(const QString &path)
     m_player.setSource(QUrl::fromLocalFile(path));
     m_mediaAudioOutput = std::make_unique<QAudioOutput>();
     m_mediaPlayer.setAudioOutput(m_mediaAudioOutput.get());
-    applyScreenAudio();
+    applyAudio(Screen);
+    applyAudio(Media);
 }
 
 void PlaybackDriver::loadCamera(const QString &path)
@@ -81,6 +85,8 @@ void PlaybackDriver::loadMedia(const QString &path)
     m_mediaFrameReady = false;
     m_pendingMediaSeekMs = -1;
     m_warmingMediaPreview = false;
+    // The last video's other sound is not this one's.
+    setAudioSource(Media, QString());
     m_mediaPlayer.setSource(QUrl::fromLocalFile(path));
 }
 
@@ -94,7 +100,7 @@ bool PlaybackDriver::attachVideoOutput(Player which, QObject *output)
             [this](const QVideoFrame &frame) {
                 emit frameShown(Screen, frame.isValid() ? frame.startTime() : -1,
                                 !m_warmingPreview && !m_internalSeek);
-                if (frame.isValid() && !m_warmingPreview && !m_internalSeek) followScreen(false);
+                if (frame.isValid() && !m_warmingPreview && !m_internalSeek) follow(Screen, false);
                 if (m_warmingPreview) {
                     QTimer::singleShot(0, this, [this] {
                         // play() may have taken over since this frame arrived.
@@ -135,6 +141,7 @@ bool PlaybackDriver::attachVideoOutput(Player which, QObject *output)
             emit mediaFrameReadyChanged();
         }
         emit frameShown(Media, frame.startTime(), !m_warmingMediaPreview && !m_internalSeek);
+        if (!m_warmingMediaPreview && !m_internalSeek) follow(Media, false);
         if (m_warmingMediaPreview) {
             QTimer::singleShot(0, this, [this] {
                 if (!m_warmingMediaPreview) return;
@@ -183,6 +190,8 @@ void PlaybackDriver::seek(Player which, qint64 milliseconds, bool willPlay)
     if (which == Camera) return;
     QMediaPlayer &player = this->player(which);
     const bool insert = which == Media;
+    // The other sound goes there now; its player follows when it gets there.
+    if (otherSound(which).active) otherSound(which).player.setPosition(milliseconds);
     // An inserted clip's file may still be opening; the seek waits for it.
     if (insert && (player.mediaStatus() == QMediaPlayer::NoMedia
                    || player.mediaStatus() == QMediaPlayer::LoadingMedia)) {
@@ -205,7 +214,6 @@ void PlaybackDriver::seek(Player which, qint64 milliseconds, bool willPlay)
     // flushes the sink without decoding.)
     const bool stalled = player.mediaStatus() == QMediaPlayer::EndOfMedia
         || player.playbackState() == QMediaPlayer::StoppedState;
-    if (!insert && m_screenSoundActive) m_screenSoundPlayer.setPosition(milliseconds);
     if (!stalled) {
         player.setPosition(milliseconds);
         return;
@@ -233,7 +241,7 @@ void PlaybackDriver::pause(Player which) { player(which).pause(); }
 void PlaybackDriver::setPlaybackRate(Player which, qreal rate)
 {
     player(which).setPlaybackRate(rate);
-    if (which == Screen && m_screenSoundActive) m_screenSoundPlayer.setPlaybackRate(rate);
+    if (which != Camera && otherSound(which).active) otherSound(which).player.setPlaybackRate(rate);
 }
 
 void PlaybackDriver::syncCamera(qint64 targetMs, qint64 toleranceMs, bool force, bool covered)
@@ -259,74 +267,74 @@ void PlaybackDriver::syncCamera(qint64 targetMs, qint64 toleranceMs, bool force,
 
 void PlaybackDriver::setAudio(Player which, double volume, bool muted)
 {
-    if (which == Screen) {
-        m_screenVolume = volume;
-        m_screenMuted = muted;
-        applyScreenAudio();
-        return;
-    }
-    QAudioOutput *output = which == Media ? m_mediaAudioOutput.get() : nullptr;
-    if (!output) return;
-    output->setVolume(volume);
-    output->setMuted(muted);
+    if (which == Camera) return;
+    OtherSound &other = otherSound(which);
+    other.volume = volume;
+    other.muted = muted;
+    applyAudio(which);
 }
 
-void PlaybackDriver::applyScreenAudio()
+void PlaybackDriver::applyAudio(Player which)
 {
-    if (m_audioOutput) {
-        m_audioOutput->setVolume(m_screenVolume);
-        m_audioOutput->setMuted(m_screenMuted || m_screenSoundActive);
+    OtherSound &other = otherSound(which);
+    if (QAudioOutput *own = ownOutput(which)) {
+        own->setVolume(other.volume);
+        own->setMuted(other.muted || other.active);
     }
-    if (m_screenSoundOutput) {
-        m_screenSoundOutput->setVolume(m_screenVolume);
-        m_screenSoundOutput->setMuted(m_screenMuted || !m_screenSoundActive);
+    if (other.output) {
+        other.output->setVolume(other.volume);
+        other.output->setMuted(other.muted || !other.active);
     }
 }
 
-void PlaybackDriver::setScreenAudioSource(const QString &path)
+void PlaybackDriver::setAudioSource(Player which, const QString &path)
 {
+    if (which == Camera) return;
+    OtherSound &other = otherSound(which);
     const QUrl source = path.isEmpty() ? QUrl() : QUrl::fromLocalFile(path);
-    if (source == m_screenSoundPlayer.source()) return;
-    if (!m_screenSoundOutput) {
-        m_screenSoundOutput = std::make_unique<QAudioOutput>();
-        m_screenSoundPlayer.setAudioOutput(m_screenSoundOutput.get());
+    if (source == other.player.source()) return;
+    if (!other.output) {
+        other.output = std::make_unique<QAudioOutput>();
+        other.player.setAudioOutput(other.output.get());
     }
-    // The recording's sound until the new file has loaded (mediaStatusChanged).
-    m_screenSoundActive = false;
-    m_screenSoundPlayer.stop();
-    applyScreenAudio();
-    m_screenSoundPlayer.setSource(source);
+    // The file's own sound until the new one has loaded (mediaStatusChanged).
+    other.active = false;
+    other.player.stop();
+    applyAudio(which);
+    other.player.setSource(source);
 }
 
-QString PlaybackDriver::screenAudioSource() const
+QString PlaybackDriver::audioSource(Player which) const
 {
-    return m_screenSoundActive ? m_screenSoundPlayer.source().toLocalFile() : QString();
+    const OtherSound &other = otherSound(which);
+    return which != Camera && other.active ? other.player.source().toLocalFile() : QString();
 }
 
-void PlaybackDriver::followScreen(bool seek)
+void PlaybackDriver::follow(Player which, bool seek)
 {
-    if (!m_screenSoundActive) return;
-    // A warm-up runs the screen player for a frame or two; its sound stays where it is.
-    const bool playing = m_player.playbackState() == QMediaPlayer::PlayingState && !m_warmingPreview;
-    if (m_screenSoundPlayer.playbackRate() != m_player.playbackRate())
-        m_screenSoundPlayer.setPlaybackRate(m_player.playbackRate());
-    const qint64 target = m_player.position();
+    OtherSound &other = otherSound(which);
+    if (!other.active) return;
+    const QMediaPlayer &leader = player(which);
+    // A warm-up runs the player for a frame or two; its sound stays where it is.
+    const bool playing = leader.playbackState() == QMediaPlayer::PlayingState && !warming(which);
+    if (other.player.playbackRate() != leader.playbackRate()) other.player.setPlaybackRate(leader.playbackRate());
+    // A seek into an inserted video still opening: the other sound is there already.
+    const qint64 target = which == Media && m_pendingMediaSeekMs >= 0 ? m_pendingMediaSeekMs : leader.position();
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
     // Two players drift apart a little; a correction is a seek, which is heard, so only past
     // lip-sync tolerance and at most once a second.
-    const bool drifted = playing && std::abs(m_screenSoundPlayer.position() - target) > 90
-        && now - m_screenSoundCorrectedAt > 1000;
+    const bool drifted = playing && std::abs(other.player.position() - target) > 90 && now - other.correctedAt > 1000;
     if (seek || drifted) {
-        if (drifted) m_screenSoundCorrectedAt = now;
-        m_screenSoundPlayer.setPosition(target);
+        if (drifted) other.correctedAt = now;
+        other.player.setPosition(target);
     }
     if (playing) {
-        if (m_screenSoundPlayer.playbackState() != QMediaPlayer::PlayingState) {
-            m_screenSoundCorrectedAt = now;
-            m_screenSoundPlayer.play();
+        if (other.player.playbackState() != QMediaPlayer::PlayingState) {
+            other.correctedAt = now;
+            other.player.play();
         }
-    } else if (m_screenSoundPlayer.playbackState() == QMediaPlayer::PlayingState) {
-        m_screenSoundPlayer.pause();
+    } else if (other.player.playbackState() == QMediaPlayer::PlayingState) {
+        other.player.pause();
     }
 }
 

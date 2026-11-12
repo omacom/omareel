@@ -132,8 +132,11 @@ pub enum Effect {
     /// Play the screen player's sound from this file instead of the recording's own (empty:
     /// the recording's), on the same timeline: the cleaned sound ([`Document::refresh_clean_audio`]).
     SetScreenAudioSource(String),
+    /// The files the media player's sound comes from changed: play
+    /// [`Document::insert_audio_source`] of the inserted video it holds.
+    InsertAudioSourcesChanged,
     /// Run [`Document::clean_audio_job`] off the GUI thread, then
-    /// [`Document::finish_clean_audio`] with its output path and result.
+    /// [`Document::finish_clean_audio`] with its id and result.
     StartCleanAudio,
     /// `cleanAudioChanged`: [`Document::clean_audio_status`] or the bypass changed.
     CleanAudioChanged,

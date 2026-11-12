@@ -595,6 +595,101 @@ private slots:
         QVERIFY2(improvement >= 8.0, qPrintable(QString::number(improvement)));
     }
 
+    // Loudness normalisation works on the program (the clips' sound) alone: the click sound,
+    // mixed after it, keeps its level even with the recording's sound off, and the volume trims
+    // the normalised level (100% is the target), as the preview plays it.
+    void normalisingLeavesTheClicksAndTheVolumeTheirPlace()
+    {
+        if (QStandardPaths::findExecutable(QStringLiteral("ffmpeg")).isEmpty()
+            || QStandardPaths::findExecutable(QStringLiteral("ffprobe")).isEmpty())
+            QSKIP("ffmpeg/ffprobe unavailable");
+        QTemporaryDir temporary;
+        QVERIFY(temporary.isValid());
+        const QString fixture = QFINDTESTDATA("fixtures/synthetic");
+        QVERIFY(!fixture.isEmpty());
+        const QString bundle = temporary.filePath(QStringLiteral("clicks.omareel"));
+        QVERIFY(QDir().mkpath(bundle));
+        // Clicks at 1.5, 2.85, 4.8 and 6.85 s.
+        for (const QString &name : {QStringLiteral("capture.json"), QStringLiteral("input.jsonl")})
+            QVERIFY(QFile::copy(QDir(fixture).filePath(name), QDir(bundle).filePath(name)));
+        // A quiet tone, some 30 dB under the target, all along.
+        QProcess make;
+        make.start(QStringLiteral("ffmpeg"), {QStringLiteral("-y"), QStringLiteral("-v"), QStringLiteral("error"),
+            QStringLiteral("-f"), QStringLiteral("lavfi"), QStringLiteral("-i"), QStringLiteral("color=c=gray:size=320x180:rate=30:d=8"),
+            QStringLiteral("-f"), QStringLiteral("lavfi"), QStringLiteral("-i"),
+            QStringLiteral("sine=f=300:sample_rate=48000:d=8,volume=0.05"),
+            QStringLiteral("-c:v"), QStringLiteral("libx264"), QStringLiteral("-pix_fmt"), QStringLiteral("yuv420p"),
+            QStringLiteral("-c:a"), QStringLiteral("aac"), QStringLiteral("-ac"), QStringLiteral("2"), QStringLiteral("-shortest"),
+            QDir(bundle).filePath(QStringLiteral("screen.mp4"))});
+        QVERIFY(make.waitForFinished(60000) && make.exitCode() == 0);
+
+        QJsonObject project = ProjectJson::defaults(QStringLiteral("Clicks"), 8.0);
+        ProjectJson::set(project, {"cursor", "visible"}, false);
+        ProjectJson::set(project, {"camera", "enabled"}, false);
+        const QString projectPath = QDir(bundle).filePath(QStringLiteral("project.json"));
+        Exporter exporter;
+        QString failure;
+        bool done = false;
+        QObject::connect(&exporter, &Exporter::failed, [&](const QString &message) { failure = message; });
+        QObject::connect(&exporter, &Exporter::finished, [&] { done = true; });
+        const auto run = [&](const QString &name, bool sound, bool clicks, double volume, const QString &loudness) {
+            ProjectJson::set(project, {"audio", "desktop"}, sound);
+            ProjectJson::set(project, {"audio", "mic"}, sound);
+            ProjectJson::set(project, {"audio", "volume"}, volume);
+            ProjectJson::set(project, {"audio", "cleanup"}, QJsonObject{{QStringLiteral("loudness"), loudness}});
+            ProjectJson::set(project, {"cursor", "clickSound"}, clicks ? QStringLiteral("soft") : QStringLiteral("none"));
+            QString error;
+            if (!ProjectJson::save(project, projectPath, &error)) return error;
+            failure.clear();
+            done = false;
+            ExportOptions options;
+            options.bundlePath = bundle;
+            options.outputPath = temporary.filePath(name);
+            options.fps = 30;
+            options.width = 320;
+            exporter.exportBundle(options);
+            return done && failure.isEmpty() ? options.outputPath : QStringLiteral("failed: ") + failure;
+        };
+
+        // Clicks alone: the same, normalised or not (they were raised some 20 dB).
+        const QString clicksOnly = run(QStringLiteral("clicks.mp4"), false, true, 1.0, QStringLiteral("off"));
+        QVERIFY2(!clicksOnly.startsWith(QStringLiteral("failed")), qPrintable(clicksOnly));
+        const QString clicksNormalised = run(QStringLiteral("clicks-16.mp4"), false, true, 1.0, QStringLiteral("-16"));
+        QVERIFY2(!clicksNormalised.startsWith(QStringLiteral("failed")), qPrintable(clicksNormalised));
+        const double click = maxVolume(clicksOnly, 1.45, 1.6);
+        const double clickNormalised = maxVolume(clicksNormalised, 1.45, 1.6);
+        qInfo("click alone %.1f dB, normalising %.1f dB", click, clickNormalised);
+        QVERIFY2(click > -40.0, qPrintable(QString::number(click)));
+        QVERIFY2(qAbs(clickNormalised - click) < 1.0, qPrintable(QString::number(clickNormalised)));
+
+        // The tone normalised, at full volume and at half (6 dB under the target).
+        const QString full = run(QStringLiteral("full.mp4"), true, false, 1.0, QStringLiteral("-16"));
+        QVERIFY2(!full.startsWith(QStringLiteral("failed")), qPrintable(full));
+        const QString half = run(QStringLiteral("half.mp4"), true, false, 0.5, QStringLiteral("-16"));
+        QVERIFY2(!half.startsWith(QStringLiteral("failed")), qPrintable(half));
+        const double fullLoudness = integratedLoudness(full);
+        const double halfLoudness = integratedLoudness(half);
+        qInfo("normalised at 100%%: %.1f LUFS, at 50%%: %.1f LUFS", fullLoudness, halfLoudness);
+        QVERIFY2(qAbs(fullLoudness + 16.0) <= 1.0, qPrintable(QString::number(fullLoudness)));
+        QVERIFY2(qAbs(halfLoudness - fullLoudness + 6.0) <= 0.5, qPrintable(QString::number(halfLoudness)));
+
+        // With the tone and the clicks: the tone at the target, the clicks on top at their level.
+        const QString both = run(QStringLiteral("both.mp4"), true, true, 1.0, QStringLiteral("-16"));
+        QVERIFY2(!both.startsWith(QStringLiteral("failed")), qPrintable(both));
+        QVERIFY2(qAbs(integratedLoudness(both) - fullLoudness) <= 0.5, qPrintable(QString::number(integratedLoudness(both))));
+        // Still stereo: the click sound is mono, and the mix once went mono with it.
+        QProcess channels;
+        channels.start(QStringLiteral("ffprobe"), {QStringLiteral("-v"), QStringLiteral("error"),
+            QStringLiteral("-select_streams"), QStringLiteral("a"), QStringLiteral("-show_entries"),
+            QStringLiteral("stream=channels"), QStringLiteral("-of"), QStringLiteral("csv=p=0"), both});
+        QVERIFY(channels.waitForFinished(15000));
+        QCOMPARE(QString::fromUtf8(channels.readAllStandardOutput()).trimmed(), QStringLiteral("2"));
+        const double toneWithClicks = rmsLevel(both, 3.2, 4.6);
+        const double tone = rmsLevel(full, 3.2, 4.6);
+        qInfo("the tone between clicks %.2f dB, without clicks %.2f dB", toneWithClicks, tone);
+        QVERIFY2(qAbs(toneWithClicks - tone) < 0.3, qPrintable(QString::number(toneWithClicks)));
+    }
+
     void exportsTwoSecondH264()
     {
         if (QStandardPaths::findExecutable(QStringLiteral("ffmpeg")).isEmpty()
