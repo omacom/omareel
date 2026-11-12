@@ -155,6 +155,9 @@ pub mod qobject {
         fn render_background() -> QColor;
         #[cxx_name = "renderForeground"]
         fn render_foreground() -> QColor;
+        /// The theme's accent, which overlays are drawn in by default.
+        #[cxx_name = "renderAccent"]
+        fn render_accent() -> QColor;
         /// shell.toml's `[font] base-size`, 12 without one.
         #[cxx_name = "shellFontBaseSize"]
         fn shell_font_base_size() -> i32;
@@ -170,6 +173,10 @@ fn render_background() -> QColor {
 
 fn render_foreground() -> QColor {
     to_qt(&theme::render_colors().1)
+}
+
+fn render_accent() -> QColor {
+    to_qt(&theme::render_accent())
 }
 
 fn shell_font_base_size() -> i32 {

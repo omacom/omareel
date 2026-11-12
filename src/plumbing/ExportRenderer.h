@@ -46,6 +46,9 @@ class CompositionState : public QObject
     Q_PROPERTY(QVariantMap cursor MEMBER cursor NOTIFY changed)
     Q_PROPERTY(QVariantList ripples MEMBER ripples NOTIFY changed)
     Q_PROPERTY(QVariantList keystrokePills MEMBER keystrokePills NOTIFY changed)
+    Q_PROPERTY(QVariantList visibleOverlays MEMBER visibleOverlays NOTIFY changed)
+    // Blur overlays are already in the recording's pixels (crates/omareel_core/src/export/redact.rs).
+    Q_PROPERTY(bool redactionBaked READ redactionBaked CONSTANT)
     Q_PROPERTY(bool softwareRendering MEMBER softwareRendering CONSTANT)
 public:
     using QObject::QObject;
@@ -66,6 +69,8 @@ public:
     QVariantMap cursor;
     QVariantList ripples;
     QVariantList keystrokePills;
+    QVariantList visibleOverlays;
+    bool redactionBaked() const { return true; }
     bool softwareRendering = false;
     void notifyChanged() { emit changed(); }
 signals:

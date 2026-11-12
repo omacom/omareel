@@ -18,6 +18,7 @@ pub mod decoder;
 pub mod encoder_pipe;
 pub mod hardware;
 pub mod plan;
+pub mod redact;
 
 use crate::clip_timeline::ClipTimeline;
 use crate::compat::qdir::{self, FileInfo};
@@ -32,6 +33,7 @@ use crate::keystroke_track::KeystrokeTrack;
 use crate::media_probe::{self, VideoInfo};
 use crate::motion_track::MotionTrack;
 use crate::omarchy_paths;
+use crate::overlay_track;
 use crate::project::{Clip, Project};
 use crate::zoom_timeline;
 use composition::{CompositionState, Sources};
@@ -190,6 +192,8 @@ struct DecodePlan {
     total_frames: i32,
     /// The recording's frames come as YUV in this layout ([`ExportJob::set_yuv_screen`]).
     screen_yuv: Option<YuvLayout>,
+    /// The project's blur overlays, baked into the recording's frames ([`redact`]).
+    redactions: Vec<crate::project::Overlay>,
 }
 
 pub struct ExportJob {
@@ -708,6 +712,7 @@ impl ExportJob {
             } else {
                 None
             },
+            redactions: self.project.overlays.iter().filter(|overlay| overlay.kind == "blur").cloned().collect(),
         };
         let shared = Arc::clone(&self.decode);
         let cancelled = Arc::clone(&self.cancelled);
@@ -1073,6 +1078,26 @@ fn image(pixels: Vec<u8>, width: i32, height: i32, yuv: Option<YuvLayout>) -> Im
     Image { width, height, pixels: Arc::new(pixels), yuv }
 }
 
+/// The recording's frame for `output_time` with the blur overlays showing then baked in, or
+/// the frame as decoded (shared, not copied) when none show.
+fn redacted(decoded: Option<&Image>, work: &DecodePlan, output_time: f64) -> Option<Image> {
+    let image = decoded?;
+    let source_time = work.timeline.recording_source_time(output_time);
+    let regions: Vec<redact::Redaction> =
+        overlay_track::redactions_at(&work.redactions, source_time).into_iter().map(redact::Redaction::of).collect();
+    if regions.is_empty() {
+        return Some(image.clone());
+    }
+    let mut pixels = image.pixels.as_ref().clone();
+    let (width, height) = (image.width.max(0) as usize, image.height.max(0) as usize);
+    if image.yuv.is_some() {
+        redact::redact_yuv420(&mut pixels, width, height, &regions);
+    } else {
+        redact::redact_rgba(&mut pixels, width, height, &regions);
+    }
+    Some(Image { pixels: Arc::new(pixels), ..image.clone() })
+}
+
 /// Starts `decoder` on `clip`: the recording at the decode size, or an inserted video scaled to
 /// its own size.
 fn start_clip_decoder(decoder: &mut FfmpegDecoder, clip: &Clip, work: &DecodePlan, error: &mut String) -> bool {
@@ -1262,7 +1287,7 @@ fn decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &AtomicBoo
             break;
         }
         queue.packets.push_back(DecodedPacket {
-            image: decoded.clone(),
+            image: if clip.is_media() { decoded.clone() } else { redacted(decoded.as_ref(), work, output_time) },
             camera_image: camera_decoded.clone(),
             error: String::new(),
             clip: clip_index,

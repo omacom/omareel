@@ -45,6 +45,7 @@ mod document;
 mod exporting;
 mod history;
 mod ids;
+mod overlays;
 pub mod playback;
 mod presets;
 #[cfg(test)]
@@ -59,6 +60,7 @@ pub use composition::*;
 pub use document::*;
 pub use exporting::*;
 pub use ids::random_uuid;
+pub use overlays::DEFAULT_OVERLAY_LENGTH;
 pub use playback::{CameraSync, MediaSeek, NextClip, NextClipKind, Player, PlayerPosition, Transport};
 pub use presets::clean_preset_name;
 pub use thumbnails::*;

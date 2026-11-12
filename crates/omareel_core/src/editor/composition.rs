@@ -9,8 +9,10 @@
 use super::Document;
 use crate::camera_timeline::map_camera_time;
 use crate::compat::cpp;
+use crate::compat::qjson::Object;
 use crate::keystroke_track::KeystrokePill;
 use crate::motion_track::{MotionSample, RippleSample};
+use crate::overlay_track;
 
 /// `zoom`: `{scale, cx, cy, velocity}`, all doubles.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -63,6 +65,8 @@ pub struct PreviewComposition {
     pub ripples: Vec<RippleSample>,
     /// `keystrokePills`: `{keys (QStringList), text, opacity}` maps.
     pub keystroke_pills: Vec<KeystrokePill>,
+    /// `overlays`: the overlays showing, each one's project JSON with its `opacity`.
+    pub overlays: Vec<Object>,
     pub camera_visible: bool,
 }
 
@@ -133,6 +137,20 @@ impl Document {
         self.keystroke_track.sample(self.source_position())
     }
 
+    /// The overlays in effect at the output position, as the exporter samples them
+    /// ([`overlay_track::sample_json`]), except that the selected one shows at full opacity
+    /// while it is being edited (a new one starts at the playhead, where its fade-in hides it).
+    pub fn preview_overlays(&self) -> Vec<Object> {
+        let mut items =
+            overlay_track::sample_json(&self.project.overlays, self.source_position(), self.output_position, !self.showing_insert());
+        for item in &mut items {
+            if !self.selected_overlay_id.is_empty() && item.value("id").as_str() == Some(self.selected_overlay_id.as_str()) {
+                item.insert("opacity", 1.0);
+            }
+        }
+        items
+    }
+
     /// `cameraVisible()`: a camera, no inserted clip, and the camera started; a full-frame camera
     /// holds its first frame until it started instead of leaving the frame empty.
     pub fn camera_visible(&self) -> bool {
@@ -154,6 +172,7 @@ impl Document {
             cursor: self.preview_cursor(),
             ripples: self.preview_ripples(),
             keystroke_pills: self.preview_keystroke_pills(),
+            overlays: self.preview_overlays(),
             camera_visible: self.camera_visible(),
         }
     }

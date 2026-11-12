@@ -1022,6 +1022,125 @@ private slots:
         QVERIFY(qAbs(editor.position() - .4) < .03);
     }
 
+    // Annotations: B adds a blur region at the playhead and selects it (the Annotate panel
+    // opens), a drag on the preview moves it as one undo step, and Delete removes it.
+    void annotationsAddMoveAndDeleteOnThePreview()
+    {
+        QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));
+        Editor editor(m_bundle);
+        QVERIFY2(editor.isValid(), qPrintable(editor.errorString()));
+        Theme theme;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("editor"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("comp"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import Omareel
+            Main { width: 1200; height: 800; visible: true })", QUrl());
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        std::unique_ptr<QObject> object(component.create());
+        auto *window = qobject_cast<QQuickWindow *>(object.get());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        QTRY_VERIFY_WITH_TIMEOUT(!editor.loading(), 15000);
+        QVERIFY(editor.overlays().isEmpty());
+
+        QTest::keyClick(window, Qt::Key_B);
+        QTRY_COMPARE(editor.overlays().size(), 1);
+        const QVariantMap added = editor.overlays().first().toMap();
+        const QString id = added.value(QStringLiteral("id")).toString();
+        QCOMPARE(added.value(QStringLiteral("kind")).toString(), QStringLiteral("blur"));
+        QCOMPARE(added.value(QStringLiteral("anchor")).toString(), QStringLiteral("screen"));
+        QCOMPARE(editor.selectedOverlayId(), id);
+        QTRY_VERIFY(window->findChild<QQuickItem *>(QStringLiteral("overlayPanel")));
+        QTRY_VERIFY(window->findChild<QQuickItem *>(QStringLiteral("overlayTrack"))->isVisible());
+        QTRY_COMPARE(editor.property("visibleOverlays").toList().size(), 1);
+
+        auto *layer = window->findChild<QQuickItem *>(QStringLiteral("overlayEditLayer"));
+        QVERIFY(layer);
+        QVariant area;
+        QVERIFY(QMetaObject::invokeMethod(layer, "bounds", Q_RETURN_ARG(QVariant, area),
+                                          Q_ARG(QVariant, editor.property("visibleOverlays").toList().first())));
+        const QRectF bounds = area.toRectF();
+        QVERIFY(bounds.width() > 10);
+        const QPoint start = layer->mapToScene(bounds.center()).toPoint();
+        const double before = added.value(QStringLiteral("rect")).toMap().value(QStringLiteral("x")).toDouble();
+        QTest::mousePress(window, Qt::LeftButton, Qt::NoModifier, start);
+        QTest::mouseMove(window, start + QPoint(20, 0), 20);
+        QTest::mouseMove(window, start + QPoint(40, 0), 20);
+        QTest::mouseRelease(window, Qt::LeftButton, Qt::NoModifier, start + QPoint(40, 0), 20);
+        const auto rectX = [&] {
+            return editor.overlays().first().toMap().value(QStringLiteral("rect")).toMap().value(QStringLiteral("x")).toDouble();
+        };
+        QTRY_VERIFY(rectX() > before + 0.02);
+        // The drag was one step: one undo puts it back, a second removes the overlay.
+        editor.undo();
+        QCOMPARE(rectX(), before);
+        editor.undo();
+        QVERIFY(editor.overlays().isEmpty());
+        editor.redo();
+        editor.redo();
+        QVERIFY(rectX() > before + 0.02);
+
+        editor.setSelectedOverlayId(id);
+        QTRY_VERIFY(!window->property("singleKeyShortcutsBlocked").toBool());
+        QTest::keyClick(window, Qt::Key_Delete);
+        QTRY_VERIFY(editor.overlays().isEmpty());
+        QVERIFY(editor.selectedOverlayId().isEmpty());
+    }
+
+    // The Overlays lane: dragging a block moves a frame-anchored overlay along the output, its
+    // length kept, as one undo step.
+    void overlayLaneDragMovesInTime()
+    {
+        QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));
+        Editor editor(m_bundle);
+        QVERIFY(editor.isValid());
+        const QString id = editor.addOverlay(QStringLiteral("text"), 0.2, 0.8, QVariantMap{{QStringLiteral("text"), QStringLiteral("Hi")}});
+        QVERIFY(!id.isEmpty());
+
+        Theme theme;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("editor"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import QtQuick
+            import QtQuick.Window
+            import Omareel
+            Window {
+                width: 600; height: 80; visible: true
+                Item { id: focusItem; anchors.fill: parent }
+                OverlayTrack { anchors.fill: parent; pixelsPerSecond: 200; focusTarget: focusItem }
+            })", QUrl());
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        std::unique_ptr<QObject> object(component.create());
+        auto *window = qobject_cast<QQuickWindow *>(object.get());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        // Repeater delegates are visual children only.
+        std::function<QQuickItem *(QQuickItem *)> findBody = [&](QQuickItem *parent) -> QQuickItem * {
+            if (parent->objectName() == QStringLiteral("overlayBody-") + id) return parent;
+            for (QQuickItem *child : parent->childItems())
+                if (QQuickItem *match = findBody(child)) return match;
+            return nullptr;
+        };
+        QTRY_VERIFY(findBody(window->contentItem()));
+        auto *body = findBody(window->contentItem());
+        const QPoint start = body->mapToScene(QPointF(body->width() / 2, body->height() / 2)).toPoint();
+        QTest::mousePress(window, Qt::LeftButton, Qt::NoModifier, start);
+        QTest::mouseMove(window, start + QPoint(50, 0), 20);
+        QTest::mouseMove(window, start + QPoint(100, 0), 20);
+        QTest::mouseRelease(window, Qt::LeftButton, Qt::NoModifier, start + QPoint(100, 0), 20);
+        const auto field = [&](const char *key) { return editor.overlays().first().toMap().value(QLatin1String(key)).toDouble(); };
+        QTRY_VERIFY(qAbs(field("start") - 0.7) < 0.02);
+        QVERIFY(qAbs(field("end") - 1.3) < 0.02);
+        QCOMPARE(editor.selectedOverlayId(), id);
+        editor.undo();
+        QCOMPARE(field("start"), 0.2);
+    }
+
     void zoomTrackRubberBandSelectsAndDeletesTwo()
     {
         QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));

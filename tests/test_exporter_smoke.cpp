@@ -99,6 +99,34 @@ static QColor pixelAt(const QString &video, double seconds, int x, int y)
     return frame.valid(x, y) ? frame.pixelColor(x, y) : QColor();
 }
 
+static QImage frameAt(const QString &video, double seconds)
+{
+    QProcess process;
+    process.start(QStringLiteral("ffmpeg"), {QStringLiteral("-v"), QStringLiteral("error"),
+        QStringLiteral("-ss"), QString::number(seconds, 'f', 3), QStringLiteral("-i"), video,
+        QStringLiteral("-frames:v"), QStringLiteral("1"), QStringLiteral("-f"), QStringLiteral("image2pipe"),
+        QStringLiteral("-c:v"), QStringLiteral("png"), QStringLiteral("-")});
+    if (!process.waitForFinished(15000)) return {};
+    return QImage::fromData(process.readAllStandardOutput(), "PNG");
+}
+
+// Variance of the grey level over `area`: high over text, near zero once it is hidden.
+static double greyVariance(const QImage &image, const QRect &area)
+{
+    double sum = 0, squares = 0;
+    int count = 0;
+    for (int y = area.top(); y <= area.bottom(); ++y)
+        for (int x = area.left(); x <= area.right(); ++x) {
+            const double grey = qGray(image.pixel(x, y));
+            sum += grey;
+            squares += grey * grey;
+            ++count;
+        }
+    if (count == 0) return -1;
+    const double mean = sum / count;
+    return squares / count - mean * mean;
+}
+
 static bool isYellow(const QColor &c) { return c.isValid() && c.red() > 150 && c.green() > 150 && c.blue() < 90; }
 static bool isRed(const QColor &c) { return c.isValid() && c.red() > 150 && c.green() < 90 && c.blue() < 90; }
 static bool isGreen(const QColor &c) { return c.isValid() && c.green() > 130 && c.red() < 90 && c.blue() < 90; }
@@ -232,6 +260,75 @@ private slots:
         }
         QCOMPARE(QDir(temporary.path()).entryList({QStringLiteral(".omareel-export-*.mp4")},
                                                   QDir::Files | QDir::Hidden), QStringList());
+    }
+
+    // Blur overlays hide what they cover in the export, on whichever renderer runs (ctest runs
+    // this on the GPU and again as exporter_overlays_software): the exporter bakes them into the
+    // recording's pixels, the RGBA frames of the software path and the YUV ones of the GPU path.
+    void blurRegionsHideWhatTheyCover()
+    {
+        if (QStandardPaths::findExecutable(QStringLiteral("ffmpeg")).isEmpty()
+            || QStandardPaths::findExecutable(QStringLiteral("ffprobe")).isEmpty())
+            QSKIP("ffmpeg/ffprobe unavailable");
+        QTemporaryDir temporary;
+        QVERIFY(temporary.isValid());
+        const QString bundle = temporary.filePath(QStringLiteral("blur.omareel"));
+        QVERIFY(QDir().mkpath(bundle));
+        // Black text on white, line after line, over the whole frame.
+        QStringList lines;
+        for (int i = 0; i < 20; ++i)
+            for (int x : {6, 326})
+                lines << QStringLiteral("drawtext=text='Password hunter2 token %1 ABCDEFGH':"
+                                        "fontsize=15:fontcolor=black:x=%2:y=%3").arg(i).arg(x).arg(4 + i * 18);
+        QProcess makeVideo;
+        makeVideo.start(QStringLiteral("ffmpeg"), {QStringLiteral("-y"), QStringLiteral("-v"), QStringLiteral("error"),
+            QStringLiteral("-f"), QStringLiteral("lavfi"), QStringLiteral("-i"),
+            QStringLiteral("color=c=white:size=640x360:rate=30:duration=2"),
+            QStringLiteral("-vf"), lines.join(QLatin1Char(',')),
+            QStringLiteral("-c:v"), QStringLiteral("libx264"), QStringLiteral("-crf"), QStringLiteral("12"),
+            QStringLiteral("-pix_fmt"), QStringLiteral("yuv420p"), QDir(bundle).filePath(QStringLiteral("screen.mp4"))});
+        QVERIFY(makeVideo.waitForFinished(30000) && makeVideo.exitCode() == 0);
+        QFile capture(QDir(bundle).filePath(QStringLiteral("capture.json")));
+        QVERIFY(capture.open(QIODevice::WriteOnly));
+        capture.write(R"({"fps":30,"first_frame_us":1000})");
+        capture.close();
+        QFile input(QDir(bundle).filePath(QStringLiteral("input.jsonl")));
+        QVERIFY(input.open(QIODevice::WriteOnly));
+        input.close();
+
+        // No background: the recording fills the 640x360 output, so recording coordinates are
+        // output pixels. Pixelate the left region and blur the right one from 0.5 s to 1.5 s.
+        QJsonObject project = ProjectJson::defaults(QStringLiteral("Blur"), 2.0);
+        ProjectJson::set(project, {"background", "type"}, QStringLiteral("none"));
+        ProjectJson::set(project, {"cursor", "visible"}, false);
+        const auto region = [](const char *id, const char *style, double x) {
+            return QJsonObject{{"id", id}, {"kind", "blur"}, {"anchor", "screen"}, {"start", 0.5}, {"end", 1.5},
+                {"rect", QJsonObject{{"x", x}, {"y", 0.25}, {"w", 0.4}, {"h", 0.5}}},
+                {"style", style}, {"amount", 0.5}};
+        };
+        project.insert(QStringLiteral("overlays"), QJsonArray{region("p", "pixelate", 0.05), region("b", "blur", 0.55)});
+        QString error;
+        QVERIFY2(ProjectJson::save(project, QDir(bundle).filePath(QStringLiteral("project.json")), &error),
+                 qPrintable(error));
+        const QString output = temporary.filePath(QStringLiteral("blur.mp4"));
+        QVERIFY2(exportBundle(bundle, output, &error), qPrintable(error));
+
+        // Inside each region, a few pixels in from its edges; and a strip of text outside both.
+        const QRect pixelated(40, 100, 240, 160), blurred(360, 100, 240, 160), outside(40, 290, 560, 60);
+        const QImage before = frameAt(output, 0.2), during = frameAt(output, 1.0), after = frameAt(output, 1.8);
+        QVERIFY(!before.isNull() && !during.isNull() && !after.isNull());
+        QCOMPARE(during.size(), QSize(640, 360));
+        const double textVariance = greyVariance(before, pixelated);
+        qInfo("text %.0f, pixelated %.0f, blurred %.0f, outside %.0f, after %.0f", textVariance,
+              greyVariance(during, pixelated), greyVariance(during, blurred), greyVariance(during, outside),
+              greyVariance(after, blurred));
+        QVERIFY(textVariance > 2000);
+        QVERIFY(greyVariance(before, blurred) > 2000);
+        QVERIFY(greyVariance(during, pixelated) < 400);
+        QVERIFY(greyVariance(during, blurred) < 400);
+        // Only there, and only then.
+        QVERIFY(greyVariance(during, outside) > 2000);
+        QVERIFY(greyVariance(after, blurred) > 2000);
     }
 
     void clipsStartingOnAStillScreenShowTheFrameOnScreen()
