@@ -126,7 +126,8 @@ static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplicat
         {QStringLiteral("background"), 0}, {QStringLiteral("shape"), 1},
         {QStringLiteral("cursor"), 2}, {QStringLiteral("zoom"), 3},
         {QStringLiteral("clip"), 4}, {QStringLiteral("camera"), 5},
-        {QStringLiteral("keystrokes"), 6}, {QStringLiteral("audio"), 7}, {QStringLiteral("speech"), 8}
+        {QStringLiteral("keystrokes"), 6}, {QStringLiteral("audio"), 7}, {QStringLiteral("speech"), 8},
+        {QStringLiteral("annotate"), 9}
     };
     const QString panel = qEnvironmentVariable("OMAREEL_SCREENSHOT_PANEL").toLower();
     if (panels.contains(panel)) {
@@ -137,6 +138,10 @@ static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplicat
                 const QVariantList zooms = editorObject->property("zooms").toList();
                 if (!zooms.isEmpty())
                     editorObject->setProperty("selectedZoomId", zooms.first().toMap().value(QStringLiteral("id")));
+            } else if (panel == QLatin1String("annotate")) {
+                const QVariantList overlays = editorObject->property("overlays").toList();
+                if (!overlays.isEmpty())
+                    editorObject->setProperty("selectedOverlayId", overlays.first().toMap().value(QStringLiteral("id")));
             } else if (panel == QLatin1String("clip")) {
                 const QVariantList clips = editorObject->property("clips").toList();
                 if (!clips.isEmpty())

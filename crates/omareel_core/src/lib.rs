@@ -22,6 +22,7 @@ pub mod microphone_meter;
 pub mod motion_track;
 pub mod music;
 pub mod omarchy_paths;
+pub mod overlay_track;
 pub mod probe;
 pub mod project;
 pub mod recording_preferences;

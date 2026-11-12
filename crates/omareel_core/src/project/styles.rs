@@ -179,6 +179,8 @@ pub struct Project {
     pub crop: RectF,
     pub clips: Vec<Clip>,
     pub zooms: Vec<ZoomSegment>,
+    /// Annotations over the recording (`overlays`, written only when there are any).
+    pub overlays: Vec<super::overlays::Overlay>,
     pub zoom_style: ZoomStyle,
     pub background: Background,
     pub frame: Frame,
@@ -211,6 +213,7 @@ impl Default for Project {
             crop: RectF::new(0.0, 0.0, 1.0, 1.0),
             clips: Vec::new(),
             zooms: Vec::new(),
+            overlays: Vec::new(),
             zoom_style: ZoomStyle::default(),
             background: Background::default(),
             frame: Frame::default(),

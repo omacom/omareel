@@ -35,6 +35,9 @@ use crate::export::ffi::ExportOptions;
 use crate::export::{json_map, json_variant, map};
 use crate::theme::to_qt;
 
+#[path = "editor_overlays.rs"]
+mod overlays;
+
 #[cxx_qt::bridge]
 pub mod qobject {
     unsafe extern "C++" {
@@ -107,6 +110,9 @@ pub mod qobject {
         #[qproperty(QMap_QString_QVariant, project, READ = project_map, NOTIFY = project_changed)]
         #[qproperty(QList_QVariant, clips, READ = clips, NOTIFY = project_changed)]
         #[qproperty(QList_QVariant, zooms, READ = zooms, NOTIFY = project_changed)]
+        #[qproperty(QList_QVariant, overlays, READ = overlays, NOTIFY = project_changed)]
+        #[qproperty(QString, selected_overlay_id, READ = selected_overlay_id, WRITE = set_selected_overlay_id, NOTIFY = selection_changed)]
+        #[qproperty(QList_QVariant, visible_overlays, READ = preview_overlays, NOTIFY = composition_changed)]
         #[qproperty(QString, bundle_path, READ = bundle_path, CONSTANT)]
         #[qproperty(QString, bundle_name, READ = bundle_name, NOTIFY = project_changed)]
         #[qproperty(f64, duration, READ = duration, NOTIFY = duration_changed)]
@@ -261,6 +267,23 @@ pub mod qobject {
         fn project_map(self: &Editor) -> QMap_QString_QVariant;
         fn clips(self: &Editor) -> QList_QVariant;
         fn zooms(self: &Editor) -> QList_QVariant;
+        // Overlays (editor_overlays.rs): each item's project JSON with `outputStart`/`outputEnd`;
+        // the selection; and what the composition draws now.
+        fn overlays(self: &Editor) -> QList_QVariant;
+        fn selected_overlay_id(self: &Editor) -> QString;
+        fn set_selected_overlay_id(self: Pin<&mut Editor>, id: &QString);
+        fn preview_overlays(self: &Editor) -> QList_QVariant;
+        // An overlay of `kind` with its defaults at the output position, for `length` seconds.
+        #[qinvokable]
+        fn add_overlay_at(self: Pin<&mut Editor>, kind: &QString, output_time: f64, length: f64) -> QString;
+        // `props`: fields as project.json writes them (rect, anchor, text, ...); times in the
+        // item's time base (source for screen-anchored items, output for frame-anchored).
+        #[qinvokable]
+        fn add_overlay(self: Pin<&mut Editor>, kind: &QString, start: f64, end: f64, props: &QMap_QString_QVariant) -> QString;
+        #[qinvokable]
+        fn update_overlay(self: Pin<&mut Editor>, id: &QString, patch: &QMap_QString_QVariant, coalesce: bool) -> bool;
+        #[qinvokable]
+        fn remove_overlay(self: Pin<&mut Editor>, id: &QString) -> bool;
         fn bundle_path(self: &Editor) -> QString;
         fn bundle_name(self: &Editor) -> QString;
         fn duration(self: &Editor) -> f64;
@@ -1400,6 +1423,7 @@ impl qobject::Editor {
             QVariant::from(&map([
                 ("background", QVariant::from(&to_qt(&background))),
                 ("foreground", QVariant::from(&to_qt(&foreground))),
+                ("accent", QVariant::from(&to_qt(&omareel_core::theme::render_accent()))),
             ])),
         );
         *self.project_map.borrow_mut() = Some((revision, result.clone()));

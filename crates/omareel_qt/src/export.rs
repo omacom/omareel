@@ -209,6 +209,9 @@ pub mod ffi {
         /// `{scale}`: the transition at a cut.
         #[cxx_name = "transitionMap"]
         fn transition_map(self: &ExportJob) -> QMap_QString_QVariant;
+        /// The overlays showing: each one's project JSON with its `opacity`.
+        #[cxx_name = "visibleOverlays"]
+        fn visible_overlays(self: &ExportJob) -> QList_QVariant;
         /// Before `start`: the recording's frames as YUV (see `DecodedImage`) when the
         /// renderer converts them on the GPU.
         #[cxx_name = "setYuvScreen"]
@@ -583,6 +586,11 @@ impl ExportJob {
                 ]))
             })
             .collect()
+    }
+
+    fn visible_overlays(&self) -> QList<QVariant> {
+        let Some(s) = self.state() else { return QList::default() };
+        s.overlays.iter().map(|overlay| json_variant(&Value::Object(overlay.clone()))).collect()
     }
 
     fn keystroke_pills(&self) -> QList<QVariant> {

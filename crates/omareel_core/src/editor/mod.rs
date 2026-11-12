@@ -46,6 +46,7 @@ mod exporting;
 mod history;
 mod ids;
 mod music;
+mod overlays;
 pub mod playback;
 mod presets;
 #[cfg(test)]
@@ -63,6 +64,7 @@ pub use document::*;
 pub use exporting::*;
 pub use ids::random_uuid;
 pub use music::{MusicImportJob, MusicPlayback, ProbeAudio};
+pub use overlays::DEFAULT_OVERLAY_LENGTH;
 pub use playback::{CameraSync, MediaSeek, NextClip, NextClipKind, Player, PlayerPosition, Transport};
 pub use presets::clean_preset_name;
 pub use thumbnails::*;

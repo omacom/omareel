@@ -101,6 +101,7 @@ set_source_files_properties(
     src/ui/qml/MediaLayer.qml
     src/ui/qml/KeystrokeOverlay.qml
     src/ui/qml/CaptionOverlay.qml
+    src/ui/qml/OverlayLayer.qml
     src/ui/qml/Main.qml
     src/ui/qml/TopBar.qml
     src/ui/qml/PreviewPane.qml
@@ -130,6 +131,9 @@ set_source_files_properties(
     src/ui/qml/Timeline.qml
     src/ui/qml/ClipTrack.qml
     src/ui/qml/ZoomTrack.qml
+    src/ui/qml/OverlayTrack.qml
+    src/ui/qml/OverlayEditLayer.qml
+    src/ui/qml/OverlayPanel.qml
     src/ui/qml/Launcher.qml
     src/ui/qml/RecordingBar.qml
     PROPERTIES QT_RESOURCE_ALIAS ""
@@ -141,7 +145,8 @@ set_source_files_properties(src/ui/qml/CursorOverlay.qml PROPERTIES QT_RESOURCE_
 set_source_files_properties(src/ui/qml/CameraOverlay.qml PROPERTIES QT_RESOURCE_ALIAS "CameraOverlay.qml")
 set_source_files_properties(src/ui/qml/BlurredBackdrop.qml PROPERTIES QT_RESOURCE_ALIAS "BlurredBackdrop.qml")
 set_source_files_properties(src/ui/qml/MediaLayer.qml PROPERTIES QT_RESOURCE_ALIAS "MediaLayer.qml")
-foreach(qml_name IN ITEMS Main TopBar PreviewPane BottomBar SidePanel PanelSlider PanelLabel PanelHeading PanelValue IconToolButton EditorButton EditorSlider EditorSwitch EditorComboBox BackgroundPanel ShapePanel CursorPanel ZoomPanel AudioPanel ClipPanel CameraPanel KeystrokesPanel SpeechPanel ExportDialog InsertClipDialog Timeline ClipTrack ZoomTrack Launcher RecordingBar)
+set_source_files_properties(src/ui/qml/OverlayLayer.qml PROPERTIES QT_RESOURCE_ALIAS "OverlayLayer.qml")
+foreach(qml_name IN ITEMS Main TopBar PreviewPane BottomBar SidePanel PanelSlider PanelLabel PanelHeading PanelValue IconToolButton EditorButton EditorSlider EditorSwitch EditorComboBox BackgroundPanel ShapePanel CursorPanel ZoomPanel AudioPanel ClipPanel CameraPanel KeystrokesPanel SpeechPanel ExportDialog InsertClipDialog Timeline ClipTrack ZoomTrack OverlayTrack OverlayEditLayer OverlayPanel Launcher RecordingBar)
     set_source_files_properties(src/ui/qml/${qml_name}.qml PROPERTIES QT_RESOURCE_ALIAS "${qml_name}.qml")
 endforeach()
 qt_add_qml_module(omareel_render
@@ -162,6 +167,7 @@ qt_add_qml_module(omareel_render
         src/ui/qml/MediaLayer.qml
         src/ui/qml/KeystrokeOverlay.qml
         src/ui/qml/CaptionOverlay.qml
+        src/ui/qml/OverlayLayer.qml
         src/ui/qml/Main.qml
         src/ui/qml/TopBar.qml
         src/ui/qml/PreviewPane.qml
@@ -191,6 +197,9 @@ qt_add_qml_module(omareel_render
         src/ui/qml/Timeline.qml
         src/ui/qml/ClipTrack.qml
         src/ui/qml/ZoomTrack.qml
+        src/ui/qml/OverlayTrack.qml
+        src/ui/qml/OverlayEditLayer.qml
+        src/ui/qml/OverlayPanel.qml
         src/ui/qml/Launcher.qml
         src/ui/qml/RecordingBar.qml
 )
@@ -201,6 +210,13 @@ qt_add_shaders(omareel_render "omareel_shaders"
     BASE src/render/shaders
     FILES src/render/shaders/yuv.vert src/render/shaders/yuv.frag
 )
+# The preview's pixelated blur regions sample mip levels (textureLod), which ESSL 100 lacks.
+qt_add_shaders(omareel_render "omareel_overlay_shaders"
+    GLSL "300es,330"
+    PREFIX "/omareel/shaders"
+    BASE src/render/shaders
+    FILES src/render/shaders/pixelate.frag
+)
 qt_add_resources(omareel_render "omareel_assets"
     PREFIX "/omareel"
     FILES
@@ -210,6 +226,8 @@ qt_add_resources(omareel_render "omareel_assets"
         assets/icons/lucide/palette.svg assets/icons/lucide/square.svg
         assets/icons/lucide/mouse-pointer-2.svg assets/icons/lucide/zoom-in.svg
         assets/icons/lucide/zoom-out.svg
+        assets/icons/lucide/type.svg assets/icons/lucide/arrow-up-right.svg assets/icons/lucide/hash.svg
+        assets/icons/lucide/pen-line.svg assets/icons/lucide/presentation.svg
         assets/icons/lucide/film.svg assets/icons/lucide/camera.svg assets/icons/lucide/volume-2.svg
         assets/icons/lucide/captions.svg
         assets/icons/lucide/play.svg assets/icons/lucide/pause.svg
@@ -255,6 +273,9 @@ if(BUILD_TESTING)
     target_link_libraries(test_exporter_smoke PRIVATE omareel_render Qt6::Test)
     add_test(NAME exporter_smoke COMMAND test_exporter_smoke)
     find_package(Qt6 REQUIRED COMPONENTS Network)
+    # The blur test again on the software scene graph (offscreen), whatever the run's platform.
+    add_test(NAME exporter_overlays_software COMMAND test_exporter_smoke blurRegionsHideWhatTheyCover blurNeverLeaksAFrame)
+    set_tests_properties(exporter_overlays_software PROPERTIES ENVIRONMENT QT_QPA_PLATFORM=offscreen)
     qt_add_executable(test_editor tests/test_editor.cpp)
     target_link_libraries(test_editor PRIVATE omareel_render Qt6::Test Qt6::Network)
     add_test(NAME editor COMMAND test_editor)

@@ -1,6 +1,7 @@
 //! Reading, migrating and writing `project.json` (`Project.cpp`).
 
 use super::model::*;
+use super::overlays::{overlays_from_json, overlays_to_json};
 use super::styles::*;
 use crate::compat::cpp;
 use crate::compat::geometry::{PointF, RectF};
@@ -283,6 +284,7 @@ impl Project {
             }
             p.zooms.push(z);
         }
+        p.overlays = overlays_from_json(source.value("overlays"));
         let zs = source.value("zoomStyle").to_object();
         p.zoom_style.spring = spring_from_json(&zs.value("spring").to_object(), &p.zoom_style.spring);
         p.zoom_style.snap_to_edges_ratio = zs.value("snapToEdgesRatio").to_double(0.25);
@@ -616,6 +618,9 @@ impl Project {
         // Written only when set, so projects without music stay as they were.
         if let Some(music) = &self.music {
             root.insert("music", music_to_json(music));
+        }
+        if !self.overlays.is_empty() {
+            root.insert("overlays", overlays_to_json(&self.overlays));
         }
         root
     }

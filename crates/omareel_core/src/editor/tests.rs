@@ -2134,3 +2134,6 @@ fn transitions_at_cuts_follow_the_project_and_the_clip() {
     qt.run(Document::undo);
     assert_eq!(qt.document.project().transition, "none");
 }
+
+#[path = "overlay_tests.rs"]
+mod overlay_tests;

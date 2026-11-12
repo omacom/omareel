@@ -77,7 +77,7 @@ static double meanVolume(const QString &video, double from, double to, const QSt
     return match.captured(1) == QLatin1String("-inf") ? -200.0 : match.captured(1).toDouble();
 }
 
-static bool exportBundle(const QString &bundle, const QString &output, QString *error)
+static bool exportBundle(const QString &bundle, const QString &output, QString *error, int fps = 30)
 {
     Exporter exporter;
     QString failure;
@@ -87,7 +87,7 @@ static bool exportBundle(const QString &bundle, const QString &output, QString *
     ExportOptions options;
     options.bundlePath = bundle;
     options.outputPath = output;
-    options.fps = 30;
+    options.fps = fps;
     options.width = 640;
     exporter.exportBundle(options);
     if (error) *error = failure;
@@ -114,6 +114,60 @@ static QColor pixelAt(const QString &video, double seconds, int x, int y)
     if (!process.waitForFinished(15000)) return {};
     const QImage frame = QImage::fromData(process.readAllStandardOutput(), "PNG");
     return frame.valid(x, y) ? frame.pixelColor(x, y) : QColor();
+}
+
+static QImage frameAt(const QString &video, double seconds)
+{
+    QProcess process;
+    process.start(QStringLiteral("ffmpeg"), {QStringLiteral("-v"), QStringLiteral("error"),
+        QStringLiteral("-ss"), QString::number(seconds, 'f', 3), QStringLiteral("-i"), video,
+        QStringLiteral("-frames:v"), QStringLiteral("1"), QStringLiteral("-f"), QStringLiteral("image2pipe"),
+        QStringLiteral("-c:v"), QStringLiteral("png"), QStringLiteral("-")});
+    if (!process.waitForFinished(15000)) return {};
+    return QImage::fromData(process.readAllStandardOutput(), "PNG");
+}
+
+// Variance of the grey level over `area`: high over text, near zero once it is hidden.
+static double greyVariance(const QImage &image, const QRect &area)
+{
+    double sum = 0, squares = 0;
+    int count = 0;
+    for (int y = area.top(); y <= area.bottom(); ++y)
+        for (int x = area.left(); x <= area.right(); ++x) {
+            const double grey = qGray(image.pixel(x, y));
+            sum += grey;
+            squares += grey * grey;
+            ++count;
+        }
+    if (count == 0) return -1;
+    const double mean = sum / count;
+    return squares / count - mean * mean;
+}
+
+// The grey-level variance over `area` (0–1 of the frame) in every frame of `video`, decoded at
+// `width` x `height`.
+static QList<double> frameVariances(const QString &video, int width, int height, const QRectF &area)
+{
+    QProcess process;
+    process.start(QStringLiteral("ffmpeg"), {QStringLiteral("-v"), QStringLiteral("error"), QStringLiteral("-i"), video,
+        QStringLiteral("-vf"), QStringLiteral("scale=%1:%2").arg(width).arg(height),
+        QStringLiteral("-f"), QStringLiteral("rawvideo"), QStringLiteral("-pix_fmt"), QStringLiteral("gray"), QStringLiteral("-")});
+    if (!process.waitForFinished(60000)) return {};
+    const QByteArray raw = process.readAllStandardOutput();
+    const QRect pixels(int(area.x() * width), int(area.y() * height), int(area.width() * width), int(area.height() * height));
+    QList<double> variances;
+    for (qsizetype offset = 0; offset + width * height <= raw.size(); offset += width * height) {
+        double sum = 0, squares = 0;
+        for (int y = pixels.top(); y <= pixels.bottom(); ++y)
+            for (int x = pixels.left(); x <= pixels.right(); ++x) {
+                const double grey = quint8(raw[offset + y * width + x]);
+                sum += grey;
+                squares += grey * grey;
+            }
+        const double count = double(pixels.width()) * pixels.height();
+        variances << squares / count - (sum / count) * (sum / count);
+    }
+    return variances;
 }
 
 static bool isYellow(const QColor &c) { return c.isValid() && c.red() > 150 && c.green() > 150 && c.blue() < 90; }
@@ -249,6 +303,152 @@ private slots:
         }
         QCOMPARE(QDir(temporary.path()).entryList({QStringLiteral(".omareel-export-*.mp4")},
                                                   QDir::Files | QDir::Hidden), QStringList());
+    }
+
+    // Blur overlays hide what they cover in the export, on whichever renderer runs (ctest runs
+    // this on the GPU and again as exporter_overlays_software): the exporter bakes them into the
+    // recording's pixels, the RGBA frames of the software path and the YUV ones of the GPU path.
+    void blurRegionsHideWhatTheyCover()
+    {
+        if (QStandardPaths::findExecutable(QStringLiteral("ffmpeg")).isEmpty()
+            || QStandardPaths::findExecutable(QStringLiteral("ffprobe")).isEmpty())
+            QSKIP("ffmpeg/ffprobe unavailable");
+        QTemporaryDir temporary;
+        QVERIFY(temporary.isValid());
+        const QString bundle = temporary.filePath(QStringLiteral("blur.omareel"));
+        QVERIFY(QDir().mkpath(bundle));
+        // Black text on white, line after line, over the whole frame.
+        QStringList lines;
+        for (int i = 0; i < 20; ++i)
+            for (int x : {6, 326})
+                lines << QStringLiteral("drawtext=text='Password hunter2 token %1 ABCDEFGH':"
+                                        "fontsize=15:fontcolor=black:x=%2:y=%3").arg(i).arg(x).arg(4 + i * 18);
+        QProcess makeVideo;
+        makeVideo.start(QStringLiteral("ffmpeg"), {QStringLiteral("-y"), QStringLiteral("-v"), QStringLiteral("error"),
+            QStringLiteral("-f"), QStringLiteral("lavfi"), QStringLiteral("-i"),
+            QStringLiteral("color=c=white:size=640x360:rate=30:duration=2"),
+            QStringLiteral("-vf"), lines.join(QLatin1Char(',')),
+            QStringLiteral("-c:v"), QStringLiteral("libx264"), QStringLiteral("-crf"), QStringLiteral("12"),
+            QStringLiteral("-pix_fmt"), QStringLiteral("yuv420p"), QDir(bundle).filePath(QStringLiteral("screen.mp4"))});
+        QVERIFY(makeVideo.waitForFinished(30000) && makeVideo.exitCode() == 0);
+        QFile capture(QDir(bundle).filePath(QStringLiteral("capture.json")));
+        QVERIFY(capture.open(QIODevice::WriteOnly));
+        capture.write(R"({"fps":30,"first_frame_us":1000})");
+        capture.close();
+        QFile input(QDir(bundle).filePath(QStringLiteral("input.jsonl")));
+        QVERIFY(input.open(QIODevice::WriteOnly));
+        input.close();
+
+        // No background: the recording fills the 640x360 output, so recording coordinates are
+        // output pixels. Pixelate the left region and blur the right one from 0.5 s to 1.5 s.
+        QJsonObject project = ProjectJson::defaults(QStringLiteral("Blur"), 2.0);
+        ProjectJson::set(project, {"background", "type"}, QStringLiteral("none"));
+        ProjectJson::set(project, {"cursor", "visible"}, false);
+        const auto region = [](const char *id, const char *style, double x) {
+            return QJsonObject{{"id", id}, {"kind", "blur"}, {"anchor", "screen"}, {"start", 0.5}, {"end", 1.5},
+                {"rect", QJsonObject{{"x", x}, {"y", 0.25}, {"w", 0.4}, {"h", 0.5}}},
+                {"style", style}, {"amount", 0.5}};
+        };
+        project.insert(QStringLiteral("overlays"), QJsonArray{region("p", "pixelate", 0.05), region("b", "blur", 0.55)});
+        QString error;
+        QVERIFY2(ProjectJson::save(project, QDir(bundle).filePath(QStringLiteral("project.json")), &error),
+                 qPrintable(error));
+        const QString output = temporary.filePath(QStringLiteral("blur.mp4"));
+        QVERIFY2(exportBundle(bundle, output, &error), qPrintable(error));
+
+        // Inside each region, a few pixels in from its edges; and a strip of text outside both.
+        const QRect pixelated(40, 100, 240, 160), blurred(360, 100, 240, 160), outside(40, 290, 560, 60);
+        const QImage before = frameAt(output, 0.2), during = frameAt(output, 1.0), after = frameAt(output, 1.8);
+        QVERIFY(!before.isNull() && !during.isNull() && !after.isNull());
+        QCOMPARE(during.size(), QSize(640, 360));
+        const double textVariance = greyVariance(before, pixelated);
+        qInfo("text %.0f, pixelated %.0f, blurred %.0f, outside %.0f, after %.0f", textVariance,
+              greyVariance(during, pixelated), greyVariance(during, blurred), greyVariance(during, outside),
+              greyVariance(after, blurred));
+        QVERIFY(textVariance > 2000);
+        QVERIFY(greyVariance(before, blurred) > 2000);
+        QVERIFY(greyVariance(during, pixelated) < 400);
+        QVERIFY(greyVariance(during, blurred) < 400);
+        // Only there, and only then.
+        QVERIFY(greyVariance(during, outside) > 2000);
+        QVERIFY(greyVariance(after, blurred) > 2000);
+    }
+
+    // A blur is a privacy feature: not one frame of what it covers may show, even where the
+    // frame the decoder picks is a frame away from the time the timeline names (spans and cuts
+    // off the frame grid, sped-up clips) or a frame is held on after its decoder ran out. The
+    // recording here is busy noise from 1 s to 2 s only (and ends at 2.2 s), so any busy frame
+    // in the export is a leak.
+    void blurNeverLeaksAFrame_data()
+    {
+        QTest::addColumn<QJsonArray>("clips");
+        QTest::addColumn<double>("start");
+        QTest::addColumn<double>("end");
+        QTest::addColumn<int>("fps");
+        const auto clip = [](const char *id, double in, double out, double speed) {
+            return QJsonObject{{"id", id}, {"in", in}, {"out", out}, {"speed", speed}};
+        };
+        QTest::newRow("span starts off the grid") << QJsonArray{clip("c1", 0, 2.2, 1)} << 1.005 << 2.0 << 60;
+        QTest::newRow("clip starts off the grid") << QJsonArray{clip("c1", 0.495, 2.2, 1)} << 1.0 << 2.0 << 30;
+        // Each of these showed a frame of the noise before the blur was padded.
+        QTest::newRow("sped-up clip") << QJsonArray{clip("c1", 0.678, 2.2, 4)} << 0.9937 << 1.9956 << 30;
+        QTest::newRow("span ends at a cut off the grid")
+            << QJsonArray{clip("c1", 0, 1.534, 1), clip("c2", 1.991, 2.2, 1)} << 1.0 << 2.0 << 60;
+        // The second clip is past the recording's last frame: the first one's last frame (under
+        // the blur) holds on through it.
+        QTest::newRow("frame held past the end")
+            << QJsonArray{clip("c1", 0, 1.5, 1), clip("c2", 2.4, 2.9, 1)} << 1.0 << 1.5 << 30;
+    }
+
+    void blurNeverLeaksAFrame()
+    {
+        if (QStandardPaths::findExecutable(QStringLiteral("ffmpeg")).isEmpty()
+            || QStandardPaths::findExecutable(QStringLiteral("ffprobe")).isEmpty())
+            QSKIP("ffmpeg/ffprobe unavailable");
+        QFETCH(QJsonArray, clips);
+        QFETCH(double, start);
+        QFETCH(double, end);
+        QFETCH(int, fps);
+        QTemporaryDir temporary;
+        QVERIFY(temporary.isValid());
+        const QString bundle = temporary.filePath(QStringLiteral("leak.omareel"));
+        QVERIFY(QDir().mkpath(bundle));
+        QProcess makeVideo;
+        makeVideo.start(QStringLiteral("ffmpeg"), {QStringLiteral("-y"), QStringLiteral("-v"), QStringLiteral("error"),
+            QStringLiteral("-f"), QStringLiteral("lavfi"), QStringLiteral("-i"),
+            QStringLiteral("nullsrc=s=320x180:r=60:d=2.2,format=gray,"
+                           "geq=lum='if(between(N,60,119),random(1)*255,128)'"),
+            QStringLiteral("-c:v"), QStringLiteral("libx264"), QStringLiteral("-crf"), QStringLiteral("12"),
+            QStringLiteral("-pix_fmt"), QStringLiteral("yuv420p"), QDir(bundle).filePath(QStringLiteral("screen.mp4"))});
+        QVERIFY(makeVideo.waitForFinished(30000) && makeVideo.exitCode() == 0);
+        QFile capture(QDir(bundle).filePath(QStringLiteral("capture.json")));
+        QVERIFY(capture.open(QIODevice::WriteOnly));
+        capture.write(R"({"fps":60,"first_frame_us":1000})");
+        capture.close();
+        QFile input(QDir(bundle).filePath(QStringLiteral("input.jsonl")));
+        QVERIFY(input.open(QIODevice::WriteOnly));
+        input.close();
+
+        QJsonObject project = ProjectJson::defaults(QStringLiteral("Leak"), 2.2);
+        ProjectJson::set(project, {"background", "type"}, QStringLiteral("none"));
+        ProjectJson::set(project, {"cursor", "visible"}, false);
+        project.insert(QStringLiteral("clips"), clips);
+        project.insert(QStringLiteral("overlays"), QJsonArray{QJsonObject{{"id", "b"}, {"kind", "blur"}, {"anchor", "screen"},
+            {"start", start}, {"end", end}, {"rect", QJsonObject{{"x", 0.2}, {"y", 0.2}, {"w", 0.6}, {"h", 0.6}}},
+            {"style", "pixelate"}, {"amount", 0.0}}});
+        QString error;
+        QVERIFY2(ProjectJson::save(project, QDir(bundle).filePath(QStringLiteral("project.json")), &error),
+                 qPrintable(error));
+        const QString output = temporary.filePath(QStringLiteral("leak.mp4"));
+        QVERIFY2(exportBundle(bundle, output, &error, fps), qPrintable(error));
+
+        // A few pixels in from the region's edges.
+        const QList<double> variances = frameVariances(output, 320, 180, QRectF(0.22, 0.22, 0.56, 0.56));
+        QVERIFY(variances.size() > 10);
+        QStringList leaks;
+        for (qsizetype i = 0; i < variances.size(); ++i)
+            if (variances[i] > 300) leaks << QStringLiteral("%1 (%2)").arg(i).arg(qRound(variances[i]));
+        QVERIFY2(leaks.isEmpty(), qPrintable(QStringLiteral("busy frames: ") + leaks.join(QStringLiteral(", "))));
     }
 
     void clipsStartingOnAStillScreenShowTheFrameOnScreen()
