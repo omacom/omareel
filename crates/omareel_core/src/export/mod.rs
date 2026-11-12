@@ -27,6 +27,7 @@ pub mod still;
 pub mod redact;
 pub mod presets;
 
+use crate::audio_cleanup::{self, LoudnessMeasurement};
 use crate::clip_timeline::ClipTimeline;
 use crate::compat::qdir::{self, FileInfo};
 use crate::compat::qnumber::number_f64;
@@ -49,7 +50,7 @@ use decoder::FfmpegDecoder;
 use encoder_pipe::{FINISH_TIMEOUT_MS, STALL_TIMEOUT_MS, finish_encoder_pipe, write_encoder_frame};
 use plan::{MediaInfo, VideoEncoder};
 use std::collections::{HashMap, VecDeque};
-use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -216,6 +217,57 @@ struct DecodePlan {
     redactions: Vec<crate::project::Overlay>,
 }
 
+/// The export's sound: the inputs to open after the video's, and what its `-filter_complex`
+/// (ending in `[aout]`) is made of.
+#[derive(Clone, Debug, PartialEq)]
+struct AudioGraph {
+    inputs: Vec<String>,
+    /// How many of `inputs`' arguments open the program's sources (the rest open the click
+    /// sound): all the measuring pass opens.
+    program_arguments: usize,
+    /// The program: the clips' sound, which loudness normalisation measures and normalises.
+    prelude: String,
+    segments: Vec<String>,
+    volume: f64,
+    click_times: Vec<f64>,
+    click_input: i32,
+    /// Background music, mixed in after the program is normalised (never measured).
+    music: Option<plan::MusicMix>,
+    output_duration: f64,
+}
+
+impl AudioGraph {
+    /// The whole graph, with the program normalised by `master` when given. The volume then
+    /// trims the normalised level, up to 100%: the target is the ceiling, its peaks already at
+    /// the limit (and the preview's players go no louder either).
+    fn filter(&self, master: Option<&str>) -> String {
+        plan::mastered_audio_filter(
+            &self.prelude,
+            &self.segments,
+            master,
+            if master.is_some() { self.volume.min(1.0) } else { self.volume },
+            &self.click_times,
+            self.click_input,
+            self.output_duration,
+            self.music.as_ref(),
+        )
+    }
+}
+
+/// The loudness measurement's thread and what it reports.
+struct LoudnessRun {
+    /// The fraction measured, as `f64` bits.
+    progress: Arc<AtomicU64>,
+    result: Arc<(Mutex<Option<Result<LoudnessMeasurement, String>>>, Condvar)>,
+    thread: Option<JoinHandle<()>>,
+}
+
+/// Where the export's temporary files go: the runtime directory, or the temporary one.
+fn runtime_directory() -> String {
+    let runtime = qdir::env_var("XDG_RUNTIME_DIR").unwrap_or_default();
+    if runtime.is_empty() || !FileInfo::new(&runtime).is_writable() { qdir::temp_path() } else { runtime }
+}
+
 pub struct ExportJob {
     options: ExportOptions,
     cancelled: Arc<AtomicBool>,
@@ -257,6 +309,12 @@ pub struct ExportJob {
     click_file: Option<TemporaryFile>,
     encoded_file: Option<TemporaryFile>,
     encoded_path: String,
+    /// capture.json says the recording has microphone sound, which `audio.cleanup.denoise` is for.
+    capture_mic: bool,
+    /// The sound's inputs and filter, once built: `Some(None)` for none.
+    audio_graph: Option<Option<AudioGraph>>,
+    /// The loudness measurement, once started.
+    loudness: Option<LoudnessRun>,
     encode: Arc<EncodeShared>,
     encode_thread: Option<JoinHandle<()>>,
     decode: Arc<DecodeShared>,
@@ -364,8 +422,10 @@ impl ExportJob {
         let mut capture_fps = 60.0;
         let mut capture_scale = 1.0;
         let mut camera_offset = 0.0;
+        let mut capture_mic = false;
         if let Ok(bytes) = qfile::read_all(qdir::file_path(&bundle, "capture.json")) {
             let capture = qjson::object_from_json(&bytes).unwrap_or_default();
+            capture_mic = capture.value("audio").to_object().value("mic").to_bool(false);
             capture_fps = capture.value("fps").to_double(60.0);
             capture_scale = capture.value("scale").to_double(1.0);
             let screen_first = capture.value("first_frame_us").to_variant_long_long();
@@ -511,6 +571,9 @@ impl ExportJob {
             click_file: None,
             encoded_file: None,
             encoded_path: String::new(),
+            capture_mic,
+            audio_graph: None,
+            loudness: None,
             encode: Arc::new(EncodeShared {
                 queue: Mutex::new(EncodeQueue {
                     frames: VecDeque::new(),
@@ -627,12 +690,11 @@ impl ExportJob {
             return Ok(());
         }
         let gif = self.gif;
-        let mut runtime = qdir::env_var("XDG_RUNTIME_DIR").unwrap_or_default();
-        if runtime.is_empty() || !FileInfo::new(&runtime).is_writable() {
-            runtime = qdir::temp_path();
-        }
+        let runtime = runtime_directory();
+        // The sound first: its loudness may still have to be measured, which takes a pass over it.
+        let audio = self.audio_graph()?;
+        let master = self.loudness_master()?;
         let raw_file = self.raw_file.insert(TemporaryFile::new(&qdir::file_path(&runtime, "omareel-export-XXXXXX.rgba")));
-        let click_file = self.click_file.insert(TemporaryFile::new(&qdir::file_path(&runtime, "omareel-click-XXXXXX.wav")));
         let encoded_file = self.encoded_file.insert(TemporaryFile::new(&qdir::file_path(
             &FileInfo::new(&self.options.output_path).absolute_path(),
             ".omareel-export-XXXXXX.mp4",
@@ -648,13 +710,6 @@ impl ExportJob {
         let project = &self.project;
         // Each encoder to try, with its whole command line.
         let mut encoders: Vec<(&'static str, Vec<String>)> = Vec::new();
-        let use_source_audio = !gif && self.media.audio && (project.audio.desktop || project.audio.mic);
-        let click_times = if !gif && project.cursor.click_sound == "soft" {
-            plan::click_output_times(&self.input, &project.clips)
-        } else {
-            Vec::new()
-        };
-        let use_clicks = !click_times.is_empty();
         if gif {
             if !raw_file.open() {
                 return Err(raw_file.error_string());
@@ -675,81 +730,11 @@ impl ExportJob {
             ]
             .map(String::from)
             .into();
-            let mut next_input = 1;
-            let mut source_input = -1;
-            let mut click_input = -1;
-            // One audio segment per clip: the recording's audio, an inserted video's own audio,
-            // or silence. Each inserted clip opens its file at its in point, so containers that
-            // do not start at zero need no timestamp arithmetic.
-            let mut audio_segments: Vec<String> = Vec::new();
-            let mut any_audio = false;
-            // Fades at the cuts with a transition, so the sound does not click there.
-            let fades = crate::transitions::audio_fades(&project.clips, &project.transition);
-            for (clip, &fade) in project.clips.iter().zip(&fades) {
-                let length = (clip.out - clip.in_) / clip.speed;
-                if clip.is_media() && self.inserts.get(&clip.media).is_some_and(|info| info.audio) {
-                    let input = next_input;
-                    next_input += 1;
-                    encoder_args.extend([
-                        "-ss".into(),
-                        number_f64(clip.in_, 'f', 6),
-                        "-t".into(),
-                        number_f64(clip.out - clip.in_, 'f', 6),
-                        "-i".into(),
-                        qdir::file_path(&self.bundle, &clip.media),
-                    ]);
-                    audio_segments.push(plan::audio_segment(
-                        &format!("[{input}:a:0]asetpts=PTS-STARTPTS"),
-                        clip.speed,
-                        length,
-                    ));
-                    any_audio = true;
-                } else if !clip.is_media() && use_source_audio {
-                    if source_input < 0 {
-                        source_input = next_input;
-                        next_input += 1;
-                        encoder_args.extend(["-i".into(), self.video_path.clone()]);
-                    }
-                    let segment = plan::audio_segment(&plan::source_audio(source_input, clip.in_, clip.out), clip.speed, length);
-                    audio_segments.push(segment + &plan::declick(fade, length));
-                    any_audio = true;
-                } else {
-                    audio_segments.push(plan::silent_segment(length));
-                }
-            }
-            if !any_audio {
-                audio_segments.clear();
-            }
-            if use_clicks {
-                let prepare_failed = || "Could not prepare the click sound".to_string();
-                if !click_file.open() {
-                    return Err(prepare_failed());
-                }
-                if click_file.write(CLICK_SOUND) != CLICK_SOUND.len() as i64 || !click_file.flush() {
-                    return Err(prepare_failed());
-                }
-                click_file.close();
-                click_input = next_input;
-                next_input += 1;
-                encoder_args.extend(["-i".into(), click_file.file_name()]);
-            }
-            // Background music goes under everything, from the output's start to its end.
-            let mut music_mix = None;
-            if let (Some(music), Some(path)) = (project.music.as_ref(), self.music_path.as_ref()) {
-                music_mix = Some(plan::MusicMix::new(next_input, music, self.output_duration));
-                encoder_args.extend(plan::music_input_arguments(music, path));
-            }
-            if any_audio || use_clicks || music_mix.is_some() {
+            if let Some(audio) = audio {
+                encoder_args.extend(audio.inputs.iter().cloned());
                 encoder_args.extend([
                     "-filter_complex".into(),
-                    plan::audio_filter_with_music(
-                        &audio_segments,
-                        project.audio.volume,
-                        &click_times,
-                        click_input,
-                        self.output_duration,
-                        music_mix.as_ref(),
-                    ),
+                    audio.filter(master.as_deref()),
                     "-map".into(),
                     "0:v:0".into(),
                     "-map".into(),
@@ -839,6 +824,174 @@ impl ExportJob {
                 None
             },
             redactions: self.project.overlays.iter().filter(|overlay| overlay.kind == "blur").cloned().collect(),
+        }
+    }
+
+    /// The export's sound, built once: the recording's audio per clip (denoised when the
+    /// project asks and the recording has microphone sound), inserted videos' audio, and the
+    /// click sound, with the click sound's temporary file. `None` for a GIF or a silent export.
+    fn audio_graph(&mut self) -> Result<Option<AudioGraph>, String> {
+        if let Some(graph) = &self.audio_graph {
+            return Ok(graph.clone());
+        }
+        let graph = self.build_audio_graph()?;
+        self.audio_graph = Some(graph.clone());
+        Ok(graph)
+    }
+
+    fn build_audio_graph(&mut self) -> Result<Option<AudioGraph>, String> {
+        if self.gif {
+            return Ok(None);
+        }
+        let project = &self.project;
+        let use_source_audio = self.media.audio && (project.audio.desktop || project.audio.mic);
+        let click_times = if project.cursor.click_sound == "soft" {
+            plan::click_output_times(&self.input, &project.clips)
+        } else {
+            Vec::new()
+        };
+        let cleanup = &project.audio.cleanup;
+        let denoise = if use_source_audio && cleanup.denoise && self.capture_mic {
+            let model = audio_cleanup::model_file(&audio_cleanup::default_model_directory())?;
+            Some(audio_cleanup::denoise_filter(&model, cleanup.strength))
+        } else {
+            None
+        };
+        let inserts = &self.inserts;
+        let has_audio = |media: &str| inserts.get(media).is_some_and(|info| info.audio);
+        // Fades at the cuts with a transition, so the sound does not click there.
+        let fades = crate::transitions::audio_fades(&project.clips, &project.transition);
+        let sources = plan::audio_inputs(
+            &project.clips,
+            &has_audio,
+            use_source_audio,
+            &self.bundle,
+            &self.video_path,
+            1,
+            denoise.as_deref(),
+            &fades,
+        );
+        let volume = project.audio.volume;
+        let program_arguments = sources.arguments.len();
+        let mut inputs = sources.arguments;
+        let mut click_input = -1;
+        let mut next_input = sources.next_input;
+        if !click_times.is_empty() {
+            let prepare_failed = || "Could not prepare the click sound".to_string();
+            let click_file = self
+                .click_file
+                .insert(TemporaryFile::new(&qdir::file_path(&runtime_directory(), "omareel-click-XXXXXX.wav")));
+            if !click_file.open() {
+                return Err(prepare_failed());
+            }
+            if click_file.write(CLICK_SOUND) != CLICK_SOUND.len() as i64 || !click_file.flush() {
+                return Err(prepare_failed());
+            }
+            click_file.close();
+            click_input = next_input;
+            next_input += 1;
+            inputs.extend(["-i".into(), click_file.file_name()]);
+        }
+        // Background music goes under everything, from the output's start to its end, after the
+        // click sound: the measuring pass opens only the program's inputs before both.
+        let mut music = None;
+        if let (Some(settings), Some(path)) = (project.music.as_ref(), self.music_path.as_ref()) {
+            music = Some(plan::MusicMix::new(next_input, settings, self.output_duration));
+            inputs.extend(plan::music_input_arguments(settings, path));
+        }
+        if sources.segments.is_empty() && click_times.is_empty() && music.is_none() {
+            return Ok(None);
+        }
+        Ok(Some(AudioGraph {
+            inputs,
+            program_arguments,
+            prelude: sources.prelude,
+            segments: sources.segments,
+            volume,
+            click_times,
+            click_input,
+            music,
+            output_duration: self.output_duration,
+        }))
+    }
+
+    /// The loudness the export normalises its sound to, in LUFS.
+    fn loudness_target(&self) -> Option<f64> {
+        if self.gif { None } else { self.project.audio.cleanup.loudness_lufs() }
+    }
+
+    /// Starts measuring the export's loudness on a thread of its own (the first of the two
+    /// loudness passes, over the program: the clips' sound, before the volume and without the
+    /// click sound), when the project normalises its sound and there is any: true then. Before [`start`](Self::start), which otherwise measures first itself.
+    /// [`cancel`](Self::cancel) stops it.
+    pub fn start_loudness_measure(&mut self) -> Result<bool, String> {
+        if self.loudness.is_some() {
+            return Ok(true);
+        }
+        let Some(target) = self.loudness_target() else { return Ok(false) };
+        // Only the clips' sound is normalised; clicks alone keep their level.
+        let Some(graph) = self.audio_graph()?.filter(|graph| !graph.segments.is_empty()) else { return Ok(false) };
+        let mut args: Vec<String> =
+            ["-hide_banner", "-nostdin", "-nostats", "-v", "info", "-progress", "pipe:1"].map(String::from).into();
+        // Input 0 stands in for the video, so the graph's input numbers hold.
+        args.extend(["-f", "lavfi", "-t", "0.1", "-i", "anullsrc=r=48000:cl=stereo"].map(String::from));
+        args.extend(graph.inputs[..graph.program_arguments].iter().cloned());
+        args.push("-filter_complex".into());
+        args.push(plan::program_measure_filter(&graph.prelude, &graph.segments, &audio_cleanup::loudness_measure_filter(target)));
+        args.extend(["-map", "[aout]", "-f", "null", "-"].map(String::from));
+        let progress = Arc::new(AtomicU64::new(0f64.to_bits()));
+        let result = Arc::new((Mutex::new(None), Condvar::new()));
+        let cancelled = Arc::clone(&self.cancelled);
+        let duration = self.output_duration;
+        let thread = {
+            let progress = Arc::clone(&progress);
+            let result = Arc::clone(&result);
+            std::thread::spawn(move || {
+                let measured = audio_cleanup::run_ffmpeg("ffmpeg", &args, duration, &cancelled, &mut |fraction| {
+                    progress.store(fraction.to_bits(), Ordering::Relaxed)
+                })
+                .and_then(|log| audio_cleanup::parse_loudnorm(&log).ok_or_else(|| "no measurement".to_string()));
+                *lock(&result.0) = Some(measured);
+                result.1.notify_all();
+            })
+        };
+        self.loudness = Some(LoudnessRun { progress, result, thread: Some(thread) });
+        Ok(true)
+    }
+
+    /// How much of the loudness measurement is done, 0 to 1.
+    pub fn loudness_progress(&self) -> f64 {
+        self.loudness.as_ref().map_or(0.0, |run| f64::from_bits(run.progress.load(Ordering::Relaxed)))
+    }
+
+    /// The loudness measurement has finished, or was never started.
+    pub fn loudness_done(&self) -> bool {
+        self.loudness.as_ref().is_none_or(|run| lock(&run.result.0).is_some())
+    }
+
+    /// Waits up to `timeout_ms` for the loudness measurement to finish.
+    pub fn wait_loudness(&self, timeout_ms: u64) {
+        let Some(run) = &self.loudness else { return };
+        let guard = lock(&run.result.0);
+        let _ = run.result.1.wait_timeout_while(guard, Duration::from_millis(timeout_ms), |result| result.is_none());
+    }
+
+    /// The second loudness pass's filter, from the measurement (made now when nobody started
+    /// it); `None` when the project does not normalise or the export is silent.
+    fn loudness_master(&mut self) -> Result<Option<String>, String> {
+        let Some(target) = self.loudness_target() else { return Ok(None) };
+        if !self.start_loudness_measure()? {
+            return Ok(None);
+        }
+        let Some(run) = self.loudness.as_mut() else { return Ok(None) };
+        if let Some(thread) = run.thread.take() {
+            let _ = thread.join();
+        }
+        let result = lock(&run.result.0).clone().unwrap_or_else(|| Err("no measurement".into()));
+        match result {
+            Ok(measured) => Ok(audio_cleanup::loudness_apply_filter(target, &measured)),
+            Err(_) if self.is_cancelled() => Err("Export cancelled".into()),
+            Err(error) => Err(format!("Could not measure the loudness: {error}")),
         }
     }
 
@@ -1077,6 +1230,10 @@ impl Drop for ExportJob {
     /// Every way out of `Exporter::run` joined its threads first; a job dropped early stops
     /// the decoder and aborts the encoder before its temporary files go.
     fn drop(&mut self) {
+        if let Some(thread) = self.loudness.as_mut().and_then(|run| run.thread.take()) {
+            self.cancelled.store(true, Ordering::SeqCst);
+            let _ = thread.join();
+        }
         if self.decode_thread.is_some() {
             self.finish_decoder();
         }

@@ -185,7 +185,9 @@ monotonic clock and copy-muxed with the video at stop.
   "cursor": {"visible":true,"size":1.5,"smoothing":0.8,       // 0=raw, 1=very smooth
              "clickEffect":"ripple",      // none | ripple | shrink | highlight
              "clickShrink":0.85,"hideWhenIdleMs":null,"style":"macos"},
-  "audio": {"desktop":true,"mic":true,"volume":1.0},
+  "audio": {"desktop":true,"mic":true,"volume":1.0,
+            "cleanup":{"denoise":false,"strength":0.85,"loudness":"off"}},  // only when not all default;
+                                   // RNNoise denoise (mic recordings), loudness off | -16 | -14 LUFS
   "music": {"file":"media/song.mp3",   // only while there is music (§9.5)
             "volume":0.25,"fadeIn":1.0,"fadeOut":2.0,"duck":true,"loop":true,"start":0.0},
   "camera": {"enabled":false,"position":"bottom-right","size":0.25,
@@ -281,6 +283,11 @@ Exporter pipeline (`crates/omareel_qt/cpp/Exporter`, over `crates/omareel_core/s
   -movflags +faststart out.mp4`. Quality tiers: low/medium/high/best → cq 30/26/22/18.
 - Encode GIF: two-pass palette: write frames to a temp raw file, then
   `ffmpeg -i raw -vf "fps,scale,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" -loop 0 out.gif`.
+- Audio cleanup (`audio.cleanup`): the recording's sound goes through `arnndn` (RNNoise, built-in
+  model) once, whole, then `asplit` into the recording clips' segments; loudness normalisation
+  measures the program (the clips' concatenated sound, before `volume` and without clicks) with
+  `loudnorm` first (a separate ffmpeg pass, reported as `measuring`), then puts the measured
+  linear pass between the concat and `volume`; clicks are mixed in after.
 - Progress callbacks (frames done/total), cancel support.
 - Headless `omareel export` must work with `QT_QPA_PLATFORM=offscreen` fallback if no Wayland.
 

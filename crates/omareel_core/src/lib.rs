@@ -3,6 +3,7 @@
 //! because the files omareel writes must stay byte-identical.
 
 pub mod agent;
+pub mod audio_cleanup;
 pub mod camera_timeline;
 pub mod captions;
 pub mod chapters;

@@ -169,6 +169,13 @@ pub mod qobject {
         #[qproperty(QString, export_error, READ = export_error, NOTIFY = export_error_changed)]
         #[qproperty(f64, export_fps, READ = export_fps, NOTIFY = export_progress_changed)]
         #[qproperty(i32, export_eta_seconds, READ = export_eta_seconds, NOTIFY = export_progress_changed)]
+        // The export measures its sound's loudness before the frames (exportProgress is that pass's).
+        #[qproperty(bool, measuring_loudness, READ = measuring_loudness, NOTIFY = export_progress_changed)]
+        // The preview's cleaned sound: "off", "preparing", "ready" or "failed".
+        #[qproperty(QString, clean_audio_status, READ = clean_audio_status, NOTIFY = clean_audio_changed)]
+        #[qproperty(QString, clean_audio_error, READ = clean_audio_error, NOTIFY = clean_audio_changed)]
+        // The preview plays the recording's own sound for comparing (not saved).
+        #[qproperty(bool, clean_audio_bypass, READ = clean_audio_bypass, WRITE = set_clean_audio_bypass, NOTIFY = clean_audio_changed)]
         #[qproperty(QString, exported_path, READ = exported_path, NOTIFY = export_finished)]
         // Composition.qml contract; the editor is registered as both "editor" and "comp".
         #[qproperty(i32, output_width, READ = output_width, NOTIFY = output_size_changed)]
@@ -252,6 +259,8 @@ pub mod qobject {
         #[qsignal]
         fn export_progress_changed(self: Pin<&mut Editor>);
         #[qsignal]
+        fn clean_audio_changed(self: Pin<&mut Editor>);
+        #[qsignal]
         fn exporting_changed(self: Pin<&mut Editor>);
         #[qsignal]
         fn export_error_changed(self: Pin<&mut Editor>);
@@ -334,6 +343,11 @@ pub mod qobject {
         fn export_error(self: &Editor) -> QString;
         fn export_fps(self: &Editor) -> f64;
         fn export_eta_seconds(self: &Editor) -> i32;
+        fn measuring_loudness(self: &Editor) -> bool;
+        fn clean_audio_status(self: &Editor) -> QString;
+        fn clean_audio_error(self: &Editor) -> QString;
+        fn clean_audio_bypass(self: &Editor) -> bool;
+        fn set_clean_audio_bypass(self: Pin<&mut Editor>, bypass: bool);
         fn exported_path(self: &Editor) -> QString;
         fn output_width(self: &Editor) -> i32;
         fn output_height(self: &Editor) -> i32;
@@ -597,6 +611,8 @@ pub mod qobject {
         #[cxx_override]
         fn called_later(self: Pin<&mut Editor>, call: i32);
         #[cxx_override]
+        fn export_measured(self: Pin<&mut Editor>, fraction: f64);
+        #[cxx_override]
         fn export_progressed(self: Pin<&mut Editor>, frame: i32, total: i32);
         #[cxx_override]
         fn export_succeeded(self: Pin<&mut Editor>, path: &QString);
@@ -643,6 +659,10 @@ pub mod qobject {
             play: bool,
             volume: f64,
         );
+        #[inherit]
+        fn playback_set_screen_audio_source(self: Pin<&mut Editor>, path: &QString);
+        #[inherit]
+        fn playback_set_media_audio_source(self: Pin<&mut Editor>, path: &QString);
         #[inherit]
         fn playback_position(self: &Editor, player: i32) -> i64;
         #[inherit]
@@ -867,6 +887,7 @@ impl Drop for EditorRust {
             if document.dirty() && !document.disk_changed() {
                 document.save_now();
             }
+            document.cancel_clean_audio();
         }
         self.speech_control.stop();
         for worker in self.workers.get_mut().drain(..) {
@@ -913,6 +934,8 @@ impl qobject::Editor {
         let video_path = qstring(document.video_path());
         let camera_path = document.has_camera().then(|| qstring(document.camera_video_path()));
         self.as_mut().playback_load_screen(&video_path);
+        // Cleanup that is on plays its cleaned sound, once there is one.
+        self.as_mut().edit(Document::refresh_clean_audio);
         let stats = qenv::int_value_or_zero("OMAREEL_PREVIEW_STATS") == 1;
         self.as_mut().rust_mut().preview_stats_enabled = stats;
         if stats {
@@ -1005,6 +1028,10 @@ impl qobject::Editor {
             Effect::StartImport(source) => self.start_import(&source),
             Effect::StartMusicImport(source) => self.start_music_import(&source),
             Effect::GenerateWallpaperThumbnail { path, thumbnail } => self.generate_wallpaper_thumbnail(path, thumbnail),
+            Effect::SetScreenAudioSource(path) => self.as_mut().playback_set_screen_audio_source(&qstring(&path)),
+            Effect::InsertAudioSourcesChanged => self.as_mut().update_insert_audio_source(),
+            Effect::StartCleanAudio => self.start_clean_audio(),
+            Effect::CleanAudioChanged => self.as_mut().clean_audio_changed(),
         }
     }
 
@@ -1284,6 +1311,27 @@ impl qobject::Editor {
                 });
             });
         }
+    }
+
+    /// The media player plays the cleaned sound of the inserted video it holds, when there is one.
+    fn update_insert_audio_source(mut self: Pin<&mut Self>) {
+        let path = self.document.as_ref().map_or(String::new(), |document| {
+            document.insert_audio_source(&self.media_player_source).to_owned()
+        });
+        self.as_mut().playback_set_media_audio_source(&qstring(&path));
+    }
+
+    /// The cleaned preview sound [`Effect::StartCleanAudio`] asks for, made off the GUI thread
+    /// (ffmpeg at a low priority), then `finish_clean_audio`.
+    fn start_clean_audio(mut self: Pin<&mut Self>) {
+        let Some(job) = self.as_mut().rust_mut().document.as_mut().and_then(Document::clean_audio_job) else { return };
+        let thread = self.qt_thread();
+        self.spawn(move || {
+            let result = job.run();
+            let _ = thread.queue(move |editor| {
+                editor.edit(|document| document.finish_clean_audio(job.id, result));
+            });
+        });
     }
 
     /// The import [`Effect::StartImport`] asks for, then `finishImport()`.
@@ -1672,6 +1720,26 @@ impl qobject::Editor {
             Some(document) => document.gradients().iter().map(json_variant).collect(),
             None => editor::gradient_presets().iter().map(json_variant).collect(),
         }
+    }
+
+    fn measuring_loudness(&self) -> bool {
+        self.document.as_ref().is_some_and(|document| document.export_state().measuring)
+    }
+
+    fn clean_audio_status(&self) -> QString {
+        qstring(self.document.as_ref().map_or("off", |document| document.clean_audio_status().name()))
+    }
+
+    fn clean_audio_error(&self) -> QString {
+        qstring(self.document.as_ref().map_or("", Document::clean_audio_error))
+    }
+
+    fn clean_audio_bypass(&self) -> bool {
+        self.document.as_ref().is_some_and(Document::clean_audio_bypass)
+    }
+
+    fn set_clean_audio_bypass(self: Pin<&mut Self>, bypass: bool) {
+        self.edit(|document| document.set_clean_audio_bypass(bypass));
     }
 
     fn export_progress(&self) -> f64 {
@@ -2385,6 +2453,12 @@ impl qobject::Editor {
         print_error(&trace_input_line(&object_name.to_string(), &phase.to_string(), x, y));
     }
 
+    fn export_measured(mut self: Pin<&mut Self>, fraction: f64) {
+        // The frame rate and time left count from the frames, not from the measuring.
+        self.as_mut().rust_mut().export_timer = Some(Instant::now());
+        self.as_mut().edit(|document| document.export_measured(fraction));
+    }
+
     fn export_progressed(mut self: Pin<&mut Self>, frame: i32, total: i32) {
         let elapsed_ms = self.export_timer.map_or(0, |timer| timer.elapsed().as_millis() as i64);
         self.as_mut().edit(|document| document.export_progressed(frame, total, elapsed_ms));
@@ -2612,6 +2686,7 @@ impl qobject::Editor {
         self.as_mut().rust_mut().media_player_source = path.to_owned();
         let file = qstring(&qdir::file_path(&self.bundle_path, path));
         self.as_mut().playback_load_media(&file);
+        self.as_mut().update_insert_audio_source();
         self.composition_changed();
     }
 

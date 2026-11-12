@@ -406,13 +406,14 @@ Dialog {
                 Label {
                     objectName: "exportStatusLabel"
                     textFormat: Text.PlainText
-                    text: editor.exportProgress >= 1 ? "Finishing encoding…" : "Rendering…"
+                    text: editor.measuringLoudness ? "Measuring loudness…"
+                        : editor.exportProgress >= 1 ? "Finishing encoding…" : "Rendering…"
                     color: theme.foreground
                     font.pixelSize: theme.type.small
                 }
                 Item { Layout.fillWidth: true }
                 Label {
-                    visible: editor.exportProgress < 1
+                    visible: editor.exportProgress < 1 && !editor.measuringLoudness
                     textFormat: Text.PlainText
                     text: editor.exportFps.toFixed(0) + " fps  ·  " + root.formatEta(editor.exportEtaSeconds) + " left"
                     color: theme.textMuted

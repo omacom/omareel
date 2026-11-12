@@ -432,6 +432,20 @@ impl Project {
         p.audio.mic = a.value("mic").to_bool(true);
         p.audio.volume = a.value("volume").to_double(1.0);
         p.music = music_from_json(source.value("music"));
+        let cleanup = a.value("cleanup").to_object();
+        let defaults = AudioCleanup::default();
+        p.audio.cleanup.denoise = cleanup.value("denoise").to_bool(false);
+        p.audio.cleanup.strength = cpp::clamp(cleanup.value("strength").to_double(defaults.strength), 0.1, 1.0);
+        // A number (-16) reads as its text.
+        let loudness_value = cleanup.value("loudness");
+        let loudness = if loudness_value.is_double() {
+            crate::compat::qnumber::number_f64(loudness_value.to_double(0.0), 'g', 6)
+        } else {
+            loudness_value.to_string_or("off")
+        };
+        if AudioCleanup::LOUDNESS_TARGETS.contains(&loudness.as_str()) {
+            p.audio.cleanup.loudness = loudness;
+        }
         let camera = source.value("camera").to_object();
         p.camera.enabled = camera.value("enabled").to_bool(false);
         p.camera.position = camera.value("position").to_string_or("bottom-right");
@@ -589,6 +603,18 @@ impl Project {
         let captions = self.captions.as_ref().map_or(Value::Undefined, |c| {
             obj([("enabled", c.enabled.into()), ("position", c.position.as_str().into()), ("size", c.size.into())])
         });
+        let mut audio = Object::from_iter([("desktop", Value::from(a.desktop)), ("mic", a.mic.into()), ("volume", a.volume.into())]);
+        // Left out at its default, so projects from before it stay as they were.
+        if a.cleanup != AudioCleanup::default() {
+            audio.insert(
+                "cleanup",
+                obj([
+                    ("denoise", a.cleanup.denoise.into()),
+                    ("strength", a.cleanup.strength.into()),
+                    ("loudness", a.cleanup.loudness.as_str().into()),
+                ]),
+            );
+        }
         let cam = &self.camera;
         let e = &self.export_settings;
         let mut root = Object::from_iter([
@@ -628,7 +654,7 @@ impl Project {
                     ("holdMs", k.hold_ms.into()),
                 ]),
             ),
-            ("audio", obj([("desktop", a.desktop.into()), ("mic", a.mic.into()), ("volume", a.volume.into())])),
+            ("audio", Value::Object(audio)),
             // Absent until the user changes captions (inserting Undefined leaves it out).
             ("captions", captions),
             ("transition", if self.transition == "none" { Value::Undefined } else { self.transition.as_str().into() }),

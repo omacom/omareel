@@ -147,6 +147,7 @@ pub struct Document {
     pub(crate) music: super::music::MusicState,
     /// `project.json` as last read or written here ([`Document::reload_if_changed_on_disk`]).
     pub(crate) disk_stamp: Option<DiskStamp>,
+    pub(crate) clean_audio: super::cleanup::CleanAudio,
 }
 
 /// What [`Document::reload_if_changed_on_disk`] found.
@@ -311,6 +312,7 @@ impl Document {
             effects: RefCell::new(Vec::new()),
             music: Default::default(),
             disk_stamp: None,
+            clean_audio: Default::default(),
         }
     }
 
@@ -740,6 +742,7 @@ impl Document {
             self.emit(Effect::StartMotionTimer);
         }
         self.emit(Effect::CompositionChanged);
+        self.refresh_clean_audio();
     }
 
     pub fn begin_coalesced_edit(&mut self, key: &str) {

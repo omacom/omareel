@@ -71,6 +71,9 @@ public slots:
     void cancel();
 
 signals:
+    // Before the frames, when the project normalises loudness: how much of the sound has been
+    // measured, 0 to 1.
+    void measuring(double fraction);
     void progress(int frame, int total);
     void finished(const QString &path);
     void failed(const QString &message);
