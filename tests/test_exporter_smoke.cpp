@@ -517,6 +517,28 @@ private slots:
         // The recording keeps its level.
         QVERIFY(qAbs(meanVolume(ducked, 1.2, 2.4, highs) - meanVolume(plain, 1.2, 2.4, highs)) < 0.5);
 
+        // A WebM written to a pipe, as browsers record, has no length in its header: it is
+        // still music, read to its end and looped.
+        QProcess makePiped;
+        makePiped.setStandardOutputFile(QDir(bundle).filePath(QStringLiteral("media/piped.webm")));
+        makePiped.start(QStringLiteral("ffmpeg"), {QStringLiteral("-v"), QStringLiteral("error"),
+            QStringLiteral("-f"), QStringLiteral("lavfi"), QStringLiteral("-i"),
+            QStringLiteral("sine=frequency=220:sample_rate=48000:duration=1"), QStringLiteral("-c:a"),
+            QStringLiteral("libopus"), QStringLiteral("-f"), QStringLiteral("webm"), QStringLiteral("-")});
+        QVERIFY(makePiped.waitForFinished(30000));
+        QCOMPARE(makePiped.exitCode(), 0);
+        music.insert(QStringLiteral("file"), QStringLiteral("media/piped.webm"));
+        music.insert(QStringLiteral("duck"), false);
+        project.insert(QStringLiteral("music"), music);
+        QVERIFY2(ProjectJson::save(project, projectPath, &error), qPrintable(error));
+        const QString piped = temporary.filePath(QStringLiteral("piped.mp4"));
+        QVERIFY2(exportBundle(bundle, piped, &error), qPrintable(error));
+        const double pipedUnder = meanVolume(piped, 1.2, 2.4, lows);
+        QVERIFY2(qAbs(pipedUnder - alone) < 2.0, qPrintable(QStringLiteral("%1 vs %2").arg(pipedUnder).arg(alone)));
+        music.insert(QStringLiteral("file"), QStringLiteral("media/song.wav"));
+        project.insert(QStringLiteral("music"), music);
+        QVERIFY2(ProjectJson::save(project, projectPath, &error), qPrintable(error));
+
         // Missing music fails the export early, saying so.
         QVERIFY(QFile::remove(QDir(bundle).filePath(QStringLiteral("media/song.wav"))));
         QVERIFY(!exportBundle(bundle, temporary.filePath(QStringLiteral("missing.mp4")), &error));

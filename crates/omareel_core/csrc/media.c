@@ -116,6 +116,72 @@ int omr_probe(const char *path, struct omr_media_info *info)
     return 0;
 }
 
+int omr_audio_duration(const char *path, double *duration, char *error, size_t error_size)
+{
+    *duration = -1.0;
+    if (omr_ff_load() != 0) {
+        snprintf(error, error_size, "%s: %s", path, omr_ff_error());
+        return AVERROR(ENOSYS);
+    }
+    AVFormatContext *format = NULL;
+    struct deadline deadline;
+    // Reading every packet of a long file takes a while: ffprobe's limit for a full read.
+    int code = open_input(&format, path, &deadline, 60);
+    if (code < 0) {
+        set_error(error, error_size, path, code);
+        return code;
+    }
+    code = avformat_find_stream_info(format, NULL);
+    if (code < 0) {
+        set_error(error, error_size, path, code);
+        avformat_close_input(&format);
+        return code;
+    }
+    int index = -1;
+    for (unsigned i = 0; i < format->nb_streams; ++i) {
+        if (format->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
+            index = (int)i;
+            break;
+        }
+    }
+    if (index < 0) {
+        avformat_close_input(&format);
+        return 0;
+    }
+    const AVStream *stream = format->streams[index];
+    *duration = seconds(stream->duration, stream->time_base);
+    if (*duration > 0.0 && format->duration_estimation_method != AVFMT_DURATION_FROM_BITRATE) {
+        avformat_close_input(&format);
+        return 1;
+    }
+    // From the first packet's start to the last one's end, as ffmpeg plays and loops it.
+    int64_t first = INT64_MAX, end = INT64_MIN;
+    AVPacket *packet = av_packet_alloc();
+    if (!packet) {
+        avformat_close_input(&format);
+        return AVERROR(ENOMEM);
+    }
+    avformat_seek_file(format, -1, INT64_MIN, 0, 0, AVSEEK_FLAG_BACKWARD);
+    while ((code = av_read_frame(format, packet)) >= 0) {
+        const int64_t at = packet->pts != AV_NOPTS_VALUE ? packet->pts : packet->dts;
+        if (packet->stream_index == index && at != AV_NOPTS_VALUE) {
+            if (at < first) first = at;
+            if (at + packet->duration > end) end = at + packet->duration;
+        }
+        av_packet_unref(packet);
+    }
+    av_packet_free(&packet);
+    // A read cut short by the deadline fails rather than give part of the length as all of it.
+    if (code != AVERROR_EOF && deadline_passed(&deadline)) {
+        set_error(error, error_size, path, AVERROR_EXIT);
+        avformat_close_input(&format);
+        return AVERROR_EXIT;
+    }
+    *duration = first < end ? (double)(end - first) * av_q2d(stream->time_base) : -1.0;
+    avformat_close_input(&format);
+    return 1;
+}
+
 static int compare_doubles(const void *a, const void *b)
 {
     double x = *(const double *)a, y = *(const double *)b;
