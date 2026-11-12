@@ -161,6 +161,23 @@ pub fn run_streaming(
     use std::os::unix::process::CommandExt;
     let program = command.get_program().to_string_lossy().into_owned();
     command.process_group(0).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    // The command dies with the thread that started it, which waits for it here, and so with
+    // this process (the editor or the CLI killed, even with SIGKILL), rather than running on
+    // with no one to stop it or time it out.
+    let parent = std::process::id() as libc::pid_t;
+    // SAFETY: only async-signal-safe calls between fork and exec.
+    unsafe {
+        command.pre_exec(move || {
+            if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL as libc::c_ulong, 0, 0, 0) != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            // The parent may have died before the call above.
+            if libc::getppid() != parent {
+                libc::_exit(1);
+            }
+            Ok(())
+        });
+    }
     let mut child = command.spawn().map_err(|error| Stopped::Failed(format!("could not run {program}: {error}")))?;
     let group = child.id() as i32;
     control.children.add(group);
@@ -178,12 +195,11 @@ pub fn run_streaming(
         if out_open {
             match out_rx.recv_timeout(POLL) {
                 Ok(chunk) => {
+                    // No `continue` for more output: steady output must not skip the checks
+                    // below (the deadline, cancelling).
                     if wanted {
                         stdout.extend_from_slice(&chunk);
                         wanted = on_output(&chunk);
-                    }
-                    if wanted {
-                        continue;
                     }
                 }
                 Err(RecvTimeoutError::Timeout) => {}
@@ -320,6 +336,77 @@ mod tests {
         held.store(false, Ordering::Relaxed);
         assert!(control.proceed());
         assert_eq!(run(sh("echo again"), None, &control).unwrap().stdout, b"again\n");
+    }
+
+    /// Output that never pauses doesn't keep the command past its timeout.
+    #[test]
+    fn steady_output_still_times_out() {
+        let started = Instant::now();
+        let mut chunks = 0;
+        let result = run_streaming(sh("while true; do echo x; sleep 0.002; done"), Some(Duration::from_millis(500)), &Control::default(), |_| {
+            chunks += 1;
+            true
+        });
+        assert!(matches!(result, Err(Stopped::TimedOut)), "{:?}", result.err());
+        assert!(started.elapsed() < Duration::from_secs(4), "{:?}", started.elapsed());
+        assert!(chunks > 10, "{chunks}");
+    }
+
+    /// And it doesn't keep a cancel waiting either.
+    #[test]
+    fn steady_output_still_sees_a_cancel() {
+        let control = Control::default();
+        let stopper = control.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(300));
+            stopper.cancel.store(true, Ordering::Relaxed);
+        });
+        let started = Instant::now();
+        let result = run(sh("while true; do echo x; sleep 0.002; done"), None, &control);
+        assert!(matches!(result, Err(Stopped::Cancelled)), "{:?}", result.err());
+        assert!(started.elapsed() < Duration::from_secs(3), "{:?}", started.elapsed());
+    }
+
+    /// Run by [`a_command_dies_with_the_process_that_started_it`] in a process of its own: starts a
+    /// sleeper that writes its pid to `$OMAREEL_TEST_DEATH_PIDFILE`, and waits for it.
+    #[test]
+    fn death_helper() {
+        let Ok(pidfile) = std::env::var("OMAREEL_TEST_DEATH_PIDFILE") else { return };
+        let _ = run(sh(&format!("echo $$ > {pidfile}.tmp; mv {pidfile}.tmp {pidfile}; exec sleep 60")), None, &Control::default());
+    }
+
+    /// The editor or `omareel agent` killed with SIGKILL takes what it runs with it.
+    #[test]
+    fn a_command_dies_with_the_process_that_started_it() {
+        let dir = std::env::temp_dir().join(format!("omareel-job-death-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let pidfile = dir.join("sleeper");
+        let mut helper = Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "transcript::job::tests::death_helper", "--test-threads=1"])
+            .env("OMAREEL_TEST_DEATH_PIDFILE", &pidfile)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let started = Instant::now();
+        while !pidfile.is_file() && started.elapsed() < Duration::from_secs(20) {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        let sleeper: i32 = std::fs::read_to_string(&pidfile).unwrap().trim().parse().unwrap();
+        assert!(alive(sleeper));
+        helper.kill().unwrap();
+        helper.wait().unwrap();
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while alive(sleeper) && !zombie(sleeper) && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(!alive(sleeper) || zombie(sleeper), "{sleeper} outlived the process that started it");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn zombie(pid: i32) -> bool {
+        std::fs::read_to_string(format!("/proc/{pid}/stat"))
+            .is_ok_and(|stat| stat.rfind(')').is_some_and(|end| stat[end + 1..].trim_start().starts_with('Z')))
     }
 
     #[test]
