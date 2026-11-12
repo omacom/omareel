@@ -98,6 +98,53 @@ pub fn allowed_aspects() -> [&'static str; 7] {
     ["auto", "16:9", "1:1", "4:3", "9:16", "3:4", "4:5"]
 }
 
+pub fn allowed_marker_kinds() -> [&'static str; 2] {
+    ["marker", "retake"]
+}
+
+/// The `markers` array: `{"id", "time", "label"}`, with `"kind": "retake"` for a retake's marker.
+pub fn markers_to_json(markers: &[Marker]) -> Vec<Value> {
+    markers
+        .iter()
+        .map(|m| {
+            let mut marker = Object::from_iter([
+                ("id", Value::from(m.id.as_str())),
+                ("time", m.time.into()),
+                ("label", m.label.as_str().into()),
+            ]);
+            if m.kind != "marker" {
+                marker.insert("kind", m.kind.as_str());
+            }
+            marker.into()
+        })
+        .collect()
+}
+
+/// Reads `markers`, dropping entries without an id or a finite, non-negative time; an unknown
+/// kind reads as "marker". Kept in time order.
+pub fn markers_from_json(value: &Value) -> Vec<Marker> {
+    let mut markers: Vec<Marker> = value
+        .to_array()
+        .iter()
+        .filter_map(|value| {
+            let o = value.as_object()?;
+            let marker = Marker {
+                id: o.value("id").to_string_or(""),
+                time: o.value("time").to_double(f64::NAN),
+                label: o.value("label").to_string_or(""),
+                kind: o.value("kind").to_string_or("marker"),
+            };
+            if marker.id.is_empty() || !marker.time.is_finite() || marker.time < 0.0 {
+                return None;
+            }
+            let kind = if allowed_marker_kinds().contains(&marker.kind.as_str()) { marker.kind } else { "marker".into() };
+            Some(Marker { kind, ..marker })
+        })
+        .collect();
+    markers.sort_by(|a, b| a.time.total_cmp(&b.time));
+    markers
+}
+
 impl Project {
     /// A new recording's project: one clip over the whole recording and the default
     /// gradient.
@@ -285,6 +332,7 @@ impl Project {
             p.zooms.push(z);
         }
         p.overlays = overlays_from_json(source.value("overlays"));
+        p.markers = markers_from_json(source.value("markers"));
         let zs = source.value("zoomStyle").to_object();
         p.zoom_style.spring = spring_from_json(&zs.value("spring").to_object(), &p.zoom_style.spring);
         p.zoom_style.snap_to_edges_ratio = zs.value("snapToEdgesRatio").to_double(0.25);
@@ -477,6 +525,7 @@ impl Project {
                 ])
             })
             .collect();
+        let markers = markers_to_json(&self.markers);
         let stops: Vec<Value> = self
             .background
             .gradient
@@ -621,6 +670,10 @@ impl Project {
         }
         if !self.overlays.is_empty() {
             root.insert("overlays", overlays_to_json(&self.overlays));
+        }
+        // Projects without markers keep the bytes they had before markers existed.
+        if !markers.is_empty() {
+            root.insert("markers", markers);
         }
         root
     }

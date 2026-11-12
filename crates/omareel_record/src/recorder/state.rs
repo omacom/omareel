@@ -120,6 +120,39 @@ pub fn update_state_file(path: &str, values: &Object) -> Result<(), String> {
     if file.commit() { Ok(()) } else { Err(file.error_string()) }
 }
 
+/// Like [`update_state_file`], but `change` reads and edits the state under the lock, so a
+/// toggle made from two processes at once never loses one of them. Its result comes back; when it
+/// is an error nothing is written.
+pub fn modify_state_file<R>(path: &str, change: impl FnOnce(&mut Object) -> Result<R, String>) -> Result<R, String> {
+    qdir::mkpath(&FileInfo::new(path).absolute_path());
+    let mut lock = LockFile::new(format!("{path}.lock"));
+    lock.set_stale_lock_time(10_000);
+    if !lock.try_lock(1000) {
+        return Err(if lock.error() == LockError::LockFailedError {
+            "Recording state is busy".into()
+        } else {
+            "Could not lock recording state".into()
+        });
+    }
+    let mut state = read_state_file(path);
+    let result = change(&mut state)?;
+    let mut file = SaveFile::new(path);
+    if !file.open() {
+        return Err(file.error_string());
+    }
+    file.write(Value::Object(state).to_json(Format::Indented).as_bytes());
+    if file.commit() { Ok(result) } else { Err(file.error_string()) }
+}
+
+/// Removes the state file under its lock (waiting up to a second for it, then removing it
+/// anyway), so a command that marks the recording under the lock never writes it back.
+pub fn remove_state_file_locked(path: &str) {
+    let mut lock = LockFile::new(format!("{path}.lock"));
+    lock.set_stale_lock_time(10_000);
+    let _locked = lock.try_lock(1000);
+    qfile::remove(path);
+}
+
 /// `Recorder::sendHostCommand(command)`: `{"command": command}` into the self-view host's file.
 pub fn send_host_command(command: &str) -> bool {
     let mut values = Object::new();

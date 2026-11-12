@@ -232,6 +232,9 @@ ApplicationWindow {
             }
         }
     }
+    Shortcut { sequence: "M"; enabled: !window.singleKeyShortcutsBlocked; onActivated: editor.jumpToMarker(1) }
+    Shortcut { sequence: "Shift+M"; enabled: !window.singleKeyShortcutsBlocked; onActivated: editor.jumpToMarker(-1) }
+    Shortcut { sequence: "Ctrl+M"; enabled: !window.singleKeyShortcutsBlocked && !editor.readOnly; onActivated: editor.addMarkerAt(editor.position, "") }
     Shortcut {
         sequence: "Delete"
         enabled: !window.singleKeyShortcutsBlocked && !editor.readOnly

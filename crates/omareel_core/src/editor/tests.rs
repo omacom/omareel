@@ -2137,3 +2137,97 @@ fn transitions_at_cuts_follow_the_project_and_the_clip() {
 
 #[path = "overlay_tests.rs"]
 mod overlay_tests;
+
+// Markers: a recording's marks shape its new project; markers are added, renamed, removed and
+// jumped between, each edit one undo step, and project.json keeps them.
+#[test]
+fn recording_marks_make_the_new_project_and_markers_edit() {
+    let world = World::new("marks");
+    let bundle = world.bundle("marks.omareel");
+    // capture.json's first frame is at 1 s; the probe says the screen lasts 2 s.
+    std::fs::write(
+        format!("{bundle}/markers.jsonl"),
+        concat!(
+            "{\"k\":\"marker\",\"label\":\"intro\",\"t\":1200000}\n",
+            "{\"from\":1500000,\"k\":\"retake\",\"t\":1800000}\n",
+            "{\"k\":\"pause\",\"t\":2400000}\n",
+        ),
+    )
+    .unwrap();
+    let mut qt = world.open(&bundle);
+    let spans: Vec<(f64, f64)> = qt.document.project().clips.iter().map(|clip| (clip.in_, clip.out)).collect();
+    assert_eq!(spans, [(0.0, 0.5), (0.8, 1.4)]);
+    assert!(q_fuzzy_compare(qt.document.duration(), 1.1));
+    let rows = qt.document.marker_rows();
+    let shown: Vec<(&str, &str, &str, Option<f64>)> = rows
+        .iter()
+        .map(|row| (row.marker.id.as_str(), row.marker.label.as_str(), row.marker.kind.as_str(), row.output_time))
+        .collect();
+    assert_eq!(shown[0].0, "m1");
+    assert_eq!((shown[0].1, shown[0].2), ("intro", "marker"));
+    assert!(q_fuzzy_compare(shown[0].3.unwrap(), 0.2));
+    assert_eq!((shown[1].0, shown[1].2), ("m2", "retake"));
+    assert!(q_fuzzy_compare(shown[1].3.unwrap(), 0.5), "the retake marker sits where the cut joins");
+
+    // M and Shift+M.
+    assert!(qt.run(|d| d.jump_to_marker(1)));
+    assert!(q_fuzzy_compare(qt.document.output_position(), 0.2));
+    assert!(qt.run(|d| d.jump_to_marker(1)));
+    assert!(q_fuzzy_compare(qt.document.output_position(), 0.5));
+    assert!(!qt.run(|d| d.jump_to_marker(1)));
+    assert!(qt.run(|d| d.jump_to_marker(-1)));
+    assert!(q_fuzzy_compare(qt.document.output_position(), 0.2));
+
+    // Added at output 0.6, which plays recording 0.9.
+    let id = qt.run(|d| d.add_marker_at_output(0.6, "  check this "));
+    assert_eq!(id, "m-id1");
+    let added = &qt.document.markers()[2];
+    assert!(q_fuzzy_compare(added.time, 0.9));
+    assert_eq!((added.label.as_str(), added.kind.as_str()), ("check this", "marker"));
+    assert!(qt.run(|d| d.rename_marker("m1", "the intro")));
+    assert!(!qt.run(|d| d.rename_marker("m1", "the intro")), "the same label is no edit");
+    assert!(!qt.run(|d| d.rename_marker("nope", "x")));
+    assert!(qt.run(|d| d.remove_marker("m2")));
+    assert!(!qt.run(|d| d.remove_marker("m2")));
+    let labels: Vec<&str> = qt.document.markers().iter().map(|m| m.label.as_str()).collect();
+    assert_eq!(labels, ["the intro", "check this"]);
+    qt.run(|d| d.undo());
+    assert_eq!(qt.document.markers().len(), 3, "one undo brings the removed marker back");
+    qt.run(|d| d.undo());
+    assert_eq!(qt.document.markers()[0].label, "intro");
+
+    // Cut away, a marker stays in the project but has no output time.
+    assert_eq!(qt.run(|d| d.add_marker(1.7, "")), "m-id2");
+    assert_eq!(qt.document.marker_rows().last().unwrap().output_time, None);
+
+    // project.json holds them, and reads back to the same bytes.
+    assert!(qt.run(|d| d.save_now()));
+    let project_path = format!("{bundle}/project.json");
+    let saved = std::fs::read(&project_path).unwrap();
+    let json = crate::compat::qjson::object_from_json(&saved).unwrap();
+    let markers = json.value("markers").to_array();
+    assert_eq!(markers.len(), 4);
+    assert_eq!(markers[1].to_object().value("kind").to_string_or(""), "retake");
+    assert!(!markers[0].to_object().contains("kind"));
+    let reopened = world.open(&bundle);
+    assert_eq!(reopened.document.markers(), qt.document.markers());
+    assert_eq!(reopened.document.project().clips, qt.document.project().clips, "marks apply to new projects only");
+    let (project, result) = Project::load(&project_path);
+    result.unwrap();
+    project.save(&project_path).unwrap();
+    assert_eq!(std::fs::read(&project_path).unwrap(), saved);
+}
+
+// A bundle without markers.jsonl opens as it always did, and its project has no markers key.
+#[test]
+fn bundles_without_marks_are_unchanged() {
+    let world = World::new("nomarks");
+    let bundle = world.bundle("plain.omareel");
+    let mut qt = world.open(&bundle);
+    assert_eq!(qt.document.project().clips.len(), 1);
+    assert!(qt.document.markers().is_empty());
+    assert!(!qt.run(|d| d.jump_to_marker(1)));
+    assert!(qt.run(|d| d.save_now()));
+    let json = crate::compat::qjson::object_from_json(&std::fs::read(format!("{bundle}/project.json")).unwrap()).unwrap();
+    assert!(!json.contains("markers"));
+}

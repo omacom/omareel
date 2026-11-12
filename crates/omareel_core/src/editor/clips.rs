@@ -34,7 +34,7 @@ impl ImportJob {
 
 /// `visibleSourceSpan` in `deleteOutputRange`: the first and last recording time of a zoom
 /// that some recording clip still shows (infinities when none does).
-fn visible_source_span(zoom: &ZoomSegment, clips: &[Clip]) -> (f64, f64) {
+pub(crate) fn visible_source_span(zoom: &ZoomSegment, clips: &[Clip]) -> (f64, f64) {
     visible_span(zoom.start, zoom.end, clips)
 }
 

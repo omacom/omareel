@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Shapes
 import QtQuick.Controls.impl
+import QtQuick.Layouts
 import Omareel.Ui
 
 FocusScope {
@@ -599,6 +600,106 @@ FocusScope {
                     target: cameraBlock
                     shown: cameraHover.hovered
                     text: "Camera settings"
+                }
+            }
+
+            // Markers: a tag on the ruler and a faint line through the tracks. Click to go there,
+            // double-click (or right-click) to rename or delete.
+            Repeater {
+                model: editor.markers
+                delegate: Item {
+                    id: markerItem
+                    required property var modelData
+                    readonly property bool retake: modelData.kind === "retake"
+                    readonly property color tint: retake ? theme.textMuted : theme.accent
+                    readonly property string title: modelData.label !== "" ? modelData.label
+                        : retake ? "Retake" : "Marker " + modelData.number
+                    objectName: "marker-" + modelData.id
+                    visible: modelData.time >= 0
+                    x: Math.max(0, modelData.time) * root.pixelsPerSecond
+                    y: 0
+                    width: 1
+                    height: root.tracksBottom
+                    z: 15
+                    Rectangle {
+                        x: 0; y: 30
+                        width: 1
+                        height: parent.height - 30
+                        color: Qt.alpha(markerItem.tint, markerHover.hovered ? .7 : .35)
+                    }
+                    Rectangle {
+                        id: markerTag
+                        x: -5; y: 17
+                        width: 10; height: 13
+                        radius: theme.rounded ? 2 : 0
+                        color: markerItem.tint
+                        scale: markerHover.hovered ? 1.15 : 1
+                        transformOrigin: Item.Bottom
+                        Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+                        HoverHandler { id: markerHover; cursorShape: Qt.PointingHandCursor }
+                        MouseArea {
+                            anchors.fill: parent
+                            anchors.margins: -3
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton
+                            onPressed: root.forceActiveFocus()
+                            onClicked: mouse => {
+                                if (mouse.button === Qt.RightButton) markerEditor.openFor(markerItem)
+                                else editor.seek(markerItem.modelData.time)
+                            }
+                            onDoubleClicked: markerEditor.openFor(markerItem)
+                        }
+                        OmLazyToolTip {
+                            target: markerTag
+                            shown: markerHover.hovered && !markerEditor.opened
+                            text: markerItem.title
+                        }
+                    }
+                }
+            }
+            OmPopup {
+                id: markerEditor
+                objectName: "markerEditor"
+                property string markerId: ""
+                property bool retake: false
+                width: 248
+                padding: 10
+                focus: true
+                function openFor(item) {
+                    markerId = item.modelData.id
+                    retake = item.retake
+                    markerLabel.text = item.modelData.label
+                    x = Math.max(0, Math.min(content.width - width, item.x - width / 2))
+                    y = 34
+                    open()
+                    markerLabel.forceActiveFocus()
+                    markerLabel.selectAll()
+                }
+                // Closing keeps what was typed (Enter, Escape or a click elsewhere).
+                function commit() { close() }
+                onClosed: {
+                    if (markerId !== "") editor.renameMarker(markerId, markerLabel.text)
+                    markerId = ""
+                    root.forceActiveFocus()
+                }
+                contentItem: RowLayout {
+                    spacing: 6
+                    OmTextField {
+                        id: markerLabel
+                        objectName: "markerLabel"
+                        Layout.fillWidth: true
+                        placeholderText: markerEditor.retake ? "Retake" : "Marker name"
+                        onAccepted: markerEditor.commit()
+                    }
+                    OmIconButton {
+                        objectName: "markerDelete"
+                        icon.source: "qrc:/omareel/assets/icons/lucide/trash-2.svg"
+                        Accessible.name: "Delete marker"
+                        onClicked: {
+                            editor.removeMarker(markerEditor.markerId)
+                            markerEditor.markerId = ""
+                            markerEditor.close()
+                        }
+                    }
                 }
             }
 

@@ -25,6 +25,7 @@ pub mod omarchy_paths;
 pub mod overlay_track;
 pub mod probe;
 pub mod project;
+pub mod recording_marks;
 pub mod recording_preferences;
 pub mod theme;
 pub mod transcript;

@@ -25,6 +25,8 @@ Rectangle {
         {key:"Z", action:"Add zoom"}, {key:"I", action:"Insert a video"},
         {key:"T R A N", action:"Add text, box, arrow, step"},
         {key:"B", action:"Add a blur region"}, {key:"Shift T", action:"Add a title card"},
+        {key:"M", action:"Next marker"}, {key:"Shift M", action:"Previous marker"},
+        {key:"Ctrl M", action:"Add marker"},
         {key:"Delete", action:"Remove selection"},
         {key:"Backspace", action:"Remove range"},
         {key:"Ctrl Z", action:"Undo"}, {key:"Ctrl Shift Z", action:"Redo"},

@@ -132,6 +132,23 @@ impl Default for ZoomSegment {
     }
 }
 
+/// A moment marked on the recording: during the recording (`omareel record --marker`, a retake)
+/// or in the editor. `time` is in recording (source) seconds, like a zoom's, so trimming clips
+/// never moves it. `kind` is "marker", or "retake" for where a retake cut ended.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Marker {
+    pub id: String,
+    pub time: f64,
+    pub label: String,
+    pub kind: String,
+}
+
+impl Default for Marker {
+    fn default() -> Marker {
+        Marker { id: String::new(), time: 0.0, label: String::new(), kind: "marker".into() }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Audio {
     pub desktop: bool,

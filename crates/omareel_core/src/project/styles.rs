@@ -181,6 +181,8 @@ pub struct Project {
     pub zooms: Vec<ZoomSegment>,
     /// Annotations over the recording (`overlays`, written only when there are any).
     pub overlays: Vec<super::overlays::Overlay>,
+    /// Left out of `project.json` while empty.
+    pub markers: Vec<Marker>,
     pub zoom_style: ZoomStyle,
     pub background: Background,
     pub frame: Frame,
@@ -214,6 +216,7 @@ impl Default for Project {
             clips: Vec::new(),
             zooms: Vec::new(),
             overlays: Vec::new(),
+            markers: Vec::new(),
             zoom_style: ZoomStyle::default(),
             background: Background::default(),
             frame: Frame::default(),
