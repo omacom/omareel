@@ -11,14 +11,17 @@ use crate::camera_timeline::map_camera_time;
 use crate::compat::cpp;
 use crate::keystroke_track::KeystrokePill;
 use crate::motion_track::{MotionSample, RippleSample};
+use crate::reframe::ReframeWindow;
 
-/// `zoom`: `{scale, cx, cy, velocity}`, all doubles.
+/// `zoom`: `{scale, cx, cy, velocity}`, all doubles; a reframing project adds `reframe: true`
+/// and the window `rx`, `ry`, `rw`, `rh` (as the exporter's [`crate::export::composition::Zoom`]).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PreviewZoom {
     pub scale: f64,
     pub cx: f64,
     pub cy: f64,
     pub velocity: f64,
+    pub reframe: Option<ReframeWindow>,
 }
 
 /// `layout`: `{cameraFull, bubble}`, doubles.
@@ -73,7 +76,11 @@ impl Document {
 
     pub fn preview_zoom(&self) -> PreviewZoom {
         let s = self.motion.as_ref().map_or_else(MotionSample::default, |motion| motion.sample(self.source_position()));
-        PreviewZoom { scale: s.zoom_scale, cx: s.zoom_cx, cy: s.zoom_cy, velocity: s.zoom_center_velocity }
+        let reframe = match &self.motion {
+            Some(motion) if !self.showing_insert() => motion.reframe(self.source_position()),
+            _ => None,
+        };
+        PreviewZoom { scale: s.zoom_scale, cx: s.zoom_cx, cy: s.zoom_cy, velocity: s.zoom_center_velocity, reframe }
     }
 
     pub fn preview_layout(&self) -> PreviewLayout {

@@ -5,6 +5,7 @@ use crate::compat::geometry::PointF;
 use crate::cursor_path::{self, CursorSample};
 use crate::input_log::{InputEvent, InputKind};
 use crate::project::{Project, Spring};
+use crate::reframe::{self, Focus, ReframeTrack, ReframeWindow};
 use crate::zoom_timeline;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -63,6 +64,8 @@ pub struct MotionTrack {
     duration: f64,
     samples: Vec<MotionSample>,
     clicks: Vec<Click>,
+    /// The auto-reframe window, for a project that reframes.
+    reframe: Option<ReframeTrack>,
 }
 
 #[derive(Clone, Copy)]
@@ -150,6 +153,13 @@ impl MotionTrack {
         let mut cursor_rotation = SpringState::new(0.0, 0.0);
         let click_spring = Spring { mass: 0.3, stiffness: 300.0, damping: 30.0 };
         let dt = 1.0 / MotionTrack::SAMPLE_RATE;
+        let reframing = reframe::enabled(project);
+        let mut focus: Vec<Focus> = Vec::new();
+        // The reframe window lives in the crop's coordinates; the cursor and zooms in the recording's.
+        let crop = project.crop;
+        let to_crop = |p: PointF| {
+            PointF::new((p.x - crop.x) / cpp::max(0.0001, crop.width), (p.y - crop.y) / cpp::max(0.0001, crop.height))
+        };
 
         for i in 0..count {
             let time = cpp::min(track.duration, f64::from(i) / MotionTrack::SAMPLE_RATE);
@@ -220,6 +230,18 @@ impl MotionTrack {
                 cursor_opacity: cursor_opacity.x,
                 cursor_rotation: cursor_rotation.x,
             });
+            if reframing {
+                focus.push(Focus {
+                    cursor: to_crop(PointF::new(cursor_x.x, cursor_y.x)),
+                    zoom_scale: zoom_scale.x,
+                    zoom_target: (zoom_target.scale > 1.0).then(|| to_crop(zoom_target.center)),
+                });
+            }
+        }
+        if reframing {
+            let base = reframe::base_size(project, source_width, source_height);
+            track.reframe =
+                Some(ReframeTrack::build(track.duration, MotionTrack::SAMPLE_RATE, &focus, base, &project.zoom_style.spring));
         }
         // Ripples ride on the cursor the viewer actually sees (the smoothed one),
         // not on the raw click position the spring may still be catching up to.
@@ -274,6 +296,11 @@ impl MotionTrack {
 
     pub fn duration(&self) -> f64 {
         self.duration
+    }
+
+    /// The auto-reframe window at `time`, for a project that reframes.
+    pub fn reframe(&self, time: f64) -> Option<ReframeWindow> {
+        self.reframe.as_ref().map(|track| track.sample(time))
     }
 
     /// The number of samples (`qsizetype` in the C++).

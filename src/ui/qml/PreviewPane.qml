@@ -83,7 +83,17 @@ FocusScope {
             readonly property real frameY: (height - videoHeight) / 2
             readonly property real zoomOriginX: frameX + editor.zoom.cx * videoWidth
             readonly property real zoomOriginY: frameY + editor.zoom.cy * videoHeight
+            // Reframed, the frame shows the composition's moving window, unscaled.
+            readonly property bool reframed: composition.reframed
+            function reframedFrameX() { return (width - composition.videoWidth) / 2 }
+            function reframedFrameY() { return (height - composition.videoHeight) / 2 }
             function targetFromScene(px, py) {
+                if (reframed) {
+                    const c = composition.viewCrop
+                    const u = Math.max(0, Math.min(1, (px - reframedFrameX()) / composition.videoWidth))
+                    const v = Math.max(0, Math.min(1, (py - reframedFrameY()) / composition.videoHeight))
+                    return { x: c.x + u * c.w, y: c.y + v * c.h }
+                }
                 const scale = Math.max(.0001, editor.zoom.scale)
                 const baseX = zoomOriginX + (px - zoomOriginX) / scale
                 const baseY = zoomOriginY + (py - zoomOriginY) / scale
@@ -115,8 +125,12 @@ FocusScope {
                 visible: scaled.selectedZoom && typeof scaled.selectedZoom.target === "object"
                 readonly property real targetX: visible ? Number(scaled.selectedZoom.target.x) : .5
                 readonly property real targetY: visible ? Number(scaled.selectedZoom.target.y) : .5
-                x: scaled.zoomOriginX + editor.zoom.scale * (scaled.frameX + targetX * scaled.videoWidth - scaled.zoomOriginX) - width / 2
-                y: scaled.zoomOriginY + editor.zoom.scale * (scaled.frameY + targetY * scaled.videoHeight - scaled.zoomOriginY) - height / 2
+                x: (scaled.reframed
+                    ? scaled.reframedFrameX() + (targetX - composition.viewCrop.x) / composition.viewCrop.w * composition.videoWidth
+                    : scaled.zoomOriginX + editor.zoom.scale * (scaled.frameX + targetX * scaled.videoWidth - scaled.zoomOriginX)) - width / 2
+                y: (scaled.reframed
+                    ? scaled.reframedFrameY() + (targetY - composition.viewCrop.y) / composition.viewCrop.h * composition.videoHeight
+                    : scaled.zoomOriginY + editor.zoom.scale * (scaled.frameY + targetY * scaled.videoHeight - scaled.zoomOriginY)) - height / 2
                 width: 18 / scaled.scale
                 height: width
                 radius: width / 2

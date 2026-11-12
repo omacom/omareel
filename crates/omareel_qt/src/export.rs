@@ -77,6 +77,9 @@ pub mod ffi {
         gif_fps: i32,
         gif_width: i32,
         timing: bool,
+        preset: QString,
+        aspect: QString,
+        reframe: QString,
     }
 
     #[namespace = "omareel::exporter"]
@@ -105,6 +108,18 @@ pub mod ffi {
         /// The even size an encoder needs: odd dimensions grow by one.
         #[cxx_name = "paddedEvenSize"]
         fn padded_even_size(width: i32, height: i32) -> EvenSize;
+
+        /// An export preset's format ("mp4" or "gif"); empty for an unknown preset.
+        #[cxx_name = "presetFormat"]
+        fn preset_format(preset: &QString) -> QString;
+
+        /// Where an export with this preset goes without `-o`; empty for an unknown preset.
+        #[cxx_name = "presetOutputPath"]
+        fn preset_output_path(bundle_path: &QString, preset: &QString) -> QString;
+
+        /// The preset ids, comma separated, for messages.
+        #[cxx_name = "presetIds"]
+        fn preset_ids() -> QString;
 
         /// The exporter's cancel flag. `cancel` may be called from any thread at any time.
         type CancelFlag;
@@ -234,6 +249,20 @@ fn padded_even_size(width: i32, height: i32) -> EvenSize {
 
 pub struct CancelFlag(Arc<AtomicBool>);
 
+fn preset_format(preset: &QString) -> QString {
+    export::presets::find(&preset.to_string()).map_or_else(QString::default, |preset| qstring(preset.format))
+}
+
+fn preset_output_path(bundle_path: &QString, preset: &QString) -> QString {
+    export::presets::find(&preset.to_string()).map_or_else(QString::default, |preset| {
+        qstring(&export::presets::default_output_path(&bundle_path.to_string(), preset))
+    })
+}
+
+fn preset_ids() -> QString {
+    qstring(&export::presets::ids())
+}
+
 fn new_cancel_flag() -> Box<CancelFlag> {
     Box::new(CancelFlag(Arc::new(AtomicBool::new(false))))
 }
@@ -331,6 +360,31 @@ pub(crate) fn map<const N: usize>(entries: [(&str, QVariant); N]) -> QMap<QMapPa
     entries.into_iter().map(|(key, value)| (qstring(key), value)).collect()
 }
 
+/// Composition.qml's `zoom` map, the editor's and the exporter's: `scale`, `cx`, `cy`,
+/// `velocity`, and for a reframing project `reframe: true` with the window `rx`, `ry`, `rw`, `rh`.
+pub(crate) fn zoom_map(
+    scale: f64,
+    cx: f64,
+    cy: f64,
+    velocity: f64,
+    reframe: Option<omareel_core::reframe::ReframeWindow>,
+) -> QMap<QMapPair_QString_QVariant> {
+    let mut zoom = map([
+        ("scale", QVariant::from(&scale)),
+        ("cx", QVariant::from(&cx)),
+        ("cy", QVariant::from(&cy)),
+        ("velocity", QVariant::from(&velocity)),
+    ]);
+    if let Some(window) = reframe {
+        zoom.insert(qstring("reframe"), QVariant::from(&true));
+        zoom.insert(qstring("rx"), QVariant::from(&window.x));
+        zoom.insert(qstring("ry"), QVariant::from(&window.y));
+        zoom.insert(qstring("rw"), QVariant::from(&window.w));
+        zoom.insert(qstring("rh"), QVariant::from(&window.h));
+    }
+    zoom
+}
+
 impl ExportJob {
     fn state(&self) -> Option<&export::composition::CompositionState> {
         self.job.as_ref().map(export::ExportJob::state)
@@ -346,6 +400,9 @@ impl ExportJob {
             gif_fps: options.gif_fps,
             gif_width: options.gif_width,
             timing: options.timing,
+            preset: options.preset.to_string(),
+            aspect: options.aspect.to_string(),
+            reframe: options.reframe.to_string(),
         };
         match export::ExportJob::prepare(&options, Arc::clone(&cancel.0)) {
             Ok(job) => {
@@ -403,12 +460,7 @@ impl ExportJob {
     fn zoom_map(&self) -> QMap<QMapPair_QString_QVariant> {
         let Some(s) = self.state() else { return QMap::default() };
         let z = &s.zoom;
-        map([
-            ("scale", QVariant::from(&z.scale)),
-            ("cx", QVariant::from(&z.cx)),
-            ("cy", QVariant::from(&z.cy)),
-            ("velocity", QVariant::from(&z.velocity)),
-        ])
+        zoom_map(z.scale, z.cx, z.cy, z.velocity, z.reframe)
     }
 
     fn layout_map(&self) -> QMap<QMapPair_QString_QVariant> {

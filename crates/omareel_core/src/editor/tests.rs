@@ -677,7 +677,7 @@ fn export_through_editor_api() {
     let bundle = world.bundle("editor.omareel");
     let mut qt = world.open(&bundle);
     let output = world.path("out/editor-api.mp4");
-    let settings = ExportDialogSettings { fps: 10, height: 180, quality: "web-low".into() };
+    let settings = ExportDialogSettings { fps: 10, height: 180, quality: "web-low".into(), ..ExportDialogSettings::default() };
     let request = qt.run(|d| d.begin_export(&output, &settings)).unwrap();
     assert_eq!(
         request,
@@ -689,6 +689,8 @@ fn export_through_editor_api() {
             quality: "web-low".into(),
             gif_fps: 0,
             gif_width: 0,
+            aspect: String::new(),
+            reframe: String::new(),
         }
     );
     // The project was saved first, and the output directory made.
@@ -1685,4 +1687,58 @@ fn real_ffmpeg_probes_and_builds_frames() {
     } else {
         eprintln!("ffmpeg could not write a display matrix");
     }
+}
+
+// Auto-reframe and export presets through the Document API.
+#[test]
+fn reframe_and_export_presets() {
+    let world = World::new("editor-reframe");
+    let bundle = world.bundle("reframe.omareel");
+    let mut qt = world.open(&bundle);
+    qt.run(|d| d.save_now());
+    let project_path = format!("{bundle}/project.json");
+    let original = std::fs::read(&project_path).unwrap();
+    assert!(!String::from_utf8_lossy(&original).contains("\"reframe\":"));
+
+    // Unknown modes are refused; "follow" is one undo step and is written to project.json.
+    assert!(!qt.run(|d| d.set_reframe("sideways")));
+    assert!(qt.run(|d| d.set_reframe("follow")));
+    assert!(!qt.run(|d| d.set_reframe("follow")));
+    assert_eq!(qt.document.project().reframe, "follow");
+    qt.run(|d| d.save_now());
+    assert!(String::from_utf8_lossy(&std::fs::read(&project_path).unwrap()).contains("\"reframe\": \"follow\""));
+    // The preview reads the window once the motion track is built.
+    let job = qt.document.motion_job().unwrap();
+    qt.run(|d| d.apply_motion(job.run()));
+    let window = qt.document.preview_zoom().reframe.expect("a reframe window");
+    assert!(window.w <= 1.0 && window.h <= 1.0);
+    qt.run(|d| d.undo());
+    assert_eq!(qt.document.project().reframe, "");
+    qt.run(|d| d.save_now());
+    assert_eq!(std::fs::read(&project_path).unwrap(), original);
+
+    // A preset only changes the export it's used for...
+    let shorts = crate::export::presets::find("shorts").unwrap();
+    assert!(qt.document.preset_export_path("shorts").ends_with("-shorts.mp4"));
+    assert_eq!(qt.document.preset_export_path("nope"), "");
+    let settings = ExportDialogSettings {
+        fps: shorts.fps,
+        height: shorts.height,
+        quality: shorts.quality.into(),
+        aspect: shorts.aspect.into(),
+        reframe: shorts.reframe.into(),
+    };
+    let request = qt.run(|d| d.begin_export(&world.path("out/s.mp4"), &settings)).unwrap();
+    assert_eq!((request.width, request.aspect.as_str(), request.reframe.as_str()), (1080, "9:16", "follow"));
+    qt.run(|d| d.export_failed(""));
+    assert_eq!(std::fs::read(&project_path).unwrap(), original);
+    // ...unless it is saved into the project, as one undo step.
+    assert!(qt.run(|d| d.apply_export_preset("shorts")));
+    assert!(!qt.run(|d| d.apply_export_preset("shorts")));
+    assert!(!qt.run(|d| d.apply_export_preset("nope")));
+    let project = qt.document.project();
+    assert_eq!((project.aspect.as_str(), project.reframe.as_str(), project.export_settings.height), ("9:16", "follow", 1920));
+    qt.run(|d| d.undo());
+    qt.run(|d| d.save_now());
+    assert_eq!(std::fs::read(&project_path).unwrap(), original);
 }

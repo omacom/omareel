@@ -194,6 +194,10 @@ impl Project {
         if allowed_aspects().contains(&aspect.as_str()) {
             p.aspect = aspect;
         }
+        let reframe = source.value("reframe").to_string_or("");
+        if crate::reframe::MODES.contains(&reframe.as_str()) {
+            p.reframe = reframe;
+        }
         let crop = source.value("crop").to_object();
         p.crop = RectF::new(
             crop.value("x").to_double(0.0),
@@ -476,7 +480,7 @@ impl Project {
         let a = &self.audio;
         let cam = &self.camera;
         let e = &self.export_settings;
-        Object::from_iter([
+        let mut json = Object::from_iter([
             ("version", Value::from(self.version)),
             ("defaultsVersion", self.defaults_version.into()),
             ("name", self.name.as_str().into()),
@@ -549,7 +553,12 @@ impl Project {
                     ),
                 ]),
             ),
-        ])
+        ]);
+        // Written only when set, so projects that don't reframe stay as they were.
+        if !self.reframe.is_empty() {
+            json.insert("reframe", self.reframe.as_str());
+        }
+        json
     }
 
     /// Reads `project.json`, writing it back when a migration changed it. On failure the
