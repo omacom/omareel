@@ -10,7 +10,7 @@ use crate::compat::qround::{q_round, q_round64};
 use crate::compat::{cpp, qstring};
 use crate::input_log::InputLog;
 use crate::media_probe::VideoInfo;
-use crate::project::Clip;
+use crate::project::{Clip, Music};
 
 /// The even size an encoder needs: odd dimensions grow by one.
 pub fn padded_even_size(width: i32, height: i32) -> (i32, i32) {
@@ -193,12 +193,95 @@ pub fn silent_segment(length: f64) -> String {
     )
 }
 
+/// Background music in the export's mix: ffmpeg input `input` (opened with
+/// [`music_input_arguments`]), at `volume`, faded in and out over the output, and ducked under
+/// the clips' sound when `duck`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MusicMix {
+    pub input: i32,
+    pub volume: f64,
+    pub fade_in: f64,
+    pub fade_out: f64,
+    pub duck: bool,
+}
+
+impl MusicMix {
+    pub fn new(input: i32, music: &Music, output_duration: f64) -> MusicMix {
+        let (fade_in, fade_out) = crate::music::fade_lengths(music, output_duration);
+        MusicMix { input, volume: music.volume, fade_in, fade_out, duck: music.duck }
+    }
+}
+
+/// The input options that open the music: from `start` into the file, then the whole file over
+/// and over when it loops (ffmpeg's later passes start at the beginning).
+pub fn music_input_arguments(music: &Music, path: &str) -> Vec<String> {
+    let mut args: Vec<String> = Vec::new();
+    if music.loop_ {
+        args.extend(["-stream_loop".into(), "-1".into()]);
+    }
+    if music.start > 0.0 {
+        args.extend(["-ss".into(), number_f64(music.start, 'f', 6)]);
+    }
+    args.extend(["-i".into(), path.into()]);
+    args
+}
+
+/// The music's chain, labelled `[music]`: brought to the clips' format and to exactly the
+/// output's length, its volume and fades, and, keyed on `duck_key` (the clips' mixed sound),
+/// ffmpeg's `sidechaincompress` with the preview's settings ([`crate::music`]).
+pub fn music_filter(music: &MusicMix, output_duration: f64, duck_key: Option<&str>) -> String {
+    let duration = number_f64(output_duration, 'f', 6);
+    let mut filter = format!(
+        "[{}:a:0]asetpts=PTS-STARTPTS,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,\
+         apad=whole_dur={duration},atrim=end={duration},volume={}",
+        music.input,
+        number_f64(music.volume, 'g', 8)
+    );
+    if music.fade_in > 0.0 {
+        filter += &format!(",afade=t=in:st=0:d={}", number_f64(music.fade_in, 'f', 6));
+    }
+    if music.fade_out > 0.0 {
+        filter += &format!(
+            ",afade=t=out:st={}:d={}",
+            number_f64(cpp::max(0.0, output_duration - music.fade_out), 'f', 6),
+            number_f64(music.fade_out, 'f', 6)
+        );
+    }
+    match duck_key {
+        Some(key) => {
+            filter += &format!(
+                "[musicsrc];[musicsrc]{key}sidechaincompress=threshold={}:ratio={}:attack={}:release={}[music];",
+                number_f64(crate::music::DUCK_THRESHOLD, 'g', 8),
+                number_f64(crate::music::DUCK_RATIO, 'g', 8),
+                number_f64(crate::music::DUCK_ATTACK_MS, 'g', 8),
+                number_f64(crate::music::DUCK_RELEASE_MS, 'g', 8)
+            );
+        }
+        None => filter += "[music];",
+    }
+    filter
+}
+
 /// The `-filter_complex` that mixes the clips' audio (`segments`, one chain per clip in output
 /// order, or none when no clip has audio) with a click sound from input `click_input` at each
 /// of `clicks`, padded or cut to the output's length.
 pub fn audio_filter(segments: &[String], volume: f64, clicks: &[f64], click_input: i32, output_duration: f64) -> String {
+    audio_filter_with_music(segments, volume, clicks, click_input, output_duration, None)
+}
+
+/// [`audio_filter`] with background music added to the mix, the clips' sound and clicks
+/// passing through at the same level. Without music it is [`audio_filter`]'s graph.
+pub fn audio_filter_with_music(
+    segments: &[String],
+    volume: f64,
+    clicks: &[f64],
+    click_input: i32,
+    output_duration: f64,
+    music: Option<&MusicMix>,
+) -> String {
     let mut filter = String::new();
     let mut mix_labels: Vec<String> = Vec::new();
+    let duck = music.is_some_and(|music| music.duck) && !segments.is_empty();
     if !segments.is_empty() {
         let mut clip_labels: Vec<String> = Vec::new();
         for (i, segment) in segments.iter().enumerate() {
@@ -207,12 +290,17 @@ pub fn audio_filter(segments: &[String], volume: f64, clicks: &[f64], click_inpu
             clip_labels.push(format!("[{label}]"));
         }
         filter += &format!(
-            "{}concat=n={}:v=0:a=1,volume={}[source];",
+            "{}concat=n={}:v=0:a=1,volume={}{};",
             clip_labels.concat(),
             segments.len(),
-            number_f64(volume, 'g', 8)
+            number_f64(volume, 'g', 8),
+            if duck { ",asplit=2[source][duckkey]" } else { "[source]" }
         );
         mix_labels.push("[source]".into());
+    }
+    if let Some(music) = music {
+        filter += &music_filter(music, output_duration, duck.then_some("[duckkey]"));
+        mix_labels.push("[music]".into());
     }
     if !clicks.is_empty() {
         let mut click_sources: Vec<String> = Vec::new();
@@ -484,6 +572,134 @@ mod tests {
             "[1:a]atrim=duration=0.03,asetpts=PTS-STARTPTS,volume=0.25,adelay=2000:all=1[click0];\
              [click0]amix=inputs=1:normalize=0:duration=longest,apad=pad_dur=3.000000,atrim=duration=3.000000[aout]"
         );
+    }
+
+    #[test]
+    fn music_joins_the_mix_without_changing_the_rest() {
+        let segments = ["S0".to_string()];
+        // Without music the graph is the one audio_filter always made.
+        assert_eq!(
+            audio_filter_with_music(&segments, 1.0, &[0.5], 3, 4.25, None),
+            audio_filter(&segments, 1.0, &[0.5], 3, 4.25)
+        );
+        let music = Music { file: "media/song.mp3".into(), volume: 0.25, fade_in: 1.0, fade_out: 2.0, ..Music::default() };
+        let mix = MusicMix::new(4, &music, 4.25);
+        assert_eq!(
+            audio_filter_with_music(&segments, 0.8, &[0.5], 3, 4.25, Some(&mix)),
+            "S0[a0];[a0]concat=n=1:v=0:a=1,volume=0.8,asplit=2[source][duckkey];\
+             [4:a:0]asetpts=PTS-STARTPTS,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,\
+             apad=whole_dur=4.250000,atrim=end=4.250000,volume=0.25,afade=t=in:st=0:d=1.000000,\
+             afade=t=out:st=2.250000:d=2.000000[musicsrc];\
+             [musicsrc][duckkey]sidechaincompress=threshold=0.03:ratio=6:attack=20:release=400[music];\
+             [3:a]atrim=duration=0.03,asetpts=PTS-STARTPTS,volume=0.25,adelay=500:all=1[click0];\
+             [source][music][click0]amix=inputs=3:normalize=0:duration=longest,apad=pad_dur=4.250000,\
+             atrim=duration=4.250000[aout]"
+        );
+        // No ducking without the clips' sound, nor when it is off; no fades of length 0.
+        let quiet = Music { duck: false, fade_in: 0.0, fade_out: 0.0, ..music.clone() };
+        assert_eq!(
+            audio_filter_with_music(&[], 1.0, &[], -1, 3.0, Some(&MusicMix::new(1, &music, 3.0))),
+            "[1:a:0]asetpts=PTS-STARTPTS,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,\
+             apad=whole_dur=3.000000,atrim=end=3.000000,volume=0.25,afade=t=in:st=0:d=1.000000,\
+             afade=t=out:st=1.000000:d=2.000000[music];\
+             [music]amix=inputs=1:normalize=0:duration=longest,apad=pad_dur=3.000000,atrim=duration=3.000000[aout]"
+        );
+        assert_eq!(
+            audio_filter_with_music(&segments, 1.0, &[], -1, 3.0, Some(&MusicMix::new(1, &quiet, 3.0))),
+            "S0[a0];[a0]concat=n=1:v=0:a=1,volume=1[source];\
+             [1:a:0]asetpts=PTS-STARTPTS,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,\
+             apad=whole_dur=3.000000,atrim=end=3.000000,volume=0.25[music];\
+             [source][music]amix=inputs=2:normalize=0:duration=longest,apad=pad_dur=3.000000,atrim=duration=3.000000[aout]"
+        );
+        // Fades longer than the output are cut to it.
+        assert_eq!(MusicMix::new(1, &Music { fade_in: 9.0, fade_out: 9.0, ..music.clone() }, 3.0).fade_out, 3.0);
+        assert_eq!(music_input_arguments(&music, "/b/media/song.mp3"), ["-stream_loop", "-1", "-i", "/b/media/song.mp3"]);
+        let once = Music { loop_: false, start: 12.5, ..music };
+        assert_eq!(music_input_arguments(&once, "/s.mp3"), ["-ss", "12.500000", "-i", "/s.mp3"]);
+    }
+
+    /// The mean level in dB of `path` between two times, of the music's 220 Hz (`low`) or the
+    /// program's 2 kHz.
+    fn band_level(path: &str, from: f64, to: f64, low: bool) -> f64 {
+        let filter = if low { "lowpass=f=400,lowpass=f=400,lowpass=f=400,volumedetect" } else { "highpass=f=1200,highpass=f=1200,highpass=f=1200,volumedetect" };
+        let finished = crate::compat::qprocess::run(
+            "ffmpeg",
+            &["-v", "info", "-ss", &format!("{from}"), "-t", &format!("{}", to - from), "-i", path, "-af", &filter, "-f", "null", "-"],
+            30000,
+        )
+        .unwrap();
+        let log = String::from_utf8_lossy(&finished.stderr);
+        let value = log.split("mean_volume: ").nth(1).and_then(|rest| rest.split(' ').next()).unwrap_or("-inf");
+        value.parse().unwrap_or(-200.0)
+    }
+
+    /// Runs the export's audio graph with ffmpeg: a 6 s program, silent for 3 s and then a loud
+    /// 2 kHz tone, under 2 s of 220 Hz music that loops.
+    fn mix_with_music(dir: &std::path::Path, duck: bool, name: &str) -> String {
+        let music_path = dir.join("music.wav").to_string_lossy().into_owned();
+        if !std::path::Path::new(&music_path).exists() {
+            let made = crate::compat::qprocess::run(
+                "ffmpeg",
+                &["-y", "-v", "error", "-f", "lavfi", "-i", "sine=frequency=220:sample_rate=44100:duration=2", &music_path],
+                30000,
+            )
+            .unwrap();
+            assert!(made.succeeded(), "{}", String::from_utf8_lossy(&made.stderr));
+        }
+        let music = Music { file: "media/music.wav".into(), volume: 1.0, fade_in: 0.0, fade_out: 0.0, duck, ..Music::default() };
+        let mix = MusicMix::new(1, &music, 6.0);
+        let segments = [
+            silent_segment(3.0),
+            audio_segment("[0:a:0]atrim=start=0:end=3,asetpts=PTS-STARTPTS,volume=4", 1.0, 3.0),
+        ];
+        let graph = audio_filter_with_music(&segments, 1.0, &[], -1, 6.0, Some(&mix));
+        let output = dir.join(name).to_string_lossy().into_owned();
+        let mut args: Vec<String> =
+            ["-y", "-v", "error", "-f", "lavfi", "-i", "sine=frequency=2000:sample_rate=48000:duration=3"].map(String::from).into();
+        args.extend(music_input_arguments(&music, &music_path));
+        args.extend(["-filter_complex".into(), graph, "-map".into(), "[aout]".into(), output.clone()]);
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        let finished = crate::compat::qprocess::run("ffmpeg", &args, 60000).unwrap();
+        assert!(finished.succeeded(), "{}", String::from_utf8_lossy(&finished.stderr));
+        output
+    }
+
+    #[test]
+    fn music_plays_under_the_program_loops_and_ducks() {
+        use crate::compat::qstandardpaths::find_executable;
+        if find_executable("ffmpeg").is_empty() {
+            eprintln!("ffmpeg unavailable");
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!("omareel-music-mix-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let ducked = mix_with_music(&dir, true, "ducked.wav");
+        let plain = mix_with_music(&dir, false, "plain.wav");
+        let duration = crate::compat::qprocess::run(
+            "ffprobe",
+            &["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", &ducked],
+            15000,
+        )
+        .unwrap();
+        let duration: f64 = String::from_utf8_lossy(&duration.stdout).trim().parse().unwrap();
+        assert!((duration - 6.0).abs() < 0.05, "{duration}");
+        // The music alone at the start, at its own level: sine's -21 dBFS mean, a little less
+        // through the band filter.
+        let alone = band_level(&ducked, 0.2, 2.8, true);
+        assert!(alone > -27.0 && alone < -19.0, "music alone at {alone} dB");
+        // It loops past its 2 s, under the program; without ducking at the same level.
+        let under = band_level(&plain, 3.3, 5.8, true);
+        assert!((under - alone).abs() < 2.0, "music under the program at {under} dB, alone at {alone} dB");
+        // Ducked under the program's tone (-9 dBFS RMS) by over 12 dB.
+        let ducked_level = band_level(&ducked, 3.5, 5.8, true);
+        assert!(ducked_level < alone - 12.0, "ducked music at {ducked_level} dB, alone at {alone} dB");
+        // The program passes at its own level either way (sine at x4: -9 dBFS mean, less through
+        // the band filter).
+        let program_ducked = band_level(&ducked, 3.3, 5.8, false);
+        let program_plain = band_level(&plain, 3.3, 5.8, false);
+        assert!((program_ducked - program_plain).abs() < 0.5, "{program_ducked} vs {program_plain}");
+        assert!(program_plain > -16.0, "{program_plain}");
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

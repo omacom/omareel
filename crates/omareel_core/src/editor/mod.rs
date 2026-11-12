@@ -45,6 +45,7 @@ mod document;
 mod exporting;
 mod history;
 mod ids;
+mod music;
 pub mod playback;
 mod presets;
 #[cfg(test)]
@@ -59,6 +60,7 @@ pub use composition::*;
 pub use document::*;
 pub use exporting::*;
 pub use ids::random_uuid;
+pub use music::{MusicImportJob, MusicPlayback, ProbeAudio};
 pub use playback::{CameraSync, MediaSeek, NextClip, NextClipKind, Player, PlayerPosition, Transport};
 pub use presets::clean_preset_name;
 pub use thumbnails::*;
@@ -126,4 +128,7 @@ pub enum Effect {
     /// `OmarchyPaths::generateWallpaperThumbnail(path, thumbnail)` off the GUI thread, then
     /// [`Document::wallpaper_thumbnail_ready`].
     GenerateWallpaperThumbnail { path: String, thumbnail: String },
+    /// Run [`Document::music_import_job`] for this source off the GUI thread, then
+    /// [`Document::finish_music_import`].
+    StartMusicImport(String),
 }

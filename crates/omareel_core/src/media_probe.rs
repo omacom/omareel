@@ -131,6 +131,46 @@ pub fn probe_video(path: &str) -> Result<VideoInfo, String> {
     Ok(info)
 }
 
+/// The length in seconds of a file's sound (an audio file, or a video whose sound is used),
+/// or why it has none to use.
+pub fn probe_audio(path: &str) -> Result<f64, String> {
+    let name = FileInfo::new(path).file_name();
+    if !FileInfo::new(path).is_file() {
+        return Err(format!("{path} does not exist"));
+    }
+    let (has_audio, duration) = match crate::media_av::probe(path) {
+        Ok(probe) => (probe.has_audio, probe.format_duration.unwrap_or(0.0)),
+        Err(_) => {
+            let mut process = Process::new();
+            process.start(
+                "ffprobe",
+                &["-v", "error", "-show_entries", "stream=codec_type:format=duration", "-of", "json", path],
+            );
+            if !process.wait_for_finished(15000) || process.exit_code() != 0 {
+                if process.state() != ProcessState::NotRunning {
+                    process.kill();
+                }
+                let details = qstring::from_utf8(&process.read_all_standard_error());
+                return Err(format!("Could not read {name}: {}", qstring::trimmed(&details)));
+            }
+            let root = qjson::object_from_json(&process.read_all_standard_output()).unwrap_or_default();
+            let has_audio = root
+                .value("streams")
+                .to_array()
+                .iter()
+                .any(|stream| stream.to_object().value("codec_type").to_string_or("") == "audio");
+            (has_audio, to_double(&root.value("format").to_object().value("duration").to_string_or("")))
+        }
+    };
+    if !has_audio {
+        return Err(format!("{name} has no sound"));
+    }
+    if duration <= 0.0 {
+        return Err(format!("{name} has no playable sound"));
+    }
+    Ok(duration)
+}
+
 /// [`probe_video`]'s reading of what the libraries found, as it reads ffprobe's JSON.
 fn video_info_from(name: &str, probe: &crate::media_av::Probe) -> Result<VideoInfo, String> {
     let mut info = VideoInfo { audio: probe.has_audio, ..VideoInfo::default() };

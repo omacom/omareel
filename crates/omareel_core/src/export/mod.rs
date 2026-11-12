@@ -205,6 +205,8 @@ pub struct ExportJob {
     timeline: ClipTimeline,
     output_duration: f64,
     inserts: HashMap<String, VideoInfo>,
+    /// The music's file, when the project has music and the output has sound.
+    music_path: Option<String>,
     input: InputLog,
     camera_offset: f64,
     camera_media: MediaInfo,
@@ -292,6 +294,15 @@ impl ExportJob {
             inserts.insert(clip.media.clone(), info);
         }
 
+        let output = options.output_path.as_bytes();
+        let gif = output.len() >= 4 && output[output.len() - 4..].eq_ignore_ascii_case(b".gif");
+        let mut music_path = None;
+        if let Some(music) = project.music.as_ref().filter(|_| !gif) {
+            let path = qdir::file_path(&bundle, &music.file);
+            media_probe::probe_audio(&path).map_err(|error| format!("Music: {error}"))?;
+            music_path = Some(path);
+        }
+
         let input = InputLog::load_bundle(&qdir::absolute_path(&bundle), media.duration)?;
         let mut capture_fps = 60.0;
         let mut capture_scale = 1.0;
@@ -314,8 +325,6 @@ impl ExportJob {
         let motion = MotionTrack::build(media.duration, media.width, media.height, input.events(), &project, capture_fps);
         let keystrokes = KeystrokeTrack::build(input.events(), &project.keystrokes);
 
-        let output = options.output_path.as_bytes();
-        let gif = output.len() >= 4 && output[output.len() - 4..].eq_ignore_ascii_case(b".gif");
         let fps = if options.fps > 0 {
             options.fps
         } else if gif && options.gif_fps > 0 {
@@ -400,6 +409,7 @@ impl ExportJob {
             timeline,
             output_duration,
             inserts,
+            music_path,
             input,
             camera_offset,
             camera_media,
@@ -623,12 +633,26 @@ impl ExportJob {
                 }
                 click_file.close();
                 click_input = next_input;
+                next_input += 1;
                 encoder_args.extend(["-i".into(), click_file.file_name()]);
             }
-            if any_audio || use_clicks {
+            // Background music goes under everything, from the output's start to its end.
+            let mut music_mix = None;
+            if let (Some(music), Some(path)) = (project.music.as_ref(), self.music_path.as_ref()) {
+                music_mix = Some(plan::MusicMix::new(next_input, music, self.output_duration));
+                encoder_args.extend(plan::music_input_arguments(music, path));
+            }
+            if any_audio || use_clicks || music_mix.is_some() {
                 encoder_args.extend([
                     "-filter_complex".into(),
-                    plan::audio_filter(&audio_segments, project.audio.volume, &click_times, click_input, self.output_duration),
+                    plan::audio_filter_with_music(
+                        &audio_segments,
+                        project.audio.volume,
+                        &click_times,
+                        click_input,
+                        self.output_duration,
+                        music_mix.as_ref(),
+                    ),
                     "-map".into(),
                     "0:v:0".into(),
                     "-map".into(),
