@@ -11,6 +11,8 @@ cursor-following zooms. Finished projects export to MP4 or GIF.
 
 - Region, window, or focused-monitor recording through `gpu-screen-recorder` at 60 fps by default.
 - Optional desktop and microphone audio in a single compatible audio track.
+- Background music under the whole video, with volume, fades, looping, and automatic ducking
+  under your voice.
 - Non-destructive clip trimming, splitting, speed changes, and timeline zoom editing.
 - Rubber-band multi-selection for zoom blocks, with grouped movement and deletion.
 - Omarchy wallpaper and live accent-color integration.
@@ -120,7 +122,8 @@ want the bar to appear.
 An `.omareel` bundle is a directory. `screen.mp4` is the cursor-free source recording;
 `screen.mp4.ts` anchors input timestamps to the first video frame; `capture.json` describes the
 region, scale, dimensions, frame rate, and audio; `input.jsonl` stores pointer, button, scroll,
-and key events (keyboard shortcuts and non-text keys only: plain typing is never recorded); `project.json` contains non-destructive editor choices; and `thumb.jpg` is the
+and key events (keyboard shortcuts and non-text keys only: plain typing is never recorded); `project.json` contains non-destructive editor choices; `media/` holds inserted videos and
+background music; and `thumb.jpg` is the
 launcher thumbnail. Moving the whole directory preserves the editable project.
 
 ## Troubleshooting
