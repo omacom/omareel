@@ -72,7 +72,7 @@ mod tests {
     #[test]
     fn the_skill_names_itself_and_its_commands() {
         assert!(SKILL.starts_with("---\nname: omareel\ndescription: |\n"));
-        for command in ["omareel describe", "omareel apply", "omareel export"] {
+        for command in ["omareel describe", "omareel apply", "omareel frame", "omareel export"] {
             assert!(SKILL.contains(command), "{command}");
         }
     }

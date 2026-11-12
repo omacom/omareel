@@ -23,7 +23,14 @@ here needs a display.
    `--dry-run`; add `--describe` to get the new timeline back. A failing
    operation saves nothing and the report names it, so fix it and run the whole
    list again.
-3. Export when asked: `omareel export <bundle> -o out.mp4` (or `out.gif`).
+3. Look: `omareel frame <bundle> --at 12.5 -o /tmp/omareel-frame.png` renders
+   the finished frame at an output time (cursor, zoom, background, camera),
+   exactly as the export will show it. View the image. For an overview,
+   `omareel frame <bundle> --count 16 --sheet -o /tmp/omareel-sheet.jpg` gives
+   one image of 16 evenly spaced frames, each labelled with its time. Look
+   after zooms, layout changes and style changes, which you can't judge from
+   JSON. A still takes about a second.
+4. Export when asked: `omareel export <bundle> -o out.mp4` (or `out.gif`).
    Options: `--width W` (MP4 or GIF; height follows the aspect), `--fps N`,
    `--quality low|medium|high|best|web-low|web-high|social|studio`. Without
    them, the project's export settings apply (`settings.exportSettings`).
