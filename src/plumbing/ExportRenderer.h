@@ -47,6 +47,7 @@ class CompositionState : public QObject
     Q_PROPERTY(QVariantList ripples MEMBER ripples NOTIFY changed)
     Q_PROPERTY(QVariantList keystrokePills MEMBER keystrokePills NOTIFY changed)
     Q_PROPERTY(QVariantMap caption MEMBER caption NOTIFY changed)
+    Q_PROPERTY(QVariantMap transition MEMBER transition NOTIFY changed)
     Q_PROPERTY(bool softwareRendering MEMBER softwareRendering CONSTANT)
 public:
     using QObject::QObject;
@@ -68,6 +69,7 @@ public:
     QVariantList ripples;
     QVariantList keystrokePills;
     QVariantMap caption;
+    QVariantMap transition{{QStringLiteral("scale"), 1.0}};
     bool softwareRendering = false;
     void notifyChanged() { emit changed(); }
 signals:
