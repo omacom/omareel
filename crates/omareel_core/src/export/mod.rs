@@ -198,6 +198,9 @@ struct DecodePlan {
 #[derive(Clone, Debug, PartialEq)]
 struct AudioGraph {
     inputs: Vec<String>,
+    /// How many of `inputs`' arguments open the program's sources (the rest open the click
+    /// sound): all the measuring pass opens.
+    program_arguments: usize,
     /// The program: the clips' sound, which loudness normalisation measures and normalises.
     prelude: String,
     segments: Vec<String>,
@@ -738,6 +741,7 @@ impl ExportJob {
         let sources =
             plan::audio_inputs(&project.clips, &has_audio, use_source_audio, &self.bundle, &self.video_path, 1, denoise.as_deref());
         let volume = project.audio.volume;
+        let program_arguments = sources.arguments.len();
         let mut inputs = sources.arguments;
         let mut click_input = -1;
         if !click_times.is_empty() {
@@ -760,6 +764,7 @@ impl ExportJob {
         }
         Ok(Some(AudioGraph {
             inputs,
+            program_arguments,
             prelude: sources.prelude,
             segments: sources.segments,
             volume,
@@ -789,7 +794,7 @@ impl ExportJob {
             ["-hide_banner", "-nostdin", "-nostats", "-v", "info", "-progress", "pipe:1"].map(String::from).into();
         // Input 0 stands in for the video, so the graph's input numbers hold.
         args.extend(["-f", "lavfi", "-t", "0.1", "-i", "anullsrc=r=48000:cl=stereo"].map(String::from));
-        args.extend(graph.inputs.iter().cloned());
+        args.extend(graph.inputs[..graph.program_arguments].iter().cloned());
         args.push("-filter_complex".into());
         args.push(plan::program_measure_filter(&graph.prelude, &graph.segments, &audio_cleanup::loudness_measure_filter(target)));
         args.extend(["-map", "[aout]", "-f", "null", "-"].map(String::from));
