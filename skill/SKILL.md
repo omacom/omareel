@@ -96,7 +96,9 @@ was cut).
 | `set` | `path`, `value`, e.g. `{"op": "set", "path": "keystrokes.enabled", "value": true}` |
 
 Rules the editor enforces, which `apply` reports as errors:
-- Zooms can't overlap and last at least a second.
+- Zooms can't overlap, cover at least a second of the recording, and have a
+  `level` from 1 to 4.
+- Output times must be inside the video (0 to `output.duration`).
 - A clip can't be shorter than 0.1 s, and a cut can't remove all of the recording.
 - Speeds must be one of the allowed values.
 
@@ -140,9 +142,11 @@ OPS
 ## Working with the person
 
 - If they have the recording open in the Omareel editor (`omareel edit
-  <bundle>`), it takes in what `apply` saves within half a second. Each apply
-  is one step they can undo with Ctrl+Z, and the editor shows "Updated from
-  project.json". You don't need to close the editor.
+  <bundle>`), it takes in what `apply` saves within half a second and shows
+  "Updated from project.json". You don't need to close the editor. Each apply
+  is usually one step they can undo with Ctrl+Z. Two applies within half a
+  second can land as a single step, so pause between applies when the person
+  wants to review them one by one.
 - Don't edit `screen.mp4`, `input.jsonl`, or `capture.json`. They are the
   recording itself.
 - Prefer `apply` to writing `project.json` by hand. `apply` checks every edit,
