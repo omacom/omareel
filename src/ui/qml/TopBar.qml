@@ -11,6 +11,8 @@ Rectangle {
     signal showExport()
     signal restoreEditorFocus()
     property string savedTime: Qt.formatTime(new Date(), "HH:mm")
+    // Set for a few seconds after project.json changed on disk (omareel apply, an agent).
+    property bool updatedExternally: false
 
     onRestoreEditorFocus: window.restoreEditorFocus()
     function commitProjectName() {
@@ -118,7 +120,8 @@ Rectangle {
             }
             Label {
                 anchors.verticalCenter: parent.verticalCenter
-                text: editor.dirty ? "Unsaved changes" : "Saved " + root.savedTime
+                text: root.updatedExternally ? "Updated from project.json"
+                    : editor.dirty ? "Unsaved changes" : "Saved " + root.savedTime
                 color: theme.textMuted
                 font.pixelSize: theme.type.small
             }
@@ -283,5 +286,12 @@ Rectangle {
     Connections {
         target: editor
         function onAutosaved(path) { root.savedTime = Qt.formatTime(new Date(), "HH:mm") }
+        function onProjectReloaded() { root.updatedExternally = true; externalUpdateTimer.restart() }
+    }
+
+    Timer {
+        id: externalUpdateTimer
+        interval: 4000
+        onTriggered: root.updatedExternally = false
     }
 }

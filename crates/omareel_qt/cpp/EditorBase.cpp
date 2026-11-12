@@ -32,11 +32,14 @@ EditorBase::EditorBase(QObject *parent) : QObject(parent)
     m_previewTimer.setTimerType(Qt::PreciseTimer);
     m_previewTimer.setInterval(16);
     m_previewStatsTimer.setInterval(1000);
+    // project.json written by another program (omareel apply, an agent) shows up within this.
+    m_projectWatchTimer.setInterval(400);
     connect(&m_autosaveTimer, &QTimer::timeout, this, [this] { timerFired(AutosaveTimer); });
     connect(&m_motionTimer, &QTimer::timeout, this, [this] { timerFired(MotionTimer); });
     connect(&m_scrubTimer, &QTimer::timeout, this, [this] { timerFired(ScrubTimer); });
     connect(&m_previewTimer, &QTimer::timeout, this, [this] { timerFired(PreviewTimer); });
     connect(&m_previewStatsTimer, &QTimer::timeout, this, [this] { timerFired(PreviewStatsTimer); });
+    connect(&m_projectWatchTimer, &QTimer::timeout, this, [this] { timerFired(ProjectWatchTimer); });
 
     // The camera follows the transport; the screen and media players play while their clip is
     // the active one.
@@ -95,6 +98,7 @@ QTimer &EditorBase::timer(int timer)
     case MotionTimer: return m_motionTimer;
     case ScrubTimer: return m_scrubTimer;
     case PreviewTimer: return m_previewTimer;
+    case ProjectWatchTimer: return m_projectWatchTimer;
     default: return m_previewStatsTimer;
     }
 }

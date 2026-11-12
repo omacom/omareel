@@ -127,6 +127,23 @@ pub struct Document {
     pub(crate) cache_location: Option<String>,
     pub(crate) new_id: Box<dyn FnMut() -> String + Send>,
     pub(crate) effects: RefCell<Vec<Effect>>,
+    /// `project.json` as last read or written here ([`Document::reload_if_changed_on_disk`]).
+    pub(crate) disk_stamp: Option<DiskStamp>,
+}
+
+/// What tells a file another program wrote apart from the one this document saw: its
+/// modification time and size.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DiskStamp {
+    modified: std::time::SystemTime,
+    len: u64,
+}
+
+impl DiskStamp {
+    pub fn of(path: &str) -> Option<DiskStamp> {
+        let metadata = std::fs::metadata(path).ok()?;
+        Some(DiskStamp { modified: metadata.modified().ok()?, len: metadata.len() })
+    }
 }
 
 /// The recording [`Document::preload`] is opening, and its path.
@@ -178,6 +195,7 @@ impl Document {
     pub fn open_with(bundle_path: &str, probes: &Probes, locations: Locations) -> Result<Document, String> {
         let Bundle { recording, project, input, inserts, new_project } = load_bundle(bundle_path, probes)?;
         let mut document = Document::new(recording, project, input, inserts, probes.video.clone());
+        document.disk_stamp = DiskStamp::of(&document.project_path);
         document.config_location = locations.config;
         document.cache_location = locations.cache;
         if new_project {
@@ -235,6 +253,7 @@ impl Document {
             cache_location: None,
             new_id: Box::new(random_uuid),
             effects: RefCell::new(Vec::new()),
+            disk_stamp: None,
         }
     }
 
@@ -695,11 +714,39 @@ impl Document {
             self.emit(Effect::ErrorOccurred(error));
             return false;
         }
+        self.disk_stamp = DiskStamp::of(&self.project_path);
         if self.dirty {
             self.dirty = false;
             self.emit(Effect::DirtyChanged);
         }
         self.emit(Effect::Autosaved(self.project_path.clone()));
+        true
+    }
+
+    /// Takes in a `project.json` another program wrote (`omareel apply`, an agent, a text
+    /// editor) since this document last read or saved it, as one undoable edit: the project as
+    /// it stood here, unsaved changes included, becomes the undo step. Returns whether anything
+    /// changed. A file that doesn't parse is left for its writer to finish and read once it
+    /// changes again.
+    pub fn reload_if_changed_on_disk(&mut self) -> bool {
+        let stamp = DiskStamp::of(&self.project_path);
+        if stamp.is_none() || stamp == self.disk_stamp {
+            return false;
+        }
+        let Ok(bytes) = crate::compat::qfile::read_all(&self.project_path) else { return false };
+        let Ok(Value::Object(object)) = crate::compat::qjson::from_json(&bytes) else { return false };
+        self.disk_stamp = stamp;
+        let (json, _) = Project::migrate_defaults(&object);
+        let next = Project::from_json(&json).to_json();
+        if next == self.project.to_json() {
+            return false;
+        }
+        for clip in Project::from_json(&next).clips.iter().filter(|clip| clip.is_media()) {
+            self.insert_info(&clip.media);
+        }
+        self.end_coalesced_edit();
+        self.snapshot("");
+        self.restore(&next);
         true
     }
 

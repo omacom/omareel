@@ -208,6 +208,9 @@ pub mod qobject {
         fn export_finished(self: Pin<&mut Editor>, path: QString);
         #[qsignal]
         fn autosaved(self: Pin<&mut Editor>, path: QString);
+        /// project.json changed on disk (another program wrote it) and the editor took it in.
+        #[qsignal]
+        fn project_reloaded(self: Pin<&mut Editor>);
         #[qsignal]
         fn error_occurred(self: Pin<&mut Editor>, message: QString);
 
@@ -523,6 +526,7 @@ const MOTION_TIMER: i32 = 1;
 const SCRUB_TIMER: i32 = 2;
 const PREVIEW_TIMER: i32 = 3;
 const PREVIEW_STATS_TIMER: i32 = 4;
+const PROJECT_WATCH_TIMER: i32 = 5;
 const FINISH_LOADING_CALL: i32 = 0;
 const ADVANCE_CLIP_CALL: i32 = 1;
 const RELEASE_THUMBNAILS_CALL: i32 = 2;
@@ -718,6 +722,16 @@ impl qobject::Editor {
         self.as_mut().rebuild_motion();
         self.as_mut().call_later(RELEASE_THUMBNAILS_CALL, THUMBNAIL_HOLD_MS);
         self.as_mut().call_later(FINISH_LOADING_CALL, 1500);
+        self.as_mut().start_editor_timer(PROJECT_WATCH_TIMER);
+    }
+
+    /// Takes in a project.json another program wrote ([`Document::reload_if_changed_on_disk`]).
+    fn reload_project_from_disk(mut self: Pin<&mut Self>) -> bool {
+        let reloaded = self.as_mut().edit(Document::reload_if_changed_on_disk) == Some(true);
+        if reloaded {
+            self.as_mut().project_reloaded();
+        }
+        reloaded
     }
 
     /// Changes the document, then performs what it queued; `None` without a document.
@@ -2076,10 +2090,16 @@ impl qobject::Editor {
         }
     }
 
-    fn timer_fired(self: Pin<&mut Self>, timer: i32) {
+    fn timer_fired(mut self: Pin<&mut Self>, timer: i32) {
         match timer {
             AUTOSAVE_TIMER => {
+                // A project.json written meanwhile is taken in first, not overwritten; the
+                // edits made here become its undo step.
+                self.as_mut().reload_project_from_disk();
                 self.save_now();
+            }
+            PROJECT_WATCH_TIMER => {
+                self.reload_project_from_disk();
             }
             MOTION_TIMER => self.rebuild_motion(),
             SCRUB_TIMER => self.flush_scrub_seek(),

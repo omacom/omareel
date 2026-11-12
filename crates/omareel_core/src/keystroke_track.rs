@@ -270,6 +270,11 @@ impl KeystrokeTrack {
         track
     }
 
+    /// Each pill's first key press and its text ("Ctrl + S"), in order.
+    pub fn presses(&self) -> impl Iterator<Item = (f64, String)> + '_ {
+        self.groups.iter().map(|group| (group.start, group.keys.join(" + ")))
+    }
+
     /// The pills showing at `time`: fully visible until `hold_ms` after their last key, then
     /// fading out over 0.25 s.
     pub fn sample(&self, time: f64) -> Vec<KeystrokePill> {
