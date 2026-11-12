@@ -327,7 +327,9 @@ pub fn load_bundle(bundle_path: &str, probes: &Probes) -> Result<Bundle, String>
         project
     };
     if new {
-        let marks = RecordingMarks::load_bundle(&bundle_path);
+        // Marks made after the recorder cleaned input.jsonl for them are left out.
+        let stopped_us = capture_root.value("stopped_us").to_variant_long_long();
+        let marks = RecordingMarks::load_bundle(&bundle_path).made_by(stopped_us);
         let first_frame_us = capture_root.value("first_frame_us").to_variant_long_long();
         apply_recording_marks(&mut project, &marks, first_frame_us, recording.source_duration);
     }

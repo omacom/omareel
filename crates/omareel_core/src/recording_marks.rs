@@ -13,7 +13,12 @@
 //!   between them is cut; a pause without a resume runs to the end.
 //!
 //! Any of them may carry `"via":"bar"` when the recording bar's button made it rather than a
-//! command (the recorder uses it to leave the button's click out of `input.jsonl`).
+//! command (the recorder uses it to leave the button's click out of `input.jsonl`), and `"at"`,
+//! the monotonic microseconds of the moment it was made when that differs from `t`: a marker or
+//! retake made while paused belongs to the pause's start (`t`, the frame the video holds) but was
+//! made later (`at`), and a pause or resume was asked for at `at`. The recorder looks for the
+//! keybind or click that made a mark just before `at`; the editor ignores marks made after
+//! `capture.json`'s `stopped_us` (see [`RecordingMarks::made_by`]).
 //!
 //! The file is its own rather than part of `input.jsonl` or `capture.json` because those are
 //! written once, at stop, from what the recorder held in memory: marks are appended the moment
@@ -75,11 +80,25 @@ pub struct Mark {
     pub from_us: i64,
     /// "bar" when the recording bar's button made it; empty for a command.
     pub via: String,
+    /// When it was made (monotonic microseconds), when that differs from `monotonic_us`; 0 for
+    /// the same moment. See [`Mark::made_us`].
+    pub at_us: i64,
 }
 
 impl Mark {
     pub fn new(kind: MarkKind, monotonic_us: i64) -> Mark {
-        Mark { monotonic_us, kind, label: String::new(), from_us: 0, via: String::new() }
+        Mark { monotonic_us, kind, label: String::new(), from_us: 0, via: String::new(), at_us: 0 }
+    }
+
+    /// The moment it was really made: `at` when given, else `t`. A mark's trigger (keybind or
+    /// click) is just before this, whatever its place on the timeline.
+    pub fn made_us(&self) -> i64 {
+        if self.at_us > 0 { self.at_us } else { self.monotonic_us }
+    }
+
+    /// Sets `at` to `made_us`, or leaves it out when it is `t` (or unknown).
+    pub fn set_made_us(&mut self, made_us: i64) {
+        self.at_us = if made_us > 0 && made_us != self.monotonic_us { made_us } else { 0 };
     }
 
     pub fn from_bar(&self) -> bool {
@@ -100,6 +119,9 @@ impl Mark {
         if !self.via.is_empty() {
             object.insert("via", self.via.as_str());
         }
+        if self.at_us > 0 {
+            object.insert("at", self.at_us);
+        }
         Value::Object(object).to_json(Format::Compact)
     }
 
@@ -113,6 +135,7 @@ impl Mark {
         let mut mark = Mark::new(kind, monotonic_us);
         mark.label = object.value("label").to_string_or("");
         mark.via = object.value("via").to_string_or("");
+        mark.set_made_us(object.value("at").to_variant_long_long());
         if kind == MarkKind::Retake {
             mark.from_us = object.value("from").to_variant_long_long().min(monotonic_us);
         }
@@ -147,6 +170,16 @@ impl RecordingMarks {
 
     pub fn is_empty(&self) -> bool {
         self.marks.is_empty()
+    }
+
+    /// Only the marks made by `stopped_us` (`capture.json`'s, taken just before the recorder
+    /// read the marks to clean `input.jsonl`); all of them when it is 0. A command that marks as
+    /// the recorder stops cannot then cut or mark what its input was never cleaned for.
+    pub fn made_by(mut self, stopped_us: i64) -> RecordingMarks {
+        if stopped_us > 0 {
+            self.marks.retain(|mark| mark.made_us() <= stopped_us);
+        }
+        self
     }
 
     /// The paused spans in monotonic microseconds, in order; a pause still open at the end runs
@@ -219,12 +252,14 @@ pub fn in_spans(t: i64, spans: &[(i64, i64)]) -> bool {
     spans.iter().any(|&(start, end)| t >= start && t < end)
 }
 
-/// Where a retake made at `now_us` cuts back to: `seconds` before it when given; otherwise the
-/// last marker, retake or resume before it (where the take began), or
-/// [`DEFAULT_RETAKE_SECONDS`] before it when there is none. Never before `started_us`, the
-/// recording's start.
+/// Where a retake made at `now_us` cuts back to: `seconds` of recorded time before it when given
+/// (paused time does not count: the cut reaches back past a pause until it has that many seconds
+/// that were recorded); otherwise the last marker, retake or resume before it (where the take
+/// began), or [`DEFAULT_RETAKE_SECONDS`] of recorded time before it when there is none. Never
+/// before `started_us`, the recording's start.
 pub fn retake_from(now_us: i64, marks: &[Mark], started_us: i64, seconds: Option<f64>) -> i64 {
-    let back = |seconds: f64| now_us - (seconds.max(0.0) * 1_000_000.0).round() as i64;
+    let pauses = RecordingMarks { marks: marks.to_vec() }.pauses();
+    let back = |seconds: f64| recorded_back(now_us, (seconds.max(0.0) * 1_000_000.0).round() as i64, &pauses);
     let from = match seconds {
         Some(seconds) => back(seconds),
         None => marks
@@ -238,9 +273,37 @@ pub fn retake_from(now_us: i64, marks: &[Mark], started_us: i64, seconds: Option
     from.max(started_us).min(now_us)
 }
 
+/// The moment `recorded_us` of recorded (unpaused) time before `now_us`, given the `pauses`
+/// (sorted, as [`RecordingMarks::pauses`] gives them).
+pub fn recorded_back(now_us: i64, recorded_us: i64, pauses: &[(i64, i64)]) -> i64 {
+    let mut left = recorded_us.max(0);
+    let mut cursor = now_us;
+    for &(start, end) in pauses.iter().rev() {
+        if start >= cursor {
+            continue;
+        }
+        let end = end.min(cursor);
+        if cursor - end >= left {
+            return cursor - left;
+        }
+        left -= cursor - end;
+        cursor = start;
+    }
+    cursor.saturating_sub(left)
+}
+
+/// The recorded (unpaused) microseconds in `from_us..to_us`.
+pub fn recorded_between(from_us: i64, to_us: i64, pauses: &[(i64, i64)]) -> i64 {
+    let paused: i64 =
+        pauses.iter().map(|&(start, end)| (end.min(to_us) - start.max(from_us)).max(0)).sum();
+    (to_us - from_us - paused).max(0)
+}
+
 /// The recording clips of a new project whose recording runs `0..duration` with `cuts` (sorted,
-/// merged) left out: `c1`, `c2`… over what is kept, slivers under 0.1 s dropped. The whole
-/// recording when the cuts would leave nothing.
+/// merged) left out: `c1`, `c2`… over what is kept, slivers under 0.1 s dropped. A cut span is
+/// never shown: when every kept piece is a sliver the longest one stays, and when the cuts cover
+/// everything there are none (the caller decides, see
+/// [`crate::editor::apply_recording_marks`]).
 pub fn kept_clips(duration: f64, cuts: &[(f64, f64)]) -> Vec<Clip> {
     let mut pieces = Vec::new();
     let mut start = 0.0;
@@ -253,9 +316,11 @@ pub fn kept_clips(duration: f64, cuts: &[(f64, f64)]) -> Vec<Clip> {
     if start < duration {
         pieces.push((start, duration));
     }
-    pieces.retain(|(from, to)| to - from >= MIN_CLIP_SECONDS);
-    if pieces.is_empty() {
-        pieces.push((0.0, duration));
+    pieces.retain(|(from, to)| to > from);
+    if pieces.iter().any(|(from, to)| to - from >= MIN_CLIP_SECONDS) {
+        pieces.retain(|(from, to)| to - from >= MIN_CLIP_SECONDS);
+    } else if let Some(longest) = pieces.iter().copied().max_by(|a, b| (a.1 - a.0).total_cmp(&(b.1 - b.0))) {
+        pieces = vec![longest];
     }
     pieces
         .into_iter()
@@ -317,7 +382,7 @@ mod tests {
         assert_eq!(retake_from(5_000_000, &marks, started, None), 3_000_000, "the marker before it");
         assert_eq!(retake_from(2_500_000, &marks, started, None), started, "five seconds, but not before the start");
         assert_eq!(retake_from(20_000_000, &[], started, None), 15_000_000);
-        assert_eq!(retake_from(10_000_000, &marks, started, Some(2.0)), 8_000_000, "seconds given win");
+        assert_eq!(retake_from(10_000_000, &marks[..2], started, Some(2.0)), 8_000_000, "seconds given win");
     }
 
     #[test]
@@ -339,9 +404,64 @@ mod tests {
         let spans: Vec<(&str, f64, f64)> = clips.iter().map(|clip| (clip.id.as_str(), clip.in_, clip.out)).collect();
         assert_eq!(spans, [("c1", 0.0, 5.0), ("c2", 9.0, 15.0)]);
         assert!(clips.iter().all(|clip| clip.speed == 1.0 && !clip.is_media()));
-        assert_eq!(kept_clips(20.0, &[(0.0, 19.95)]).len(), 1, "a sliver is not a clip, so the whole stays");
-        assert_eq!(kept_clips(20.0, &[(0.0, 19.95)])[0].out, 20.0);
+        let sliver: Vec<(f64, f64)> = kept_clips(20.0, &[(0.0, 19.95)]).iter().map(|c| (c.in_, c.out)).collect();
+        assert_eq!(sliver, [(19.95, 20.0)], "only slivers: the longest stays, never the cut");
+        let slivers: Vec<(f64, f64)> =
+            kept_clips(20.0, &[(0.02, 10.0), (10.05, 20.0)]).iter().map(|c| (c.in_, c.out)).collect();
+        assert_eq!(slivers, [(10.0, 10.05)]);
+        assert!(kept_clips(20.0, &[(0.0, 20.0)]).is_empty(), "everything cut: no clip");
         assert_eq!(kept_clips(20.0, &[]).len(), 1);
+    }
+
+    #[test]
+    fn retake_seconds_count_recorded_time_only() {
+        let started = 1_000_000;
+        // Paused 10..70 s; a five-second retake two seconds after the resume reaches back three
+        // seconds before the pause.
+        let marks = [mark(MarkKind::Pause, 10_000_000), mark(MarkKind::Resume, 70_000_000)];
+        assert_eq!(retake_from(72_000_000, &marks, started, Some(5.0)), 7_000_000);
+        let pauses = RecordingMarks { marks: marks.to_vec() }.pauses();
+        assert_eq!(recorded_between(7_000_000, 72_000_000, &pauses), 5_000_000);
+        let mut retake = mark(MarkKind::Retake, 72_000_000);
+        retake.from_us = 7_000_000;
+        let mut all = marks.to_vec();
+        all.push(retake);
+        assert_eq!(RecordingMarks { marks: all }.cut_spans(started, 80.0), [(6.0, 71.0)]);
+        // Made while paused (at the pause's start), it counts back from there.
+        assert_eq!(retake_from(10_000_000, &marks[..1], started, Some(2.0)), 8_000_000);
+        // Not before the start, nor past two pauses' worth of nothing.
+        assert_eq!(retake_from(72_000_000, &marks, started, Some(100.0)), started);
+        let two = [
+            mark(MarkKind::Pause, 4_000_000),
+            mark(MarkKind::Resume, 5_000_000),
+            mark(MarkKind::Pause, 6_000_000),
+            mark(MarkKind::Resume, 8_000_000),
+        ];
+        let pauses = RecordingMarks { marks: two.to_vec() }.pauses();
+        assert_eq!(recorded_back(9_000_000, 2_500_000, &pauses), 3_500_000);
+        assert_eq!(recorded_back(9_000_000, 1_000_000, &pauses), 8_000_000, "exactly up to the resume");
+        assert_eq!(recorded_back(9_000_000, 0, &pauses), 9_000_000);
+        assert_eq!(recorded_between(3_500_000, 9_000_000, &pauses), 2_500_000);
+        assert_eq!(retake_from(9_000_000, &two, started, None), 8_000_000, "the resume began the take");
+        assert_eq!(retake_from(9_000_000, &[], started, None), 4_000_000);
+        assert_eq!(retake_from(9_000_000, &two[..2], started, None), 5_000_000);
+    }
+
+    #[test]
+    fn marks_keep_when_they_were_made() {
+        let mut marker = mark(MarkKind::Marker, 10_000_000);
+        marker.set_made_us(15_000_000);
+        assert_eq!(marker.to_line(), r#"{"at":15000000,"k":"marker","t":10000000}"#);
+        assert_eq!(marker.made_us(), 15_000_000);
+        let parsed = RecordingMarks::parse(marker.to_line().as_bytes());
+        assert_eq!(parsed.marks, [marker.clone()]);
+        let mut same = mark(MarkKind::Marker, 10_000_000);
+        same.set_made_us(10_000_000);
+        assert_eq!(same.to_line(), r#"{"k":"marker","t":10000000}"#, "no at when it is t");
+        assert_eq!(same.made_us(), 10_000_000);
+        let marks = RecordingMarks { marks: vec![same.clone(), marker.clone()] };
+        assert_eq!(marks.clone().made_by(12_000_000).marks, [same], "made after the stop: ignored");
+        assert_eq!(marks.clone().made_by(0), marks);
     }
 
     #[test]

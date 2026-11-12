@@ -13,6 +13,10 @@ use crate::project::{Clip, Marker, Project, ZoomSegment};
 use crate::recording_marks::{kept_clips, MarkKind, RecordingMarks};
 use crate::zoom_timeline;
 
+/// What a new project keeps of a recording that was paused throughout (see
+/// [`apply_recording_marks`]).
+const EVERYTHING_PAUSED_SECONDS: f64 = 0.1;
+
 /// Where a marker shows on the timeline: the marker, and its output time, `None` while every clip
 /// that showed its moment is cut or trimmed away.
 #[derive(Clone, Debug, PartialEq)]
@@ -46,6 +50,11 @@ pub fn generate_visible_zooms(click_times: &[f64], clips: &[Clip], source_durati
 /// Applies a recording's marks to its new project: clips around the cuts (see
 /// [`RecordingMarks::cut_spans`]) and a marker for each marker and retake mark, `m1`, `m2`…, at
 /// its recording time. `first_frame_us` is `capture.json`'s.
+///
+/// A cut span never plays: when the cuts cover the whole recording (it was paused from its first
+/// frame to the stop), the project keeps only its first tenth of a second, with the desktop
+/// audio, the microphone and the camera off, so nothing recorded while paused is heard or seen
+/// beyond that one still moment.
 pub fn apply_recording_marks(project: &mut Project, marks: &RecordingMarks, first_frame_us: i64, source_duration: f64) {
     if marks.is_empty() || source_duration <= 0.0 {
         return;
@@ -54,6 +63,13 @@ pub fn apply_recording_marks(project: &mut Project, marks: &RecordingMarks, firs
     if !cuts.is_empty() {
         let media: Vec<Clip> = project.clips.iter().filter(|clip| clip.is_media()).cloned().collect();
         project.clips = kept_clips(source_duration, &cuts);
+        if project.clips.is_empty() {
+            let out = source_duration.min(EVERYTHING_PAUSED_SECONDS);
+            project.clips.push(Clip { id: "c1".into(), in_: 0.0, out, speed: 1.0, ..Clip::default() });
+            project.audio.desktop = false;
+            project.audio.mic = false;
+            project.camera.enabled = false;
+        }
         project.clips.extend(media);
     }
     project.markers = marks
@@ -205,5 +221,30 @@ mod tests {
         let mut untouched = Project::defaults("x", 20.0);
         apply_recording_marks(&mut untouched, &RecordingMarks::default(), first, 20.0);
         assert_eq!(untouched, Project::defaults("x", 20.0));
+    }
+
+    #[test]
+    fn paused_spans_never_come_back() {
+        let first = 2_000_000;
+        let clip_spans = |project: &Project| -> Vec<(f64, f64)> { project.clips.iter().map(|c| (c.in_, c.out)).collect() };
+        // Paused right after the start and stopped while paused: the 50 ms before the pause stays,
+        // not the whole recording.
+        let marks = RecordingMarks { marks: vec![Mark::new(MarkKind::Pause, first + 50_000)] };
+        let mut project = Project::defaults("x", 20.0);
+        project.camera.enabled = true;
+        apply_recording_marks(&mut project, &marks, first, 20.0);
+        assert_eq!(clip_spans(&project), [(0.0, 0.05)]);
+        assert!(project.audio.desktop && project.audio.mic && project.camera.enabled);
+
+        // Paused before the first frame and never resumed: a muted tenth of a second without the
+        // camera.
+        let marks = RecordingMarks { marks: vec![Mark::new(MarkKind::Pause, first - 10_000)] };
+        let mut project = Project::defaults("x", 20.0);
+        project.camera.enabled = true;
+        project.clips.push(Clip { id: "i1".into(), media: "media/a.mp4".into(), in_: 0.0, out: 2.0, speed: 1.0, ..Clip::default() });
+        apply_recording_marks(&mut project, &marks, first, 20.0);
+        assert_eq!(clip_spans(&project), [(0.0, 0.1), (0.0, 2.0)]);
+        assert!(!project.clips[0].is_media() && project.clips[1].is_media());
+        assert!(!project.audio.desktop && !project.audio.mic && !project.camera.enabled);
     }
 }
