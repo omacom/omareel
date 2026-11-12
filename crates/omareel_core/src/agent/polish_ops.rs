@@ -303,7 +303,20 @@ fn edit_overlay(document: &mut Document, op: &Object) -> OpResult {
             }
             range
         };
-        let (start, end) = item_times(document, op, from.unwrap_or(now_from), to.unwrap_or(now_to), new_anchor == "screen")?;
+        let (mut start, mut end) = item_times(document, op, from.unwrap_or(now_from), to.unwrap_or(now_to), new_anchor == "screen")?;
+        if current.kind == "blur" {
+            // The end not given stays as stored, not where the footage that still shows ends:
+            // cut footage under a blur stays covered if it comes back.
+            if from.is_none() {
+                start = current.start;
+            }
+            if to.is_none() {
+                end = current.end;
+            }
+            if end - start < MIN_OVERLAY_LENGTH - 1e-9 {
+                return Err("the blur would end before it starts; give both \"from\" and \"to\"".into());
+            }
+        }
         patch.insert("start", start);
         patch.insert("end", end);
     }
@@ -320,7 +333,7 @@ fn edit_overlay(document: &mut Document, op: &Object) -> OpResult {
 }
 
 /// The operations of this module; `None` for any other name.
-pub(super) fn run(document: &mut Document, op: &Object, warnings: &mut Vec<String>) -> Option<OpResult> {
+pub(super) fn run(document: &mut Document, op: &Object, warnings: &mut Vec<String>, dry_run: bool) -> Option<OpResult> {
     let name = op.value("op").to_string_or("");
     let result = match name.as_str() {
         "add-overlay" => add_overlay(document, op, &text(op, "kind").unwrap_or_default()),
@@ -376,7 +389,7 @@ pub(super) fn run(document: &mut Document, op: &Object, warnings: &mut Vec<Strin
             }
             ok()
         })(),
-        "speed-up-quiet" => speed_up_quiet(document, op),
+        "speed-up-quiet" => speed_up_quiet(document, op, dry_run),
         "reframe" => (|| {
             let mode = text(op, "mode")?;
             if !matches!(mode.as_str(), "follow" | "off") {
@@ -425,7 +438,7 @@ fn add_marker(document: &mut Document, op: &Object) -> OpResult {
     ]))
 }
 
-fn speed_up_quiet(document: &mut Document, op: &Object) -> OpResult {
+fn speed_up_quiet(document: &mut Document, op: &Object, dry_run: bool) -> OpResult {
     if !document.recording().has_audio {
         return Err("the recording has no sound: quiet parts are found from where it speaks".into());
     }
@@ -438,7 +451,7 @@ fn speed_up_quiet(document: &mut Document, op: &Object) -> OpResult {
     if !(0.5..=600.0).contains(&min) {
         return Err("\"min\" (the shortest quiet part to speed up, seconds) must be from 0.5 to 600".into());
     }
-    super::apply::measure_speech_and_screen(document, true)?;
+    super::apply::measure_speech_and_screen(document, true, !dry_run)?;
     let settings = SpeedUpSettings { min_length: min, target, ..defaults };
     let parts = document.quiet_parts(&settings);
     let before = document.duration();

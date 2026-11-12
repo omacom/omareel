@@ -270,6 +270,27 @@ impl Document {
         }
     }
 
+    /// Parts of the video now play faster: `sped` holds their output spans before the edit and
+    /// their speed. Frame-anchored overlays keep to the moments they were on: a time after a
+    /// part moves back by what the part saved, a time inside it scales with it. (They are then
+    /// where they belong, so the edit's [`Document::fit_frame_overlays`] leaves them be.)
+    pub(crate) fn retime_frame_overlays(&mut self, sped: &[(f64, f64, f64)]) {
+        self.duration_before_edit = None;
+        let map = |t: f64| {
+            let mut saved = 0.0;
+            for &(from, to, speed) in sped {
+                let played = cpp::clamp(t, from, to) - from;
+                saved += played * (1.0 - 1.0 / speed);
+            }
+            t - saved
+        };
+        for overlay in self.project.overlays.iter_mut().filter(|overlay| !overlay.is_screen_anchored()) {
+            let (start, end) = (map(overlay.start), map(overlay.end));
+            overlay.start = start;
+            overlay.end = cpp::max(end, start + MIN_OVERLAY_LENGTH);
+        }
+    }
+
     /// The clips became `clips`: screen-anchored overlays shrink to the part of their span that
     /// still shows, and those that no longer show at all go, as zooms do. Except blur regions:
     /// they keep their whole span always, so footage that comes back (a trim undone by hand,

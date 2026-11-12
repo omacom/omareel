@@ -86,7 +86,13 @@ impl Document {
         }
         let mut used = vec![false; kept.len()];
         let mut clips = Vec::new();
+        // Output spans (before the edit) that now play faster, with their speed: frame-anchored
+        // overlays are retimed through them.
+        let mut sped: Vec<(f64, f64, f64)> = Vec::new();
+        let mut old_cursor = 0.0;
         for clip in self.project.clips.clone() {
+            let clip_start = old_cursor;
+            old_cursor += (clip.out - clip.in_) / clip.speed;
             if clip.is_media() || clip.speed != 1.0 {
                 clips.push(clip);
                 continue;
@@ -119,6 +125,9 @@ impl Document {
                 pieces.push((cursor, clip.out, 1.0));
             }
             for (i, (in_, out, speed)) in pieces.into_iter().enumerate() {
+                if speed != 1.0 {
+                    sped.push((clip_start + (in_ - clip.in_), clip_start + (out - clip.in_), speed));
+                }
                 let mut piece = clip.clone();
                 (piece.in_, piece.out, piece.speed) = (in_, out, speed);
                 if i > 0 {
@@ -137,6 +146,7 @@ impl Document {
         let in_insert = self.clip_is_media(self.clip_for_output(self.output_position).0);
         self.snapshot("");
         self.project.clips = clips;
+        self.retime_frame_overlays(&sped);
         self.changed(false);
         let kept = if in_insert { -1.0 } else { self.source_to_output(source, -1) };
         let at = if kept >= 0.0 { kept } else { cpp::min(self.output_position, self.duration()) };

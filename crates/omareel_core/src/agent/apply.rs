@@ -236,16 +236,18 @@ fn ranges(op: &Object) -> Result<Vec<(f64, f64)>, String> {
 /// measured is not measured again.
 /// `moving`: the windows the screen moves in are needed too (quiet parts), not only the still
 /// ones (pauses).
-pub(super) fn measure_speech_and_screen(document: &mut Document, moving: bool) -> Result<(), String> {
+/// `store` false (a dry run) measures without writing the cache.
+pub(super) fn measure_speech_and_screen(document: &mut Document, moving: bool, store: bool) -> Result<(), String> {
     let control = Control::default();
     let entry = document.measurement_cache();
+    let store_to = entry.as_ref().filter(|_| store);
     if document.speech_regions().is_none() {
         let speech = match entry.as_ref().and_then(cache::Entry::speech) {
             Some(speech) => speech,
             None if document.recording().has_audio => {
                 let sound = audio::extract_with(document.video_path(), &control)?;
                 let speech = vad::speech_regions(&sound.samples, &vad::VadSettings::default());
-                if let Some(entry) = &entry {
+                if let Some(entry) = store_to {
                     let _ = entry.store_speech(&speech);
                 }
                 speech
@@ -261,7 +263,7 @@ pub(super) fn measure_speech_and_screen(document: &mut Document, moving: bool) -
             Some(check) => check,
             None => {
                 let check = stillness::check_windows(document.video_path(), &silences, document.source_duration(), geometry, &control)?;
-                if let Some(entry) = &entry {
+                if let Some(entry) = store_to {
                     let _ = entry.store_screen(&silences, geometry, &check);
                 }
                 check
@@ -370,7 +372,7 @@ fn set_chapters(document: &Document, op: &Object, current: Option<Chapters>) -> 
 
 /// The edits of [`Document`] the operations use, refusing what the editor would refuse.
 fn run_op(document: &mut Document, op: &Object, run: &mut Run) -> OpResult {
-    if let Some(result) = super::polish_ops::run(document, op, &mut run.warnings) {
+    if let Some(result) = super::polish_ops::run(document, op, &mut run.warnings, run.dry_run) {
         return result;
     }
     let warnings = &mut run.warnings;
@@ -665,7 +667,7 @@ fn run_op(document: &mut Document, op: &Object, run: &mut Run) -> OpResult {
                 min_pause: optional_number(op, "min")?.unwrap_or(PauseSettings::default().min_pause).max(0.2),
                 keep: optional_number(op, "keep")?.unwrap_or(PauseSettings::default().keep).max(0.0),
             };
-            measure_speech_and_screen(document, false)?;
+            measure_speech_and_screen(document, false, !run.dry_run)?;
             let pauses = document.pause_ranges(&settings);
             let before = document.duration();
             let cut = if pauses.is_empty() { 0 } else { document.remove_source_ranges(&pauses) };

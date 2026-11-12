@@ -674,3 +674,57 @@ fn quiet_parts_play_faster_where_the_screen_moves() {
     assert_eq!(sped, vec![(0.0, 1.3, 1.0), (1.3, 6.7, 4.0), (6.7, 10.0, 1.0)]);
     assert!((results[0].get("saved_seconds").to_double(0.0) - 4.05).abs() < 1e-3);
 }
+
+#[test]
+fn editing_one_end_of_a_blur_never_uncovers_cut_footage() {
+    let dir = TempDir::new("agent-blur-edit");
+    let bundle = bundle(&dir);
+    let mut document = open(&bundle, &dir);
+    apply_ops(&mut document, &ops(r#"[
+            {"op": "blur", "from": 2, "to": 6, "timeline": "source", "rect": {"x": 0, "y": 0, "w": 0.5, "h": 0.2}},
+            {"op": "delete", "from": 1, "to": 3, "timeline": "source"}
+        ]"#), false)
+    .unwrap();
+    let id = document.project().overlays[0].id.clone();
+    // Only `to` given, on the output timeline: the start stays at source 2, though 2–3 is cut.
+    let edit = format!(r#"{{"op": "edit-overlay", "id": "{id}", "to": 4.5}}"#);
+    apply_ops(&mut document, &ops(&edit), false).unwrap();
+    let blur = document.overlay(&id).unwrap();
+    assert_eq!(round(blur.start), 2.0, "the cut footage under the blur stays covered");
+    assert_eq!(round(blur.end), 6.5);
+    // Restoring the cut brings 2–3 back covered.
+    apply_ops(&mut document, &ops(r#"{"op": "reset-trims", "at": 0.5}"#), false).ok();
+    let blur = document.overlay(&id).unwrap();
+    assert!(blur.start <= 2.0 + 1e-9);
+}
+
+#[test]
+fn speeding_up_retimes_frame_overlays() {
+    use crate::transcript::stillness::ScreenCheck;
+    let dir = TempDir::new("agent-speedup-overlays");
+    let bundle = bundle(&dir);
+    let mut document = open(&bundle, &dir);
+    apply_ops(&mut document, &ops(r#"[
+            {"op": "add-overlay", "kind": "text", "from": 8, "to": 9, "text": "After", "rect": {"x": 0.1, "y": 0.1, "w": 0.5, "h": 0.1}},
+            {"op": "add-overlay", "kind": "text", "from": 4, "to": 6, "text": "Inside", "rect": {"x": 0.1, "y": 0.1, "w": 0.5, "h": 0.1}},
+            {"op": "add-marker", "at": 8}
+        ]"#), false)
+    .unwrap();
+    // Silent 2–8 with the screen moving: one quiet part, played faster.
+    document.set_speech_regions(vec![(0.0, 2.0), (8.0, 10.0)]);
+    document.set_screen_check(ScreenCheck { still: Vec::new(), moving: vec![(2.0, 8.0)] });
+    let (results, _) = apply_ops(&mut document, &ops(r#"{"op": "speed-up-quiet", "target": 2, "min": 1}"#), true).unwrap();
+    assert_eq!(results[0].get("parts").to_int(0), 1, "{results:?}");
+    let sped: Vec<_> = document.project().clips.iter().filter(|clip| clip.speed != 1.0).cloned().collect();
+    assert_eq!(sped.len(), 1);
+    let (from, to, speed) = (sped[0].in_, sped[0].out, sped[0].speed);
+    let saved = (to - from) * (1.0 - 1.0 / speed);
+    let overlays = &document.project().overlays;
+    // After the part: moved back by what it saved, with the marker (source time) at the same moment.
+    assert!((overlays[0].start - (8.0 - saved)).abs() < 1e-6, "{:?}", overlays[0]);
+    assert!((overlays[0].end - (9.0 - saved)).abs() < 1e-6);
+    let marker_output = document.marker_rows()[0].output_time.unwrap();
+    assert!((marker_output - overlays[0].start).abs() < 1e-6, "{marker_output}");
+    // Inside the part: scaled with it.
+    assert!((overlays[1].start - (from + (4.0 - from) / speed)).abs() < 1e-6, "{:?}", overlays[1]);
+}
