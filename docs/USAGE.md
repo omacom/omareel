@@ -10,7 +10,8 @@
 omareel
 omareel record [--region|--fullscreen|--window] [options]
 omareel edit BUNDLE.omareel
-omareel export BUNDLE.omareel -o OUTPUT.mp4|OUTPUT.gif [options]
+omareel export BUNDLE.omareel -o OUTPUT.mp4|OUTPUT.gif|OUTPUT.srt|OUTPUT.vtt [options]
+omareel transcribe BUNDLE.omareel [--backend NAME] [--force]
 omareel probe BUNDLE.omareel
 omareel help
 omareel --version
@@ -130,6 +131,33 @@ GIF-specific overrides are `--gif-fps N` and `--gif-width W`.
 Add `--timing` to print average decode wait, upload, render, readback, encoder-write, and
 end-to-end throughput measurements.
 
+An output ending in `.srt` (SubRip) or `.vtt` (WebVTT) writes the recording's captions instead,
+on the edited timeline: cut parts are left out and sped-up clips shorten their captions. It needs
+`transcript.json` (see `transcribe`). MP4 and GIF exports draw the captions into the video when
+they are turned on in the editor.
+
+### `transcribe BUNDLE`
+
+Writes `transcript.json` in the bundle with a speech-to-text engine on this computer; nothing is
+uploaded by omareel. `--backend` picks the engine:
+
+- `auto` (the default) follows Omarchy's dictation choice
+  (`~/.config/omarchy/defaults/dictation`). When that is voxtype on a Whisper model and
+  `whisper-cli` is installed, voxtype's model runs through `whisper-cli` first, for measured word
+  times. Then the chosen backend, then `whisper-cli` with any model, then voxtype.
+- `voxtype` runs `voxtype transcribe` with its configured engine and model. Text only.
+- `hex` runs `hex transcribe`, which needs Hex running with Labs > Transcribe files on. Text only.
+- `superwhisper` runs `superwhisper transcribe` through its service. Text only. (Superwhisper's
+  own cloud mode, if selected there, is Superwhisper's choice, not omareel's.)
+- `whisper-cpp` runs `whisper-cli` with voxtype's model, a model in
+  `~/.local/share/whisper.cpp/models`, or `OMAREEL_WHISPER_MODEL`. Times every word.
+
+The recording's audio is read with ffmpeg at 16 kHz mono, and a loudness-based speech finder
+splits it into phrases. Text-only engines transcribe one phrase at a time, which times the
+phrases; their words are spread over the phrase's speech and marked `estimated`. An existing
+transcript is kept unless `--force` is given. Without any engine the command says how to set one
+up in Omarchy and exits 1.
+
 ### `probe BUNDLE`
 
 Prints JSON containing source duration, frame rate, dimensions, input-event counts, and the
@@ -204,12 +232,53 @@ The bundle directory contains `screen.mp4`, its `screen.mp4.ts` first-frame time
 videos. Video remains unchanged while
 clip, style, cursor, and zoom edits are stored in `project.json`.
 
+`transcript.json` (once transcribed) has every time in seconds of `screen.mp4`, so edits never
+invalidate it:
+
+```json
+{
+  "version": 1, "backend": "voxtype", "model": "base.en", "language": "en",
+  "wordTiming": "estimated",
+  "segments": [
+    { "start": 0.42, "end": 3.1, "text": "Hello there.",
+      "words": [ { "start": 0.42, "end": 0.8, "text": "Hello" }, ... ] }
+  ]
+}
+```
+
+`wordTiming` is `measured` when the engine timed each word (whisper-cli), `estimated` otherwise.
+
+`project.json` gains a `captions` object only once captions are changed in the editor, so older
+projects keep their bytes: `{ "enabled": false, "position": "bottom", "size": 1 }` (`position`
+`bottom` or `top`, `size` 0.5 to 2).
+
+## Speech in the editor
+
+When a recording with sound opens, the editor measures where it speaks and, with no transcript
+yet, transcribes it in the background. That never blocks editing, waits while a recording or an
+export runs, and stops when the editor closes. The Speech section shows its progress, or why
+there is no transcript, and offers:
+
+- Show captions, with position and size: drawn in the preview and the export, at most two lines
+  of about 42 characters, in the keystroke pills' style.
+- Save .srt / .vtt beside the default export.
+- Trim pauses: each silence over a second shrinks to 0.4 s, and the silence before the first
+  and after the last words shrinks to 0.2 s. A silence with typing, clicks, scrolling or pointer travel in
+  it is kept, since on a screen recording that is someone showing something. Needs no engine.
+  Desktop audio counts as sound, so music under the voice hides pauses.
+- Remove filler words (um, uh, erm, hmm…), with the hesitation around them.
+
+Both trims are one undo step. Engines differ in whether they write fillers out; with estimated
+word times a filler's cut is approximate.
+
 ## Environment
 
 - `OMAREEL_DEBUG=1` appends `gpu-screen-recorder` stderr to `/tmp/omareel.log`.
 - `OMAREEL_PREVIEW_STATS=1` plays an opened recording and logs preview frame rate, average
   frame handling cost, and drops once per second.
 - `OMAREEL_CAPTURE=gsr` forces the fallback screen capture backend.
+- `OMAREEL_NO_TRANSCRIBE=1` stops the editor transcribing recordings on its own.
+- `OMAREEL_WHISPER_MODEL=PATH` is the ggml model `whisper-cli` uses.
 - `OMAREEL_CAPTURE=native` selects the native screen capture backend when supported.
 - `OMAREEL_PLUGIN_PATH` selects the capture-exclusion plugin file. An explicit missing path
   forces overlay fallback placement.
