@@ -4,6 +4,7 @@
 
 pub mod agent;
 pub mod camera_timeline;
+pub mod captions;
 pub mod cli;
 pub mod clip_timeline;
 pub mod compat;
@@ -24,4 +25,5 @@ pub mod probe;
 pub mod project;
 pub mod recording_preferences;
 pub mod theme;
+pub mod transcript;
 pub mod zoom_timeline;

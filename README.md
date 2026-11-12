@@ -22,6 +22,8 @@ cursor-following zooms. Finished projects export to MP4 or GIF.
 - Hardware-accelerated MP4 export with CPU fallback, plus GIF export.
 - `omareel frame` renders any moment of the finished video, or a labelled contact sheet, as an
   image without exporting: a quick check of an edit for people and AI agents.
+- Speech to text with the dictation engine chosen in Omarchy: captions, SRT/WebVTT subtitles,
+  and one-click trimming of pauses and filler words. Everything stays on this computer.
 - Self-contained `.omareel` project bundles that preserve the source and editor state.
 - Scriptable editing for AI agents and scripts: `omareel describe` prints the edited timeline
   as JSON, `omareel apply` runs checked edit operations, and an open editor follows along.
@@ -86,6 +88,8 @@ omareel edit ~/Videos/omareel/Recording.omareel
 omareel export Recording.omareel -o recording.mp4
 omareel frame Recording.omareel --at 12.5 -o frame.png
 omareel frame Recording.omareel --count 12 --sheet -o sheet.jpg
+omareel transcribe Recording.omareel
+omareel export Recording.omareel -o recording.srt
 omareel probe Recording.omareel
 omareel describe Recording.omareel
 omareel apply Recording.omareel edits.json
@@ -134,7 +138,18 @@ An `.omareel` bundle is a directory. `screen.mp4` is the cursor-free source reco
 region, scale, dimensions, frame rate, and audio; `input.jsonl` stores pointer, button, scroll,
 and key events (keyboard shortcuts and non-text keys only: plain typing is never recorded); `project.json` contains non-destructive editor choices; `media/` holds inserted videos and
 background music; and `thumb.jpg` is the
-launcher thumbnail. Moving the whole directory preserves the editable project.
+launcher thumbnail. `transcript.json`, once the recording is transcribed, holds its words
+with times in recording seconds. Moving the whole directory preserves the editable project.
+
+### Speech, captions and trimming
+
+The editor transcribes a recording with sound in the background when it opens, using the
+dictation engine chosen in Omarchy's Setup > Defaults > Dictation (voxtype, Hex or
+Superwhisper; `omarchy install dictation voxtype` sets one up). With voxtype on a Whisper model
+and `whisper-cpp` installed, the same model runs through `whisper-cli`, which times every word.
+The Speech section of the editor turns captions on, saves subtitles, and trims pauses (silences
+over a second while nothing changes on screen and the pointer stays put) and filler words (with
+whisper-cpp's measured word times), each as one undo step. Pause trimming needs no engine. See `docs/USAGE.md` for details.
 
 ## Troubleshooting
 

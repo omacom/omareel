@@ -203,6 +203,9 @@ pub mod ffi {
         fn ripples(self: &ExportJob) -> QList_QVariant;
         #[cxx_name = "keystrokePills"]
         fn keystroke_pills(self: &ExportJob) -> QList_QVariant;
+        /// `{lines, opacity, position, size}`; no lines when no caption shows.
+        #[cxx_name = "captionMap"]
+        fn caption_map(self: &ExportJob) -> QMap_QString_QVariant;
         /// Before `start`: the recording's frames as YUV (see `DecodedImage`) when the
         /// renderer converts them on the GPU.
         #[cxx_name = "setYuvScreen"]
@@ -394,6 +397,20 @@ fn new_export_job() -> Box<ExportJob> {
     Box::new(ExportJob { job: None, frame: FrameImages::default(), still_times: Vec::new(), still_count: 0 })
 }
 
+/// The caption map Composition.qml's CaptionOverlay reads.
+pub(crate) fn caption_map(
+    frame: &omareel_core::captions::CaptionFrame,
+    settings: &omareel_core::project::Captions,
+) -> QMap<QMapPair_QString_QVariant> {
+    let lines: QStringList = frame.lines.iter().map(|line| qstring(line)).collect();
+    map([
+        ("lines", QVariant::from(&lines)),
+        ("opacity", QVariant::from(&frame.opacity)),
+        ("position", QVariant::from(&qstring(&settings.position))),
+        ("size", QVariant::from(&settings.size)),
+    ])
+}
+
 fn qstring(text: &str) -> QString {
     QString::from(text)
 }
@@ -573,6 +590,12 @@ impl ExportJob {
                 ]))
             })
             .collect()
+    }
+
+    fn caption_map(&self) -> QMap<QMapPair_QString_QVariant> {
+        let Some(s) = self.state() else { return QMap::default() };
+        let settings = self.job.as_ref().and_then(|job| job.project().captions.clone()).unwrap_or_default();
+        caption_map(&s.caption, &settings)
     }
 
     fn set_yuv_screen(&mut self, yuv: bool) {

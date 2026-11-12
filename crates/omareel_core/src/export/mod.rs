@@ -225,6 +225,7 @@ pub struct ExportJob {
     camera_enabled: bool,
     motion: MotionTrack,
     keystrokes: KeystrokeTrack,
+    captions: Vec<crate::captions::Cue>,
     gif: bool,
     fps: i32,
     width: i32,
@@ -338,6 +339,11 @@ impl ExportJob {
         let camera_enabled = camera_media.width > 0 && (project.camera.enabled || camera_full_frame);
         let motion = MotionTrack::build(media.duration, media.width, media.height, input.events(), &project, capture_fps);
         let keystrokes = KeystrokeTrack::build(input.events(), &project.keystrokes);
+        // Captions need a transcript; one that does not read leaves them out.
+        let captions = match (project.captions.as_ref().is_some_and(|c| c.enabled), crate::transcript::Transcript::load(&bundle)) {
+            (true, Ok(Some(transcript))) => crate::captions::build_cues(&transcript, &project.clips),
+            _ => Vec::new(),
+        };
 
         let fps = if options.fps > 0 {
             options.fps
@@ -437,6 +443,7 @@ impl ExportJob {
             camera_enabled,
             motion,
             keystrokes,
+            captions,
             gif,
             fps,
             width,
@@ -652,11 +659,7 @@ impl ExportJob {
                         encoder_args.extend(["-i".into(), self.video_path.clone()]);
                     }
                     audio_segments.push(plan::audio_segment(
-                        &format!(
-                            "[{source_input}:a:0]atrim=start={}:end={},asetpts=PTS-STARTPTS",
-                            number_f64(clip.in_, 'f', 6),
-                            number_f64(clip.out, 'f', 6)
-                        ),
+                        &plan::source_audio(source_input, clip.in_, clip.out),
                         clip.speed,
                         length,
                     ));
@@ -831,6 +834,7 @@ impl ExportJob {
             project: &self.project,
             motion: &self.motion,
             keystrokes: &self.keystrokes,
+            captions: &self.captions,
             camera_width: self.camera_media.width,
             camera_duration: self.camera_media.duration,
             camera_offset: self.camera_offset,

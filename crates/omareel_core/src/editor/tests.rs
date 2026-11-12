@@ -1878,3 +1878,138 @@ fn music_ducks_under_the_recordings_sound_in_the_preview() {
     document.set_project_value("audio.mic", false.into(), false);
     assert_eq!(document.music_playback(1.5).unwrap().gain, 0.25);
 }
+
+fn clip_spans(qt: &Qt) -> Vec<(f64, f64, f64)> {
+    let round = |t: f64| (t * 1e6).round() / 1e6;
+    qt.document.project().clips.iter().map(|c| (round(c.in_), round(c.out), c.speed)).collect()
+}
+
+#[test]
+fn removing_source_ranges_is_one_undo_step() {
+    let world = World::new("editor-remove-ranges");
+    let mut qt = world.open(&world.bundle("ranges.omareel"));
+    let original = clip_spans(&qt);
+    assert_eq!(original, [(0.0, 2.0, 1.0)]);
+    let steps = qt.undo_steps();
+    qt.effects.clear();
+    assert_eq!(qt.run(|d| d.remove_source_ranges(&[(1.0, 1.2), (0.3, 0.5)])), 2);
+    assert_eq!(clip_spans(&qt), [(0.0, 0.3, 1.0), (0.5, 1.0, 1.0), (1.2, 2.0, 1.0)]);
+    assert_eq!(qt.undo_steps(), steps + 1);
+    assert_eq!(qt.effects[..2], [Effect::Pause, Effect::HistoryChanged]);
+    assert!((qt.document.duration() - 1.6).abs() < 1e-9);
+    qt.run(Document::undo);
+    assert_eq!(clip_spans(&qt), original);
+
+    // Nothing to cut, or everything: no change and no undo step.
+    let steps = qt.undo_steps();
+    assert_eq!(qt.run(|d| d.remove_source_ranges(&[])), 0);
+    assert_eq!(qt.run(|d| d.remove_source_ranges(&[(0.0, 2.0)])), 0);
+    assert_eq!(qt.run(|d| d.remove_source_ranges(&[(5.0, 6.0)])), 0);
+    assert_eq!(qt.undo_steps(), steps);
+    assert_eq!(clip_spans(&qt), original);
+}
+
+#[test]
+fn removing_source_ranges_across_cuts_and_speeds() {
+    let world = World::new("editor-remove-ranges-speed");
+    let mut qt = world.open(&world.bundle("ranges.omareel"));
+    // Cut 1.0..1.2 out, then play the rest at 2x.
+    assert!(qt.run(|d| d.delete_output_range(1.0, 1.2)));
+    let second = qt.clip_id(1);
+    assert!(qt.run(|d| d.set_clip_speed(&second, 2.0)));
+    assert_eq!(clip_spans(&qt), [(0.0, 1.0, 1.0), (1.2, 2.0, 2.0)]);
+    // One range spans the earlier cut; a leftover under 0.1 s at the start goes too.
+    assert_eq!(qt.run(|d| d.remove_source_ranges(&[(0.9, 1.5), (0.05, 0.5)])), 2);
+    assert_eq!(clip_spans(&qt), [(0.5, 0.9, 1.0), (1.5, 2.0, 2.0)]);
+    assert!((qt.document.duration() - (0.4 + 0.25)).abs() < 1e-9);
+    // A range already cut away does nothing.
+    assert_eq!(qt.run(|d| d.remove_source_ranges(&[(1.0, 1.4)])), 0);
+}
+
+#[test]
+fn removing_source_ranges_keeps_the_playhead_on_the_moment() {
+    let world = World::new("editor-remove-ranges-playhead");
+    let mut qt = world.open(&world.bundle("ranges.omareel"));
+    qt.seek(1.5);
+    assert_eq!(qt.run(|d| d.remove_source_ranges(&[(0.2, 0.7)])), 1);
+    assert!((qt.document.output_position() - 1.0).abs() < 1e-9);
+    assert!((qt.document.source_position() - 1.5).abs() < 1e-9);
+}
+
+#[test]
+fn captions_follow_the_clips_and_stay_out_of_old_projects() {
+    use crate::transcript::{Segment, Transcript, Word};
+    let world = World::new("editor-captions");
+    let bundle = world.bundle("captions.omareel");
+    let mut qt = world.open(&bundle);
+    assert!(!qt.document.project().to_json().contains("captions"));
+    assert!(!qt.document.captions().enabled);
+    let words = vec![
+        Word { start: 0.1, end: 0.4, text: "Hello".into() },
+        Word { start: 0.5, end: 0.8, text: "um".into() },
+        Word { start: 1.0, end: 1.4, text: "world.".into() },
+    ];
+    let mut transcript = Transcript {
+        segments: vec![Segment { start: 0.1, end: 1.4, text: "Hello um world.".into(), words }],
+        ..Transcript::default()
+    };
+    // Estimated word times are not good enough to cut by.
+    transcript.save(&bundle).unwrap();
+    qt = world.open(&bundle);
+    assert!(!qt.document.can_remove_fillers());
+    assert!(qt.document.filler_ranges().is_empty());
+    transcript.word_timing = crate::transcript::WordTiming::Measured;
+    transcript.save(&bundle).unwrap();
+    qt = world.open(&bundle);
+    assert!(qt.document.can_remove_fillers());
+    assert_eq!(qt.document.caption_cues().len(), 1);
+    assert_eq!(qt.document.caption_cues()[0].lines, ["Hello um world."]);
+    // Off by default: nothing shows.
+    qt.seek(0.3);
+    assert!(qt.document.preview_caption().lines.is_empty());
+    qt.run(|d| d.set_project_value("captions.enabled", Value::Bool(true), false));
+    let json = qt.document.project().to_json();
+    assert_eq!(json.value("captions").to_object().value("position").to_string_or(""), "bottom");
+    qt.seek(0.3);
+    assert_eq!(qt.document.preview_caption().lines, ["Hello um world."]);
+
+    // Remove the filler: one undo step, and the caption loses it.
+    let fillers = qt.document.filler_ranges();
+    assert_eq!(fillers.len(), 1);
+    assert_eq!(qt.run(|d| d.remove_source_ranges(&fillers)), 1);
+    assert_eq!(qt.document.caption_cues()[0].lines, ["Hello world."]);
+    assert!(qt.document.filler_ranges().is_empty());
+    qt.run(Document::undo);
+    assert_eq!(qt.document.caption_cues()[0].lines, ["Hello um world."]);
+}
+
+#[test]
+fn pause_ranges_need_speech_and_skip_activity() {
+    let world = World::new("editor-pauses");
+    let settings = crate::transcript::trim::PauseSettings { min_pause: 0.5, keep: 0.2 };
+    // The fixture's cursor keeps moving: someone showing something, not a pause.
+    let mut qt = world.open(&world.bundle("moving.omareel"));
+    assert!(qt.document.pause_ranges(&settings).is_empty());
+    qt.document.set_speech_regions(vec![(0.0, 0.4), (1.4, 2.0)]);
+    qt.document.set_still_windows(vec![(0.0, 2.0)]);
+    assert!(qt.document.input_activity().iter().any(|&t| (0.4..=1.4).contains(&t)));
+    assert!(qt.document.pause_ranges(&settings).is_empty());
+
+    let still = world.bundle("still.omareel");
+    std::fs::write(format!("{still}/input.jsonl"), b"").unwrap();
+    let mut qt = world.open(&still);
+    qt.document.set_speech_regions(vec![(0.0, 0.4), (1.4, 2.0)]);
+    assert_eq!(qt.document.silences_to_check(), Some(vec![(0.4, 1.4)]));
+    // Not before the screen is checked, nor when it moves during the silence.
+    assert!(!qt.document.pauses_ready());
+    assert!(qt.document.pause_ranges(&settings).is_empty());
+    qt.document.set_still_windows(Vec::new());
+    assert!(qt.document.pauses_ready());
+    assert!(qt.document.pause_ranges(&settings).is_empty());
+    qt.document.set_still_windows(vec![(0.4, 1.4)]);
+    let ranges = qt.document.pause_ranges(&settings);
+    assert_eq!(ranges.len(), 1);
+    assert!((ranges[0].0 - 0.5).abs() < 1e-9 && (ranges[0].1 - 1.3).abs() < 1e-9, "{ranges:?}");
+    assert_eq!(qt.run(|d| d.remove_source_ranges(&ranges)), 1);
+    assert!(qt.document.pause_ranges(&settings).is_empty());
+}

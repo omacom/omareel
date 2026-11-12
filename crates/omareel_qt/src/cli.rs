@@ -15,6 +15,11 @@ pub mod ffi {
         /// need no Qt application, so main() runs them before making one.
         #[cxx_name = "agentCommand"]
         fn agent_command(command: &str, args: Vec<String>) -> i32;
+        /// `omareel transcribe <arguments>`: writes the bundle's transcript.json; the exit status.
+        fn transcribe(arguments: Vec<String>) -> i32;
+        /// `omareel export <bundle> -o <file.srt|file.vtt>` for absolute paths; the exit status.
+        #[cxx_name = "exportSubtitles"]
+        fn export_subtitles(bundle: &str, output: &str) -> i32;
         /// Sends the Rust code's Qt-style warnings through Qt's message handler, as the C++'s
         /// qWarning went; main() calls it first.
         #[cxx_name = "installMessageHandler"]
@@ -36,6 +41,14 @@ pub mod ffi {
 fn preload_editor(bundle: &str) {
     use omareel_core::editor::{Document, Probes};
     Document::preload(bundle, Probes::new(std::sync::Arc::new(omareel_core::media_probe::probe_video)));
+}
+
+fn transcribe(arguments: Vec<String>) -> i32 {
+    omareel_core::transcript::command::transcribe_command(&arguments)
+}
+
+fn export_subtitles(bundle: &str, output: &str) -> i32 {
+    omareel_core::transcript::command::export_subtitles_command(bundle, output)
 }
 
 fn prefetch_theme() {

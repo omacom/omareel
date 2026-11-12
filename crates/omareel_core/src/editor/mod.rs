@@ -51,6 +51,7 @@ mod presets;
 #[cfg(test)]
 mod tests;
 mod project_map;
+mod speech;
 mod thumbnails;
 mod zooms;
 
@@ -103,6 +104,8 @@ pub enum Effect {
     ErrorOccurred(String),
     /// `autosaved(path)`.
     Autosaved(String),
+    /// The transcript or the measured speech changed (not in the C++).
+    TranscriptChanged,
 
     /// `Editor::seek(outputTime)`: unless there are no clips, stop the scrub timer and scrubbing,
     /// [`Document::set_output_position`] to [`Document::clamp_playback_position`] of it (resetting

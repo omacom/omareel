@@ -200,17 +200,15 @@ impl Document {
         Some(OutputCut { from, clips: edited.clips().to_vec() })
     }
 
-    /// The edit of `deleteOutputRange` after its pause, for a cut
-    /// [`Document::prepare_delete_output_range`] made of the clips as they still are.
-    pub fn apply_delete_output_range(&mut self, cut: OutputCut) {
-        let OutputCut { from, clips } = cut;
-        self.snapshot("");
+    /// For clips about to replace the current ones: zooms that no longer show are removed and
+    /// the others shrink to what still shows (true when any changed).
+    pub(crate) fn fit_zooms_to(&mut self, clips: &[Clip]) -> bool {
         let mut surviving = Vec::new();
         let mut zooms_changed = false;
         for zoom in &self.project.zooms {
             let mut zoom = zoom.clone();
             let before = visible_source_span(&zoom, &self.project.clips);
-            let after = visible_source_span(&zoom, &clips);
+            let after = visible_source_span(&zoom, clips);
             if before.0.is_finite() && !after.0.is_finite() {
                 zooms_changed = true;
                 continue;
@@ -222,10 +220,19 @@ impl Document {
             }
             surviving.push(zoom);
         }
-        self.project.clips = clips;
         if zooms_changed {
             self.project.zooms = surviving;
         }
+        zooms_changed
+    }
+
+    /// The edit of `deleteOutputRange` after its pause, for a cut
+    /// [`Document::prepare_delete_output_range`] made of the clips as they still are.
+    pub fn apply_delete_output_range(&mut self, cut: OutputCut) {
+        let OutputCut { from, clips } = cut;
+        self.snapshot("");
+        let zooms_changed = self.fit_zooms_to(&clips);
+        self.project.clips = clips;
         let at = cpp::min(from, self.duration());
         self.selected_clip_id = self.project.clips[self.clip_for_output(at).0 as usize].id.clone();
         self.selected_zoom_id.clear();

@@ -100,6 +100,7 @@ set_source_files_properties(
     src/ui/qml/BlurredBackdrop.qml
     src/ui/qml/MediaLayer.qml
     src/ui/qml/KeystrokeOverlay.qml
+    src/ui/qml/CaptionOverlay.qml
     src/ui/qml/Main.qml
     src/ui/qml/TopBar.qml
     src/ui/qml/PreviewPane.qml
@@ -122,6 +123,7 @@ set_source_files_properties(
     src/ui/qml/ClipPanel.qml
     src/ui/qml/CameraPanel.qml
     src/ui/qml/KeystrokesPanel.qml
+    src/ui/qml/SpeechPanel.qml
     src/ui/qml/ExportDialog.qml
     src/ui/qml/InsertClipDialog.qml
     src/ui/qml/Timeline.qml
@@ -138,7 +140,7 @@ set_source_files_properties(src/ui/qml/CursorOverlay.qml PROPERTIES QT_RESOURCE_
 set_source_files_properties(src/ui/qml/CameraOverlay.qml PROPERTIES QT_RESOURCE_ALIAS "CameraOverlay.qml")
 set_source_files_properties(src/ui/qml/BlurredBackdrop.qml PROPERTIES QT_RESOURCE_ALIAS "BlurredBackdrop.qml")
 set_source_files_properties(src/ui/qml/MediaLayer.qml PROPERTIES QT_RESOURCE_ALIAS "MediaLayer.qml")
-foreach(qml_name IN ITEMS Main TopBar PreviewPane BottomBar SidePanel PanelSlider PanelLabel PanelHeading PanelValue IconToolButton EditorButton EditorSlider EditorSwitch EditorComboBox BackgroundPanel ShapePanel CursorPanel ZoomPanel AudioPanel ClipPanel CameraPanel KeystrokesPanel ExportDialog InsertClipDialog Timeline ClipTrack ZoomTrack Launcher RecordingBar)
+foreach(qml_name IN ITEMS Main TopBar PreviewPane BottomBar SidePanel PanelSlider PanelLabel PanelHeading PanelValue IconToolButton EditorButton EditorSlider EditorSwitch EditorComboBox BackgroundPanel ShapePanel CursorPanel ZoomPanel AudioPanel ClipPanel CameraPanel KeystrokesPanel SpeechPanel ExportDialog InsertClipDialog Timeline ClipTrack ZoomTrack Launcher RecordingBar)
     set_source_files_properties(src/ui/qml/${qml_name}.qml PROPERTIES QT_RESOURCE_ALIAS "${qml_name}.qml")
 endforeach()
 qt_add_qml_module(omareel_render
@@ -158,6 +160,7 @@ qt_add_qml_module(omareel_render
         src/ui/qml/BlurredBackdrop.qml
         src/ui/qml/MediaLayer.qml
         src/ui/qml/KeystrokeOverlay.qml
+        src/ui/qml/CaptionOverlay.qml
         src/ui/qml/Main.qml
         src/ui/qml/TopBar.qml
         src/ui/qml/PreviewPane.qml
@@ -180,6 +183,7 @@ qt_add_qml_module(omareel_render
         src/ui/qml/ClipPanel.qml
         src/ui/qml/CameraPanel.qml
         src/ui/qml/KeystrokesPanel.qml
+        src/ui/qml/SpeechPanel.qml
         src/ui/qml/ExportDialog.qml
         src/ui/qml/InsertClipDialog.qml
         src/ui/qml/Timeline.qml
@@ -205,6 +209,7 @@ qt_add_resources(omareel_render "omareel_assets"
         assets/icons/lucide/mouse-pointer-2.svg assets/icons/lucide/zoom-in.svg
         assets/icons/lucide/zoom-out.svg
         assets/icons/lucide/film.svg assets/icons/lucide/camera.svg assets/icons/lucide/volume-2.svg
+        assets/icons/lucide/captions.svg
         assets/icons/lucide/play.svg assets/icons/lucide/pause.svg
         assets/icons/lucide/skip-back.svg assets/icons/lucide/skip-forward.svg
         assets/icons/lucide/scissors.svg assets/icons/lucide/crop.svg assets/icons/lucide/image.svg

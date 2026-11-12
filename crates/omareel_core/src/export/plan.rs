@@ -186,6 +186,18 @@ pub fn audio_segment(source: &str, speed: f64, length: f64) -> String {
     )
 }
 
+/// The recording's audio from `in_` to `out` source seconds, from input `input`, timed from
+/// the clip's start. The recording's sound can start after the screen (it is muxed in with
+/// `-itsoffset`); `aresample` pads it with silence from the file's time 0, so a clip from the
+/// start keeps it where the preview plays it instead of pulling it early.
+pub fn source_audio(input: i32, in_: f64, out: f64) -> String {
+    format!(
+        "[{input}:a:0]aresample=async=1:first_pts=0,atrim=start={}:end={},asetpts=PTS-STARTPTS",
+        number_f64(in_, 'f', 6),
+        number_f64(out, 'f', 6)
+    )
+}
+
 pub fn silent_segment(length: f64) -> String {
     format!(
         "anullsrc=r=48000:cl=stereo,atrim=duration={},aformat=sample_fmts=fltp:channel_layouts=stereo",
@@ -545,6 +557,34 @@ mod tests {
         assert_eq!(atempo(24.0), "atempo=2,atempo=2,atempo=2,atempo=2,atempo=1.5");
         assert_eq!(atempo(0.2), "atempo=0.5,atempo=0.5,atempo=0.8");
         assert_eq!(atempo(1.4), "atempo=1.4");
+    }
+
+    /// A clip from the start of a recording whose sound starts late keeps the sound where the
+    /// preview plays it.
+    #[test]
+    fn late_recording_audio_keeps_its_place_in_the_export() {
+        use crate::transcript::audio::tests::{late_audio_recording, onset};
+        let dir = std::env::temp_dir().join(format!("omareel-export-audio-offset-{}", std::process::id()));
+        let Some(screen) = late_audio_recording(&dir, 0.7) else {
+            eprintln!("skipped: no ffmpeg");
+            return;
+        };
+        let filter = format!("{}[a]", audio_segment(&source_audio(0, 0.0, 3.0), 1.0, 3.0));
+        let output = std::process::Command::new("ffmpeg")
+            .args(["-nostdin", "-v", "error", "-i", &screen, "-filter_complex", &filter, "-map", "[a]"])
+            .args(["-ac", "1", "-f", "s16le", "-acodec", "pcm_s16le", "pipe:1"])
+            .output()
+            .unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        let samples: Vec<i16> = output.stdout.chunks_exact(2).map(|p| i16::from_le_bytes([p[0], p[1]])).collect();
+        let onset = onset(&samples, 48_000);
+        assert!((onset - 0.7).abs() < 0.03, "the tone starts at {onset}");
+        assert!((samples.len() as f64 / 48_000.0 - 3.0).abs() < 0.01);
+        assert_eq!(
+            source_audio(2, 1.5, 4.0),
+            "[2:a:0]aresample=async=1:first_pts=0,atrim=start=1.500000:end=4.000000,asetpts=PTS-STARTPTS"
+        );
     }
 
     #[test]
