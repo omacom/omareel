@@ -39,6 +39,7 @@
 //!   [`crate::media_probe::probe_frame_times`] for [`Document::set_screen_frame_times`].
 
 mod bundle;
+mod cleanup;
 mod clips;
 mod composition;
 mod document;
@@ -54,6 +55,7 @@ mod thumbnails;
 mod zooms;
 
 pub use bundle::*;
+pub use cleanup::{CleanAudio, CleanAudioStatus};
 pub use clips::{ImportJob, OutputCut};
 pub use composition::*;
 pub use document::*;
@@ -126,4 +128,16 @@ pub enum Effect {
     /// `OmarchyPaths::generateWallpaperThumbnail(path, thumbnail)` off the GUI thread, then
     /// [`Document::wallpaper_thumbnail_ready`].
     GenerateWallpaperThumbnail { path: String, thumbnail: String },
+
+    /// Play the screen player's sound from this file instead of the recording's own (empty:
+    /// the recording's), on the same timeline: the cleaned sound ([`Document::refresh_clean_audio`]).
+    SetScreenAudioSource(String),
+    /// The files the media player's sound comes from changed: play
+    /// [`Document::insert_audio_source`] of the inserted video it holds.
+    InsertAudioSourcesChanged,
+    /// Run [`Document::clean_audio_job`] off the GUI thread, then
+    /// [`Document::finish_clean_audio`] with its id and result.
+    StartCleanAudio,
+    /// `cleanAudioChanged`: [`Document::clean_audio_status`] or the bypass changed.
+    CleanAudioChanged,
 }

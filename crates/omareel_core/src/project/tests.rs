@@ -351,3 +351,38 @@ fn camera_crop_folds_into_shape() {
         assert_eq!(Project::from_json(&loaded.to_json()).camera.shape, expected_shape, "{row}");
     }
 }
+
+#[test]
+fn audio_cleanup_is_written_only_when_switched_on() {
+    let plain = Project::defaults("Demo", 4.0);
+    let audio = plain.to_json().value("audio").to_object();
+    assert!(!audio.contains("cleanup"));
+    assert_eq!(audio.keys().collect::<Vec<_>>(), ["desktop", "mic", "volume"]);
+
+    let mut cleaned = plain.clone();
+    cleaned.audio.cleanup = AudioCleanup { denoise: true, strength: 0.6, loudness: "-14".into() };
+    let json = cleaned.to_json();
+    assert_eq!(
+        json.value("audio").to_json(Format::Compact),
+        r#"{"cleanup":{"denoise":true,"loudness":"-14","strength":0.6},"desktop":true,"mic":true,"volume":1}"#
+    );
+    assert_eq!(Project::from_json(&json), cleaned);
+    assert!(cleaned.audio.cleanup.active());
+    assert_eq!(cleaned.audio.cleanup.loudness_lufs(), Some(-14.0));
+    assert!(!AudioCleanup::default().active());
+}
+
+#[test]
+fn audio_cleanup_reads_leniently() {
+    let read = |cleanup: &str| {
+        Project::from_json(&object(&format!(r#"{{"audio":{{"cleanup":{cleanup}}}}}"#))).audio.cleanup
+    };
+    assert_eq!(read(r#"{"denoise":true}"#), AudioCleanup { denoise: true, ..AudioCleanup::default() });
+    assert_eq!(read(r#"{"loudness":-16}"#).loudness, "-16");
+    assert_eq!(read(r#"{"loudness":"-23"}"#).loudness, "off");
+    assert_eq!(read(r#"{"strength":7}"#).strength, 1.0);
+    assert_eq!(read(r#"{"strength":0}"#).strength, 0.1);
+    // Everything at its default reads back as no cleanup at all.
+    let json = Project::from_json(&object(r#"{"audio":{"cleanup":{"denoise":false}}}"#)).to_json();
+    assert!(!json.value("audio").to_object().contains("cleanup"));
+}

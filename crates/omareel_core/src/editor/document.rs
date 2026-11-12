@@ -127,6 +127,7 @@ pub struct Document {
     pub(crate) cache_location: Option<String>,
     pub(crate) new_id: Box<dyn FnMut() -> String + Send>,
     pub(crate) effects: RefCell<Vec<Effect>>,
+    pub(crate) clean_audio: super::cleanup::CleanAudio,
 }
 
 /// The recording [`Document::preload`] is opening, and its path.
@@ -235,6 +236,7 @@ impl Document {
             cache_location: None,
             new_id: Box::new(random_uuid),
             effects: RefCell::new(Vec::new()),
+            clean_audio: Default::default(),
         }
     }
 
@@ -637,6 +639,7 @@ impl Document {
             self.emit(Effect::StartMotionTimer);
         }
         self.emit(Effect::CompositionChanged);
+        self.refresh_clean_audio();
     }
 
     pub fn begin_coalesced_edit(&mut self, key: &str) {

@@ -50,6 +50,11 @@ public:
     QMediaPlayer::PlaybackState cameraPlaybackStateForTests() const { return m_playback.playbackState(PlaybackDriver::Camera); }
     qint64 cameraPositionMsForTests() const { return m_playback.position(PlaybackDriver::Camera); }
     QMediaPlayer::PlaybackState mediaPlaybackStateForTests() const { return m_playback.playbackState(PlaybackDriver::Media); }
+    QString screenAudioSourceForTests() const { return m_playback.screenAudioSource(); }
+    qint64 screenAudioPositionMsForTests() const { return m_playback.screenAudioPosition(); }
+    QMediaPlayer::PlaybackState screenAudioStateForTests() const { return m_playback.screenAudioState(); }
+    QString mediaAudioSourceForTests() const { return m_playback.audioSource(PlaybackDriver::Media); }
+    qint64 mediaAudioPositionMsForTests() const { return m_playback.audioPosition(PlaybackDriver::Media); }
 
     // What the players, timers and exporter report, for the Rust object. 64-bit values are
     // std::int64_t, the type the Rust overrides have.
@@ -64,6 +69,7 @@ public:
     virtual void mediaOutputAttached() = 0;
     virtual void timerFired(int timer) = 0;
     virtual void calledLater(int call) = 0;
+    virtual void exportMeasured(double fraction) = 0;
     virtual void exportProgressed(int frame, int total) = 0;
     virtual void exportSucceeded(const QString &path) = 0;
     virtual void exportFailedWith(const QString &message) = 0;
@@ -85,6 +91,8 @@ protected:
     { m_playback.syncCamera(targetMs, toleranceMs, force, covered); }
     void playbackSetAudio(int player, double volume, bool muted)
     { m_playback.setAudio(PlaybackDriver::Player(player), volume, muted); }
+    void playbackSetScreenAudioSource(const QString &path) { m_playback.setAudioSource(PlaybackDriver::Screen, path); }
+    void playbackSetMediaAudioSource(const QString &path) { m_playback.setAudioSource(PlaybackDriver::Media, path); }
     qint64 playbackPosition(int player) const { return m_playback.position(PlaybackDriver::Player(player)); }
     bool playbackPositionReady(int player) const { return m_playback.positionReady(PlaybackDriver::Player(player)); }
     int playbackState(int player) const { return m_playback.playbackState(PlaybackDriver::Player(player)); }
