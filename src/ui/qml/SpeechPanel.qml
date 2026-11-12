@@ -118,8 +118,9 @@ ColumnLayout {
             objectName: "trimPausesButton"
             Layout.fillWidth: true
             enabled: editor.pauseCount > 0
-            text: editor.pauseCount > 0 ? "Trim " + editor.pauseCount + (editor.pauseCount === 1 ? " pause" : " pauses")
-                                        : "No pauses to trim"
+            text: !editor.pausesReady ? "Looking for pauses…"
+                : editor.pauseCount > 0 ? "Trim " + editor.pauseCount + (editor.pauseCount === 1 ? " pause" : " pauses")
+                : "No pauses to trim"
             onClicked: editor.trimPauses()
         }
         Text {
@@ -129,15 +130,27 @@ ColumnLayout {
             color: theme.textMuted
             font.family: theme.fontFamily
             font.pixelSize: theme.type.small
-            text: "Silences over a second shrink to 0.4 s. Silences where you type, click or move the pointer stay."
+            text: "Silences over a second shrink to 0.4 s, unless something changes on screen or you click, scroll, move the pointer or press a shortcut."
         }
         EditorButton {
             objectName: "removeFillersButton"
             Layout.fillWidth: true
             enabled: editor.fillerCount > 0
             text: editor.fillerCount > 0 ? "Remove " + editor.fillerCount + (editor.fillerCount === 1 ? " filler word" : " filler words")
-                : editor.hasTranscript ? "No filler words" : "Filler words need a transcript"
+                : !editor.hasTranscript ? "Filler words need a transcript"
+                : editor.canRemoveFillers ? "No filler words" : "Remove filler words"
             onClicked: editor.removeFillerWords()
+        }
+        Text {
+            objectName: "fillerTimingNote"
+            visible: editor.hasTranscript && !editor.canRemoveFillers
+            Layout.fillWidth: true
+            wrapMode: Text.Wrap
+            textFormat: Text.PlainText
+            color: theme.textMuted
+            font.family: theme.fontFamily
+            font.pixelSize: theme.type.small
+            text: "Needs measured word timing: install whisper-cpp, then Redo."
         }
     }
 }

@@ -9,6 +9,8 @@
 pub mod audio;
 pub mod backend;
 pub mod command;
+pub mod job;
+pub mod stillness;
 pub mod trim;
 pub mod vad;
 

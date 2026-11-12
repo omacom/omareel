@@ -135,8 +135,8 @@ dictation engine chosen in Omarchy's Setup > Defaults > Dictation (voxtype, Hex 
 Superwhisper; `omarchy install dictation voxtype` sets one up). With voxtype on a Whisper model
 and `whisper-cpp` installed, the same model runs through `whisper-cli`, which times every word.
 The Speech section of the editor turns captions on, saves subtitles, and trims pauses (silences
-over a second without any typing, clicking or pointer movement) and filler words, each as one
-undo step. Pause trimming needs no engine. See `docs/USAGE.md` for details.
+over a second while nothing changes on screen and the pointer stays put) and filler words (with
+whisper-cpp's measured word times), each as one undo step. Pause trimming needs no engine. See `docs/USAGE.md` for details.
 
 ## Troubleshooting
 

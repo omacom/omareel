@@ -39,6 +39,29 @@ impl Document {
         self.emit(Effect::TranscriptChanged);
     }
 
+    /// The silences the screen stays still through (see `transcript::stillness`), once checked;
+    /// pause trimming needs them too.
+    pub fn still_windows(&self) -> Option<&[(f64, f64)]> {
+        self.still.as_deref()
+    }
+
+    pub fn set_still_windows(&mut self, windows: Vec<(f64, f64)>) {
+        self.still = Some(windows);
+        self.emit(Effect::TranscriptChanged);
+    }
+
+    /// The silences `transcript::stillness::still_windows` should check, once the speech is
+    /// measured.
+    pub fn silences_to_check(&self) -> Option<Vec<(f64, f64)>> {
+        let speech = self.speech.as_ref()?;
+        Some(crate::transcript::stillness::silences_to_check(speech, self.recording.source_duration))
+    }
+
+    /// Whether pause trimming knows enough: the speech is measured and the screen checked.
+    pub fn pauses_ready(&self) -> bool {
+        self.speech.is_some() && self.still.is_some()
+    }
+
     /// The project's caption settings, or their defaults.
     pub fn captions(&self) -> Captions {
         self.project.captions.clone().unwrap_or_default()
@@ -104,14 +127,22 @@ impl Document {
     }
 
     /// The pauses "Trim pauses" would cut, in source seconds, limited to what the clips still
-    /// show; empty until the speech is measured.
+    /// show: silences with no input and a still screen. Empty until the speech is measured and
+    /// the screen checked ([`Document::pauses_ready`]).
     pub fn pause_ranges(&self, settings: &PauseSettings) -> Vec<(f64, f64)> {
-        let Some(speech) = &self.speech else { return Vec::new() };
-        let ranges = trim::pause_ranges(speech, self.recording.source_duration, &self.input_activity(), settings);
+        let (Some(speech), Some(still)) = (&self.speech, &self.still) else { return Vec::new() };
+        let ranges = trim::pause_ranges(speech, self.recording.source_duration, &self.input_activity(), still, settings);
         self.visible_source_ranges(&ranges)
     }
 
-    /// The filler words "Remove filler words" would cut, limited to what the clips still show.
+    /// Whether filler words can be removed: the transcript's word times are measured (see
+    /// `trim::can_remove_fillers`).
+    pub fn can_remove_fillers(&self) -> bool {
+        self.transcript.as_ref().is_some_and(trim::can_remove_fillers)
+    }
+
+    /// The filler words "Remove filler words" would cut, limited to what the clips still show;
+    /// none when the word times are estimated.
     pub fn filler_ranges(&self) -> Vec<(f64, f64)> {
         let Some(transcript) = &self.transcript else { return Vec::new() };
         self.visible_source_ranges(&trim::filler_ranges(transcript))

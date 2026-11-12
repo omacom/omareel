@@ -44,7 +44,7 @@ fn transcribes_speech_with_installed_engines() {
     let audio = Audio { samples };
 
     let regions = speech_regions(&audio.samples, &VadSettings::default());
-    let pauses = pause_ranges(&regions, audio.duration(), &[], &PauseSettings::default());
+    let pauses = pause_ranges(&regions, audio.duration(), &[], &[(0.0, audio.duration())], &PauseSettings::default());
     assert!(
         pauses.iter().any(|&(a, b)| a < gap_start + 0.5 && b > gap_start + gap - 0.5 && b - a > gap - 1.0),
         "no pause found in {pauses:?} (speech {regions:?})"

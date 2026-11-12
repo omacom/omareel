@@ -167,6 +167,10 @@ pub mod qobject {
         #[qproperty(QString, transcript_summary, READ = transcript_summary, NOTIFY = speech_changed)]
         #[qproperty(i32, pause_count, READ = pause_count, NOTIFY = speech_changed)]
         #[qproperty(i32, filler_count, READ = filler_count, NOTIFY = speech_changed)]
+        // The speech is measured and the screen checked, so pause_count is known.
+        #[qproperty(bool, pauses_ready, READ = pauses_ready, NOTIFY = speech_changed)]
+        // The transcript's word times are measured, so filler words can be cut.
+        #[qproperty(bool, can_remove_fillers, READ = can_remove_fillers, NOTIFY = speech_changed)]
         // "", "analyzing", "transcribing", "done", "unavailable", "failed".
         #[qproperty(QString, transcription_state, READ = transcription_state, NOTIFY = transcription_changed)]
         #[qproperty(QString, transcription_message, READ = transcription_message, NOTIFY = transcription_changed)]
@@ -287,6 +291,8 @@ pub mod qobject {
         fn transcript_summary(self: &Editor) -> QString;
         fn pause_count(self: &Editor) -> i32;
         fn filler_count(self: &Editor) -> i32;
+        fn pauses_ready(self: &Editor) -> bool;
+        fn can_remove_fillers(self: &Editor) -> bool;
         fn transcription_state(self: &Editor) -> QString;
         fn transcription_message(self: &Editor) -> QString;
         fn transcription_progress(self: &Editor) -> f64;
@@ -635,11 +641,13 @@ pub struct EditorRust {
     project_map: RefCell<Option<(u64, QMap<QMapPair_QString_QVariant>)>>,
     workers: RefCell<Vec<JoinHandle<()>>>,
     wallpaper_jobs: Arc<WallpaperQueue>,
-    /// Stops the speech worker when the editor goes.
-    speech_cancel: Arc<AtomicBool>,
-    /// Holds transcription back while an export runs.
+    /// Stops the speech work (and kills what it runs) when the editor goes.
+    speech_control: omareel_core::transcript::job::Control,
+    /// Holds the speech work back while an export runs.
     export_busy: Arc<AtomicBool>,
     speech_running: bool,
+    /// The screen is being checked for stillness during silences (pause trimming needs it).
+    stillness_running: bool,
     transcription_state: String,
     transcription_message: String,
     transcription_progress: f64,
@@ -666,9 +674,10 @@ impl EditorRust {
             project_map: RefCell::new(None),
             workers: RefCell::new(Vec::new()),
             wallpaper_jobs: Arc::new(WallpaperQueue::default()),
-            speech_cancel: Arc::new(AtomicBool::new(false)),
+            speech_control: omareel_core::transcript::job::Control::default(),
             export_busy: Arc::new(AtomicBool::new(false)),
             speech_running: false,
+            stillness_running: false,
             transcription_state: String::new(),
             transcription_message: String::new(),
             transcription_progress: 0.0,
@@ -704,13 +713,15 @@ impl EditorRust {
 impl Drop for EditorRust {
     /// `~Editor`: unsaved edits are written, then the workers are waited for. Nothing is
     /// emitted: the object is being destroyed. EditorBase cancels a running export after this.
+    /// The speech work is not waited for: it is stopped and what it runs killed at once, and
+    /// its threads end on their own.
     fn drop(&mut self) {
         if let Some(document) = self.document.as_mut() {
             if document.dirty() {
                 document.save_now();
             }
         }
-        self.speech_cancel.store(true, Ordering::Relaxed);
+        self.speech_control.stop();
         for worker in self.workers.get_mut().drain(..) {
             let _ = worker.join();
         }
@@ -845,12 +856,15 @@ impl qobject::Editor {
         });
     }
 
-    /// Measures where the recording speaks (for pause trimming) and, when there is no
-    /// transcript yet or `force` asks, transcribes it with Omarchy's dictation engine, all on a
-    /// thread of its own. Transcribing waits while a recording or an export runs, and stops when
-    /// the editor goes. `OMAREEL_NO_TRANSCRIBE=1` leaves the transcript alone unless asked.
+    /// Measures where the recording speaks and checks the screen during the silences (both for
+    /// pause trimming) and, when there is no transcript yet or `force` asks, transcribes it with
+    /// Omarchy's dictation engine, all on threads of their own. Everything waits while a
+    /// recording or an export runs (the editor is opened ahead during a recording), stopping
+    /// what it runs then and taking it up again after. Closing the editor never waits for it:
+    /// it is stopped and its commands killed. `OMAREEL_NO_TRANSCRIBE=1` leaves the transcript
+    /// alone unless asked.
     fn start_speech(mut self: Pin<&mut Self>, force: bool) {
-        use omareel_core::transcript::{audio, backend, vad};
+        use omareel_core::transcript::{audio, backend, stillness, vad};
         if self.speech_running {
             return;
         }
@@ -860,16 +874,26 @@ impl qobject::Editor {
         }
         let transcribe = force || (document.transcript().is_none() && qenv::int_value_or_zero("OMAREEL_NO_TRANSCRIBE") != 1);
         let measure = document.speech_regions().is_none();
-        if !transcribe && !measure {
+        let check_screen = document.still_windows().is_none() && !self.stillness_running;
+        if !transcribe && !measure && !check_screen {
             return;
         }
         let screen = document.video_path().to_owned();
         let bundle = document.bundle_path().to_owned();
-        let cancel = Arc::clone(&self.speech_cancel);
+        let duration = document.recording().source_duration;
+        let geometry = (document.source_width(), document.source_height(), document.capture_scale());
+        // Silences already known (the speech was measured on an earlier run).
+        let known_silences = document.silences_to_check();
         let export_busy = Arc::clone(&self.export_busy);
+        let hold: Arc<dyn Fn() -> bool + Send + Sync> = Arc::new(move || {
+            export_busy.load(Ordering::Relaxed) || omareel_record::recorder::state::is_recording()
+        });
+        let mut control = self.speech_control.clone();
+        control.hold = Some(hold);
         {
             let mut rust = self.as_mut().rust_mut();
             rust.speech_running = true;
+            rust.stillness_running |= check_screen;
             if transcribe {
                 rust.transcription_state = "analyzing".into();
                 rust.transcription_message.clear();
@@ -879,8 +903,51 @@ impl qobject::Editor {
         if transcribe {
             self.as_mut().transcription_changed();
         }
+        self.as_mut().speech_changed();
         let thread = self.qt_thread();
-        self.spawn(move || {
+        let screen_for_audio = screen.clone();
+        // The screen check reads the video, the rest the sound: they run side by side.
+        let start_stillness = {
+            let thread = thread.clone();
+            let control = control.clone();
+            move |silences: Vec<(f64, f64)>| {
+                let spawned = std::thread::Builder::new().name("omareel-stillness".into()).spawn(move || {
+                    let still = match stillness::still_windows(&screen, &silences, duration, geometry, &control) {
+                        Ok(still) => Some(still),
+                        Err(_) if control.cancelled() => None,
+                        Err(error) => {
+                            eprintln!("omareel: could not check the screen for pauses: {error}");
+                            Some(Vec::new())
+                        }
+                    };
+                    let _ = thread.queue(move |mut editor| {
+                        editor.as_mut().rust_mut().stillness_running = false;
+                        match still {
+                            Some(still) => {
+                                editor.edit(|document| document.set_still_windows(still));
+                            }
+                            None => editor.as_mut().speech_changed(),
+                        }
+                    });
+                });
+                spawned.is_ok()
+            }
+        };
+        let mut start_stillness = Some(start_stillness);
+        let check_thread = thread.clone();
+        let mut check = move |silences: Vec<(f64, f64)>| {
+            if let Some(start) = start_stillness.take() {
+                if !start(silences) {
+                    let _ = check_thread.queue(|mut editor| editor.as_mut().rust_mut().stillness_running = false);
+                }
+            }
+        };
+        if check_screen && !measure {
+            check(known_silences.unwrap_or_default());
+        }
+        let worker_thread = thread.clone();
+        let work = move || {
+            let thread = worker_thread;
             let status = |state: &'static str, message: String, progress: f64| {
                 let _ = thread.queue(move |mut editor| {
                     let mut rust = editor.as_mut().rust_mut();
@@ -891,13 +958,23 @@ impl qobject::Editor {
                 });
             };
             let finish = || {
-                let _ = thread.queue(|mut editor| editor.as_mut().rust_mut().speech_running = false);
+                let _ = thread.queue(|mut editor| {
+                    let mut rust = editor.as_mut().rust_mut();
+                    rust.speech_running = false;
+                    if rust.transcription_state == "analyzing" {
+                        rust.transcription_state.clear();
+                        editor.as_mut().transcription_changed();
+                    }
+                });
             };
-            let audio = match audio::extract(&screen) {
+            let audio = match audio::extract_with(&screen_for_audio, &control) {
                 Ok(audio) => audio,
                 Err(error) => {
-                    if transcribe {
+                    if transcribe && !control.cancelled() {
                         status("failed", error, 0.0);
+                    }
+                    if check_screen && measure {
+                        let _ = thread.queue(|mut editor| editor.as_mut().rust_mut().stillness_running = false);
                     }
                     finish();
                     return;
@@ -905,11 +982,14 @@ impl qobject::Editor {
             };
             if measure {
                 let regions = vad::speech_regions(&audio.samples, &vad::VadSettings::default());
+                if check_screen {
+                    check(stillness::silences_to_check(&regions, duration));
+                }
                 let _ = thread.queue(move |editor| {
                     editor.edit(|document| document.set_speech_regions(regions));
                 });
             }
-            if !transcribe {
+            if !transcribe || control.cancelled() {
                 finish();
                 return;
             }
@@ -927,10 +1007,7 @@ impl qobject::Editor {
                     editor.as_mut().transcription_changed();
                 });
             });
-            let hold: Arc<dyn Fn() -> bool + Send + Sync> = Arc::new(move || {
-                export_busy.load(Ordering::Relaxed) || omareel_record::recorder::state::is_recording()
-            });
-            let control = backend::Control { cancel: Arc::clone(&cancel), hold: Some(hold), progress: Some(progress) };
+            let control = backend::Control { progress: Some(progress), ..control.clone() };
             match backend::transcribe_audio(&audio, &engines, &control) {
                 Ok(transcript) => {
                     let saved = transcript.save(&bundle);
@@ -944,11 +1021,17 @@ impl qobject::Editor {
                         Ok(()) => status("done", String::new(), 1.0),
                     }
                 }
-                Err(_) if cancel.load(Ordering::Relaxed) => {}
+                Err(_) if control.cancelled() => {}
                 Err(error) => status("failed", error, 0.0),
             }
             finish();
-        });
+        };
+        // Not one of `workers`: closing the editor must not wait for it.
+        if std::thread::Builder::new().name("omareel-speech".into()).spawn(work).is_err() {
+            let mut rust = self.as_mut().rust_mut();
+            rust.speech_running = false;
+            rust.stillness_running = false;
+        }
     }
 
     /// `rebuildMotion()`: builds the motion track off the GUI thread, unless a build runs.
@@ -1451,6 +1534,14 @@ impl qobject::Editor {
 
     fn filler_count(&self) -> i32 {
         self.document.as_ref().map_or(0, |document| document.filler_ranges().len() as i32)
+    }
+
+    fn pauses_ready(&self) -> bool {
+        self.document.as_ref().is_some_and(Document::pauses_ready)
+    }
+
+    fn can_remove_fillers(&self) -> bool {
+        self.document.as_ref().is_some_and(Document::can_remove_fillers)
     }
 
     fn transcription_state(&self) -> QString {

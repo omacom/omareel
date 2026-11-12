@@ -17,14 +17,13 @@
 use super::audio::{write_wav, Audio};
 use super::vad::{self, VadSettings};
 use super::{estimate_words, split_words, Segment, Transcript, Word, WordTiming};
+use super::job::{self, Stopped};
+pub use super::job::Control;
 use crate::compat::qjson;
 use crate::compat::qstandardpaths;
-use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::process::Command;
+use std::time::Duration;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BackendKind {
@@ -270,37 +269,17 @@ pub fn plan(choice: Choice) -> Vec<Engine> {
     engines
 }
 
-/// Cancelling, holding back, and following a transcription.
-#[derive(Clone, Default)]
-pub struct Control {
-    pub cancel: Arc<AtomicBool>,
-    /// Asked between pieces; while it says yes the work waits (a recording or an export is
-    /// running).
-    pub hold: Option<Arc<dyn Fn() -> bool + Send + Sync>>,
-    /// Told the share done, 0 to 1.
-    pub progress: Option<Arc<dyn Fn(f64) + Send + Sync>>,
+/// Why a piece of work did not give a result.
+enum Failure {
+    /// Stopped for a recording or an export; run it again once that is over.
+    Held,
+    Cancelled,
+    Error(String),
 }
 
-impl Control {
-    fn cancelled(&self) -> bool {
-        self.cancel.load(Ordering::Relaxed)
-    }
-
-    /// Waits while held; false once cancelled.
-    fn proceed(&self) -> bool {
-        while let Some(hold) = &self.hold {
-            if self.cancelled() || !hold() {
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(500));
-        }
-        !self.cancelled()
-    }
-
-    fn report(&self, fraction: f64) {
-        if let Some(progress) = &self.progress {
-            progress(fraction.clamp(0.0, 1.0));
-        }
+impl From<String> for Failure {
+    fn from(error: String) -> Failure {
+        Failure::Error(error)
     }
 }
 
@@ -310,44 +289,22 @@ struct Output {
     stderr: String,
 }
 
-/// Runs a command to its end, killing it after `timeout` or once cancelled.
-fn run(program: &str, args: &[String], timeout: Duration, control: &Control) -> Result<Output, String> {
-    let mut child = Command::new(program)
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|error| format!("could not run {program}: {error}"))?;
-    let reader = |pipe: Option<Box<dyn Read + Send>>| {
-        std::thread::spawn(move || {
-            let mut bytes = Vec::new();
-            if let Some(mut pipe) = pipe {
-                let _ = pipe.read_to_end(&mut bytes);
-            }
-            String::from_utf8_lossy(&bytes).into_owned()
-        })
-    };
-    let stdout = reader(child.stdout.take().map(|p| Box::new(p) as Box<dyn Read + Send>));
-    let stderr = reader(child.stderr.take().map(|p| Box::new(p) as Box<dyn Read + Send>));
-    let deadline = Instant::now() + timeout;
-    let status = loop {
-        if let Some(status) = child.try_wait().map_err(|error| error.to_string())? {
-            break status;
-        }
-        if control.cancelled() || Instant::now() > deadline {
-            let _ = child.kill();
-            let _ = child.wait();
-            let _ = (stdout.join(), stderr.join());
-            return Err(if control.cancelled() { "cancelled".into() } else { format!("{program} took too long") });
-        }
-        std::thread::sleep(Duration::from_millis(20));
-    };
-    Ok(Output {
-        code: status.code().unwrap_or(-1),
-        stdout: stdout.join().unwrap_or_default(),
-        stderr: stderr.join().unwrap_or_default(),
-    })
+/// Runs an engine to its end in a process group of its own (see `job`), killing the group
+/// after `timeout`, once cancelled, or when a recording or an export starts.
+fn run(program: &str, args: &[String], timeout: Duration, control: &Control) -> Result<Output, Failure> {
+    let mut command = Command::new(program);
+    command.args(args);
+    match job::run(command, Some(timeout), control) {
+        Ok(output) => Ok(Output {
+            code: output.code,
+            stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+            stderr: output.stderr,
+        }),
+        Err(Stopped::Held) => Err(Failure::Held),
+        Err(Stopped::Cancelled) => Err(Failure::Cancelled),
+        Err(Stopped::TimedOut) => Err(Failure::Error(format!("{program} took too long"))),
+        Err(Stopped::Failed(error)) => Err(Failure::Error(error)),
+    }
 }
 
 /// The last line that says something, for an error message.
@@ -468,14 +425,14 @@ enum Heard {
     Timed(Vec<Segment>, String),
 }
 
-fn transcribe_text(engine: &Engine, wav: &Path, control: &Control) -> Result<String, String> {
+fn transcribe_text(engine: &Engine, wav: &Path, control: &Control) -> Result<String, Failure> {
     let file = wav.to_string_lossy().into_owned();
     let timeout = Duration::from_secs(300);
     match engine.kind {
         BackendKind::Voxtype => {
             let output = run(&engine.program, &["-q".into(), "transcribe".into(), file], timeout, control)?;
             if output.code != 0 {
-                return Err(format!("voxtype: {}", last_line(&(output.stderr + &output.stdout))));
+                return Err(Failure::Error(format!("voxtype: {}", last_line(&(output.stderr + &output.stdout)))));
             }
             Ok(parse_voxtype_output(&output.stdout))
         }
@@ -484,14 +441,14 @@ fn transcribe_text(engine: &Engine, wav: &Path, control: &Control) -> Result<Str
             match output.code {
                 0 => Ok(clean_text(&output.stdout)),
                 4 => Ok(String::new()),
-                3 => Err("Hex isn't running".into()),
-                _ => Err(format!("hex: {}", last_line(&output.stderr))),
+                3 => Err(Failure::Error("Hex isn't running".into())),
+                _ => Err(Failure::Error(format!("hex: {}", last_line(&output.stderr)))),
             }
         }
         BackendKind::Superwhisper => {
             let output = run(&engine.program, &["transcribe".into(), file], timeout, control)?;
             if output.code != 0 {
-                return Err(format!("superwhisper: {}", last_line(&(output.stderr + &output.stdout))));
+                return Err(Failure::Error(format!("superwhisper: {}", last_line(&(output.stderr + &output.stdout)))));
             }
             Ok(clean_text(&output.stdout))
         }
@@ -500,7 +457,7 @@ fn transcribe_text(engine: &Engine, wav: &Path, control: &Control) -> Result<Str
 }
 
 /// whisper-cli over several pieces at once (the model loads once); one result per piece.
-fn transcribe_whisper(engine: &Engine, wavs: &[PathBuf], seconds: f64, control: &Control) -> Result<Vec<Heard>, String> {
+fn transcribe_whisper(engine: &Engine, wavs: &[PathBuf], seconds: f64, control: &Control) -> Result<Vec<Heard>, Failure> {
     let threads = std::thread::available_parallelism().map_or(4, |n| (n.get() / 2).clamp(1, 8));
     let mut args: Vec<String> = vec!["-m".into(), engine.model_path.clone(), "-ojf".into(), "-np".into()];
     args.extend(["-t".into(), threads.to_string()]);
@@ -514,15 +471,17 @@ fn transcribe_whisper(engine: &Engine, wavs: &[PathBuf], seconds: f64, control: 
     }
     let output = run(&engine.program, &args, Duration::from_secs_f64(120.0 + seconds * 10.0), control)?;
     if output.code != 0 {
-        return Err(format!("whisper-cli: {}", last_line(&output.stderr)));
+        return Err(Failure::Error(format!("whisper-cli: {}", last_line(&output.stderr))));
     }
-    wavs.iter()
+    let heard: Result<Vec<Heard>, String> = wavs
+        .iter()
         .map(|wav| {
             let bytes = std::fs::read(json_path(wav)).map_err(|_| format!("whisper-cli: {}", last_line(&output.stderr)))?;
             let (segments, language) = parse_whisper_json(&bytes)?;
             Ok(Heard::Timed(segments, language))
         })
-        .collect()
+        .collect();
+    Ok(heard?)
 }
 
 fn json_path(wav: &Path) -> PathBuf {
@@ -620,18 +579,27 @@ fn transcribe_pieces(
     // whisper-cli takes several pieces per run; the others one.
     let batch = if engine.kind.timestamps() { 8 } else { 1 };
     for group in pieces.chunks(batch) {
-        if !control.proceed() {
-            return Err("cancelled".into());
-        }
-        for piece in group {
-            write_wav(&piece.wav, audio.slice(piece.start, piece.end))?;
-        }
         let seconds: f64 = group.iter().map(|p| p.end - p.start).sum();
-        let heard: Vec<Heard> = if engine.kind.timestamps() {
-            let wavs: Vec<PathBuf> = group.iter().map(|p| p.wav.clone()).collect();
-            transcribe_whisper(engine, &wavs, seconds, control)?
-        } else {
-            vec![Heard::Text(transcribe_text(engine, &group[0].wav, control)?)]
+        // A recording or an export stops the engine; the batch runs again once it is over.
+        let heard: Vec<Heard> = loop {
+            if !control.proceed() {
+                return Err("cancelled".into());
+            }
+            for piece in group {
+                write_wav(&piece.wav, audio.slice(piece.start, piece.end))?;
+            }
+            let heard = if engine.kind.timestamps() {
+                let wavs: Vec<PathBuf> = group.iter().map(|p| p.wav.clone()).collect();
+                transcribe_whisper(engine, &wavs, seconds, control)
+            } else {
+                transcribe_text(engine, &group[0].wav, control).map(|text| vec![Heard::Text(text)])
+            };
+            match heard {
+                Ok(heard) => break heard,
+                Err(Failure::Held) => continue,
+                Err(Failure::Cancelled) => return Err("cancelled".into()),
+                Err(Failure::Error(error)) => return Err(error),
+            }
         };
         for (piece, heard) in group.iter().zip(heard) {
             match heard {
@@ -692,7 +660,7 @@ pub fn transcribe_media(media: &str, choice: Choice, control: &Control) -> Resul
             }),
         });
     }
-    let audio = super::audio::extract(media)?;
+    let audio = super::audio::extract_with(media, control)?;
     transcribe_audio(&audio, &engines, control)
 }
 
@@ -771,5 +739,77 @@ mod tests {
         let audio = Audio { samples: crate::transcript::vad::tests::bursts(2.0, &[(0.5, 1.5)], 0.3) };
         let error = transcribe_audio(&audio, &[engine], &Control::default()).unwrap_err();
         assert!(error.starts_with("voxtype: could not run"), "{error}");
+    }
+
+    /// A fake voxtype in a scratch directory running `body` (a shell script).
+    fn fake_voxtype(dir: &Path, body: &str) -> Engine {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::create_dir_all(dir).unwrap();
+        let program = dir.join("voxtype");
+        std::fs::write(&program, format!("#!/bin/sh\n{body}\n")).unwrap();
+        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+        Engine {
+            kind: BackendKind::Voxtype,
+            program: program.to_string_lossy().into_owned(),
+            model_path: String::new(),
+            model: "base.en".into(),
+            language: String::new(),
+        }
+    }
+
+    fn speech_audio() -> Audio {
+        Audio { samples: crate::transcript::vad::tests::bursts(2.0, &[(0.5, 1.5)], 0.3) }
+    }
+
+    /// An engine that leaves a child holding its output is stopped at once when cancelled (the
+    /// editor closing), child and all.
+    #[test]
+    fn cancelling_kills_an_engine_and_what_it_started() {
+        let dir = std::env::temp_dir().join(format!("omareel-fake-engine-{}", std::process::id()));
+        let pidfile = dir.join("sleeper");
+        let engine = fake_voxtype(&dir, &format!("sleep 500 &\necho $! > {}\nexec sleep 400", pidfile.display()));
+        let control = Control::default();
+        let stopper = control.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(500));
+            stopper.stop();
+        });
+        let started = std::time::Instant::now();
+        assert!(transcribe_audio(&speech_audio(), &[engine], &control).is_err());
+        assert!(started.elapsed() < Duration::from_secs(5), "{:?}", started.elapsed());
+        let sleeper: i32 = std::fs::read_to_string(&pidfile).unwrap().trim().parse().unwrap();
+        std::thread::sleep(Duration::from_millis(100));
+        // SAFETY: signal 0 only checks that the process exists.
+        assert_ne!(unsafe { libc::kill(sleeper, 0) }, 0, "the engine's child outlived it");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A recording starting while an engine runs stops it; it runs again once the recording is
+    /// over, and the transcript comes out whole.
+    #[test]
+    fn a_recording_stops_the_engine_and_it_resumes_after() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+        let dir = std::env::temp_dir().join(format!("omareel-held-engine-{}", std::process::id()));
+        let runs = dir.join("runs");
+        let engine = fake_voxtype(&dir, &format!("echo run >> {}\nsleep 1.5\necho\necho Hello world.", runs.display()));
+        let recording = Arc::new(AtomicBool::new(false));
+        let flag = Arc::clone(&recording);
+        let control = Control { hold: Some(Arc::new(move || flag.load(Ordering::Relaxed))), ..Control::default() };
+        let toggler = Arc::clone(&recording);
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(300));
+            toggler.store(true, Ordering::Relaxed);
+            std::thread::sleep(Duration::from_millis(1500));
+            toggler.store(false, Ordering::Relaxed);
+        });
+        let started = std::time::Instant::now();
+        let transcript = transcribe_audio(&speech_audio(), &[engine], &control).unwrap();
+        let ran = std::fs::read_to_string(&runs).unwrap().lines().count();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(transcript.text(), "Hello world.");
+        assert_eq!(ran, 2, "the first run should have been stopped");
+        // Stopped within half a second of the recording starting, not after its 1.5 s.
+        assert!(started.elapsed() < Duration::from_millis(1800 + 1500 + 1000), "{:?}", started.elapsed());
     }
 }

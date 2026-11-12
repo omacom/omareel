@@ -1757,9 +1757,19 @@ fn captions_follow_the_clips_and_stay_out_of_old_projects() {
         Word { start: 0.5, end: 0.8, text: "um".into() },
         Word { start: 1.0, end: 1.4, text: "world.".into() },
     ];
-    let transcript = Transcript { segments: vec![Segment { start: 0.1, end: 1.4, text: "Hello um world.".into(), words }], ..Transcript::default() };
+    let mut transcript = Transcript {
+        segments: vec![Segment { start: 0.1, end: 1.4, text: "Hello um world.".into(), words }],
+        ..Transcript::default()
+    };
+    // Estimated word times are not good enough to cut by.
     transcript.save(&bundle).unwrap();
     qt = world.open(&bundle);
+    assert!(!qt.document.can_remove_fillers());
+    assert!(qt.document.filler_ranges().is_empty());
+    transcript.word_timing = crate::transcript::WordTiming::Measured;
+    transcript.save(&bundle).unwrap();
+    qt = world.open(&bundle);
+    assert!(qt.document.can_remove_fillers());
     assert_eq!(qt.document.caption_cues().len(), 1);
     assert_eq!(qt.document.caption_cues()[0].lines, ["Hello um world."]);
     // Off by default: nothing shows.
@@ -1789,6 +1799,7 @@ fn pause_ranges_need_speech_and_skip_activity() {
     let mut qt = world.open(&world.bundle("moving.omareel"));
     assert!(qt.document.pause_ranges(&settings).is_empty());
     qt.document.set_speech_regions(vec![(0.0, 0.4), (1.4, 2.0)]);
+    qt.document.set_still_windows(vec![(0.0, 2.0)]);
     assert!(qt.document.input_activity().iter().any(|&t| (0.4..=1.4).contains(&t)));
     assert!(qt.document.pause_ranges(&settings).is_empty());
 
@@ -1796,6 +1807,14 @@ fn pause_ranges_need_speech_and_skip_activity() {
     std::fs::write(format!("{still}/input.jsonl"), b"").unwrap();
     let mut qt = world.open(&still);
     qt.document.set_speech_regions(vec![(0.0, 0.4), (1.4, 2.0)]);
+    assert_eq!(qt.document.silences_to_check(), Some(vec![(0.4, 1.4)]));
+    // Not before the screen is checked, nor when it moves during the silence.
+    assert!(!qt.document.pauses_ready());
+    assert!(qt.document.pause_ranges(&settings).is_empty());
+    qt.document.set_still_windows(Vec::new());
+    assert!(qt.document.pauses_ready());
+    assert!(qt.document.pause_ranges(&settings).is_empty());
+    qt.document.set_still_windows(vec![(0.4, 1.4)]);
     let ranges = qt.document.pause_ranges(&settings);
     assert_eq!(ranges.len(), 1);
     assert!((ranges[0].0 - 0.5).abs() < 1e-9 && (ranges[0].1 - 1.3).abs() < 1e-9, "{ranges:?}");

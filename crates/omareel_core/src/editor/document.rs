@@ -103,6 +103,8 @@ pub struct Document {
     pub(crate) transcript: Option<crate::transcript::Transcript>,
     pub(crate) caption_cues: Vec<crate::captions::Cue>,
     pub(crate) speech: Option<Vec<(f64, f64)>>,
+    /// The silences the screen stays still through (`transcript::stillness`), once checked.
+    pub(crate) still: Option<Vec<(f64, f64)>>,
     pub(crate) inserts: HashMap<String, VideoInfo>,
     pub(crate) probe_video: ProbeVideo,
     pub(crate) history: History,
@@ -219,6 +221,7 @@ impl Document {
             transcript: None,
             caption_cues: Vec::new(),
             speech: None,
+            still: None,
             inserts,
             probe_video,
             history: History::default(),

@@ -604,11 +604,7 @@ impl ExportJob {
                         encoder_args.extend(["-i".into(), self.video_path.clone()]);
                     }
                     audio_segments.push(plan::audio_segment(
-                        &format!(
-                            "[{source_input}:a:0]atrim=start={}:end={},asetpts=PTS-STARTPTS",
-                            number_f64(clip.in_, 'f', 6),
-                            number_f64(clip.out, 'f', 6)
-                        ),
+                        &plan::source_audio(source_input, clip.in_, clip.out),
                         clip.speed,
                         length,
                     ));

@@ -247,6 +247,8 @@ invalidate it:
 ```
 
 `wordTiming` is `measured` when the engine timed each word (whisper-cli), `estimated` otherwise.
+Times count from the start of `screen.mp4`, even though its sound track usually starts a little
+after its video (the recorder places the sound by its first sample).
 
 `project.json` gains a `captions` object only once captions are changed in the editor, so older
 projects keep their bytes: `{ "enabled": false, "position": "bottom", "size": 1 }` (`position`
@@ -254,22 +256,27 @@ projects keep their bytes: `{ "enabled": false, "position": "bottom", "size": 1 
 
 ## Speech in the editor
 
-When a recording with sound opens, the editor measures where it speaks and, with no transcript
-yet, transcribes it in the background. That never blocks editing, waits while a recording or an
-export runs, and stops when the editor closes. The Speech section shows its progress, or why
-there is no transcript, and offers:
+When a recording with sound opens, the editor measures where it speaks, checks the screen
+during the silences and, with no transcript yet, transcribes it in the background. That never
+blocks editing; while a recording or an export runs it stops what it is running and carries on
+afterwards, and closing the editor stops it at once. The Speech section shows its progress, or
+why there is no transcript, and offers:
 
 - Show captions, with position and size: drawn in the preview and the export, at most two lines
   of about 42 characters, in the keystroke pills' style.
 - Save .srt / .vtt beside the default export.
 - Trim pauses: each silence over a second shrinks to 0.4 s, and the silence before the first
-  and after the last words shrinks to 0.2 s. A silence with typing, clicks, scrolling or pointer travel in
-  it is kept, since on a screen recording that is someone showing something. Needs no engine.
-  Desktop audio counts as sound, so music under the voice hides pauses.
-- Remove filler words (um, uh, erm, hmm…), with the hesitation around them.
+  and after the last words shrinks to 0.2 s. A silence is kept when anything changes on screen
+  during it (typing, a video, scrolling output; a blinking text cursor does not count) or it
+  has clicks, scrolling, pointer travel or shortcuts in it, since on a screen recording that is
+  someone showing something. The screen is read from `screen.mp4`, five frames a second, only
+  during the silences. Needs no engine. Desktop audio counts as sound, so music under the
+  voice hides pauses.
+- Remove filler words (um, uh, erm, hmm…), with the hesitation around them. Only with measured
+  word times (whisper-cli, from the `whisper-cpp` package): estimated times can miss a short
+  "um" and cut the words beside it.
 
-Both trims are one undo step. Engines differ in whether they write fillers out; with estimated
-word times a filler's cut is approximate.
+Both trims are one undo step. Engines differ in whether they write fillers out.
 
 ## Environment
 
