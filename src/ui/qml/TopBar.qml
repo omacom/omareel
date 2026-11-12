@@ -11,6 +11,10 @@ Rectangle {
     signal showExport()
     signal restoreEditorFocus()
     property string savedTime: Qt.formatTime(new Date(), "HH:mm")
+    // Set for a few seconds after project.json changed on disk (omareel apply, an agent).
+    property bool updatedExternally: false
+    // project.json was changed outside the editor and can't be read: autosave waits.
+    property bool projectUnreadable: false
 
     onRestoreEditorFocus: window.restoreEditorFocus()
     function commitProjectName() {
@@ -118,7 +122,9 @@ Rectangle {
             }
             Label {
                 anchors.verticalCenter: parent.verticalCenter
-                text: editor.dirty ? "Unsaved changes" : "Saved " + root.savedTime
+                text: root.projectUnreadable ? "project.json can't be read · Ctrl+S overwrites it"
+                    : root.updatedExternally ? "Updated from project.json"
+                    : editor.dirty ? "Unsaved changes" : "Saved " + root.savedTime
                 color: theme.textMuted
                 font.pixelSize: theme.type.small
             }
@@ -282,6 +288,14 @@ Rectangle {
 
     Connections {
         target: editor
-        function onAutosaved(path) { root.savedTime = Qt.formatTime(new Date(), "HH:mm") }
+        function onAutosaved(path) { root.savedTime = Qt.formatTime(new Date(), "HH:mm"); root.projectUnreadable = false }
+        function onProjectReloaded() { root.projectUnreadable = false; root.updatedExternally = true; externalUpdateTimer.restart() }
+        function onProjectUnreadable() { root.projectUnreadable = true }
+    }
+
+    Timer {
+        id: externalUpdateTimer
+        interval: 4000
+        onTriggered: root.updatedExternally = false
     }
 }

@@ -19,7 +19,7 @@ use omareel_core::compat::qdir;
 use omareel_core::compat::qenv;
 use omareel_core::compat::qjson::{self, Value};
 use omareel_core::editor::{
-    self, containing_folder, format_time, preview_stats_line, takes_local_file, trace_input_line, Document, Effect,
+    self, containing_folder, format_time, preview_stats_line, takes_local_file, trace_input_line, DiskChange, Document, Effect,
     ExportDialogSettings, NextClipKind, Player, Probes, Transport, ZoomTarget,
 };
 use omareel_core::media_probe;
@@ -208,6 +208,12 @@ pub mod qobject {
         fn export_finished(self: Pin<&mut Editor>, path: QString);
         #[qsignal]
         fn autosaved(self: Pin<&mut Editor>, path: QString);
+        /// project.json changed on disk (another program wrote it) and the editor took it in.
+        #[qsignal]
+        fn project_reloaded(self: Pin<&mut Editor>);
+        /// project.json changed on disk but can't be read; autosave stops until it can.
+        #[qsignal]
+        fn project_unreadable(self: Pin<&mut Editor>);
         #[qsignal]
         fn error_occurred(self: Pin<&mut Editor>, message: QString);
 
@@ -523,6 +529,7 @@ const MOTION_TIMER: i32 = 1;
 const SCRUB_TIMER: i32 = 2;
 const PREVIEW_TIMER: i32 = 3;
 const PREVIEW_STATS_TIMER: i32 = 4;
+const PROJECT_WATCH_TIMER: i32 = 5;
 const FINISH_LOADING_CALL: i32 = 0;
 const ADVANCE_CLIP_CALL: i32 = 1;
 const RELEASE_THUMBNAILS_CALL: i32 = 2;
@@ -597,6 +604,8 @@ pub struct EditorRust {
     preview_stats_clock: Option<Instant>,
     camera_thumbnails: QList<QVariant>,
     export_timer: Option<Instant>,
+    /// `projectUnreadable` was emitted for the project.json on disk now.
+    project_unreadable_reported: bool,
     /// The converted `project` map and the document revision it was made at.
     project_map: RefCell<Option<(u64, QMap<QMapPair_QString_QVariant>)>>,
     workers: RefCell<Vec<JoinHandle<()>>>,
@@ -621,6 +630,7 @@ impl EditorRust {
             preview_stats_clock: None,
             camera_thumbnails: QList::default(),
             export_timer: None,
+            project_unreadable_reported: false,
             project_map: RefCell::new(None),
             workers: RefCell::new(Vec::new()),
             wallpaper_jobs: Arc::new(WallpaperQueue::default()),
@@ -658,7 +668,9 @@ impl Drop for EditorRust {
     /// emitted: the object is being destroyed. EditorBase cancels a running export after this.
     fn drop(&mut self) {
         if let Some(document) = self.document.as_mut() {
-            if document.dirty() {
+            // A project.json another program wrote since the last look is kept over edits made
+            // here in the last moments: the window is closing and could not show the choice.
+            if document.dirty() && !document.disk_changed() {
                 document.save_now();
             }
         }
@@ -718,6 +730,21 @@ impl qobject::Editor {
         self.as_mut().rebuild_motion();
         self.as_mut().call_later(RELEASE_THUMBNAILS_CALL, THUMBNAIL_HOLD_MS);
         self.as_mut().call_later(FINISH_LOADING_CALL, 1500);
+        self.as_mut().start_editor_timer(PROJECT_WATCH_TIMER);
+    }
+
+    /// Takes in a project.json another program wrote ([`Document::reload_if_changed_on_disk`])
+    /// and tells QML: `projectReloaded`, or `projectUnreadable` once while it can't be read.
+    fn reload_project_from_disk(mut self: Pin<&mut Self>) -> DiskChange {
+        let change = self.as_mut().edit(Document::reload_if_changed_on_disk).unwrap_or(DiskChange::Unchanged);
+        let reported = self.project_unreadable_reported;
+        self.as_mut().rust_mut().project_unreadable_reported = change == DiskChange::Unreadable;
+        match change {
+            DiskChange::Reloaded => self.as_mut().project_reloaded(),
+            DiskChange::Unreadable if !reported => self.as_mut().project_unreadable(),
+            _ => {}
+        }
+        change
     }
 
     /// Changes the document, then performs what it queued; `None` without a document.
@@ -1319,7 +1346,19 @@ impl qobject::Editor {
         self.edit(Document::redo);
     }
 
+    /// Ctrl+S and the Save button: an explicit save, which also replaces a project.json that
+    /// can't be read.
     fn save_now(self: Pin<&mut Self>) -> bool {
+        self.save_project(true)
+    }
+
+    /// Saves project.json, first taking in one another program wrote, so it becomes an undo
+    /// step instead of being overwritten. Autosave leaves a project.json that can't be read
+    /// alone (and the top bar says so); an explicit save replaces it.
+    fn save_project(mut self: Pin<&mut Self>, explicit: bool) -> bool {
+        if self.as_mut().reload_project_from_disk() == DiskChange::Unreadable && !explicit {
+            return false;
+        }
         self.edit(Document::save_now).unwrap_or(false)
     }
 
@@ -1543,7 +1582,8 @@ impl qobject::Editor {
         if self.document.as_ref().is_none_or(|document| document.export_state().exporting) {
             return;
         }
-        self.as_mut().save_now();
+        // The export reads project.json, so this save must happen.
+        self.as_mut().save_project(true);
         let path = qobject::text_url_path(path).to_string();
         let (mut fps, mut height, mut quality) = (0, 0, QString::default());
         qobject::export_settings(settings, &mut fps, &mut height, &mut quality);
@@ -2079,7 +2119,10 @@ impl qobject::Editor {
     fn timer_fired(self: Pin<&mut Self>, timer: i32) {
         match timer {
             AUTOSAVE_TIMER => {
-                self.save_now();
+                self.save_project(false);
+            }
+            PROJECT_WATCH_TIMER => {
+                self.reload_project_from_disk();
             }
             MOTION_TIMER => self.rebuild_motion(),
             SCRUB_TIMER => self.flush_scrub_seek(),

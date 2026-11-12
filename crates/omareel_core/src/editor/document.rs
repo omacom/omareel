@@ -1,7 +1,7 @@
 //! The document itself: the project, its history and selection, the output position and
 //! playback range, and the operations on them that are not about clips, zooms or presets.
 
-use super::bundle::{aspect_ratio, load_bundle, Bundle, CameraRecording, Probes, ProbeVideo, Recording, VideoInfo};
+use super::bundle::{aspect_ratio, fit_project_to_recording, load_bundle_with, Bundle, CameraRecording, Probes, ProbeVideo, Recording, VideoInfo};
 use super::history::History;
 use super::ids::random_uuid;
 use super::thumbnails::{Thumbnails, WallpaperCache};
@@ -127,6 +127,35 @@ pub struct Document {
     pub(crate) cache_location: Option<String>,
     pub(crate) new_id: Box<dyn FnMut() -> String + Send>,
     pub(crate) effects: RefCell<Vec<Effect>>,
+    /// `project.json` as last read or written here ([`Document::reload_if_changed_on_disk`]).
+    pub(crate) disk_stamp: Option<DiskStamp>,
+}
+
+/// What [`Document::reload_if_changed_on_disk`] found.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DiskChange {
+    /// project.json is as this document last read or wrote it, or says the same.
+    Unchanged,
+    /// Another program's project was taken in.
+    Reloaded,
+    /// project.json changed but doesn't parse (half written, or a typo): it is left alone and
+    /// read again once it changes.
+    Unreadable,
+}
+
+/// What tells a file another program wrote apart from the one this document saw: its
+/// modification time and size.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DiskStamp {
+    modified: std::time::SystemTime,
+    len: u64,
+}
+
+impl DiskStamp {
+    pub fn of(path: &str) -> Option<DiskStamp> {
+        let metadata = std::fs::metadata(path).ok()?;
+        Some(DiskStamp { modified: metadata.modified().ok()?, len: metadata.len() })
+    }
 }
 
 /// The recording [`Document::preload`] is opening, and its path.
@@ -176,8 +205,20 @@ impl Document {
 
     /// [`Document::open`] with the standard locations given (for tests).
     pub fn open_with(bundle_path: &str, probes: &Probes, locations: Locations) -> Result<Document, String> {
-        let Bundle { recording, project, input, inserts, new_project } = load_bundle(bundle_path, probes)?;
+        Document::open_bundle(bundle_path, probes, locations, true)
+    }
+
+    /// [`Document::open`] for a look that must not write: a project.json that needs migrating
+    /// is migrated in memory only (until something saves).
+    pub fn open_read_only(bundle_path: &str, probes: &Probes) -> Result<Document, String> {
+        Document::open_bundle(bundle_path, probes, Locations::default(), false)
+    }
+
+    fn open_bundle(bundle_path: &str, probes: &Probes, locations: Locations, save_migration: bool) -> Result<Document, String> {
+        let Bundle { recording, project, input, inserts, new_project } =
+            load_bundle_with(bundle_path, probes, save_migration)?;
         let mut document = Document::new(recording, project, input, inserts, probes.video.clone());
+        document.disk_stamp = DiskStamp::of(&document.project_path);
         document.config_location = locations.config;
         document.cache_location = locations.cache;
         if new_project {
@@ -235,6 +276,7 @@ impl Document {
             cache_location: None,
             new_id: Box::new(random_uuid),
             effects: RefCell::new(Vec::new()),
+            disk_stamp: None,
         }
     }
 
@@ -695,12 +737,50 @@ impl Document {
             self.emit(Effect::ErrorOccurred(error));
             return false;
         }
+        self.disk_stamp = DiskStamp::of(&self.project_path);
         if self.dirty {
             self.dirty = false;
             self.emit(Effect::DirtyChanged);
         }
         self.emit(Effect::Autosaved(self.project_path.clone()));
         true
+    }
+
+    /// Takes in a `project.json` another program wrote (`omareel apply`, an agent, a text
+    /// editor) since this document last read or saved it, as one undoable edit: the project as
+    /// it stood here, unsaved changes included, becomes the undo step. Returns whether anything
+    /// changed. A file that doesn't parse is left for its writer to finish and read once it
+    /// changes again. The project gets the corrections opening a bundle makes
+    /// ([`fit_project_to_recording`]), so it matches what `omareel describe` shows.
+    pub fn reload_if_changed_on_disk(&mut self) -> DiskChange {
+        if !self.disk_changed() {
+            return DiskChange::Unchanged;
+        }
+        let stamp = DiskStamp::of(&self.project_path);
+        let parsed = crate::compat::qfile::read_all(&self.project_path)
+            .ok()
+            .and_then(|bytes| crate::compat::qjson::from_json(&bytes).ok());
+        let Some(Value::Object(object)) = parsed else { return DiskChange::Unreadable };
+        self.disk_stamp = stamp;
+        let (json, _) = Project::migrate_defaults(&object);
+        let mut project = Project::from_json(&json);
+        fit_project_to_recording(&mut project, &self.recording);
+        let next = project.to_json();
+        if next == self.project.to_json() {
+            return DiskChange::Unchanged;
+        }
+        for clip in project.clips.iter().filter(|clip| clip.is_media()) {
+            self.insert_info(&clip.media);
+        }
+        self.end_coalesced_edit();
+        self.snapshot("");
+        self.restore(&next);
+        DiskChange::Reloaded
+    }
+
+    /// Whether project.json exists and is not the file this document last read or wrote.
+    pub fn disk_changed(&self) -> bool {
+        DiskStamp::of(&self.project_path).is_some_and(|stamp| Some(stamp) != self.disk_stamp)
     }
 
     // ---------------------------------------------------------------------------------------

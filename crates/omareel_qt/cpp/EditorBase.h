@@ -31,7 +31,7 @@ class EditorBase : public QObject
 public:
     // The editor's timers: autosave (500 ms), motion (100 ms after the last change), scrub
     // (35 ms), preview (16 ms, precise, while playing) and preview stats (1 s).
-    enum Timer { AutosaveTimer, MotionTimer, ScrubTimer, PreviewTimer, PreviewStatsTimer };
+    enum Timer { AutosaveTimer, MotionTimer, ScrubTimer, PreviewTimer, PreviewStatsTimer, ProjectWatchTimer };
     // What the editor runs later from the event loop, as QTimer::singleShot did.
     enum Call { FinishLoadingCall, AdvanceClipCall };
 
@@ -108,6 +108,7 @@ private:
     QTimer m_previewStatsTimer;
     QTimer m_autosaveTimer;
     QTimer m_motionTimer;
+    QTimer m_projectWatchTimer;
     Exporter *m_exporter = nullptr;
 };
 

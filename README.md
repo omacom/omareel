@@ -19,6 +19,8 @@ cursor-following zooms. Finished projects export to MP4 or GIF.
 - Camera rotation, horizontal flip, independent shadow/border styling, and 720p/1080p capture.
 - Hardware-accelerated MP4 export with CPU fallback, plus GIF export.
 - Self-contained `.omareel` project bundles that preserve the source and editor state.
+- Scriptable editing for AI agents and scripts: `omareel describe` prints the edited timeline
+  as JSON, `omareel apply` runs checked edit operations, and an open editor follows along.
 
 ## Install
 
@@ -77,6 +79,8 @@ omareel record --region --with-desktop-audio
 omareel edit ~/Videos/omareel/Recording.omareel
 omareel export Recording.omareel -o recording.mp4
 omareel probe Recording.omareel
+omareel describe Recording.omareel
+omareel apply Recording.omareel edits.json
 omareel help
 ```
 

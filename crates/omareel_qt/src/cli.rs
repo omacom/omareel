@@ -11,6 +11,10 @@ pub mod ffi {
         /// `omareel probe <bundle>` for an absolute bundle path: prints the summary and returns
         /// the exit status.
         fn probe(bundle: &str) -> i32;
+        /// `omareel describe` and `omareel apply` with the arguments after the command; they
+        /// need no Qt application, so main() runs them before making one.
+        #[cxx_name = "agentCommand"]
+        fn agent_command(command: &str, args: Vec<String>) -> i32;
         /// Sends the Rust code's Qt-style warnings through Qt's message handler, as the C++'s
         /// qWarning went; main() calls it first.
         #[cxx_name = "installMessageHandler"]
@@ -56,6 +60,66 @@ fn usage(error: &str) -> i32 {
         let _ = std::io::stderr().lock().write_all(text.as_bytes());
     }
     omareel_core::cli::usage_status(error)
+}
+
+fn agent_command(command: &str, args: Vec<String>) -> i32 {
+    let absolute = |path: &str| omareel_core::compat::qdir::absolute_path(path);
+    if command == "describe" {
+        return match args.as_slice() {
+            [bundle] => describe(&absolute(bundle)),
+            _ => usage("describe requires a bundle"),
+        };
+    }
+    let mut positional = Vec::new();
+    let (mut dry_run, mut describe_after) = (false, false);
+    for arg in &args {
+        match arg.as_str() {
+            "--dry-run" => dry_run = true,
+            "--describe" => describe_after = true,
+            option if option.starts_with("--") => return usage(&format!("unknown apply option {option}")),
+            _ => positional.push(arg.as_str()),
+        }
+    }
+    match positional.as_slice() {
+        [bundle, ops] => apply(&absolute(bundle), ops, dry_run, describe_after),
+        _ => usage("apply requires a bundle and an operations file (or - for stdin)"),
+    }
+}
+
+fn describe(bundle: &str) -> i32 {
+    match omareel_core::agent::describe::run(bundle) {
+        Ok(summary) => {
+            let mut out = std::io::stdout().lock();
+            let _ = out.write_all(summary.as_bytes());
+            let _ = out.write_all(b"\n");
+            let _ = out.flush();
+            0
+        }
+        Err(error) => {
+            let _ = writeln!(std::io::stderr(), "omareel: {error}");
+            1
+        }
+    }
+}
+
+fn apply(bundle: &str, ops: &str, dry_run: bool, describe_after: bool) -> i32 {
+    use std::io::Read;
+    let mut bytes = Vec::new();
+    let read = if ops == "-" {
+        std::io::stdin().lock().read_to_end(&mut bytes).map(|_| ())
+    } else {
+        std::fs::read(ops).map(|contents| bytes = contents)
+    };
+    if let Err(error) = read {
+        let _ = writeln!(std::io::stderr(), "omareel: cannot read {ops}: {error}");
+        return 1;
+    }
+    let (report, ok) = omareel_core::agent::apply::run(bundle, &bytes, dry_run, describe_after);
+    let mut out = std::io::stdout().lock();
+    let _ = out.write_all(report.as_bytes());
+    let _ = out.write_all(b"\n");
+    let _ = out.flush();
+    if ok { 0 } else { 1 }
 }
 
 fn probe(bundle: &str) -> i32 {
