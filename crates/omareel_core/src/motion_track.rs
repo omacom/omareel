@@ -79,7 +79,10 @@ impl Typing {
             .map(|event| event.time)
             .collect();
         keys.sort_by(f64::total_cmp);
-        let mut touches: Vec<f64> = raw.iter().map(|sample| sample.time).chain(clicks.iter().map(|click| click.down)).collect();
+        // Moving, clicking and scrolling all use the pointer; each shows the cursor again.
+        let scrolls = events.iter().filter(|event| event.kind == InputKind::Scroll).map(|event| event.time);
+        let mut touches: Vec<f64> =
+            raw.iter().map(|sample| sample.time).chain(clicks.iter().map(|click| click.down)).chain(scrolls).collect();
         touches.sort_by(f64::total_cmp);
         Typing { keys, touches }
     }
@@ -427,5 +430,11 @@ mod tests {
         let track = MotionTrack::build(3.0, 100, 100, &moving, &project, 60.0);
         assert!(track.sample(2.5).cursor_opacity > 0.99, "the pointer moved after the key");
         assert!(track.sample(1.0).cursor_opacity > 0.9);
+        // Scrolling with the pointer still is using it: the cursor shows.
+        let scroll = |time: f64| InputEvent { time, kind: InputKind::Scroll, dy: 1.0, ..InputEvent::default() };
+        let scrolling = [moves_to(0.0, 10.0, 10.0), key(1.0, "KEY_ENTER"), scroll(2.0), scroll(2.3), scroll(2.6)];
+        let track = MotionTrack::build(4.0, 100, 100, &scrolling, &project, 60.0);
+        assert!(track.sample(1.7).cursor_opacity < 0.01, "hidden after the key");
+        assert!(track.sample(2.5).cursor_opacity > 0.9, "shown while scrolling");
     }
 }

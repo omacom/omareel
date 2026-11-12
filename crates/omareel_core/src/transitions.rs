@@ -130,13 +130,15 @@ pub fn punch(offset: f64) -> f64 {
 
 /// The transitions at `output_time`, given the timeline's [`cuts`].
 pub fn sample(cuts: &[Cut], output_time: f64) -> TransitionFrame {
-    let mut scale = 1.0;
+    // Cuts close together (filler words) would add their punches up and shake the frame; the
+    // strongest one at this moment counts.
+    let mut extra: f64 = 0.0;
     for cut in cuts {
         if cut.style == Style::ZoomPunch {
-            scale += punch(output_time - cut.time);
+            extra = extra.max(punch(output_time - cut.time));
         }
     }
-    TransitionFrame { scale }
+    TransitionFrame { scale: 1.0 + extra }
 }
 
 /// For each clip, whether its sound fades in at its start and out at its end, for the cuts
@@ -158,6 +160,17 @@ mod tests {
 
     fn clip(id: &str, in_: f64, out: f64) -> Clip {
         Clip { id: id.into(), in_, out, ..Clip::default() }
+    }
+
+    #[test]
+    fn punches_at_close_cuts_do_not_add_up() {
+        let close = [
+            Cut { clip: 1, time: 1.0, style: Style::ZoomPunch },
+            Cut { clip: 2, time: 1.06, style: Style::ZoomPunch },
+        ];
+        let peak = (0..300).map(|i| sample(&close, 0.5 + f64::from(i) * 0.005).scale).fold(0.0, f64::max);
+        assert!(peak <= 1.0 + PUNCH_SCALE + 1e-9, "{peak}");
+        assert!(peak > 1.0 + PUNCH_SCALE * 0.9);
     }
 
     #[test]

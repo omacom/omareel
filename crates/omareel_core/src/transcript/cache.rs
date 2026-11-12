@@ -29,6 +29,14 @@ pub const VERSION: i32 = 1;
 pub const DIRECTORY: &str = "speech-v1";
 /// How much of the video's start is hashed.
 const HEAD: u64 = 1 << 20;
+/// Entries not read or written for this long are removed (deleted recordings leave them).
+const UNUSED_FOR: std::time::Duration = std::time::Duration::from_secs(60 * 24 * 60 * 60);
+
+/// A short name for the video's path: entries of one path share it, so a changed video's older
+/// entries are found by name.
+fn path_tag(video: &str) -> String {
+    qdir::sha256_hex(video.as_bytes())[..12].to_owned()
+}
 
 /// The cache key of `video` as it is now; `None` when it cannot be read.
 pub fn identity(video: &str) -> Option<String> {
@@ -78,8 +86,9 @@ impl Entry {
     /// The entry for `video` as it is now, in the cache under `cache_location`; `None` when the
     /// video cannot be read.
     pub fn new(cache_location: &str, video: &str) -> Option<Entry> {
-        let key = identity(video)?;
-        Some(Entry { directory: directory(cache_location), key, video: qdir::absolute_path(video) })
+        let video = qdir::absolute_path(video);
+        let key = format!("{}-{}", path_tag(&video), identity(&video)?);
+        Some(Entry { directory: directory(cache_location), key, video })
     }
 
     pub fn key(&self) -> &str {
@@ -91,7 +100,12 @@ impl Entry {
     }
 
     fn read(&self, kind: &str) -> Option<Object> {
-        let bytes = std::fs::read(self.path(kind)).ok()?;
+        let path = self.path(kind);
+        let bytes = std::fs::read(&path).ok()?;
+        // Read is use: the entry's age for pruning restarts.
+        if let Ok(file) = std::fs::File::options().append(true).open(&path) {
+            let _ = file.set_modified(std::time::SystemTime::now());
+        }
         let object = qjson::object_from_json(&bytes)?;
         (object.value("version").to_int(0) == VERSION).then_some(object)
     }
@@ -109,20 +123,27 @@ impl Entry {
         Ok(())
     }
 
-    /// Removes this kind's entries for the same video under other keys: the video changed.
+    /// Removes this kind's entries for the same video under other keys (the video changed, so
+    /// they can't be read again), and any entry unused for [`UNUSED_FOR`]. Older entries are
+    /// told apart by name; only entries older than this one go, so an editor still holding the
+    /// previous version of a video never removes the newer entry another one wrote.
     fn remove_older(&self, kind: &str) {
         let Ok(entries) = std::fs::read_dir(&self.directory) else { return };
         let suffix = format!(".{kind}.json");
+        let prefix = format!("{}-", path_tag(&self.video));
+        let own = std::fs::metadata(self.path(kind)).and_then(|m| m.modified()).ok();
+        let now = std::time::SystemTime::now();
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
-            if !name.ends_with(&suffix) || name.starts_with(&self.key) {
+            if !name.ends_with(".json") || name.starts_with(&self.key) {
                 continue;
             }
-            let same_video = std::fs::read(entry.path())
-                .ok()
-                .and_then(|bytes| qjson::object_from_json(&bytes))
-                .is_some_and(|object| object.value("video").to_string_or("") == self.video);
-            if same_video {
+            let modified = entry.metadata().and_then(|m| m.modified()).ok();
+            let unused = modified.is_some_and(|m| now.duration_since(m).unwrap_or_default() > UNUSED_FOR);
+            let superseded = name.starts_with(&prefix)
+                && name.ends_with(&suffix)
+                && matches!((modified, own), (Some(theirs), Some(ours)) if theirs <= ours);
+            if unused || superseded {
                 let _ = std::fs::remove_file(entry.path());
             }
         }
@@ -176,6 +197,33 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn prunes_unused_entries_and_never_a_newer_one() {
+        let dir = scratch("prune");
+        let cache = dir.join("cache").to_string_lossy().into_owned();
+        let video = dir.join("screen.mp4");
+        std::fs::write(&video, vec![1u8; 4096]).unwrap();
+        let video = video.to_string_lossy().into_owned();
+        // An entry from a recording deleted long ago.
+        std::fs::create_dir_all(directory(&cache)).unwrap();
+        let stale = std::path::Path::new(&directory(&cache)).join("0123456789ab-deadbeef.speech.json");
+        std::fs::write(&stale, "{}").unwrap();
+        let old = std::time::SystemTime::now() - UNUSED_FOR - std::time::Duration::from_secs(60);
+        std::fs::File::options().append(true).open(&stale).unwrap().set_modified(old).unwrap();
+        // Another editor already wrote the entry for a newer version of this video.
+        let newer = std::path::Path::new(&directory(&cache)).join(format!("{}-ffff.speech.json", path_tag(&qdir::absolute_path(&video))));
+        std::fs::write(&newer, "{}").unwrap();
+        std::fs::File::options()
+            .append(true)
+            .open(&newer)
+            .unwrap()
+            .set_modified(std::time::SystemTime::now() + std::time::Duration::from_secs(60))
+            .unwrap();
+        Entry::new(&cache, &video).unwrap().store_speech(&[(0.0, 1.0)]).unwrap();
+        assert!(!stale.exists(), "unused for 60 days");
+        assert!(newer.exists(), "written after ours: not ours to remove");
     }
 
     #[test]

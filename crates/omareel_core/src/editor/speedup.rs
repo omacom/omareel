@@ -37,10 +37,23 @@ impl Document {
     /// or slowed down are left alone. Empty until [`Document::quiet_parts_ready`].
     pub fn quiet_parts(&self, settings: &SpeedUpSettings) -> Vec<QuietPart> {
         let Some(moving) = &self.moving else { return Vec::new() };
+        // Recording clips at normal speed, neighbours that continue each other (a split, not a
+        // cut) joined into one run: a quiet stretch across a split is one stretch.
+        let mut runs: Vec<(f64, f64)> = Vec::new();
+        let mut continues = false;
+        for clip in &self.project.clips {
+            let normal = !clip.is_media() && clip.speed == 1.0;
+            match runs.last_mut() {
+                Some(run) if normal && continues && (clip.in_ - run.1).abs() < 1e-6 => run.1 = clip.out,
+                _ if normal => runs.push((clip.in_, clip.out)),
+                _ => {}
+            }
+            continues = normal;
+        }
         let mut parts = Vec::new();
         for (start, end) in speedup::quiet_ranges(moving, self.recording.source_duration, settings) {
-            for clip in self.project.clips.iter().filter(|clip| !clip.is_media() && clip.speed == 1.0) {
-                let (from, to) = (cpp::max(start, clip.in_), cpp::min(end, clip.out));
+            for &(run_in, run_out) in &runs {
+                let (from, to) = (cpp::max(start, run_in), cpp::min(end, run_out));
                 if to - from >= settings.min_length {
                     parts.push(QuietPart { start: from, end: to, speed: speedup::choose_speed(to - from, settings.target) });
                 }

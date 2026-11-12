@@ -1876,6 +1876,18 @@ fn quiet_parts_play_faster_in_one_undo_step() {
     let second = qt.clip_id(1);
     assert!(qt.run(|d| d.set_clip_speed(&second, 0.5)));
     assert!(qt.document.quiet_parts(&settings).is_empty());
+
+    // A split inside the quiet stretch (no cut) leaves it one stretch.
+    let mut qt = world.open(&world.bundle("quiet-split.omareel"));
+    qt.run(|d| d.set_speech_regions(vec![(0.0, 0.3), (1.7, 2.0)]));
+    qt.run(|d| d.set_screen_check(ScreenCheck { still: Vec::new(), moving: vec![(0.3, 1.7)] }));
+    qt.seek(0.7);
+    assert!(qt.run(Document::split_at_playhead));
+    let parts = qt.document.quiet_parts(&settings);
+    assert_eq!(parts.len(), 1, "{parts:?}");
+    assert!((parts[0].start - 0.4).abs() < 1e-9 && (parts[0].end - 1.6).abs() < 1e-9 && parts[0].speed == 4.0);
+    assert_eq!(qt.run(|d| d.speed_up_source_ranges(&parts)), 1);
+    assert_eq!(clip_spans(&qt), [(0.0, 0.4, 1.0), (0.4, 0.7, 4.0), (0.7, 1.6, 4.0), (1.6, 2.0, 1.0)]);
 }
 
 #[test]
