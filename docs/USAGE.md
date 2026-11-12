@@ -197,18 +197,49 @@ earlier** and **Move later** move it past its neighbour. Recording clips keep th
 inserted video goes missing from `media/`, its clip is marked Missing and export stops until it
 is restored or deleted.
 
+## Background music
+
+**Add music…** in the Audio panel sets an audio file (MP3, M4A, AAC, Ogg, Opus, FLAC, WAV), or a
+video whose sound you want, as background music. Like an inserted video it is copied into the
+bundle's `media/` directory; **Replace music…** swaps the file and keeps the settings, and the
+trash button removes it (undo brings it back). The music plays under the whole edited video,
+from its start to its end, whatever the clips: it starts at the beginning of the output, starts
+over when it is shorter than the video (**Loop**; off, it plays once), and fades in and out over
+the first and last seconds (**Fade in**, **Fade out**, 0 to 10 s). **Music volume** sets its
+level without changing the recording's. With **Lower under the recording** on, the music drops
+while the recording's own sound (your voice, the desktop, or an inserted video's sound) plays,
+and comes back in the pauses. It shows as a thin Music lane under the timeline's tracks, with
+its waveform; click it to open the Audio panel. The preview plays it in step with the playhead;
+its ducking there is an approximation of the export's, from the recording's measured loudness.
+GIF exports have no sound. If the music file goes missing from `media/`, export stops until it is
+restored or the music is removed.
+
 ## Project bundle
 
 The bundle directory contains `screen.mp4`, its `screen.mp4.ts` first-frame timestamp,
 `capture.json`, `input.jsonl`, `project.json`, `thumb.jpg`, and `media/` with any inserted
-videos. Video remains unchanged while
-clip, style, cursor, and zoom edits are stored in `project.json`.
+videos and background music. Video remains unchanged while
+clip, style, cursor, zoom, and music edits are stored in `project.json`.
+
+`project.json` holds a `music` object only while there is music (projects without it are
+unchanged):
+
+```json
+"music": {"file": "media/song.mp3", "volume": 0.25, "fadeIn": 1.0, "fadeOut": 2.0,
+          "duck": true, "loop": true, "start": 0.0}
+```
+
+`file` is bundle-relative and must stay inside `media/`; `volume` is 0 to 1; the fades are
+seconds, 0 to 10; `start` is the offset in seconds into the file where the music begins (later
+loops start the file from its beginning).
 
 ## Environment
 
 - `OMAREEL_DEBUG=1` appends `gpu-screen-recorder` stderr to `/tmp/omareel.log`.
 - `OMAREEL_PREVIEW_STATS=1` plays an opened recording and logs preview frame rate, average
   frame handling cost, and drops once per second.
+- `OMAREEL_MUSIC_TRACE=1` logs each background-music sync in the editor: output time, the
+  music's target and reported positions in milliseconds, its gain, and whether it plays.
 - `OMAREEL_CAPTURE=gsr` forces the fallback screen capture backend.
 - `OMAREEL_CAPTURE=native` selects the native screen capture backend when supported.
 - `OMAREEL_PLUGIN_PATH` selects the capture-exclusion plugin file. An explicit missing path

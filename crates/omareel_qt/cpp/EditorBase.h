@@ -50,6 +50,9 @@ public:
     QMediaPlayer::PlaybackState cameraPlaybackStateForTests() const { return m_playback.playbackState(PlaybackDriver::Camera); }
     qint64 cameraPositionMsForTests() const { return m_playback.position(PlaybackDriver::Camera); }
     QMediaPlayer::PlaybackState mediaPlaybackStateForTests() const { return m_playback.playbackState(PlaybackDriver::Media); }
+    QMediaPlayer::PlaybackState musicPlaybackStateForTests() const { return m_playback.playbackState(PlaybackDriver::Music); }
+    QMediaPlayer::MediaStatus musicMediaStatusForTests() const { return m_playback.mediaStatus(PlaybackDriver::Music); }
+    qint64 musicPositionMsForTests() const { return m_playback.position(PlaybackDriver::Music); }
 
     // What the players, timers and exporter report, for the Rust object. 64-bit values are
     // std::int64_t, the type the Rust overrides have.
@@ -85,6 +88,9 @@ protected:
     { m_playback.syncCamera(targetMs, toleranceMs, force, covered); }
     void playbackSetAudio(int player, double volume, bool muted)
     { m_playback.setAudio(PlaybackDriver::Player(player), volume, muted); }
+    void playbackLoadMusic(const QString &path) { m_playback.loadMusic(path); }
+    void playbackSyncMusic(qint64 milliseconds, qint64 toleranceMs, bool play, double volume)
+    { m_playback.syncMusic(milliseconds, toleranceMs, play, volume); }
     qint64 playbackPosition(int player) const { return m_playback.position(PlaybackDriver::Player(player)); }
     bool playbackPositionReady(int player) const { return m_playback.positionReady(PlaybackDriver::Player(player)); }
     int playbackState(int player) const { return m_playback.playbackState(PlaybackDriver::Player(player)); }

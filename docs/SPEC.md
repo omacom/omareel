@@ -186,6 +186,8 @@ monotonic clock and copy-muxed with the video at stop.
              "clickEffect":"ripple",      // none | ripple | shrink | highlight
              "clickShrink":0.85,"hideWhenIdleMs":null,"style":"macos"},
   "audio": {"desktop":true,"mic":true,"volume":1.0},
+  "music": {"file":"media/song.mp3",   // only while there is music (§9.5)
+            "volume":0.25,"fadeIn":1.0,"fadeOut":2.0,"duck":true,"loop":true,"start":0.0},
   "camera": {"enabled":false,"position":"bottom-right","size":0.25,
              "shape":"round",       // round | square | rectangle (the webcam's own aspect)
              "radius":16,           // corners of square and rectangle, px at 1080p reference
@@ -291,7 +293,7 @@ Exporter pipeline (`crates/omareel_qt/cpp/Exporter`, over `crates/omareel_core/s
 - **Right panel:** icon rail + panel. Sections: Background (Wallpaper | Gradient | Color |
   Image tabs, blur slider), Shape (padding, roundness, shadow, outside border), Cursor (visible, size,
   smoothing, click effect, hide-when-idle), Zoom (default level, transition, follow smoothing,
-  regenerate), Audio (desktop/mic toggles, volume), Export (format, fps, size, quality, gif
+  regenerate), Audio (desktop/mic toggles, volume, background music), Export (format, fps, size, quality, gif
   opts). Wallpaper tab shows the Omarchy theme backgrounds
   (`~/.local/state/omarchy/current/theme/backgrounds/*`) as thumbnails plus "Pick file…".
 - **Bottom toolbar:** aspect dropdown (Auto, Wide 16:9, 4:3, Square, Vertical 9:16, 4:5, 3:2),
@@ -564,4 +566,41 @@ outgoing one pauses) does not toggle it. While a recording clip is active the in
 it is loaded and paused on its first frame, and during an inserted clip the screen player waits
 where the recording resumes. A player's end of media also ends its clip. The media layer stays
 hidden until the loaded file has delivered a frame.
+
+### 9.5 Background music
+
+`music` in project.json is written only while there is music, so projects without it round-trip
+byte for byte. `file` follows the inserted-video rules (inside `media/`, `sanitizedMediaPath`;
+anything else drops the music on load); `volume` 0..1, `fadeIn`/`fadeOut` 0..10 s, `start` ≥ 0.
+`editor::Document::set_music(path)` probes the file's sound (`media_probe::probe_audio`, an audio
+file or a video with sound), copies it into `media/` as an insert is copied, and sets the music
+(replacing a file keeps the settings and resets `start`) under one undo snapshot;
+`clear_music()` removes it (the file stays). The settings change through `setProjectValue`
+(`music.volume`, ...), which ignores them without music. The editor runs the copy off the GUI
+thread (`addMusic(url)`, `musicImporting`).
+
+Timing (`crate::music`): the music spans the output timeline. Output time t plays file time
+`start + t` until the file ends, then, with `loop`, `(t - (duration - start)) mod duration`
+(later passes restart the file from 0); without `loop` it is silent after that. Fades are linear
+over the first `fadeIn` and last `fadeOut` seconds of the output, each cut to the output's
+length.
+
+Export: the music is one more input after the click sound,
+`[-stream_loop -1] [-ss start] -i media/file`, its chain
+`asetpts,aresample=48000,aformat=fltp:stereo,apad,atrim=end=D,volume=V,afade=in,afade=out`. With
+`duck` and any clip sound, the clips' concatenated audio (after its volume) is split, one copy
+keying `sidechaincompress=threshold=0.03:ratio=6:attack=20:release=400` on the music. The music
+then joins the existing `amix=normalize=0`, so the clips and clicks keep their level. Without
+music the arguments and graph are unchanged. GIFs have no audio. A music file without sound, or
+missing, fails the export.
+
+Preview: a fourth `QMediaPlayer` (sound only) holds the music. On every transport change and
+preview tick the editor asks `Document::music_playback(output)` for the file position, whether
+it plays, and its gain, and `PlaybackDriver::syncMusic` re-seeks only when it is more than
+250 ms off (QMediaPlayer reports an audio file's position in decode-chunk steps, ~93 ms).
+Ducking there is approximated: the recording's and inserted videos' sound levels are measured
+once (RMS in 20 ms windows, `music::measure_levels`, off the GUI thread), and the gain is the
+compressor's static curve at the loudest window from the release before to the attack after the
+playhead's source time (the key taken as RMS × √2, which matches `sidechaincompress` on tones
+within ~1 dB). The music lane's waveform comes from the music's own levels.
 

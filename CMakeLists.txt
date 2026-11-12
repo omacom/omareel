@@ -219,7 +219,7 @@ qt_add_resources(omareel_render "omareel_assets"
         assets/icons/lucide/keyboard.svg
         assets/icons/lucide/eye.svg assets/icons/lucide/eye-off.svg assets/icons/lucide/trash-2.svg
         assets/icons/lucide/video-off.svg assets/icons/lucide/volume-x.svg
-        assets/icons/lucide/sparkles.svg
+        assets/icons/lucide/sparkles.svg assets/icons/lucide/music.svg
         assets/icons/reel.svg
         assets/fonts/Inter-Regular.ttf assets/fonts/Inter-Medium.ttf
         assets/fonts/Inter-SemiBold.ttf assets/fonts/Inter-Bold.ttf

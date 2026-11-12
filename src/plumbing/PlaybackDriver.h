@@ -11,8 +11,8 @@ class QVideoSink;
 
 namespace Omareel {
 
-// Plays the editor's three files: the screen recording, the webcam recording, and one inserted
-// video at a time. It knows nothing of clips or the timeline; it shows the positions it is told
+// Plays the editor's files: the screen recording, the webcam recording, one inserted video at a
+// time, and the background music. It knows nothing of clips or the timeline; it shows the positions it is told
 // and reports what the players do. Behind its commands it works around QMediaPlayer: a player
 // that is not about to play is run until its sink shows the frame asked for and paused there
 // (warming up), a player stalled at the end of its file is revived before it seeks, and a seek
@@ -21,7 +21,7 @@ class PlaybackDriver : public QObject
 {
     Q_OBJECT
 public:
-    enum Player { Screen, Camera, Media };
+    enum Player { Screen, Camera, Media, Music };
     Q_ENUM(Player)
 
     explicit PlaybackDriver(QObject *parent = nullptr);
@@ -62,6 +62,11 @@ public:
     void syncCamera(qint64 targetMs, qint64 toleranceMs, bool force, bool covered);
     // The screen's sound is the recording's; the media player's is the inserted video's.
     void setAudio(Player player, double volume, bool muted);
+    // Opens the background music (sound only), or closes it for an empty path.
+    void loadMusic(const QString &path);
+    // Keeps the music within toleranceMs of milliseconds in its file at volume (0 to 1),
+    // playing or paused there. A player that ran off the end is revived first.
+    void syncMusic(qint64 milliseconds, qint64 toleranceMs, bool play, double volume);
 
     qint64 position(Player player) const;
     // False while the media player's file is still opening or a seek waits on it: it has no
@@ -96,8 +101,10 @@ private:
     QMediaPlayer m_cameraPlayer;
     // Holds one inserted video at a time.
     QMediaPlayer m_mediaPlayer;
+    QMediaPlayer m_musicPlayer;
     std::unique_ptr<QAudioOutput> m_audioOutput;
     std::unique_ptr<QAudioOutput> m_mediaAudioOutput;
+    std::unique_ptr<QAudioOutput> m_musicAudioOutput;
     QPointer<QVideoSink> m_videoSink;
     QPointer<QVideoSink> m_cameraVideoSink;
     QPointer<QVideoSink> m_mediaVideoSink;

@@ -1830,3 +1830,40 @@ fn music_playback_follows_the_output() {
     assert_eq!(extent, 0.4);
     assert_eq!(waveform, vec![1.0, 0.0, 0.0, 0.0]);
 }
+
+#[test]
+fn music_ducks_under_the_recordings_sound_in_the_preview() {
+    let world = World::new("music-duck");
+    let bundle = world.bundle("duck.omareel");
+    std::fs::write(format!("{bundle}/capture.json"), br#"{"fps":30,"first_frame_us":1000,"audio":{"desktop":true,"mic":true}}"#).unwrap();
+    let with_sound = |path: &str| media_probe(path).map(|info| MediaInfo { audio: true, ..info });
+    let probes = Probes { media: Arc::new(with_sound), video: Arc::new(video_probe) };
+    let locations = Locations { config: Some(world.path("config")), cache: Some(world.path("cache")) };
+    let mut document = Document::open_with(&bundle, &probes, locations).unwrap();
+    document.set_audio_probe(Arc::new(audio_probe));
+    let song = world.path("loop.ogg");
+    std::fs::write(&song, b"ogg").unwrap();
+    document.set_music(&song).unwrap();
+    document.set_project_value("music.fadeIn", 0.0.into(), false);
+    document.set_project_value("music.fadeOut", 0.0.into(), false);
+    let screen = format!("{bundle}/screen.mp4");
+    let requests = document.take_audio_levels_requests();
+    assert!(requests.contains(&screen), "{requests:?}");
+    // Before the recording's levels are known the music plays at its own volume.
+    assert_eq!(document.music_playback(1.5).unwrap().gain, 0.25);
+    // Quiet for the first second, then a voice at -12 dBFS RMS.
+    let mut rms = vec![0.0_f32; 50];
+    rms.extend(vec![0.25_f32; 50]);
+    document.set_audio_levels(&screen, crate::music::AudioLevels { rate: 50.0, rms });
+    assert_eq!(document.music_playback(0.5).unwrap().gain, 0.25);
+    let ducked = document.music_playback(1.5).unwrap().gain;
+    assert!(ducked < 0.25 * 0.2, "{ducked}");
+    // The switch turns it off.
+    document.set_project_value("music.duck", false.into(), false);
+    assert_eq!(document.music_playback(1.5).unwrap().gain, 0.25);
+    // A recording whose sound is switched off does not duck.
+    document.set_project_value("music.duck", true.into(), false);
+    document.set_project_value("audio.desktop", false.into(), false);
+    document.set_project_value("audio.mic", false.into(), false);
+    assert_eq!(document.music_playback(1.5).unwrap().gain, 0.25);
+}

@@ -19,6 +19,7 @@
 #include <QImage>
 #include <QUrl>
 #include <algorithm>
+#include <cmath>
 #include <functional>
 #include <QVideoFrame>
 #include <QVideoSink>
@@ -1692,6 +1693,88 @@ private slots:
         QVERIFY(editor.previewMedia().value("active").toBool());
         QTRY_VERIFY(editor.previewMedia().value("ready").toBool());
         QVERIFY(!editor.playing());
+    }
+
+    // Background music plays under the playhead: paused where it is, playing with it, looping
+    // past its end, and gone (and back) with remove and undo.
+    void backgroundMusicFollowsThePlayhead()
+    {
+        const QString bundle = plainBundle(QStringLiteral("music.omareel"));
+        // A quiet 1 s tone: the test plays it on whatever the machine's audio output is.
+        const QString song = QDir(m_temporary.path()).filePath(QStringLiteral("tone.wav"));
+        QProcess makeSong;
+        makeSong.start(QStringLiteral("ffmpeg"), {QStringLiteral("-y"), QStringLiteral("-v"), QStringLiteral("error"),
+            QStringLiteral("-f"), QStringLiteral("lavfi"), QStringLiteral("-i"),
+            QStringLiteral("sine=frequency=440:duration=1,volume=0.02"), song});
+        QVERIFY(makeSong.waitForFinished(30000));
+        QCOMPARE(makeSong.exitCode(), 0);
+
+        Editor editor(bundle);
+        QVERIFY2(editor.isValid(), qPrintable(editor.errorString()));
+        QVideoSink sink;
+        QObject holder;
+        holder.setProperty("videoSink", QVariant::fromValue(&sink));
+        editor.attachVideoOutput(&holder);
+        QTRY_VERIFY_WITH_TIMEOUT(editor.playerMediaStatusForTests() >= QMediaPlayer::LoadedMedia, 15000);
+        QVERIFY(!editor.property("music").toMap().value("present").toBool());
+
+        editor.addMusic(QUrl::fromLocalFile(song));
+        QTRY_VERIFY_WITH_TIMEOUT(!editor.property("musicImporting").toBool(), 5000);
+        const QVariantMap music = editor.property("music").toMap();
+        QVERIFY(music.value("present").toBool());
+        QCOMPARE(music.value("name").toString(), QStringLiteral("tone.wav"));
+        QVERIFY(QFileInfo::exists(QDir(bundle).filePath(QStringLiteral("media/tone.wav"))));
+        QCOMPARE(editor.projectMap().value("music").toMap().value("file").toString(), QStringLiteral("media/tone.wav"));
+        QTRY_VERIFY_WITH_TIMEOUT(editor.musicMediaStatusForTests() >= QMediaPlayer::LoadedMedia, 5000);
+        // The waveform arrives once its levels are measured.
+        QTRY_VERIFY_WITH_TIMEOUT(!editor.property("music").toMap().value("waveform").toList().isEmpty(), 10000);
+
+        // Paused: the music waits where the playhead is.
+        editor.seek(0.3);
+        QTRY_COMPARE_WITH_TIMEOUT(editor.musicPlaybackStateForTests(), QMediaPlayer::PausedState, 3000);
+        QTRY_VERIFY_WITH_TIMEOUT(qAbs(editor.musicPositionMsForTests() - 300) <= 40, 3000);
+
+        // Playing: it follows the playhead, starting over after its 1 s.
+        editor.play();
+        QTRY_COMPARE_WITH_TIMEOUT(editor.musicPlaybackStateForTests(), QMediaPlayer::PlayingState, 3000);
+        QList<qint64> drifts;
+        bool looped = false;
+        QElapsedTimer elapsed;
+        elapsed.start();
+        while (editor.playing() && elapsed.elapsed() < 4000) {
+            QTest::qWait(20);
+            const qint64 expected = qint64(std::fmod(editor.position(), 1.0) * 1000);
+            const qint64 actual = editor.musicPositionMsForTests();
+            // Around the loop point the two may sit on either side of it.
+            if (expected > 100 && expected < 900) drifts.append(qAbs(actual - expected));
+            if (editor.position() > 1.2 && actual < 900) looped = true;
+        }
+        QVERIFY(looped);
+        QVERIFY(drifts.size() > 20);
+        std::sort(drifts.begin(), drifts.end());
+        // The player reports its position in steps of its decode chunks (about 93 ms), so these
+        // read up to a step more than the drift.
+        qInfo("music drift against the playhead over %d samples: median %lld ms, 90th %lld ms, max %lld ms",
+              int(drifts.size()), drifts.at(drifts.size() / 2), drifts.at(drifts.size() * 9 / 10), drifts.last());
+        QVERIFY2(drifts.at(drifts.size() / 2) <= 150, qPrintable(QString::number(drifts.at(drifts.size() / 2))));
+        QVERIFY2(drifts.last() <= 300, qPrintable(QString::number(drifts.last())));
+        // The end of the recording pauses the music too.
+        QTRY_VERIFY_WITH_TIMEOUT(!editor.playing(), 5000);
+        QTRY_VERIFY_WITH_TIMEOUT(editor.musicPlaybackStateForTests() != QMediaPlayer::PlayingState, 3000);
+
+        editor.seek(0.5);
+        editor.play();
+        QTRY_COMPARE_WITH_TIMEOUT(editor.musicPlaybackStateForTests(), QMediaPlayer::PlayingState, 3000);
+        editor.pause();
+        QTRY_COMPARE_WITH_TIMEOUT(editor.musicPlaybackStateForTests(), QMediaPlayer::PausedState, 3000);
+
+        // Removing it is undoable.
+        editor.clearMusic();
+        QVERIFY(!editor.property("music").toMap().value("present").toBool());
+        QTRY_COMPARE_WITH_TIMEOUT(editor.musicMediaStatusForTests(), QMediaPlayer::NoMedia, 3000);
+        editor.undo();
+        QVERIFY(editor.property("music").toMap().value("present").toBool());
+        QTRY_VERIFY_WITH_TIMEOUT(editor.musicMediaStatusForTests() >= QMediaPlayer::LoadedMedia, 5000);
     }
 
     void frameStepsMoveThePausedPlayer()

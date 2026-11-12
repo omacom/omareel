@@ -33,18 +33,24 @@ PlaybackDriver::PlaybackDriver(QObject *parent): QObject(parent)
             [this](QMediaPlayer::PlaybackState state) { emit playbackStateChanged(Camera, state); });
     connect(&m_mediaPlayer, &QMediaPlayer::playbackStateChanged, this,
             [this](QMediaPlayer::PlaybackState state) { emit playbackStateChanged(Media, state); });
+    connect(&m_musicPlayer, &QMediaPlayer::mediaStatusChanged, this,
+            [this](QMediaPlayer::MediaStatus status) { emit mediaStatusChanged(Music, status); });
+    connect(&m_musicPlayer, &QMediaPlayer::playbackStateChanged, this,
+            [this](QMediaPlayer::PlaybackState state) { emit playbackStateChanged(Music, state); });
 }
 
 PlaybackDriver::~PlaybackDriver() = default;
 
 QMediaPlayer &PlaybackDriver::player(Player player)
 {
-    return player == Media ? m_mediaPlayer : player == Camera ? m_cameraPlayer : m_player;
+    return player == Music ? m_musicPlayer
+        : player == Media ? m_mediaPlayer : player == Camera ? m_cameraPlayer : m_player;
 }
 
 const QMediaPlayer &PlaybackDriver::player(Player player) const
 {
-    return player == Media ? m_mediaPlayer : player == Camera ? m_cameraPlayer : m_player;
+    return player == Music ? m_musicPlayer
+        : player == Media ? m_mediaPlayer : player == Camera ? m_cameraPlayer : m_player;
 }
 
 void PlaybackDriver::loadScreen(const QString &path)
@@ -243,6 +249,53 @@ void PlaybackDriver::setAudio(Player which, double volume, bool muted)
     if (!output) return;
     output->setVolume(volume);
     output->setMuted(muted);
+}
+
+void PlaybackDriver::loadMusic(const QString &path)
+{
+    if (!m_musicAudioOutput) {
+        m_musicAudioOutput = std::make_unique<QAudioOutput>();
+        m_musicAudioOutput->setVolume(0);
+        m_musicPlayer.setAudioOutput(m_musicAudioOutput.get());
+    }
+    m_musicPlayer.stop();
+    m_musicPlayer.setSource(path.isEmpty() ? QUrl() : QUrl::fromLocalFile(path));
+}
+
+void PlaybackDriver::syncMusic(qint64 milliseconds, qint64 toleranceMs, bool play, double volume)
+{
+    if (!m_musicAudioOutput || m_musicPlayer.source().isEmpty()) return;
+    m_musicAudioOutput->setVolume(volume);
+    const QMediaPlayer::MediaStatus status = m_musicPlayer.mediaStatus();
+    // Still opening: the editor syncs again once it has (mediaStatusChanged).
+    if (status == QMediaPlayer::NoMedia || status == QMediaPlayer::LoadingMedia
+        || status == QMediaPlayer::InvalidMedia) return;
+    // As in seek(): a player that ran off the end restarts from 0 on play() and drops a
+    // pending seek, so it goes to Paused first.
+    const bool stalled = status == QMediaPlayer::EndOfMedia
+        || m_musicPlayer.playbackState() == QMediaPlayer::StoppedState;
+    if (!play) {
+        if (m_musicPlayer.playbackState() == QMediaPlayer::PlayingState) m_musicPlayer.pause();
+        if (stalled) {
+            m_musicPlayer.play();
+            m_musicPlayer.pause();
+        }
+        if (std::abs(m_musicPlayer.position() - milliseconds) > 1) m_musicPlayer.setPosition(milliseconds);
+        return;
+    }
+    if (stalled) {
+        // Run off the end a moment before the playhead gets there: the loop (or the silence)
+        // follows soon, so it is not played again.
+        if (status == QMediaPlayer::EndOfMedia && m_musicPlayer.duration() > 0
+            && m_musicPlayer.duration() - milliseconds <= toleranceMs) return;
+        m_musicPlayer.play();
+        m_musicPlayer.pause();
+        m_musicPlayer.setPosition(milliseconds);
+        m_musicPlayer.play();
+        return;
+    }
+    if (std::abs(m_musicPlayer.position() - milliseconds) > toleranceMs) m_musicPlayer.setPosition(milliseconds);
+    if (m_musicPlayer.playbackState() != QMediaPlayer::PlayingState) m_musicPlayer.play();
 }
 
 qint64 PlaybackDriver::position(Player which) const { return player(which).position(); }
