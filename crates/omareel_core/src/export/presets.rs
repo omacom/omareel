@@ -127,16 +127,21 @@ impl ExportPreset {
 }
 
 /// Where `omareel export BUNDLE --preset ID` writes without `-o`: the preset's file name for
-/// the bundle's project (its name, or the bundle's for a bundle without `project.json`) in the
-/// recordings directory, where the editor's export dialog suggests it too.
+/// the bundle's project ([`project_name`]) in the recordings directory, where the editor's
+/// export dialog suggests it too.
 pub fn default_output_path(bundle_path: &str, preset: &ExportPreset) -> String {
+    qdir::file_path(&crate::omarchy_paths::recordings_directory(), &preset.file_name(&project_name(bundle_path)))
+}
+
+/// The bundle's project's name, or for a bundle without `project.json` the name the editor gives
+/// a new project: the directory's without `.omareel` (or the older `.omarecord`).
+fn project_name(bundle_path: &str) -> String {
     let project_path = qdir::file_path(bundle_path, "project.json");
-    let name = if FileInfo::new(&project_path).is_file() {
+    if FileInfo::new(&project_path).is_file() {
         Project::load(&project_path).0.name
     } else {
-        qdir::dir_name(bundle_path)
-    };
-    qdir::file_path(&crate::omarchy_paths::recordings_directory(), &preset.file_name(&name))
+        crate::editor::bundle_project_name(&qdir::dir_name(bundle_path))
+    }
 }
 
 #[cfg(test)]
@@ -161,6 +166,21 @@ mod tests {
         assert_eq!(find("github-gif").unwrap().file_name("Demo"), "Demo-github.gif");
         // 9:16 at 1920 high is 1080 wide.
         assert_eq!((f64::from(shorts.height) * output_aspect(shorts.aspect, 1920, 1080, &Default::default())).round(), 1080.0);
+    }
+
+    // Regression: a bundle without project.json kept its extension, "ramp.omareel-github.gif".
+    #[test]
+    fn file_names_drop_the_bundle_extension() {
+        let gif = find("github-gif").unwrap();
+        for (bundle, name) in [
+            ("/nowhere/ramp.omareel", "ramp"),
+            ("/nowhere/ramp.omareel/", "ramp"),
+            ("/nowhere/old.omarecord", "old"),
+            ("/nowhere/plain", "plain"),
+        ] {
+            assert_eq!(project_name(bundle), name, "{bundle}");
+            assert!(default_output_path(bundle, gif).ends_with(&format!("/{name}-github.gif")), "{bundle}");
+        }
     }
 
     #[test]
