@@ -11,7 +11,7 @@ pub mod ffi {
         /// `omareel probe <bundle>` for an absolute bundle path: prints the summary and returns
         /// the exit status.
         fn probe(bundle: &str) -> i32;
-        /// `omareel describe` and `omareel apply` with the arguments after the command; they
+        /// `omareel describe`, `apply` and `skill` with the arguments after the command; they
         /// need no Qt application, so main() runs them before making one.
         #[cxx_name = "agentCommand"]
         fn agent_command(command: &str, args: Vec<String>) -> i32;
@@ -64,6 +64,9 @@ fn usage(error: &str) -> i32 {
 
 fn agent_command(command: &str, args: Vec<String>) -> i32 {
     let absolute = |path: &str| omareel_core::compat::qdir::absolute_path(path);
+    if command == "skill" {
+        return skill(&args);
+    }
     if command == "describe" {
         return match args.as_slice() {
             [bundle] => describe(&absolute(bundle)),
@@ -83,6 +86,36 @@ fn agent_command(command: &str, args: Vec<String>) -> i32 {
     match positional.as_slice() {
         [bundle, ops] => apply(&absolute(bundle), ops, dry_run, describe_after),
         _ => usage("apply requires a bundle and an operations file (or - for stdin)"),
+    }
+}
+
+fn skill(args: &[String]) -> i32 {
+    use omareel_core::agent::skill;
+    match args {
+        [] => {
+            let _ = std::io::stdout().lock().write_all(skill::SKILL.as_bytes());
+            0
+        }
+        [install] if install == "install" => {
+            let Some(home) = std::env::var_os("HOME") else {
+                let _ = writeln!(std::io::stderr(), "omareel: HOME is not set");
+                return 1;
+            };
+            match skill::install(std::path::Path::new(&home)) {
+                Ok(report) => {
+                    let mut out = std::io::stdout().lock();
+                    for line in report {
+                        let _ = writeln!(out, "{line}");
+                    }
+                    0
+                }
+                Err(error) => {
+                    let _ = writeln!(std::io::stderr(), "omareel: {error}");
+                    1
+                }
+            }
+        }
+        _ => usage("skill takes no arguments, or install"),
     }
 }
 
