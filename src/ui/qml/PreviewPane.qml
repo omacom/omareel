@@ -273,6 +273,7 @@ FocusScope {
                         - (dismissImport.visible ? dismissImport.width + importRow.spacing : 0))
                     anchors.verticalCenter: parent.verticalCenter
                     elide: Text.ElideRight
+                    textFormat: Text.PlainText
                     text: editor.importing ? "Adding clip…" : editor.importError
                     color: theme.textStrong
                     font.pixelSize: theme.type.body

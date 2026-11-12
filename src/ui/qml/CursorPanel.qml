@@ -109,6 +109,7 @@ ColumnLayout {
     }
     Label {
         Layout.fillWidth: true
+        textFormat: Text.PlainText
         text: root.motionValue() === "" ? "Using a custom spring — tune it below."
             : "Natural stays close to raw movement; Smooth uses a softer spring."
         wrapMode: Text.WordWrap

@@ -16,6 +16,7 @@ RowLayout {
         spacing: 2
         Text {
             Layout.fillWidth: true
+            textFormat: Text.PlainText
             text: root.label
             color: root.enabled ? theme.foreground : theme.textFaint
             font.family: theme.fontFamily
@@ -25,6 +26,7 @@ RowLayout {
         Text {
             Layout.fillWidth: true
             visible: root.description !== ""
+            textFormat: Text.PlainText
             text: root.description
             color: theme.textMuted
             font.family: theme.fontFamily

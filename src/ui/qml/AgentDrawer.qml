@@ -166,6 +166,7 @@ Rectangle {
             BusyIndicator { running: root.running; Layout.preferredWidth: 18; Layout.preferredHeight: 18 }
             Label {
                 Layout.fillWidth: true
+                textFormat: Text.PlainText
                 text: root.runningText() + (root.applies ? "  ·  " + root.applies + (root.applies === 1 ? " change" : " changes") : "")
                 color: theme.textMuted
                 font.pixelSize: theme.type.small
@@ -258,6 +259,7 @@ Rectangle {
             OmSeparator { Layout.fillWidth: true }
             Label {
                 Layout.fillWidth: true
+                textFormat: Text.PlainText
                 text: root.chapterData.title || "Chapters"
                 font.weight: Font.DemiBold
                 color: theme.textStrong
@@ -279,6 +281,7 @@ Rectangle {
                     Layout.fillWidth: true
                     spacing: 8
                     Label {
+                        textFormat: Text.PlainText
                         text: root.timeText(modelData.time)
                         font.family: theme.monoFamily
                         font.pixelSize: theme.type.small
@@ -287,6 +290,7 @@ Rectangle {
                     }
                     Label {
                         Layout.fillWidth: true
+                        textFormat: Text.PlainText
                         text: modelData.title
                         elide: Text.ElideRight
                         font.pixelSize: theme.type.small

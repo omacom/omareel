@@ -115,6 +115,7 @@ Rectangle {
                 Layout.preferredWidth: positionMetrics.advanceWidth
                 horizontalAlignment: Text.AlignRight
                 Layout.rightMargin: 8
+                textFormat: Text.PlainText
                 text: root.formatTenths(editor.position)
                 color: theme.textStrong
                 font.family: theme.monoFamily
@@ -165,6 +166,7 @@ Rectangle {
             Label {
                 Layout.preferredWidth: positionMetrics.advanceWidth
                 Layout.leftMargin: 8
+                textFormat: Text.PlainText
                 text: root.formatTenths(editor.duration)
                 color: theme.textFaint
                 font.family: theme.monoFamily
@@ -339,6 +341,7 @@ Rectangle {
                         spacing: 8
                         Label {
                             Layout.fillWidth: true
+                            textFormat: Text.PlainText
                             text: modelData.action
                             color: theme.foreground
                             font.pixelSize: theme.type.body

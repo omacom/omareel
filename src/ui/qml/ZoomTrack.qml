@@ -118,6 +118,7 @@ Item {
                     }
                 }
                 Label {
+                    textFormat: Text.PlainText
                     text: Number(modelData.level).toFixed(1) + "×"
                     color: theme.textStrong
                     font.family: theme.monoFamily
@@ -128,6 +129,7 @@ Item {
                     Layout.fillWidth: true
                     elide: Text.ElideRight
                     horizontalAlignment: Text.AlignLeft
+                    textFormat: Text.PlainText
                     text: typeof modelData.target === "object" ? "Manual" : "Auto"
                     color: theme.textMuted
                     font.pixelSize: theme.type.small

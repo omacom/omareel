@@ -110,6 +110,7 @@ ApplicationWindow {
                 spacing: 1
                 Label {
                     Layout.fillWidth: true
+                    textFormat: Text.PlainText
                     text: row.title
                     color: row.checked ? theme.textStrong : theme.foreground
                     font.pixelSize: theme.type.body
@@ -125,6 +126,7 @@ ApplicationWindow {
                         width: Math.min(implicitWidth, parent.width)
                         Label {
                             width: Math.min(implicitWidth, deviceRow.parent.width - 16)
+                            textFormat: Text.PlainText
                             text: row.device
                             elide: Text.ElideRight
                             color: deviceMouse.containsMouse ? theme.foreground : theme.textMuted
@@ -310,6 +312,7 @@ ApplicationWindow {
                     Label {
                         Layout.alignment: Qt.AlignHCenter
                         Layout.topMargin: 6
+                        textFormat: Text.PlainText
                         text: launcher.startingRecording ? "Starting…" : "Start recording"
                         color: theme.textStrong
                         font.pixelSize: theme.type.title
@@ -358,6 +361,7 @@ ApplicationWindow {
                 }
                 Label {
                     Layout.alignment: Qt.AlignHCenter
+                    textFormat: Text.PlainText
                     text: window.screenshotRecording ? "00:12" : launcher.recordingElapsed
                     color: theme.textStrong
                     font.family: theme.monoFamily
@@ -401,6 +405,7 @@ ApplicationWindow {
             Layout.fillWidth: true
             Layout.bottomMargin: 8
             visible: launcher.captureExclusionNote.length > 0
+            textFormat: Text.PlainText
             text: launcher.captureExclusionNote
             color: theme.textMuted
             font.pixelSize: theme.type.caption
@@ -475,6 +480,7 @@ ApplicationWindow {
                         spacing: 4
                         Label {
                             Layout.fillWidth: true
+                            textFormat: Text.PlainText
                             text: launcher.selfViewStatus
                             elide: Text.ElideRight
                             color: theme.textMuted
@@ -595,6 +601,7 @@ ApplicationWindow {
             OmSeparator { Layout.fillWidth: true }
             Label {
                 Layout.fillWidth: true
+                textFormat: Text.PlainText
                 text: "omareel " + Qt.application.version + "  ·  made for Omarchy"
                 color: theme.textFaint
                 font.family: theme.monoFamily
@@ -627,6 +634,7 @@ ApplicationWindow {
             id: errorLabel
             anchors.centerIn: parent
             width: parent.width - 20
+            textFormat: Text.PlainText
             text: window.errorMessage
             color: theme.surface
             font.pixelSize: theme.type.small

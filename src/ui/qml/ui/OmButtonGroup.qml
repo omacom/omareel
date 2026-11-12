@@ -70,6 +70,7 @@ Item {
                     id: label
                     anchors.centerIn: parent
                     width: Math.min(implicitWidth, parent.width - 8)
+                    textFormat: Text.PlainText
                     text: root.optionLabel(segment.modelData)
                     elide: Text.ElideRight
                     horizontalAlignment: Text.AlignHCenter

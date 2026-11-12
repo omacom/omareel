@@ -18,6 +18,7 @@ ColumnLayout {
     Label {
         visible: editor.hasCamera && editor.cameraStatus !== ""
         Layout.fillWidth: true
+        textFormat: Text.PlainText
         text: editor.cameraStatus
         wrapMode: Text.WordWrap
         color: theme.textMuted

@@ -122,6 +122,7 @@ Rectangle {
             }
             Label {
                 anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
                 text: root.projectUnreadable ? "project.json can't be read · Ctrl+S overwrites it"
                     : root.updatedExternally ? "Updated from project.json"
                     : editor.dirty ? "Unsaved changes" : "Saved " + root.savedTime

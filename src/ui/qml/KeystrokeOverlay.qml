@@ -54,6 +54,7 @@ Item {
                                 Label {
                                     id: keyLabel
                                     anchors.centerIn: parent
+                                    textFormat: Text.PlainText
                                     text: modelData
                                     color: root.textColor
                                     font.family: "monospace"

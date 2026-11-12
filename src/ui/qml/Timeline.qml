@@ -203,6 +203,7 @@ FocusScope {
                 }
                 Label {
                     anchors.verticalCenter: parent.verticalCenter
+                    textFormat: Text.PlainText
                     text: modelData.name
                     color: theme.textMuted
                     font.pixelSize: theme.type.caption
@@ -306,6 +307,7 @@ FocusScope {
                         Text {
                             x: 4
                             y: 6
+                            textFormat: Text.PlainText
                             text: root.formatRulerTime(tickDelegate.tickTime)
                             color: theme.textFaint
                             font.pixelSize: theme.type.caption - 1
@@ -629,6 +631,7 @@ FocusScope {
                         anchors.fill: parent
                         anchors.leftMargin: 6; anchors.rightMargin: 6
                         verticalAlignment: Text.AlignVCenter
+                        textFormat: Text.PlainText
                         text: editor.music.name || ""
                         elide: Text.ElideRight
                         color: theme.textStrong
@@ -742,6 +745,7 @@ FocusScope {
                     Label {
                         id: playheadLabel
                         anchors.centerIn: parent
+                        textFormat: Text.PlainText
                         text: editor.formatTime(editor.position)
                         color: "white"
                         font.family: theme.monoFamily

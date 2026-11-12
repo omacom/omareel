@@ -46,6 +46,7 @@ ColumnLayout {
         Label {
             visible: editor.hasCamera && root.selected !== null && !root.insert
             Layout.fillWidth: true
+            textFormat: Text.PlainText
             text: !root.selected ? ""
                 : root.selected.layout === "camera" ? "The webcam fills the frame. Choose Fill or Square in Camera."
                 : root.selected.layout === "screen" ? "The screen alone, without the camera bubble."
@@ -59,6 +60,7 @@ ColumnLayout {
         Label {
             visible: root.insert
             Layout.fillWidth: true
+            textFormat: Text.PlainText
             text: !root.insert ? ""
                 : root.selected.missing ? root.selected.mediaName + " is missing from the recording."
                 : root.selected.mediaName
@@ -82,6 +84,7 @@ ColumnLayout {
         Label {
             visible: root.insert
             Layout.fillWidth: true
+            textFormat: Text.PlainText
             text: !root.insert ? ""
                 : root.selected.fit === "fill" ? "Covers the whole frame, cropping what does not fit."
                 : root.selected.fit === "framed" ? "Sits in the frame over the background, like the screen."
