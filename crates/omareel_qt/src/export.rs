@@ -9,7 +9,7 @@
 use cxx_qt_lib::{QByteArray, QList, QMap, QMapPair_QString_QVariant, QString, QStringList, QVariant};
 use omareel_core::compat::qjson::Value;
 use omareel_core::export::plan::YuvMatrix;
-use omareel_core::export::{self, FrameImages, Image};
+use omareel_core::export::{self, FrameImages, Image, still};
 use omareel_core::media_probe;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -22,6 +22,8 @@ pub mod ffi {
         include!("QtShims.h");
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
+        include!("cxx-qt-lib/qstringlist.h");
+        type QStringList = cxx_qt_lib::QStringList;
         include!("cxx-qt-lib/qbytearray.h");
         type QByteArray = cxx_qt_lib::QByteArray;
         include!("cxx-qt-lib/qmap.h");
@@ -79,6 +81,29 @@ pub mod ffi {
         timing: bool,
     }
 
+    /// `omareel frame`'s arguments (`export::still::FrameRequest`), or `error` when they are
+    /// wrong.
+    #[namespace = "omareel::exporter"]
+    struct FrameRequest {
+        error: QString,
+        bundle: QString,
+        output: QString,
+        times: Vec<f64>,
+        count: i32,
+        sheet: bool,
+        width: i32,
+        fps: i32,
+    }
+
+    /// A contact sheet's grid (`export::still::SheetGrid`).
+    #[namespace = "omareel::exporter"]
+    struct SheetGrid {
+        columns: i32,
+        rows: i32,
+        tile_width: i32,
+        gap: i32,
+    }
+
     #[namespace = "omareel::exporter"]
     struct EvenSize {
         width: i32,
@@ -105,6 +130,18 @@ pub mod ffi {
         /// The even size an encoder needs: odd dimensions grow by one.
         #[cxx_name = "paddedEvenSize"]
         fn padded_even_size(width: i32, height: i32) -> EvenSize;
+
+        #[cxx_name = "parseFrameArgs"]
+        fn parse_frame_args(arguments: &QStringList) -> FrameRequest;
+        /// Where each of `count` stills goes: `output` for one, numbered otherwise.
+        #[cxx_name = "stillOutputPaths"]
+        fn still_output_paths(output: &QString, count: i32) -> QStringList;
+        /// `mm:ss.s`.
+        #[cxx_name = "stillTimeLabel"]
+        fn still_time_label(seconds: f64) -> QString;
+        /// The sheet's grid for `count` tiles on a sheet `width` wide (0: the default width).
+        #[cxx_name = "sheetGrid"]
+        fn sheet_grid(count: i32, width: i32) -> SheetGrid;
 
         /// The exporter's cancel flag. `cancel` may be called from any thread at any time.
         type CancelFlag;
@@ -136,8 +173,18 @@ pub mod ffi {
         /// Loads the bundle and works out the output; false with `error` set when it can't be
         /// exported. Cancelling `cancel` stops the job.
         fn prepare(self: &mut ExportJob, options: &ExportOptions, cancel: &CancelFlag, error: &mut QString) -> bool;
+        /// Before `prepare`: render stills at these output times, or `count` spread over the
+        /// output, instead of exporting (`omareel frame`).
+        #[cxx_name = "setStills"]
+        fn set_stills(self: &mut ExportJob, times: &[f64], count: i32);
+        /// The frames the frame loop renders: the export's, or the stills'.
         #[cxx_name = "totalFrames"]
         fn total_frames(self: &ExportJob) -> i32;
+        /// The output time each still shows (the start of its frame).
+        #[cxx_name = "stillTimes"]
+        fn still_times(self: &ExportJob) -> Vec<f64>;
+        #[cxx_name = "outputDuration"]
+        fn output_duration(self: &ExportJob) -> f64;
         fn composition(self: &ExportJob) -> Composition;
         /// `project.toJson().toVariantMap()`.
         #[cxx_name = "projectMap"]
@@ -194,7 +241,7 @@ pub mod ffi {
     }
 }
 
-use ffi::{Composition, EvenSize, ExportOptions, VideoInfo};
+use ffi::{Composition, EvenSize, ExportOptions, FrameRequest, SheetGrid, VideoInfo};
 
 fn video_info(info: &media_probe::VideoInfo) -> VideoInfo {
     VideoInfo { width: info.width, height: info.height, duration: info.duration, fps: info.fps, audio: info.audio }
@@ -230,6 +277,46 @@ fn probe_frame_times(path: &QString) -> QList<f64> {
 fn padded_even_size(width: i32, height: i32) -> EvenSize {
     let (width, height) = export::plan::padded_even_size(width, height);
     EvenSize { width, height }
+}
+
+fn parse_frame_args(arguments: &QStringList) -> FrameRequest {
+    let arguments: Vec<String> = QList::<QString>::from(arguments).iter().map(QString::to_string).collect();
+    match still::parse_frame_args(&arguments) {
+        Ok(request) => FrameRequest {
+            error: QString::default(),
+            bundle: qstring(&request.bundle),
+            output: qstring(&request.output),
+            times: request.times,
+            count: request.count,
+            sheet: request.sheet,
+            width: request.width,
+            fps: request.fps,
+        },
+        Err(message) => FrameRequest {
+            error: qstring(&message),
+            bundle: QString::default(),
+            output: QString::default(),
+            times: Vec::new(),
+            count: 0,
+            sheet: false,
+            width: 0,
+            fps: 0,
+        },
+    }
+}
+
+fn still_output_paths(output: &QString, count: i32) -> QStringList {
+    let paths = still::output_paths(&output.to_string(), usize::try_from(count).unwrap_or(0));
+    paths.iter().map(|path| qstring(path)).collect()
+}
+
+fn still_time_label(seconds: f64) -> QString {
+    qstring(&still::time_label(seconds))
+}
+
+fn sheet_grid(count: i32, width: i32) -> SheetGrid {
+    let grid = still::sheet_grid(count, if width > 0 { width } else { still::SHEET_WIDTH });
+    SheetGrid { columns: grid.columns, rows: grid.rows, tile_width: grid.tile_width, gap: still::SHEET_GAP }
 }
 
 pub struct CancelFlag(Arc<AtomicBool>);
@@ -298,10 +385,13 @@ impl AsRef<[u8]> for SendBytes {
 pub struct ExportJob {
     job: Option<export::ExportJob>,
     frame: FrameImages,
+    /// `set_stills`, for `prepare`.
+    still_times: Vec<f64>,
+    still_count: i32,
 }
 
 fn new_export_job() -> Box<ExportJob> {
-    Box::new(ExportJob { job: None, frame: FrameImages::default() })
+    Box::new(ExportJob { job: None, frame: FrameImages::default(), still_times: Vec::new(), still_count: 0 })
 }
 
 fn qstring(text: &str) -> QString {
@@ -346,6 +436,8 @@ impl ExportJob {
             gif_fps: options.gif_fps,
             gif_width: options.gif_width,
             timing: options.timing,
+            still_times: std::mem::take(&mut self.still_times),
+            still_count: self.still_count,
         };
         match export::ExportJob::prepare(&options, Arc::clone(&cancel.0)) {
             Ok(job) => {
@@ -359,8 +451,21 @@ impl ExportJob {
         }
     }
 
+    fn set_stills(&mut self, times: &[f64], count: i32) {
+        self.still_times = times.to_vec();
+        self.still_count = count;
+    }
+
     fn total_frames(&self) -> i32 {
         self.job.as_ref().map_or(0, export::ExportJob::total_frames)
+    }
+
+    fn still_times(&self) -> Vec<f64> {
+        self.job.as_ref().map(export::ExportJob::still_times).unwrap_or_default()
+    }
+
+    fn output_duration(&self) -> f64 {
+        self.job.as_ref().map_or(0.0, export::ExportJob::output_duration)
     }
 
     fn composition(&self) -> Composition {
