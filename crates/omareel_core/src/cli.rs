@@ -11,6 +11,9 @@ commands:\n\
 \x20     --with-webcam, --webcam-device PATH, --webcam-height 720|1080,\n\
 \x20     --no-webcam, --no-selfview, --no-open, --no-bar,\n\
 \x20     --stop, --cancel.\n\
+\x20 record --marker [LABEL] | --retake [SECONDS] | --pause\n\
+\x20     While recording: drop a marker, cut back to the last marker (or the last\n\
+\x20     SECONDS, 5 without a marker) in the new project, or pause and resume.\n\
 \x20 edit <bundle.omareel>\n\
 \x20     Open a recording bundle in the editor.\n\
 \x20 export <bundle> -o <file.mp4|file.gif> [options]\n\

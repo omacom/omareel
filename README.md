@@ -94,6 +94,28 @@ While recording, use any of these stop paths:
   keybind.
 - Run `omareel record --cancel` to stop and permanently discard the recording bundle.
 
+### Markers, retakes and pauses
+
+While recording, three more commands (and the bar's flag, undo and pause buttons) make the
+recording easier to edit. Bind them next to the toggle:
+
+```lua
+o.bind("SUPER + ALT + M", "Omareel marker", "omareel record --marker")
+o.bind("SUPER + ALT + BACKSPACE", "Omareel retake", "omareel record --retake")
+o.bind("SUPER + ALT + P", "Omareel pause", "omareel record --pause")
+```
+
+- `--marker [LABEL]` drops a marker ("good take", "cut here") that the editor shows on its
+  timeline; `M` and `Shift+M` jump between markers there.
+- `--retake [SECONDS]` means "that didn't go well": the editor's new project starts with
+  everything since the last marker (or the last 5 seconds, or `SECONDS`) already cut. Nothing
+  is deleted; trim the clips to bring it back.
+- `--pause` pauses and resumes. Nothing on screen is recorded while paused, and the paused
+  time is cut from the new project.
+
+The keypress or bar click that made a mark is left out of the recorded input, so it never shows
+as a keystroke, a click or a zoom. See [docs/USAGE.md](docs/USAGE.md#markers-retakes-and-pauses).
+
 The recording bar appears at the top center of the recorded monitor. Turning on the webcam in
 the launcher opens a floating camera self-view right away; drag it where you want it and it
 stays there through the recording, using the same warm camera. Native capture keeps both the
