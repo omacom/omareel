@@ -29,10 +29,15 @@
 //! | `trim-pauses` | optional `min` (seconds of silence, default 1), `keep` (seconds left, default 0.4) |
 //! | `remove-fillers` | (needs a transcript with measured word times) |
 //! | `set` | `path` (dotted, as in describe's `settings`), `value` |
+//! | `set-chapters` | any of `chapters` (`[{"at", "title"}, ...]`, replacing the list), `title`, `description` |
+//!
+//! `set-chapters` writes the bundle's chapters.json ([`crate::chapters`]), at source times
+//! whatever timeline its `at`s use, and only once the whole list succeeded.
 
 use super::{ms, source_span_outputs, source_time_outputs};
 use crate::compat::qdir;
 use crate::compat::qjson::{self, Format, Object, Value};
+use crate::chapters::{Chapter, Chapters};
 use crate::editor::{Document, Effect, ImportedInsert, ImportedMusic, ZoomTarget};
 use crate::project::{allowed_clip_speeds, Project};
 use crate::transcript::trim::PauseSettings;
@@ -242,6 +247,55 @@ struct Run {
     warnings: Vec<String>,
     /// Videos copied into media/ by this run, removed again if it fails.
     copied: Vec<String>,
+    /// chapters.json as `set-chapters` left it, written once the project is saved.
+    chapters: Option<Chapters>,
+}
+
+/// `set-chapters`: chapters.json's new contents.
+fn set_chapters(document: &Document, op: &Object, current: Option<Chapters>) -> Result<Chapters, String> {
+    let mut chapters = match current {
+        Some(chapters) => chapters,
+        None => Chapters::load(document.bundle_path())?.unwrap_or_default(),
+    };
+    for key in ["title", "description"] {
+        match op.value(key) {
+            Value::Undefined => {}
+            Value::String(text) => {
+                let text = text.trim().to_owned();
+                if key == "title" { chapters.title = text } else { chapters.description = text }
+            }
+            _ => return Err(format!("\"{key}\" must be a string")),
+        }
+    }
+    if op.value("chapters").is_undefined() {
+        return Ok(chapters);
+    }
+    let list = op.value("chapters").as_array().ok_or("\"chapters\" must be a list of {\"at\", \"title\"}")?;
+    let source = source_timeline(op)?;
+    let mut new = Vec::with_capacity(list.len());
+    for (index, item) in list.iter().enumerate() {
+        let item = item.as_object().ok_or_else(|| format!("chapter {} must be an object with \"at\" and \"title\"", index + 1))?;
+        let title = item.value("title").as_str().map(str::trim).unwrap_or_default();
+        if title.is_empty() {
+            return Err(format!("chapter {} needs a \"title\"", index + 1));
+        }
+        let at = number(item, "at").map_err(|error| format!("chapter {}: {error}", index + 1))?;
+        let at = if source {
+            if at < 0.0 || at > document.source_duration() + 1e-6 {
+                return Err(format!("chapter {}: source time {at} is outside the recording (0 to {})", index + 1, ms(document.source_duration())));
+            }
+            at
+        } else {
+            if at < 0.0 || at > document.duration() + 1e-6 {
+                return Err(format!("chapter {}: {at} is outside the video (0 to {})", index + 1, ms(document.duration())));
+            }
+            document.output_to_source(at)
+        };
+        new.push(Chapter { source: at, title: title.to_owned() });
+    }
+    new.sort_by(|a, b| a.source.total_cmp(&b.source));
+    chapters.chapters = new;
+    Ok(chapters)
 }
 
 /// The edits of [`Document`] the operations use, refusing what the editor would refuse.
@@ -578,6 +632,20 @@ fn run_op(document: &mut Document, op: &Object, run: &mut Run) -> OpResult {
             }
             ok()
         }
+        "set-chapters" => {
+            let chapters = set_chapters(document, op, run.chapters.take())?;
+            let placed = chapters.on_timeline(&document.project().clips).len();
+            if placed < chapters.chapters.len() {
+                run.warnings.push(format!(
+                    "set-chapters: {} of {} chapters don't show, their stretch is cut or shared with another",
+                    chapters.chapters.len() - placed,
+                    chapters.chapters.len()
+                ));
+            }
+            let count = chapters.chapters.len() as i64;
+            run.chapters = Some(chapters);
+            with("chapters", count)
+        }
         "" => Err("missing \"op\"".into()),
         other => Err(format!("unknown op {other:?}")),
     }
@@ -587,6 +655,20 @@ fn run_op(document: &mut Document, op: &Object, run: &mut Run) -> OpResult {
 /// then hold some of the edits, so the caller must not save it. Videos the run copied into
 /// the bundle are removed again on failure; a `dry_run` copies none.
 pub fn apply_ops(document: &mut Document, ops: &[Object], dry_run: bool) -> Result<(Vec<Value>, Vec<String>), String> {
+    apply_all(document, ops, dry_run).map(|applied| (applied.results, applied.warnings))
+}
+
+/// What a successful run of operations did.
+pub struct Applied {
+    pub results: Vec<Value>,
+    pub warnings: Vec<String>,
+    /// The bundle's chapters.json as `set-chapters` left it, to write once the project is
+    /// saved; `None` when no operation changed it.
+    pub chapters: Option<Chapters>,
+}
+
+/// [`apply_ops`], with the chapters to write.
+pub fn apply_all(document: &mut Document, ops: &[Object], dry_run: bool) -> Result<Applied, String> {
     let mut run = Run { dry_run, ..Run::default() };
     let mut results = Vec::new();
     for (index, op) in ops.iter().enumerate() {
@@ -606,7 +688,7 @@ pub fn apply_ops(document: &mut Document, ops: &[Object], dry_run: bool) -> Resu
             }
         }
     }
-    Ok((results, run.warnings))
+    Ok(Applied { results, warnings: run.warnings, chapters: run.chapters })
 }
 
 /// `omareel apply`: the JSON report, and whether it succeeded. Nothing is saved on failure or
@@ -633,7 +715,7 @@ pub fn run_on(
         Ok(document) => document,
         Err(error) => return failure(error),
     };
-    let (results, warnings) = match apply_ops(&mut document, &ops, dry_run) {
+    let Applied { results, warnings, chapters } = match apply_all(&mut document, &ops, dry_run) {
         Ok(done) => done,
         Err(error) => return failure(error),
     };
@@ -646,6 +728,11 @@ pub fn run_on(
                 .find_map(|effect| if let Effect::ErrorOccurred(message) = effect { Some(message) } else { None })
                 .unwrap_or_else(|| "could not save project.json".into());
             return failure(error);
+        }
+        if let Some(chapters) = &chapters {
+            if let Err(error) = chapters.save(document.bundle_path()) {
+                return failure(format!("project.json was saved, but not the chapters: {error}"));
+            }
         }
     }
     let project: &Project = document.project();

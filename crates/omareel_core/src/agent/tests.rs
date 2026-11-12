@@ -349,3 +349,54 @@ fn inserts_copy_nothing_on_a_dry_run_or_a_failed_batch() {
     apply_ops(&mut document, &ops(&insert)[..1], false).unwrap();
     assert!(std::path::Path::new(&format!("{bundle}/media/clip.mp4")).exists());
 }
+
+#[test]
+fn chapters_are_written_at_source_times_and_follow_later_cuts() {
+    let dir = TempDir::new("agent-chapters");
+    let bundle = bundle(&dir);
+    let chapters_file = crate::chapters::path(&bundle);
+    let run = |ops: &str, dry_run: bool| {
+        let (report, ok) = super::apply::run_on(|| Ok(open(&bundle, &dir)), ops.as_bytes(), dry_run, true);
+        (crate::compat::qjson::object_from_json(report.as_bytes()).unwrap(), ok)
+    };
+    // Output times after a cut of 0–2 s are stored as source times.
+    let (report, ok) = run(
+        r#"[{"op": "delete", "from": 0, "to": 2},
+            {"op": "set-chapters", "title": " Demo ", "description": "Two parts.",
+             "chapters": [{"at": 4, "title": "Second"}, {"at": 0, "title": "First"}]}]"#,
+        true,
+    );
+    assert!(ok, "{report:?}");
+    assert!(!std::path::Path::new(&chapters_file).exists(), "a dry run writes nothing");
+    assert!(report.value("describe").get("chapters").is_undefined());
+    let (report, ok) = run(
+        r#"[{"op": "delete", "from": 0, "to": 2},
+            {"op": "set-chapters", "title": " Demo ", "description": "Two parts.",
+             "chapters": [{"at": 4, "title": "Second"}, {"at": 0, "title": "First"}]}]"#,
+        false,
+    );
+    assert!(ok, "{report:?}");
+    let saved = crate::chapters::Chapters::load(&bundle).unwrap().unwrap();
+    assert_eq!(saved.title, "Demo");
+    let sources: Vec<(f64, &str)> = saved.chapters.iter().map(|c| (c.source, c.title.as_str())).collect();
+    assert_eq!(sources, vec![(2.0, "First"), (6.0, "Second")]);
+    let chapters = report.value("describe").get("chapters").clone();
+    assert_eq!(chapters.get("chapters").to_array()[1].get("output").to_double(-1.0), 4.0);
+    // A later cut before the second chapter moves it; only the title changes the file's text.
+    let (report, ok) = run(r#"[{"op": "delete", "from": 1, "to": 2}, {"op": "set-chapters", "title": "Better"}]"#, false);
+    assert!(ok, "{report:?}");
+    let listed = report.value("describe").get("chapters").get("chapters").to_array();
+    assert_eq!(listed[1].get("output").to_double(-1.0), 3.0);
+    assert_eq!(listed[1].get("source").to_double(-1.0), 6.0);
+    assert_eq!(crate::chapters::Chapters::load(&bundle).unwrap().unwrap().title, "Better");
+    // Errors name the chapter; nothing is saved.
+    let (report, ok) = run(r#"[{"op": "set-chapters", "chapters": [{"at": 1, "title": ""}]}]"#, false);
+    assert!(!ok);
+    assert_eq!(report.value("error").as_str(), Some("operation 1 (set-chapters): chapter 1 needs a \"title\""));
+    let (report, _) = run(r#"[{"op": "set-chapters", "timeline": "source", "chapters": [{"at": 99, "title": "Late"}]}]"#, false);
+    assert!(report.value("error").to_string_or("").contains("outside the recording (0 to 10)"), "{report:?}");
+    // An empty set removes the file.
+    let (_, ok) = run(r#"[{"op": "set-chapters", "title": "", "description": "", "chapters": []}]"#, false);
+    assert!(ok);
+    assert!(!std::path::Path::new(&chapters_file).exists());
+}
