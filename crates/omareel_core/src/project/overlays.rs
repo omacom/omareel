@@ -66,7 +66,8 @@ pub struct Overlay {
     pub number: i32,
     /// `blur`: "pixelate" or "blur".
     pub style: String,
-    /// `blur`: strength, 0–1; the block or blur size is 1–4 % of the recording's height.
+    /// `blur`: strength, 0–1; the block or blur size is an eighth to a quarter of the region's
+    /// height, and 4–8 % of the recording's height at the least (`export::redact::block_fraction`).
     pub amount: f64,
 }
 

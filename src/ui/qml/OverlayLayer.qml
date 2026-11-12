@@ -165,8 +165,11 @@ Item {
     // what it hides.
     component BlurOverlay: Placed {
         id: blurItem
+        // The cell size as a fraction of the recording's height, from the overlay track
+        // (crates/omareel_core/src/export/redact.rs, block_fraction), so the export's grid
+        // is this one.
         readonly property real block: host.height / Math.max(.0001, host.space.h)
-            * (0.01 + 0.03 * Math.max(0, Math.min(1, modelData.amount)))
+            * Math.max(0.04, modelData.block || 0)
         readonly property size cells: Qt.size(Math.max(1, Math.round(width / Math.max(1, block))),
                                               Math.max(1, Math.round(height / Math.max(1, block))))
         readonly property bool blurStyle: modelData.style === "blur"

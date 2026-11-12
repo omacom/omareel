@@ -3,6 +3,7 @@
 //! frames in both.
 
 use crate::compat::qjson::{Object, Value};
+use crate::export::redact::block_fraction;
 use crate::project::Overlay;
 
 /// The overlays in effect at `output_time` (whose recording time is `source_time`), each with
@@ -22,13 +23,19 @@ pub fn sample(overlays: &[Overlay], source_time: f64, output_time: f64, recordin
         .collect()
 }
 
-/// [`sample`] as the maps the composition draws: each item's JSON with its `opacity`.
+/// [`sample`] as the maps the composition draws: each item's JSON with its `opacity`, and for
+/// a blur region its cell size `block` as a fraction of the recording's height
+/// ([`block_fraction`]).
 pub fn sample_json(overlays: &[Overlay], source_time: f64, output_time: f64, recording_shown: bool) -> Vec<Object> {
     sample(overlays, source_time, output_time, recording_shown)
         .into_iter()
         .map(|(index, opacity)| {
-            let mut json = overlays[index].to_json();
+            let overlay = &overlays[index];
+            let mut json = overlay.to_json();
             json.insert("opacity", Value::from(opacity));
+            if overlay.kind == "blur" {
+                json.insert("block", Value::from(block_fraction(overlay.amount, overlay.rect.height)));
+            }
             json
         })
         .collect()

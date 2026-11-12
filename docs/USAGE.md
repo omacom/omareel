@@ -251,7 +251,7 @@ stay byte for byte as they were). Each item:
 | `width`, `radius`, `spotlight` | `box`: line width and corner radius in pixels at 1080 p, and dimming outside it (0–1); `arrow`: `width` |
 | `from`, `to` | `arrow`: tail and head, `{x, y}` like `rect` |
 | `number` | `badge`: the number shown |
-| `style`, `amount` | `blur`: `pixelate` or `blur`, and strength 0–1 (cells or blur radius of 1–4 % of the recording's height) |
+| `style`, `amount` | `blur`: `pixelate` or `blur`, and strength 0–1: cells (or blur radius) of an eighth (0) to a quarter (1) of the region's height, and at least 4 % (0) to 8 % (1) of the recording's height |
 | `title`, `subtitle` | `card` |
 
 Deleting a range of the timeline shrinks or removes annotations: `screen` items keep what still
