@@ -7,7 +7,7 @@ use super::*;
 use crate::compat::qdir::tests::TempDir;
 use crate::compat::qjson::{Object, Value};
 use crate::compat::qround::q_fuzzy_compare;
-use crate::project::{Clip, Project};
+use crate::project::{AudioCleanup, Clip, Project};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -1685,4 +1685,130 @@ fn real_ffmpeg_probes_and_builds_frames() {
     } else {
         eprintln!("ffmpeg could not write a display matrix");
     }
+}
+
+// -------------------------------------------------------------------------------------------
+// Audio cleanup.
+
+/// A bundle whose recording has sound, from the microphone when `mic`, opened with a probe that
+/// says so.
+fn sound_bundle(world: &World, name: &str, mic: bool) -> Qt {
+    let bundle = world.bundle(name);
+    std::fs::write(
+        format!("{bundle}/capture.json"),
+        format!(r#"{{"fps":30,"first_frame_us":1000000,"audio":{{"desktop":true,"mic":{mic}}}}}"#),
+    )
+    .unwrap();
+    let probes = Probes {
+        media: Arc::new(|path: &str| media_probe(path).map(|info| MediaInfo { audio: true, ..info })),
+        video: Arc::new(video_probe),
+    };
+    let locations = Locations { config: Some(world.path("config")), cache: Some(world.path("cache")) };
+    let document = Document::open_with(&bundle, &probes, locations).unwrap();
+    let mut qt = Qt { document, effects: Vec::new() };
+    qt.drain();
+    qt
+}
+
+/// Performs `f` and returns the effects it queued.
+fn act(qt: &mut Qt, f: impl FnOnce(&mut Document)) -> Vec<Effect> {
+    f(&mut qt.document);
+    qt.drain()
+}
+
+fn sources(effects: &[Effect]) -> Vec<String> {
+    effects
+        .iter()
+        .filter_map(|effect| match effect {
+            Effect::SetScreenAudioSource(path) => Some(path.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn audio_cleanup_is_one_undo_step_and_prepares_the_preview() {
+    let world = World::new("audio-cleanup");
+    let mut qt = sound_bundle(&world, "Voice.omareel", true);
+    assert!(qt.document.denoise_available());
+    // Nothing happens to the sound of a project without cleanup.
+    let effects = act(&mut qt, |d| d.refresh_clean_audio());
+    assert!(no_cleanup_effects(&effects));
+    assert_eq!(qt.document.clean_audio_status(), CleanAudioStatus::Off);
+
+    let on = AudioCleanup { denoise: true, ..AudioCleanup::default() };
+    qt.document.set_audio_cleanup(on.clone());
+    let effects = qt.drain();
+    assert_eq!(qt.undo_steps(), 1);
+    assert!(effects.contains(&Effect::StartCleanAudio));
+    assert!(effects.contains(&Effect::CleanAudioChanged));
+    assert!(sources(&effects).is_empty(), "the recording's sound plays until the cleaned one is ready");
+    assert_eq!(qt.document.clean_audio_status(), CleanAudioStatus::Preparing);
+    // Setting the same again is no edit.
+    act(&mut qt, |d| d.set_audio_cleanup(on.clone()));
+    assert_eq!(qt.undo_steps(), 1);
+
+    let job = qt.document.clean_audio_job().expect("a job");
+    assert_eq!(job.settings.denoise, Some(0.85));
+    assert_eq!(job.settings.loudness, None);
+    assert!(job.output_path.starts_with(&world.path("cache/audio-cleanup/")));
+    assert!(qt.document.clean_audio_job().is_none(), "one job per file");
+    // The job's file appears; the screen player switches to it.
+    std::fs::create_dir_all(std::path::Path::new(&job.output_path).parent().unwrap()).unwrap();
+    std::fs::write(&job.output_path, b"m4a").unwrap();
+    qt.document.finish_clean_audio(&job.output_path, Ok(job.output_path.clone()));
+    let effects = qt.drain();
+    assert_eq!(sources(&effects), [job.output_path.clone()]);
+    assert_eq!(qt.document.clean_audio_status(), CleanAudioStatus::Ready);
+
+    // Comparing with the original is no edit.
+    assert_eq!(sources(&act(&mut qt, |d| d.set_clean_audio_bypass(true))), [String::new()]);
+    assert_eq!(sources(&act(&mut qt, |d| d.set_clean_audio_bypass(false))), [job.output_path.clone()]);
+    assert_eq!(qt.undo_steps(), 1);
+
+    // New settings: the old file keeps playing while the new one is made, and a failure says why.
+    let effects = act(&mut qt, |d| d.set_project_value("audio.cleanup.loudness", "-16".into(), false));
+    assert!(effects.contains(&Effect::StartCleanAudio));
+    assert!(sources(&effects).is_empty());
+    assert_eq!(qt.document.screen_audio_source(), job.output_path);
+    let louder = qt.document.clean_audio_job().expect("a job for the new settings");
+    assert_eq!(louder.settings.loudness, Some(-16.0));
+    qt.document.finish_clean_audio(&louder.output_path, Err("ffmpeg failed".into()));
+    qt.drain();
+    assert_eq!(qt.document.clean_audio_status(), CleanAudioStatus::Failed);
+    assert_eq!(qt.document.clean_audio_error(), "ffmpeg failed");
+
+    // Undo goes back to the file there is.
+    act(&mut qt, |d| d.undo());
+    assert_eq!(qt.document.clean_audio_status(), CleanAudioStatus::Ready);
+    assert_eq!(qt.document.screen_audio_source(), job.output_path);
+    // Off: the recording's own sound.
+    assert_eq!(sources(&act(&mut qt, |d| d.set_audio_cleanup(AudioCleanup::default()))), [String::new()]);
+    assert_eq!(qt.document.clean_audio_status(), CleanAudioStatus::Off);
+    assert!(qt.document.save_now());
+    let saved = std::fs::read_to_string(qt.document.project_path()).unwrap();
+    assert!(!saved.contains("cleanup"));
+}
+
+/// No effect at all about cleaned sound.
+fn no_cleanup_effects(effects: &[Effect]) -> bool {
+    !effects.iter().any(|effect| {
+        matches!(effect, Effect::SetScreenAudioSource(_) | Effect::StartCleanAudio | Effect::CleanAudioChanged)
+    })
+}
+
+#[test]
+fn denoising_needs_the_microphone() {
+    let world = World::new("audio-cleanup-desktop");
+    let mut qt = sound_bundle(&world, "Desktop.omareel", false);
+    assert!(!qt.document.denoise_available());
+    let effects = act(&mut qt, |d| d.set_audio_cleanup(AudioCleanup { denoise: true, ..AudioCleanup::default() }));
+    // Saved, but there is nothing to clean: the desktop sound is left alone.
+    assert_eq!(qt.undo_steps(), 1);
+    assert!(no_cleanup_effects(&effects));
+    assert!(qt.document.clean_audio_job().is_none());
+    // Loudness still applies.
+    act(&mut qt, |d| d.set_project_value("audio.cleanup.loudness", "-14".into(), false));
+    let job = qt.document.clean_audio_job().expect("a loudness job");
+    assert_eq!((job.settings.denoise, job.settings.loudness), (None, Some(-14.0)));
 }

@@ -7,7 +7,7 @@ use crate::compat::qjson;
 use crate::compat::qnumber::{self, number_f64};
 use crate::compat::qprocess::Process;
 use crate::compat::qround::{q_round, q_round64};
-use crate::compat::{cpp, qstring};
+use crate::compat::{cpp, qdir, qstring};
 use crate::input_log::InputLog;
 use crate::media_probe::VideoInfo;
 use crate::project::Clip;
@@ -179,11 +179,92 @@ pub fn click_output_times(input: &InputLog, clips: &[Clip]) -> Vec<f64> {
 /// A clip's audio, brought to one format and to exactly the clip's output length, so a source
 /// with other rates or channels, or audio that ends early, cannot shift the clips after it.
 pub fn audio_segment(source: &str, speed: f64, length: f64) -> String {
+    cleaned_audio_segment(source, speed, length, None)
+}
+
+/// [`audio_segment`] with `cleanup` (filters for 48 kHz stereo, such as the denoiser) before
+/// the speed change.
+pub fn cleaned_audio_segment(source: &str, speed: f64, length: f64, cleanup: Option<&str>) -> String {
     let length = number_f64(length, 'f', 6);
+    let cleanup = cleanup.map(|filters| format!("{filters},")).unwrap_or_default();
     format!(
-        "{source},aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,{},apad=whole_dur={length},atrim=end={length}",
+        "{source},aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,{cleanup}{},apad=whole_dur={length},atrim=end={length}",
         atempo(speed)
     )
+}
+
+/// The export's audio sources: the inputs to open after the video's, from `first_input` on,
+/// and one segment per clip in output order (none when no clip has sound).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct AudioInputs {
+    pub arguments: Vec<String>,
+    pub segments: Vec<String>,
+    /// The next input number free after these.
+    pub next_input: i32,
+}
+
+/// One audio segment per clip: the recording's audio (through `denoise` when given), an
+/// inserted video's own audio, or silence. Each inserted clip opens its file at its in point,
+/// so containers that do not start at zero need no timestamp arithmetic. `insert_has_audio`
+/// says whether an inserted clip's file (its bundle-relative path) has sound.
+pub fn audio_inputs(
+    clips: &[Clip],
+    insert_has_audio: &dyn Fn(&str) -> bool,
+    use_source_audio: bool,
+    bundle: &str,
+    video_path: &str,
+    first_input: i32,
+    denoise: Option<&str>,
+) -> AudioInputs {
+    let mut result = AudioInputs { next_input: first_input, ..AudioInputs::default() };
+    let mut source_input = -1;
+    let mut any_audio = false;
+    for clip in clips {
+        let length = (clip.out - clip.in_) / clip.speed;
+        if clip.is_media() && insert_has_audio(&clip.media) {
+            let input = result.next_input;
+            result.next_input += 1;
+            result.arguments.extend([
+                "-ss".into(),
+                number_f64(clip.in_, 'f', 6),
+                "-t".into(),
+                number_f64(clip.out - clip.in_, 'f', 6),
+                "-i".into(),
+                qdir::file_path(bundle, &clip.media),
+            ]);
+            result.segments.push(audio_segment(&format!("[{input}:a:0]asetpts=PTS-STARTPTS"), clip.speed, length));
+            any_audio = true;
+        } else if !clip.is_media() && use_source_audio {
+            if source_input < 0 {
+                source_input = result.next_input;
+                result.next_input += 1;
+                result.arguments.extend(["-i".into(), video_path.to_owned()]);
+            }
+            result.segments.push(cleaned_audio_segment(
+                &format!(
+                    "[{source_input}:a:0]atrim=start={}:end={},asetpts=PTS-STARTPTS",
+                    number_f64(clip.in_, 'f', 6),
+                    number_f64(clip.out, 'f', 6)
+                ),
+                clip.speed,
+                length,
+                denoise,
+            ));
+            any_audio = true;
+        } else {
+            result.segments.push(silent_segment(length));
+        }
+    }
+    if !any_audio {
+        result.segments.clear();
+    }
+    result
+}
+
+/// `filter` (an [`audio_filter`]) with `master` applied to the finished mix, before `[aout]`.
+pub fn with_master(filter: &str, master: &str) -> String {
+    let body = filter.strip_suffix("[aout]").unwrap_or(filter);
+    format!("{body},{master}[aout]")
 }
 
 pub fn silent_segment(length: f64) -> String {
@@ -484,6 +565,52 @@ mod tests {
             "[1:a]atrim=duration=0.03,asetpts=PTS-STARTPTS,volume=0.25,adelay=2000:all=1[click0];\
              [click0]amix=inputs=1:normalize=0:duration=longest,apad=pad_dur=3.000000,atrim=duration=3.000000[aout]"
         );
+    }
+
+    /// The recording, an inserted video with sound, one without, and the recording again.
+    fn mixed_clips() -> Vec<Clip> {
+        vec![
+            Clip { id: "c1".into(), in_: 0.5, out: 2.0, speed: 1.0, ..Clip::default() },
+            Clip { id: "m1".into(), in_: 1.0, out: 3.0, speed: 2.0, media: "media/talk.mp4".into(), ..Clip::default() },
+            Clip { id: "m2".into(), in_: 0.0, out: 1.0, speed: 1.0, media: "media/mute.mp4".into(), ..Clip::default() },
+            Clip { id: "c2".into(), in_: 4.0, out: 5.0, speed: 0.5, ..Clip::default() },
+        ]
+    }
+
+    // The arguments start() built before audio cleanup, spelled out: with cleanup off they must
+    // stay exactly these.
+    #[test]
+    fn audio_inputs_without_cleanup_are_as_before() {
+        let has_audio = |media: &str| media == "media/talk.mp4";
+        let inputs = audio_inputs(&mixed_clips(), &has_audio, true, "/b", "/b/screen.mp4", 1, None);
+        assert_eq!(inputs.arguments, ["-i", "/b/screen.mp4", "-ss", "1.000000", "-t", "2.000000", "-i", "/b/media/talk.mp4"]);
+        assert_eq!(inputs.next_input, 3);
+        assert_eq!(
+            inputs.segments,
+            [
+                "[1:a:0]atrim=start=0.500000:end=2.000000,asetpts=PTS-STARTPTS,aresample=48000,\
+                 aformat=sample_fmts=fltp:channel_layouts=stereo,atempo=1,apad=whole_dur=1.500000,atrim=end=1.500000",
+                "[2:a:0]asetpts=PTS-STARTPTS,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,atempo=2,\
+                 apad=whole_dur=1.000000,atrim=end=1.000000",
+                "anullsrc=r=48000:cl=stereo,atrim=duration=1.000000,aformat=sample_fmts=fltp:channel_layouts=stereo",
+                "[1:a:0]atrim=start=4.000000:end=5.000000,asetpts=PTS-STARTPTS,aresample=48000,\
+                 aformat=sample_fmts=fltp:channel_layouts=stereo,atempo=0.5,apad=whole_dur=2.000000,atrim=end=2.000000",
+            ]
+        );
+        // No sound anywhere: no inputs and no segments.
+        let silent = audio_inputs(&mixed_clips(), &|_| false, false, "/b", "/b/screen.mp4", 1, None);
+        assert_eq!(silent, AudioInputs { next_input: 1, ..AudioInputs::default() });
+    }
+
+    #[test]
+    fn denoising_reaches_only_the_recording() {
+        let has_audio = |media: &str| media == "media/talk.mp4";
+        let inputs = audio_inputs(&mixed_clips(), &has_audio, true, "/b", "/b/screen.mp4", 1, Some("DN"));
+        assert!(inputs.segments[0].contains("channel_layouts=stereo,DN,atempo=1,apad"));
+        assert!(!inputs.segments[1].contains("DN"));
+        assert!(inputs.segments[3].contains("channel_layouts=stereo,DN,atempo=0.5,apad"));
+        assert_eq!(with_master("X[a0];[a0]amix=inputs=1,atrim=duration=1.000000[aout]", "LN"),
+                   "X[a0];[a0]amix=inputs=1,atrim=duration=1.000000,LN[aout]");
     }
 
     #[test]
