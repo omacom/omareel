@@ -351,3 +351,54 @@ fn camera_crop_folds_into_shape() {
         assert_eq!(Project::from_json(&loaded.to_json()).camera.shape, expected_shape, "{row}");
     }
 }
+
+#[test]
+fn music_is_written_only_when_set() {
+    let project = Project::defaults("Demo", 5.0);
+    let text = project.to_json().to_json(Format::Indented);
+    assert!(!text.contains("music"));
+    let reread = Project::from_json(&object(&text));
+    assert_eq!(reread.music, None);
+    assert_eq!(reread.to_json().to_json(Format::Indented), text);
+}
+
+#[test]
+fn music_round_trips() {
+    let mut project = Project::defaults("Demo", 5.0);
+    project.music = Some(Music {
+        file: "media/song.mp3".into(),
+        volume: 0.4,
+        fade_in: 0.5,
+        fade_out: 3.0,
+        duck: false,
+        loop_: false,
+        start: 12.25,
+    });
+    let text = project.to_json().to_json(Format::Indented);
+    let reread = Project::from_json(&object(&text));
+    assert_eq!(reread.music, project.music);
+    assert_eq!(reread.to_json().to_json(Format::Indented), text);
+    let music = reread.to_json().value("music").to_object();
+    assert_eq!(music.value("file").to_string_or(""), "media/song.mp3");
+    assert!(qcompare(music.value("fadeOut").to_double(0.0), 3.0));
+    assert!(!music.value("loop").to_bool(true));
+}
+
+#[test]
+fn music_keeps_to_what_the_editor_offers() {
+    // Defaults fill in; values are clamped.
+    let p = Project::from_json(&object(r#"{"music": {"file": "media/a.ogg", "volume": 3, "fadeIn": -1, "fadeOut": 99, "start": -4}}"#));
+    let m = p.music.expect("music");
+    assert_eq!(m.file, "media/a.ogg");
+    assert!(qcompare(m.volume, 1.0));
+    assert!(q_fuzzy_is_null(m.fade_in));
+    assert!(qcompare(m.fade_out, Music::MAX_FADE));
+    assert!(q_fuzzy_is_null(m.start));
+    assert!(m.duck && m.loop_);
+    let d = Project::from_json(&object(r#"{"music": {"file": "media/a.ogg"}}"#)).music.unwrap();
+    assert_eq!(d, Music { file: "media/a.ogg".into(), ..Music::default() });
+    // A file outside media/, or none, is no music.
+    for json in [r#"{"music": {"file": "../a.ogg"}}"#, r#"{"music": {"file": "/tmp/a.ogg"}}"#, r#"{"music": {}}"#, r#"{"music": "media/a.ogg"}"#] {
+        assert_eq!(Project::from_json(&object(json)).music, None, "{json}");
+    }
+}

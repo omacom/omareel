@@ -404,6 +404,17 @@ pub fn import_insert(source: &str, bundle_path: &str, probe_video: &dyn Fn(&str)
     if !result.info.is_valid() {
         return result;
     }
+    match copy_into_media(source, bundle_path, "clip") {
+        Ok(path) => result.path = path,
+        Err(error) => result.error = error,
+    }
+    result
+}
+
+/// Brings a file into the bundle's `media/` directory as [`import_insert`] does, naming it from
+/// its own name (`fallback` when nothing is left of that); returns its bundle-relative path. A
+/// file already in this bundle's `media/` is used where it is.
+pub fn copy_into_media(source: &str, bundle_path: &str, fallback: &str) -> Result<String, String> {
     let media = qdir::file_path(bundle_path, "media");
     let file = FileInfo::new(source);
     let media_exists = qdir::dir_exists(&media);
@@ -411,17 +422,15 @@ pub fn import_insert(source: &str, bundle_path: &str, probe_video: &dyn Fn(&str)
         && same_file_info(&file.canonical_path(), &FileInfo::new(media.as_str()).canonical_file_path())
         && !sanitized_media_path(&format!("media/{}", file.file_name())).is_empty()
     {
-        result.path = format!("media/{}", file.file_name());
-        return result;
+        return Ok(format!("media/{}", file.file_name()));
     }
     if !media_exists && !qdir::mkpath(&media) {
-        result.error = qstring::arg("Could not create %1", &media);
-        return result;
+        return Err(qstring::arg("Could not create %1", &media));
     }
     let mut base = replace_unsafe_name_characters(&file.complete_base_name());
     base = base.trim_start_matches('.').to_owned();
     if base.is_empty() {
-        base = "clip".into();
+        base = fallback.into();
     }
     let suffix = file.suffix();
     let suffix = if suffix.is_empty() { String::new() } else { format!(".{}", qstring::to_lower(&suffix)) };
@@ -433,16 +442,38 @@ pub fn import_insert(source: &str, bundle_path: &str, probe_video: &dyn Fn(&str)
         n = n.wrapping_add(1);
     }
     let partial = qdir::file_path(&media, &format!(".{name}.part"));
-    if let Err(error) = clone_or_copy(source, &partial) {
-        result.error = error;
-        return result;
-    }
+    clone_or_copy(source, &partial)?;
     if !rename_no_replace(&partial, &qdir::file_path(&media, &name)) {
         let _ = std::fs::remove_file(&partial);
-        result.error = qstring::arg("Could not add %1 to the recording", &name);
-        return result;
+        return Err(qstring::arg("Could not add %1 to the recording", &name));
     }
-    result.path = format!("media/{name}");
+    Ok(format!("media/{name}"))
+}
+
+/// What [`import_music`] brought into the bundle: the music's media path and the length of its
+/// sound, or why not.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ImportedMusic {
+    pub path: String,
+    pub duration: f64,
+    pub error: String,
+}
+
+/// Probes a file's sound (an audio file, or a video whose sound is used) and brings the file
+/// into the bundle's `media/` directory as [`import_insert`] does.
+pub fn import_music(source: &str, bundle_path: &str, probe_audio: &dyn Fn(&str) -> Result<f64, String>) -> ImportedMusic {
+    let mut result = ImportedMusic::default();
+    match probe_audio(source) {
+        Ok(duration) => result.duration = duration,
+        Err(error) => {
+            result.error = error;
+            return result;
+        }
+    }
+    match copy_into_media(source, bundle_path, "music") {
+        Ok(path) => result.path = path,
+        Err(error) => result.error = error,
+    }
     result
 }
 

@@ -1,6 +1,8 @@
 #ifndef OMAREEL_MEDIA_H
 #define OMAREEL_MEDIA_H
 
+#include <stddef.h>
+
 // See media.c. Kept in step with src/media_av.rs.
 
 struct omr_media_info {
@@ -27,6 +29,14 @@ struct omr_media_info {
 // What ffprobe's -show_entries stream=...:format=duration would say. 0, or a negative AVERROR
 // with `error` set.
 int omr_probe(const char *path, struct omr_media_info *info);
+
+// The length in seconds of the first audio stream's sound (what `-map 0:a:0` plays), in
+// `*duration`: the stream's own length, not the file's (a video's sound can end before its
+// picture). Read from the packets when the header gives no length (a WebM written to a pipe)
+// or only one guessed from the bitrate (an MP3 without a header). 1 when the file has an audio
+// stream (`*duration` below 0 when it holds no sound), 0 when it has none, or a negative
+// AVERROR with `error` set.
+int omr_audio_duration(const char *path, double *duration, char *error, size_t error_size);
 
 // When each frame of the first video stream starts, in seconds and in order, in `*times`
 // (freed with omr_free); the count, or -1 when the file can't be read.

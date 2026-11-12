@@ -100,6 +100,8 @@ was cut).
 | `remove-zoom` | `id` |
 | `clear-zooms` | |
 | `regenerate-zooms` | (rebuilds the automatic zooms around clicks) |
+| `music` | `file` (audio, or a video whose sound is used) and/or `volume` 0–1, `fadeIn`, `fadeOut`, `start` (seconds), `duck`, `loop` (true/false) |
+| `remove-music` | |
 | `set` | `path`, `value`, e.g. `{"op": "set", "path": "keystrokes.enabled", "value": true}` |
 
 Rules the editor enforces, which `apply` reports as errors:
@@ -143,6 +145,11 @@ OPS
   changes all of it. Cuts shrink the zooms they pass through and remove the
   ones they cut entirely.
 - Turn on `keystrokes.enabled` when shortcuts are part of what is shown.
+- Background music runs under the whole video. It is lowered under the
+  recording's own sound when `duck` is on (the default), and it fades in and
+  out at the video's start and end. Keep `volume` low (0.15–0.3) when someone
+  is talking. Only use music files the person gives you or points you to, and
+  check `describe`'s `music` afterwards.
 - Make one change at a time when the person is watching, and describe what
   changed in output times they can find on the timeline.
 

@@ -207,6 +207,36 @@ fn an_open_editor_takes_in_a_project_written_elsewhere() {
 }
 
 #[test]
+fn music_is_added_set_and_removed() {
+    let dir = TempDir::new("agent-music");
+    let bundle = bundle(&dir);
+    let song = dir.join("song.mp3");
+    std::fs::write(&song, b"song").unwrap();
+    let open_with_audio = || {
+        let mut document = open(&bundle, &dir);
+        document.set_audio_probe(Arc::new(|_: &str| Ok(4.0)));
+        document
+    };
+    let add = format!(r#"{{"op": "music", "file": "{song}", "volume": 0.4, "loop": false}}"#);
+    let mut document = open_with_audio();
+    assert!(apply_ops(&mut document, &ops(r#"{"op": "music", "volume": 0.4}"#), false).unwrap_err().contains("no music yet"));
+    apply_ops(&mut document, &ops(&add), true).unwrap();
+    assert_eq!(document.music().unwrap().file, "media/song.mp3");
+    assert!(!std::path::Path::new(&format!("{bundle}/media/song.mp3")).exists(), "a dry run copies nothing");
+    let mut document = open_with_audio();
+    apply_ops(&mut document, &ops(&add), false).unwrap();
+    let music = document.music().unwrap();
+    assert_eq!((music.volume, music.loop_), (0.4, false));
+    assert!(std::path::Path::new(&format!("{bundle}/media/song.mp3")).exists());
+    let summary = Value::Object(describe(&document));
+    assert_eq!(summary.get("music").get("duration").to_double(0.0), 4.0);
+    assert!(apply_ops(&mut document, &ops(r#"{"op": "music", "duck": "yes"}"#), false).is_err());
+    apply_ops(&mut document, &ops(r#"{"op": "remove-music"}"#), false).unwrap();
+    assert!(document.music().is_none());
+    assert!(apply_ops(&mut document, &ops(r#"{"op": "remove-music"}"#), false).is_err());
+}
+
+#[test]
 fn zoom_edges_levels_and_ranges() {
     let dir = TempDir::new("agent-zoom");
     let bundle = bundle(&dir);

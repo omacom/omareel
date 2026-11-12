@@ -186,7 +186,7 @@ pub fn describe(document: &Document) -> Object {
         ("fits", Value::array(allowed_clip_fits().into_iter().map(Value::from).collect())),
     ]);
 
-    Object::from_iter([
+    let mut summary = Object::from_iter([
         ("bundle", Value::from(document.bundle_path())),
         ("name", project.name.as_str().into()),
         ("source", source.into()),
@@ -196,7 +196,15 @@ pub fn describe(document: &Document) -> Object {
         ("activity", activity.into()),
         ("settings", settings.into()),
         ("allowed", allowed.into()),
-    ])
+    ]);
+    if let Some(music) = document.music() {
+        let mut object = Object::from_iter([("file", Value::from(music.file.as_str()))]);
+        if let Some(duration) = document.music_duration() {
+            object.insert("duration", ms(duration));
+        }
+        summary.insert("music", object);
+    }
+    summary
 }
 
 /// `omareel describe <bundle>`: the summary, or the error to report. `bundle` is absolute.

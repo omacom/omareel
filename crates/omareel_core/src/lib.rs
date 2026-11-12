@@ -18,6 +18,7 @@ pub mod media_av;
 pub mod media_probe;
 pub mod microphone_meter;
 pub mod motion_track;
+pub mod music;
 pub mod omarchy_paths;
 pub mod probe;
 pub mod project;

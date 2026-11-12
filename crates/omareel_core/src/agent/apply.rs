@@ -24,12 +24,14 @@
 //! | `remove-zoom` | `id` |
 //! | `clear-zooms` | |
 //! | `regenerate-zooms` | |
+//! | `music` | `file` (audio, or a video whose sound is used) and/or any of `volume` (0–1), `fadeIn`, `fadeOut` (seconds), `duck`, `loop` (booleans), `start` (seconds into the file) |
+//! | `remove-music` | |
 //! | `set` | `path` (dotted, as in describe's `settings`), `value` |
 
 use super::{ms, source_span_outputs, source_time_outputs};
 use crate::compat::qdir;
 use crate::compat::qjson::{self, Format, Object, Value};
-use crate::editor::{Document, Effect, ImportedInsert, ZoomTarget};
+use crate::editor::{Document, Effect, ImportedInsert, ImportedMusic, ZoomTarget};
 use crate::project::{allowed_clip_speeds, Project};
 
 /// One operation's failure, before the operation's number is added.
@@ -160,6 +162,23 @@ fn zoom_level(op: &Object) -> Result<Option<f64>, String> {
     match optional_number(op, "level")? {
         Some(level) if !(1.0..=4.0).contains(&level) => Err("\"level\" must be from 1 to 4".into()),
         level => Ok(level),
+    }
+}
+
+/// The names in the bundle's media/ directory now, to tell a copy a run makes from a file that
+/// was there.
+fn media_names(document: &Document) -> Vec<String> {
+    std::fs::read_dir(qdir::file_path(document.bundle_path(), "media"))
+        .map(|entries| entries.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().into_owned()).collect())
+        .unwrap_or_default()
+}
+
+/// Notes a `media/…` path the run copied (it was not there before), to remove on failure.
+fn note_copy(document: &Document, run: &mut Run, before: &[String], path: &str) {
+    if let Some(name) = path.strip_prefix("media/") {
+        if !before.iter().any(|existing| existing == name) {
+            run.copied.push(qdir::file_path(&qdir::file_path(document.bundle_path(), "media"), name));
+        }
     }
 }
 
@@ -300,16 +319,9 @@ fn run_op(document: &mut Document, op: &Object, run: &mut Run) -> OpResult {
                     Err(error) => return Err(error),
                 }
             } else {
-                let media = qdir::file_path(document.bundle_path(), "media");
-                let before: Vec<String> = std::fs::read_dir(&media)
-                    .map(|entries| entries.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().into_owned()).collect())
-                    .unwrap_or_default();
+                let before = media_names(document);
                 let imported = job.run();
-                if let Some(name) = imported.path.strip_prefix("media/") {
-                    if !before.iter().any(|existing| existing == name) {
-                        run.copied.push(qdir::file_path(&media, name));
-                    }
-                }
+                note_copy(document, run, &before, &imported.path);
                 imported
             };
             document.start_import(&file);
@@ -401,6 +413,54 @@ fn run_op(document: &mut Document, op: &Object, run: &mut Run) -> OpResult {
         "regenerate-zooms" => {
             document.regenerate_zooms();
             with("zooms", document.project().zooms.len() as i64)
+        }
+        "music" => {
+            if !op.value("file").is_undefined() {
+                let file = qdir::absolute_path(&text(op, "file")?);
+                let job = document.music_import_job(&file);
+                let imported = if run.dry_run {
+                    match (job.probe_audio)(&file) {
+                        Ok(duration) => ImportedMusic {
+                            path: format!("media/{}", qdir::FileInfo::new(file.as_str()).file_name()),
+                            duration,
+                            error: String::new(),
+                        },
+                        Err(error) => return Err(error),
+                    }
+                } else {
+                    let before = media_names(document);
+                    let imported = job.run();
+                    note_copy(document, run, &before, &imported.path);
+                    imported
+                };
+                document.start_music_import(&file);
+                document.finish_music_import(imported);
+                if !document.import_error().is_empty() {
+                    return Err(document.import_error().to_owned());
+                }
+            } else if document.music().is_none() {
+                return Err("there is no music yet: give a \"file\"".into());
+            }
+            for key in ["volume", "fadeIn", "fadeOut", "start"] {
+                if let Some(value) = optional_number(op, key)? {
+                    document.set_project_value(&format!("music.{key}"), Value::from(value), false);
+                }
+            }
+            for key in ["duck", "loop"] {
+                match op.value(key) {
+                    Value::Undefined => {}
+                    Value::Bool(value) => document.set_project_value(&format!("music.{key}"), Value::from(*value), false),
+                    _ => return Err(format!("\"{key}\" must be true or false")),
+                }
+            }
+            let file = document.music().map(|music| music.file.clone()).unwrap_or_default();
+            with("file", file)
+        }
+        "remove-music" => {
+            if !document.clear_music() {
+                return Err("there is no music".into());
+            }
+            ok()
         }
         "set" => {
             let path = text(op, "path")?;

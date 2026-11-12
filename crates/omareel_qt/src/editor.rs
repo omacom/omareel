@@ -124,6 +124,12 @@ pub mod qobject {
         // A video being copied into the bundle by insertMedia().
         #[qproperty(bool, importing, READ = importing, NOTIFY = importing_changed)]
         #[qproperty(QString, import_error, READ = import_error, NOTIFY = importing_changed)]
+        // Background music being copied into the bundle by addMusic().
+        #[qproperty(bool, music_importing, READ = music_importing, NOTIFY = importing_changed)]
+        // The music's lane on the timeline: present, file, name, duration (of the file, -1
+        // unknown), extent (output seconds it plays) and waveform (loudness 0 to 1 in equal
+        // steps across the output, empty until measured). Its settings are project.music.
+        #[qproperty(QMap_QString_QVariant, music, READ = music_map, NOTIFY = music_changed)]
         #[qproperty(f64, position, READ = position, NOTIFY = position_changed)]
         #[qproperty(f64, playhead_position, READ = playhead_position, NOTIFY = playhead_position_changed)]
         #[qproperty(bool, playing, READ = playing, NOTIFY = playing_changed)]
@@ -164,6 +170,8 @@ pub mod qobject {
 
         #[qsignal]
         fn project_changed(self: Pin<&mut Editor>);
+        #[qsignal]
+        fn music_changed(self: Pin<&mut Editor>);
         #[qsignal]
         fn duration_changed(self: Pin<&mut Editor>);
         #[qsignal]
@@ -239,6 +247,8 @@ pub mod qobject {
         fn loading(self: &Editor) -> bool;
         fn importing(self: &Editor) -> bool;
         fn import_error(self: &Editor) -> QString;
+        fn music_importing(self: &Editor) -> bool;
+        fn music_map(self: &Editor) -> QMap_QString_QVariant;
         fn position(self: &Editor) -> f64;
         fn playhead_position(self: &Editor) -> f64;
         fn playing(self: &Editor) -> bool;
@@ -377,6 +387,12 @@ pub mod qobject {
         fn insert_media(self: Pin<&mut Editor>, url: &QUrl);
         #[qinvokable]
         fn clear_import_error(self: Pin<&mut Editor>);
+        // Copies an audio file (or a video, whose sound is used) into the bundle's media/
+        // directory and sets it as the background music, replacing any.
+        #[qinvokable]
+        fn add_music(self: Pin<&mut Editor>, url: &QUrl);
+        #[qinvokable]
+        fn clear_music(self: Pin<&mut Editor>);
         #[qinvokable]
         fn add_zoom_at(self: Pin<&mut Editor>, output_time: f64) -> QString;
         #[qinvokable]
@@ -487,6 +503,18 @@ pub mod qobject {
         #[inherit]
         fn playback_set_audio(self: Pin<&mut Editor>, player: i32, volume: f64, muted: bool);
         #[inherit]
+        fn playback_load_music(self: Pin<&mut Editor>, path: &QString);
+        #[inherit]
+        fn playback_sync_music(
+            self: Pin<&mut Editor>,
+            milliseconds: i64,
+            pass: i64,
+            remaining_ms: i64,
+            tolerance_ms: i64,
+            play: bool,
+            volume: f64,
+        );
+        #[inherit]
         fn playback_position(self: &Editor, player: i32) -> i64;
         #[inherit]
         fn playback_position_ready(self: &Editor, player: i32) -> bool;
@@ -514,6 +542,14 @@ pub mod qobject {
 const SCREEN: i32 = 0;
 const CAMERA: i32 = 1;
 const MEDIA: i32 = 2;
+const MUSIC: i32 = 3;
+
+/// How far the music may drift from the playhead while playing before it is moved back: each
+/// correction is an audible skip. QMediaPlayer reports an audio file's position in steps of its
+/// decode chunks (93 ms for 4096 samples at 44.1 kHz), so it reads up to a step behind.
+const MUSIC_TOLERANCE_MS: i64 = 250;
+/// The waveform's steps across the timeline.
+const MUSIC_WAVEFORM_STEPS: usize = 400;
 
 // QMediaPlayer::PlaybackState and MediaStatus.
 const PLAYING_STATE: i32 = 1;
@@ -592,6 +628,13 @@ pub struct EditorRust {
     playhead_clock: Option<Instant>,
     /// The inserted video the media player holds.
     media_player_source: String,
+    /// The music file the music player holds (absolute).
+    music_player_source: String,
+    /// `OMAREEL_MUSIC_TRACE=1`: each music sync is written to stderr.
+    music_trace: bool,
+    /// What the `music` property was last made from, so it changes (and the timeline rebuilds
+    /// the waveform) only when the lane does, not on every slider step.
+    music_lane_key: String,
     pending_scrub_position: f64,
     loading: bool,
     /// The filmstrip and camera strip wait while the editor opens: their decoders took ten cores
@@ -621,6 +664,9 @@ impl EditorRust {
             transport: Transport::default(),
             playhead_clock: None,
             media_player_source: String::new(),
+            music_player_source: String::new(),
+            music_trace: std::env::var_os("OMAREEL_MUSIC_TRACE").is_some_and(|value| value == "1"),
+            music_lane_key: String::new(),
             pending_scrub_position: -1.0,
             loading: true,
             thumbnails_held: true,
@@ -727,6 +773,8 @@ impl qobject::Editor {
             self.as_mut().playback_load_camera(&camera_path);
         }
         self.start_frame_times();
+        // The music opens with the recording, ready when play is pressed.
+        self.as_mut().update_music();
         self.as_mut().rebuild_motion();
         self.as_mut().call_later(RELEASE_THUMBNAILS_CALL, THUMBNAIL_HOLD_MS);
         self.as_mut().call_later(FINISH_LOADING_CALL, 1500);
@@ -765,10 +813,17 @@ impl qobject::Editor {
     fn perform(mut self: Pin<&mut Self>, effect: Effect) {
         match effect {
             Effect::SetScreenAudio { volume, muted } => self.as_mut().playback_set_audio(SCREEN, volume, muted),
-            Effect::UpdateInsertAudio => self.as_mut().update_insert_audio(),
+            Effect::UpdateInsertAudio => {
+                // The music's volume and file follow the project like the inserted video's sound.
+                self.as_mut().update_insert_audio();
+                self.as_mut().update_music();
+            }
             Effect::DirtyChanged => self.as_mut().dirty_changed(),
             Effect::StartAutosaveTimer => self.as_mut().start_editor_timer(AUTOSAVE_TIMER),
-            Effect::ProjectChanged => self.as_mut().project_changed(),
+            Effect::ProjectChanged => {
+                self.as_mut().project_changed();
+                self.as_mut().update_music_lane();
+            }
             Effect::DurationChanged => self.as_mut().duration_changed(),
             Effect::OutputSizeChanged => self.as_mut().output_size_changed(),
             Effect::StartMotionTimer => self.as_mut().start_editor_timer(MOTION_TIMER),
@@ -792,6 +847,7 @@ impl qobject::Editor {
             Effect::SyncCamera { screen_source_time, force } => self.as_mut().sync_camera(screen_source_time, force),
             Effect::StartNextVideoThumbnail => self.as_mut().start_next_video_thumbnail(),
             Effect::StartImport(source) => self.start_import(&source),
+            Effect::StartMusicImport(source) => self.start_music_import(&source),
             Effect::GenerateWallpaperThumbnail { path, thumbnail } => self.generate_wallpaper_thumbnail(path, thumbnail),
         }
     }
@@ -875,6 +931,40 @@ impl qobject::Editor {
         });
     }
 
+    /// The music import [`Effect::StartMusicImport`] asks for.
+    fn start_music_import(&self, source: &str) {
+        let Some(job) = self.document.as_ref().map(|document| document.music_import_job(source)) else { return };
+        let thread = self.qt_thread();
+        self.spawn(move || {
+            let imported = job.run();
+            let _ = thread.queue(move |editor| {
+                editor.edit(|document| document.finish_music_import(imported));
+            });
+        });
+    }
+
+    /// Measures the sound levels the music's waveform and the preview's ducking need, each file
+    /// once, off the GUI thread.
+    fn start_audio_levels(mut self: Pin<&mut Self>) {
+        let requests = match self.as_mut().rust_mut().document.as_mut() {
+            Some(document) => document.take_audio_levels_requests(),
+            None => return,
+        };
+        for path in requests {
+            let thread = self.qt_thread();
+            self.spawn(move || {
+                let levels = omareel_core::music::measure_levels(&path).unwrap_or_default();
+                let _ = thread.queue(move |mut editor| {
+                    if let Some(document) = editor.as_mut().rust_mut().document.as_mut() {
+                        document.set_audio_levels(&path, levels);
+                    }
+                    editor.as_mut().update_music_lane();
+                    editor.update_music();
+                });
+            });
+        }
+    }
+
     /// A wallpaper picker thumbnail, generated off the GUI thread.
     fn generate_wallpaper_thumbnail(&self, path: String, thumbnail: String) {
         let queue = Arc::clone(&self.wallpaper_jobs);
@@ -932,6 +1022,48 @@ impl qobject::Editor {
 
     // ---------------------------------------------------------------------------------------
     // Properties.
+
+    /// Emits `musicChanged` when what the music lane shows changed.
+    fn update_music_lane(mut self: Pin<&mut Self>) {
+        let Some(document) = self.document.as_ref() else { return };
+        let key = match document.music() {
+            Some(music) => format!(
+                "{}|{}|{}|{:?}|{}|{}",
+                music.file,
+                music.start,
+                music.loop_,
+                document.music_duration(),
+                document.duration(),
+                document.audio_levels_revision()
+            ),
+            None => String::new(),
+        };
+        if key != self.music_lane_key {
+            self.as_mut().rust_mut().music_lane_key = key;
+            self.music_changed();
+        }
+    }
+
+    fn music_importing(&self) -> bool {
+        self.document.as_ref().is_some_and(Document::music_importing)
+    }
+
+    fn music_map(&self) -> QMap<QMapPair_QString_QVariant> {
+        let Some(document) = self.document.as_ref() else { return QMap::default() };
+        let (Some(music), Some((extent, waveform))) = (document.music(), document.music_lane(MUSIC_WAVEFORM_STEPS)) else {
+            return map([("present", QVariant::from(&false))]);
+        };
+        let name = music.file.rsplit('/').next().unwrap_or(&music.file).to_owned();
+        let waveform = Value::Array(waveform.into_iter().map(Value::from).collect());
+        map([
+            ("present", QVariant::from(&true)),
+            ("file", QVariant::from(&qstring(&music.file))),
+            ("name", QVariant::from(&qstring(&name))),
+            ("duration", QVariant::from(&document.music_duration().unwrap_or(-1.0))),
+            ("extent", QVariant::from(&extent)),
+            ("waveform", json_variant(&waveform)),
+        ])
+    }
 
     fn is_valid(&self) -> bool {
         self.document.is_some()
@@ -1491,6 +1623,15 @@ impl qobject::Editor {
         self.edit(Document::clear_import_error);
     }
 
+    fn add_music(self: Pin<&mut Self>, url: &QUrl) {
+        let source = qobject::url_path(url).to_string();
+        self.edit(|document| document.start_music_import(&source));
+    }
+
+    fn clear_music(self: Pin<&mut Self>) {
+        self.edit(Document::clear_music);
+    }
+
     fn add_zoom_at(self: Pin<&mut Self>, output_time: f64) -> QString {
         self.add_zoom_at_with_length(output_time, 2.0)
     }
@@ -1688,6 +1829,7 @@ impl qobject::Editor {
             self.as_mut().sync_camera(source, true);
         }
         self.as_mut().update_insert_audio();
+        self.as_mut().update_music();
         self.prepare_next_clip();
     }
 
@@ -1695,7 +1837,8 @@ impl qobject::Editor {
         self.as_mut().set_transport_playing(false);
         self.as_mut().playback_pause(SCREEN);
         self.as_mut().playback_pause(CAMERA);
-        self.playback_pause(MEDIA);
+        self.as_mut().playback_pause(MEDIA);
+        self.update_music();
     }
 
     fn step_frames(mut self: Pin<&mut Self>, frames: i32) {
@@ -1791,7 +1934,8 @@ impl qobject::Editor {
         let position = self.position();
         self.as_mut().reset_playhead_clock(position);
         self.as_mut().position_changed();
-        self.composition_changed();
+        self.as_mut().composition_changed();
+        self.update_music();
     }
 
     fn set_playhead_position(mut self: Pin<&mut Self>, output_time: f64) {
@@ -1921,6 +2065,48 @@ impl qobject::Editor {
         self.as_mut().playback_set_audio(MEDIA, volume, muted);
     }
 
+    /// Keeps the music player on the playhead: its file, where in it, playing or paused, and
+    /// its volume with the fades and ducking there. Called as the transport moves and on every
+    /// tick while playing.
+    fn update_music(mut self: Pin<&mut Self>) {
+        let output = self.position();
+        let playing = self.transport.playing && !self.transport.scrubbing;
+        let Some(playback) = self.document.as_ref().map(|document| document.music_playback(output)) else { return };
+        let Some(playback) = playback else {
+            if !self.music_player_source.is_empty() {
+                self.as_mut().rust_mut().music_player_source.clear();
+                self.as_mut().playback_load_music(&QString::default());
+            }
+            return;
+        };
+        if self.music_player_source != playback.path {
+            self.as_mut().rust_mut().music_player_source = playback.path.clone();
+            self.as_mut().playback_load_music(&qstring(&playback.path));
+            self.as_mut().start_audio_levels();
+        }
+        let play = playing && playback.audible;
+        if self.music_trace {
+            print_error(&format!(
+                "music output={output:.3} target_ms={} pass={} player_ms={} gain={:.3} play={play} state={}\n",
+                playback.position_ms,
+                playback.pass,
+                self.playback_position(MUSIC),
+                playback.gain,
+                self.playback_state(MUSIC)
+            ));
+        }
+        self.as_mut().playback_sync_music(
+            playback.position_ms,
+            playback.pass,
+            playback.remaining_ms,
+            MUSIC_TOLERANCE_MS,
+            play,
+            playback.gain,
+        );
+        // The recording's and inserted videos' levels, once ducking needs them.
+        self.start_audio_levels();
+    }
+
     /// `setTransportPlaying(value)`: what Space controls; the players follow it as clips change
     /// hands.
     fn set_transport_playing(mut self: Pin<&mut Self>, value: bool) {
@@ -1996,7 +2182,8 @@ impl qobject::Editor {
             let position = self.playback_position(player);
             self.as_mut().handle_player_position(position);
         }
-        self.update_playhead_position();
+        self.as_mut().update_playhead_position();
+        self.update_music();
     }
 
     /// `handlePreviewStats()`.
@@ -2092,6 +2279,9 @@ impl qobject::Editor {
             }
         } else if player == MEDIA && status == END_OF_MEDIA && self.transport.playing && self.clip_is_media(active) {
             self.call_later(ADVANCE_CLIP_CALL, 0);
+        } else if player == MUSIC && [LOADED_MEDIA, BUFFERED_MEDIA].contains(&status) {
+            // A file still opening ignored where it was asked to be.
+            self.update_music();
         }
     }
 
