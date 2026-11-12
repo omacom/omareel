@@ -135,7 +135,8 @@ impl Default for Audio {
 /// then filters the desktop sound too.
 /// `strength`: how much of the denoised sound replaces the original, 0.1 to 1.
 /// `loudness`: the export's integrated loudness target in LUFS, two-pass and linear where the
-/// true peak (-1.5 dBTP) allows: "off", "-16" (podcasts, YouTube) or "-14" (social video).
+/// true peak allows (-1.5 dBTP once encoded): "off", "-16" (podcasts, YouTube) or "-14" (social
+/// video).
 #[derive(Clone, Debug, PartialEq)]
 pub struct AudioCleanup {
     pub denoise: bool,

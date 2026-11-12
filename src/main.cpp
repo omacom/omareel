@@ -276,6 +276,10 @@ static int exportCommand(const QStringList &arguments)
     Exporter exporter;
     bool success = false;
     QString failure;
+    QObject::connect(&exporter, &Exporter::measuring, [](double fraction) {
+        QTextStream(stderr) << '\r' << "Measuring loudness " << qRound(fraction * 100) << '%' << Qt::flush;
+        if (fraction >= 1.0) QTextStream(stderr) << '\n' << Qt::flush;
+    });
     QObject::connect(&exporter, &Exporter::progress, [](int frame, int total) {
         if (frame == total || frame == 1 || frame % 10 == 0)
             QTextStream(stderr) << '\r' << "Exporting " << frame << '/' << total << Qt::flush;

@@ -26,8 +26,10 @@ use std::sync::Arc;
 /// <https://github.com/GregorR/rnnoise-models> (LICENSES/rnnoise-models.txt).
 pub const MODEL: &[u8] = include_bytes!("../../../assets/audio/rnnoise-sh.rnnn");
 
-/// The true peak loudness normalisation keeps under, in dBTP.
-pub const TRUE_PEAK: f64 = -1.5;
+/// The true peak loudnorm limits to, in dBTP: half a decibel under the -1.5 dBTP delivery
+/// target, for the AAC encoder's overshoot (denoised speech came out at -1.2 dBTP when limited at
+/// -1.5).
+pub const TRUE_PEAK: f64 = -2.0;
 
 /// The loudness range loudnorm aims for unless the sound already has a wider one, which it then
 /// keeps (so the gain stays linear).
@@ -362,12 +364,12 @@ mod tests {
             "arnndn=m=/run/m.rnnn:mix=0.85,atrim=start_sample=480,asetpts=PTS-STARTPTS"
         );
         assert!(denoise_filter("/run/m.rnnn", 1.0).starts_with("arnndn=m=/run/m.rnnn:mix=1,"));
-        assert_eq!(loudness_measure_filter(-16.0), "loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json");
+        assert_eq!(loudness_measure_filter(-16.0), "loudnorm=I=-16:TP=-2:LRA=11:print_format=json");
         let measured =
             LoudnessMeasurement { integrated: -27.61, true_peak: -4.47, range: 18.06, threshold: -39.2, offset: 0.58 };
         assert_eq!(
             loudness_apply_filter(-14.0, &measured).unwrap(),
-            "loudnorm=I=-14:TP=-1.5:LRA=18.06:measured_I=-27.61:measured_TP=-4.47:measured_LRA=18.06:\
+            "loudnorm=I=-14:TP=-2:LRA=18.06:measured_I=-27.61:measured_TP=-4.47:measured_LRA=18.06:\
              measured_thresh=-39.20:offset=0.58:linear=true:print_format=none,aresample=48000"
         );
         let narrow = LoudnessMeasurement { range: 4.0, ..measured };
@@ -432,9 +434,10 @@ mod tests {
         line.trim().trim_start_matches("I:").trim().trim_end_matches("LUFS").trim().parse().unwrap()
     }
 
-    /// A 12 s test recording: speech-like tone bursts (espeak-ng speech when it is installed)
-    /// from 2 s to 9 s over pink and brown noise ("fan and hiss"), with a black video.
-    pub(crate) fn noisy_recording(dir: &std::path::Path) -> String {
+    /// A 12 s test recording: espeak-ng speech (a buzz talking in syllables without it) from 2 s
+    /// to 9 s over pink and brown noise ("fan and hiss"), with a black video. True when the
+    /// voice is speech: RNNoise takes a buzz for noise.
+    pub(crate) fn noisy_recording(dir: &std::path::Path) -> (String, bool) {
         let path = dir.join("screen.mp4").to_string_lossy().into_owned();
         let speech = dir.join("speech.wav").to_string_lossy().into_owned();
         let espeak = !find_executable("espeak-ng").is_empty()
@@ -449,7 +452,7 @@ mod tests {
             format!("amovie={},aresample=48000,apad=whole_dur=7,atrim=0:7", escape_filter_value(&speech))
         } else {
             // A buzzy 140 Hz voice that talks in syllables.
-            "aevalsrc='0.4*sin(2*PI*140*t)*(0.6+0.4*sin(2*PI*3*t))*sgn(sin(2*PI*1.7*t)+0.3)*(sin(2*PI*1.7*t)>-0.3)':s=48000:d=7"
+            "aevalsrc='0.4*sin(2*PI*140*t)*(0.6+0.4*sin(2*PI*3*t))*gt(sin(2*PI*1.7*t),-0.3)':s=48000:d=7"
                 .into()
         };
         let graph = format!(
@@ -466,7 +469,7 @@ mod tests {
         )
         .unwrap();
         assert!(out.succeeded(), "{}", String::from_utf8_lossy(&out.stderr));
-        path
+        (path, espeak)
     }
 
     #[test]
@@ -477,7 +480,7 @@ mod tests {
         }
         let dir = std::env::temp_dir().join(format!("omareel-denoise-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let video = noisy_recording(&dir);
+        let (video, speech) = noisy_recording(&dir);
         let output = dir.join("clean.m4a").to_string_lossy().into_owned();
         let job = CleanAudioJob {
             video_path: video.clone(),
@@ -492,7 +495,9 @@ mod tests {
         let (voice_before, voice_after) = (rms_db(&video, 3.0, 8.0), rms_db(&output, 3.0, 8.0));
         eprintln!("noise floor {noise_before:.1} -> {noise_after:.1} dB, voice {voice_before:.1} -> {voice_after:.1} dB");
         assert!(noise_before - noise_after >= 10.0, "the noise floor fell {:.1} dB", noise_before - noise_after);
-        assert!(voice_before - voice_after <= 6.0, "the voice fell {:.1} dB", voice_before - voice_after);
+        if speech {
+            assert!(voice_before - voice_after <= 3.0, "the voice fell {:.1} dB", voice_before - voice_after);
+        }
         // Same length: the preview plays it on the recording's timeline.
         let probe = crate::compat::qprocess::run(
             "ffprobe", &["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", &output], 15000).unwrap();
@@ -503,7 +508,7 @@ mod tests {
         let loud = dir.join("loud.m4a").to_string_lossy().into_owned();
         let job = CleanAudioJob {
             output_path: loud.clone(),
-            settings: CleanSettings { denoise: Some(1.0), loudness: Some(-16.0) },
+            settings: CleanSettings { denoise: speech.then_some(1.0), loudness: Some(-16.0) },
             ..job
         };
         assert_eq!(job.run(), Ok(loud.clone()));

@@ -128,7 +128,8 @@ Exports `.mp4` or `.gif`. Common options are `--fps N`, `--width W`, and `--qual
 Quality may be `low`, `medium`, `high`, `best`, `web-low`, `web-high`, `social`, or `studio`.
 GIF-specific overrides are `--gif-fps N` and `--gif-width W`.
 Add `--timing` to print average decode wait, upload, render, readback, encoder-write, and
-end-to-end throughput measurements.
+end-to-end throughput measurements. A project with loudness normalisation (see
+[Audio cleanup](#audio-cleanup)) prints `Measuring loudness N%` before the frames.
 
 ### `probe BUNDLE`
 
@@ -196,6 +197,59 @@ background, like the screen. Trim, split, speed, and delete work as for other cl
 earlier** and **Move later** move it past its neighbour. Recording clips keep their order. If an
 inserted video goes missing from `media/`, its clip is marked Missing and export stops until it
 is restored or deleted.
+
+## Audio cleanup
+
+The Audio panel's **Cleanup** section makes a laptop-microphone recording sound better:
+
+- **Reduce noise** suppresses fan noise, hiss, keyboard clatter, and room tone in your voice with
+  RNNoise, a speech denoiser. **Strength** (10–100%, default 85%) sets how much of the
+  denoised sound replaces the original. It is offered when the recording has microphone sound.
+  The recording keeps the microphone and the system audio in one track, so system audio is
+  filtered too, which can dull music or effects; inserted videos are never filtered.
+- **Loudness** evens the export out to a standard level: **−16 LUFS** (podcasts, YouTube) or
+  **−14 LUFS** (social video). Export measures the finished mix first (the export shows
+  "Measuring loudness"), then applies one gain to all of it, keeping the true peak under
+  −1.5 dBTP after encoding (loudnorm limits at −2 dBTP, and only when the gain alone would pass
+  it).
+
+The preview plays the cleaned sound once it has been made in the background (a few seconds for
+a few minutes of recording); until then it plays the recording as it was. **Hear original**
+switches the preview back to the recorded sound for comparing, without changing the project.
+The preview's loudness is measured over the whole recording, the export's over the edited mix,
+so they can differ slightly when cuts remove much louder or quieter parts. Cleaned sound is
+cached in `~/.cache/omareel/omareel/audio-cleanup/`, beside the filmstrips (the last three versions
+per recording).
+
+`project.json` stores the choice as `audio.cleanup`, written only once something is switched on:
+
+```json
+"audio": {"desktop": true, "mic": true, "volume": 1,
+          "cleanup": {"denoise": true, "strength": 0.85, "loudness": "-16"}}
+```
+
+`denoise` is a boolean, `strength` a number from 0.1 to 1 (clamped), and `loudness` one of
+`"off"`, `"-16"`, `"-14"` (a number such as `-16` is read too; anything else is `"off"`).
+Without `cleanup`, or with everything off, export is exactly as before.
+
+Measured on 20 s of espeak-ng speech with synthetic noise. "Floor" is how far the level fell
+where nobody speaks; SI-SDR (scale-invariant signal-to-distortion ratio against the clean speech)
+goes from the noisy input to the output; "Speech" is the level change while speaking:
+
+| Noise | Filter | Floor | SI-SDR | Speech |
+| --- | --- | --- | --- | --- |
+| fan + hiss, 10 dB SNR | RNNoise 85% (default) | −9.6 dB | 8.4 → 12.8 dB | −0.6 dB |
+| | RNNoise 100% | −11.1 dB | 8.4 → 12.5 dB | −0.7 dB |
+| | afftdn, eight settings | 0 to −2.5 dB | 8.4 → 7.5–8.7 dB | 0 to −1.0 dB |
+| fan + hiss, 3 dB SNR | RNNoise 85% | −9.6 dB | 1.4 → 7.8 dB | −2.3 dB |
+| | RNNoise 100% | −10.8 dB | 1.4 → 8.0 dB | −2.5 dB |
+| | afftdn, eight settings | 0 to −1.2 dB | 1.4 → 0.9–1.6 dB | 0 to −0.8 dB |
+| hiss 15 dB + keyboard | RNNoise 85% | −13.6 dB | 8.7 → 14.9 dB | −0.6 dB |
+| | RNNoise 100% | −19.6 dB | 8.7 → 14.7 dB | −0.6 dB |
+| | afftdn `nf=-20` | −7.3 dB | 8.7 → 11.6 dB | −1.0 dB |
+
+On clean speech RNNoise keeps an SI-SDR of 20.4 dB at 85% (19.0 dB at 100%); afftdn with
+`nf=-20` drops it to 14.1 dB. `anlmdn` crashes ffmpeg 9.0.2 with heap corruption.
 
 ## Project bundle
 

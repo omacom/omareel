@@ -11,6 +11,8 @@ cursor-following zooms. Finished projects export to MP4 or GIF.
 
 - Region, window, or focused-monitor recording through `gpu-screen-recorder` at 60 fps by default.
 - Optional desktop and microphone audio in a single compatible audio track.
+- One-switch audio cleanup: RNNoise noise suppression for the microphone and two-pass loudness
+  normalisation to −16 or −14 LUFS, previewed before export.
 - Non-destructive clip trimming, splitting, speed changes, and timeline zoom editing.
 - Rubber-band multi-selection for zoom blocks, with grouped movement and deletion.
 - Omarchy wallpaper and live accent-color integration.
@@ -168,6 +170,9 @@ The frozen engineering contract is in [docs/SPEC.md](docs/SPEC.md).
 
 Interface icons are from Lucide, used under the ISC license. See
 [`LICENSES/lucide.txt`](LICENSES/lucide.txt).
+
+Noise suppression uses the RNNoise model "somnolent-hogwash" from GregorR/rnnoise-models,
+built into the binary. See [`LICENSES/rnnoise-models.txt`](LICENSES/rnnoise-models.txt).
 
 The interface is set in Inter, bundled under the SIL Open Font License 1.1. See
 [`LICENSES/inter.txt`](LICENSES/inter.txt). Numbers, timecodes, and keys use your Omarchy

@@ -62,6 +62,15 @@ public:
     void syncCamera(qint64 targetMs, qint64 toleranceMs, bool force, bool covered);
     // The screen's sound is the recording's; the media player's is the inserted video's.
     void setAudio(Player player, double volume, bool muted);
+    // Plays the screen's sound from another file of the same length (the editor's cleaned
+    // sound) in place of the recording's own, once it has loaded: a player of its own follows
+    // the screen player's position, rate and play state, so the picture is untouched. An empty
+    // path goes back to the recording's sound.
+    void setScreenAudioSource(const QString &path);
+    // The file the screen's sound plays from now: empty for the recording's own.
+    QString screenAudioSource() const;
+    qint64 screenAudioPosition() const { return m_screenSoundPlayer.position(); }
+    QMediaPlayer::PlaybackState screenAudioState() const { return m_screenSoundPlayer.playbackState(); }
 
     qint64 position(Player player) const;
     // False while the media player's file is still opening or a seek waits on it: it has no
@@ -88,6 +97,11 @@ private:
     QMediaPlayer &player(Player player);
     const QMediaPlayer &player(Player player) const;
     bool playingNow(Player player) const { return m_playingQuery && m_playingQuery(player); }
+    // Volume and mute for the screen's sound, on whichever player makes it.
+    void applyScreenAudio();
+    // Brings the screen sound player to the screen player's rate and play state, and to its
+    // position when `seek` or when it has drifted off.
+    void followScreen(bool seek);
 
     // Declared before the players so they outlive any frame a player delivers as it is torn down.
     std::function<bool(Player)> m_playingQuery;
@@ -96,8 +110,17 @@ private:
     QMediaPlayer m_cameraPlayer;
     // Holds one inserted video at a time.
     QMediaPlayer m_mediaPlayer;
+    // Plays the screen's sound from setScreenAudioSource()'s file.
+    QMediaPlayer m_screenSoundPlayer;
     std::unique_ptr<QAudioOutput> m_audioOutput;
     std::unique_ptr<QAudioOutput> m_mediaAudioOutput;
+    std::unique_ptr<QAudioOutput> m_screenSoundOutput;
+    double m_screenVolume = 1.0;
+    bool m_screenMuted = false;
+    // The screen sound player has its file loaded and makes the screen's sound.
+    bool m_screenSoundActive = false;
+    // When the screen sound player was last moved to correct drift (ms since epoch).
+    qint64 m_screenSoundCorrectedAt = 0;
     QPointer<QVideoSink> m_videoSink;
     QPointer<QVideoSink> m_cameraVideoSink;
     QPointer<QVideoSink> m_mediaVideoSink;
