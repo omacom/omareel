@@ -145,7 +145,9 @@ auto-generated zoom summary.
 | `S` | Split at playhead |
 | `Z` | Add a zoom of up to two seconds at the playhead |
 | `I` | Insert a video at the playhead |
-| `Delete` | Remove the selected time range, selected zooms, or selected clip |
+| `T`, `R`, `A`, `N`, `B` | Add a text label, box, arrow, numbered step, or blur region at the playhead |
+| `Shift+T` | Add a title card at the playhead |
+| `Delete` | Remove the selected time range, annotation, zooms, or clip |
 | `Backspace` | Remove the selected time range |
 | `Ctrl+Z`, `Ctrl+Shift+Z` | Undo/redo |
 | `Ctrl+S` | Save |
@@ -164,6 +166,36 @@ Shift+drag on the ruler or video row selects a time range. Drag either orange ra
 adjust it and preview that endpoint. Seeking and Space playback stay inside the range; playback
 stops at its end and restarts at its start. Press Delete or Backspace to cut the range and join
 the remaining footage, or Escape to clear it.
+
+## Annotations
+
+The **Annotate** button in the bottom toolbar, the Annotate panel, and the keys above add an
+annotation at the playhead, three seconds long:
+
+- **Text** (`T`): a label with a font size, a colour, and a theme-coloured pill behind it or none.
+- **Box** (`R`): a rounded outline around a region; **Spotlight** dims everything outside it.
+- **Arrow** (`A`): from one point to another.
+- **Step** (`N`): a numbered circle; each new one takes the next number.
+- **Blur** (`B`): pixelates or blurs the recording under a rectangle, to hide a password, key,
+  or message. The export bakes it into the recording's own pixels before anything is drawn, so
+  it covers exactly the frames and place the preview shows, on the GPU and the software path
+  alike, and it never fades.
+- **Card** (`Shift+T`): a full-frame title card with a title and subtitle over the project's
+  background, styled from the Omarchy theme.
+
+Click an annotation on the preview to select it; drag it to move it, and drag its corner handles
+(an arrow's two ends) to resize it. Annotations get their own **Overlay** row on the timeline once
+there is one: drag a block to move it in time and its edges to trim it. The Annotate panel edits
+the selected one's text, size, colour, line, spotlight, number, blur style and strength, and fades.
+`Delete` removes it, and each drag or slider gesture is one undo step.
+
+Annotations either follow the recording or sit on the frame (the panel's **Follow the
+recording** switch). Boxes, arrows, steps and blur follow the recording by default: they move
+with zooms and the crop, keep to the moment they mark through cuts, and hide while an inserted
+video plays. Text and cards sit on the frame by default: they stay put on the canvas and keep
+their place on the edited timeline. A card is an overlay rather than a clip of its own, so the
+recording keeps playing (and its sound with it) underneath; put it over a still moment, or at the
+start or end.
 
 ## Clip layouts
 
@@ -204,6 +236,28 @@ The bundle directory contains `screen.mp4`, its `screen.mp4.ts` first-frame time
 videos. Video remains unchanged while
 clip, style, cursor, and zoom edits are stored in `project.json`.
 
+Annotations are `project.json`'s `overlays` list, written only when there is one (older projects
+stay byte for byte as they were). Each item:
+
+| Field | Meaning |
+| --- | --- |
+| `id`, `kind` | `kind` is `text`, `box`, `arrow`, `badge`, `blur` or `card` |
+| `anchor` | `screen`: follows the recording; `frame`: fixed on the canvas. `blur` is always `screen`, `card` always `frame` |
+| `start`, `end` | Seconds: of the recording (source) for `screen` items, of the edited output for `frame` items |
+| `rect` | `{x, y, w, h}`, 0–1 of the recording's full frame (before the crop) for `screen` items, of the canvas for `frame` items; not for `arrow` or `card` |
+| `fadeIn`, `fadeOut` | Seconds of fading (not for `blur`) |
+| `text`, `size`, `background` | `text`: the label, its pixel size at 1080 p, and `pill` or `none` |
+| `color` | `text`, `box`, `arrow`, `badge`: `#rrggbb`; absent means the Omarchy theme's colour |
+| `width`, `radius`, `spotlight` | `box`: line width and corner radius in pixels at 1080 p, and dimming outside it (0–1); `arrow`: `width` |
+| `from`, `to` | `arrow`: tail and head, `{x, y}` like `rect` |
+| `number` | `badge`: the number shown |
+| `style`, `amount` | `blur`: `pixelate` or `blur`, and strength 0–1 (cells or blur radius of 1–4 % of the recording's height) |
+| `title`, `subtitle` | `card` |
+
+Deleting a range of the timeline shrinks or removes annotations: `screen` items keep what still
+shows of their source span, as zooms do; `frame` items after the cut move back with it, and those
+inside it go.
+
 ## Environment
 
 - `OMAREEL_DEBUG=1` appends `gpu-screen-recorder` stderr to `/tmp/omareel.log`.
@@ -233,7 +287,7 @@ clip, style, cursor, and zoom edits are stored in `project.json`.
 - `OMAREEL_SCREENSHOT=/path/out.png` makes `omareel edit` capture its own window with
   `QQuickWindow::grabWindow()` three seconds after loading, save the PNG, and quit. The launcher
   supports the same capture flag.
-- `OMAREEL_SCREENSHOT_PANEL=background|shape|cursor|zoom|clip|camera|keystrokes|audio` selects an editor inspector
+- `OMAREEL_SCREENSHOT_PANEL=background|shape|cursor|zoom|clip|camera|keystrokes|audio|annotate` selects an editor inspector
   before the debug capture.
 - `OMAREEL_SCREENSHOT_SIZE=1440x900` sets the debug-capture window dimensions.
 - `OMAREEL_SCREENSHOT_HOVER_HANDLE=clip-right|zoom-left` forces the selected block's named
