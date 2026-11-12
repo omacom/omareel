@@ -12,12 +12,18 @@
 //! The order of everything, the ffmpeg arguments, the error messages and the files are the
 //! C++'s. Cancelling only sets the shared flag, so it is safe from any thread at any time; the
 //! threads notice it where the C++ threads did.
+//!
+//! With [`ExportOptions::still_times`] or [`ExportOptions::still_count`] the job renders single
+//! frames instead (`omareel frame`): no encoder and no audio, and a decode thread that starts
+//! each still's decoders where the export's would be at that frame ([`still`]). The frame loop
+//! is the same, over [`total_frames`](ExportJob::total_frames) stills.
 
 pub mod composition;
 pub mod decoder;
 pub mod encoder_pipe;
 pub mod hardware;
 pub mod plan;
+pub mod still;
 
 use crate::clip_timeline::ClipTimeline;
 use crate::compat::qdir::{self, FileInfo};
@@ -58,6 +64,10 @@ pub struct ExportOptions {
     pub gif_fps: i32,
     pub gif_width: i32,
     pub timing: bool,
+    /// Render these output times as stills instead of exporting (see [`still`]).
+    pub still_times: Vec<f64>,
+    /// Or this many stills spread over the output ([`still::spaced_times`]).
+    pub still_count: i32,
 }
 
 /// A decoded frame, shared by the frames that repeat it: tightly packed RGBA rows, or with
@@ -188,6 +198,8 @@ struct DecodePlan {
     height: i32,
     fps: i32,
     total_frames: i32,
+    /// The output frames to decode as stills, in order; empty for an export.
+    stills: Vec<i32>,
     /// The recording's frames come as YUV in this layout ([`ExportJob::set_yuv_screen`]).
     screen_yuv: Option<YuvLayout>,
 }
@@ -216,6 +228,8 @@ pub struct ExportJob {
     width: i32,
     height: i32,
     total_frames: i32,
+    /// The output frame each still shows; empty for an export.
+    still_frames: Vec<i32>,
     decode_width: i32,
     decode_height: i32,
     camera_decode_width: i32,
@@ -336,6 +350,13 @@ impl ExportJob {
         }
         let (width, height) = plan::padded_even_size(width, height);
         let total_frames = cpp::max(1, cpp::int_cast((output_duration * f64::from(fps)).ceil()));
+        let still_times = if options.still_count > 0 {
+            still::spaced_times(options.still_count, output_duration)
+        } else {
+            options.still_times.clone()
+        };
+        let still_frames: Vec<i32> =
+            still_times.iter().map(|&time| still::output_frame(time, fps, total_frames)).collect();
 
         let mut maximum_zoom = 1.0;
         for zoom in &project.zooms {
@@ -411,6 +432,7 @@ impl ExportJob {
             width,
             height,
             total_frames,
+            still_frames,
             decode_width,
             decode_height,
             camera_decode_width,
@@ -457,8 +479,24 @@ impl ExportJob {
         self.height
     }
 
+    /// The frames the frame loop renders: the export's, or the stills'.
     pub fn total_frames(&self) -> i32 {
-        self.total_frames
+        if self.is_still() { self.still_frames.len() as i32 } else { self.total_frames }
+    }
+
+    /// Whether this job renders stills rather than exporting.
+    pub fn is_still(&self) -> bool {
+        !self.still_frames.is_empty()
+    }
+
+    /// The output time each still shows: the start of the frame on screen at the time asked for.
+    pub fn still_times(&self) -> Vec<f64> {
+        self.still_frames.iter().map(|&frame| still::frame_time(frame, self.fps)).collect()
+    }
+
+    /// The edited video's length in seconds.
+    pub fn output_duration(&self) -> f64 {
+        self.output_duration
     }
 
     pub fn is_gif(&self) -> bool {
@@ -514,6 +552,13 @@ impl ExportJob {
     /// and the decode thread. `software_rendering` frames come top-down; OpenGL's are flipped.
     pub fn start(&mut self, software_rendering: bool) -> Result<(), String> {
         self.software_rendering = software_rendering;
+        if self.is_still() {
+            let work = self.decode_plan();
+            let shared = Arc::clone(&self.decode);
+            let cancelled = Arc::clone(&self.cancelled);
+            self.decode_thread = Some(std::thread::spawn(move || still_decode_thread(&work, &shared, &cancelled)));
+            return Ok(());
+        }
         let gif = self.gif;
         let mut runtime = qdir::env_var("XDG_RUNTIME_DIR").unwrap_or_default();
         if runtime.is_empty() || !FileInfo::new(&runtime).is_writable() {
@@ -684,7 +729,15 @@ impl ExportJob {
             }
         }
 
-        let work = DecodePlan {
+        let work = self.decode_plan();
+        let shared = Arc::clone(&self.decode);
+        let cancelled = Arc::clone(&self.cancelled);
+        self.decode_thread = Some(std::thread::spawn(move || decode_thread(&work, &shared, &cancelled)));
+        Ok(())
+    }
+
+    fn decode_plan(&self) -> DecodePlan {
+        DecodePlan {
             clips: self.project.clips.clone(),
             timeline: self.timeline.clone(),
             inserts: self.inserts.clone(),
@@ -703,24 +756,26 @@ impl ExportJob {
             height: self.height,
             fps: self.fps,
             total_frames: self.total_frames,
+            stills: self.still_frames.clone(),
             screen_yuv: if self.yuv_screen && !self.gif {
                 self.media.yuv_matrix.map(|matrix| YuvLayout { matrix, full_range: self.media.full_range })
             } else {
                 None
             },
-        };
-        let shared = Arc::clone(&self.decode);
-        let cancelled = Arc::clone(&self.cancelled);
-        self.decode_thread = Some(std::thread::spawn(move || decode_thread(&work, &shared, &cancelled)));
-        Ok(())
+        }
     }
 
-    /// Frame `frame` of the output: waits for the decoder, then updates the composition state.
-    /// An error ends the export ("Export cancelled", or why decoding stopped).
+    /// Frame `frame` of the output (or still `frame`): waits for the decoder, then updates the
+    /// composition state. An error ends the export ("Export cancelled", or why decoding stopped).
     pub fn next_frame(&mut self, frame: i32) -> Result<FrameImages, String> {
         if self.is_cancelled() {
             return Err("Export cancelled".into());
         }
+        let frame = if self.is_still() {
+            usize::try_from(frame).ok().and_then(|index| self.still_frames.get(index)).copied().unwrap_or(-1)
+        } else {
+            frame
+        };
         let output_time = f64::from(frame) / f64::from(self.fps);
         let stage_timer = Instant::now();
         let packet = {
@@ -1073,9 +1128,10 @@ fn image(pixels: Vec<u8>, width: i32, height: i32, yuv: Option<YuvLayout>) -> Im
     Image { width, height, pixels: Arc::new(pixels), yuv }
 }
 
-/// Starts `decoder` on `clip`: the recording at the decode size, or an inserted video scaled to
-/// its own size.
-fn start_clip_decoder(decoder: &mut FfmpegDecoder, clip: &Clip, work: &DecodePlan, error: &mut String) -> bool {
+/// Starts `decoder` on `clip` at its frame `index` (0 at its in point): the recording at the
+/// decode size, or an inserted video scaled to its own size.
+fn start_clip_decoder(decoder: &mut FfmpegDecoder, clip: &Clip, index: i32, work: &DecodePlan, error: &mut String) -> bool {
+    let start = if index > 0 { still::clip_start(clip, work.fps, index) } else { clip.in_ };
     decoder.set_yuv(!clip.is_media() && work.screen_yuv.is_some());
     if clip.is_media() {
         let info = work.inserts.get(&clip.media).copied().unwrap_or_default();
@@ -1084,8 +1140,8 @@ fn start_clip_decoder(decoder: &mut FfmpegDecoder, clip: &Clip, work: &DecodePla
         // file carries.
         decoder.start(
             &qdir::file_path(&work.bundle, &clip.media),
-            clip.in_,
-            clip.out - clip.in_,
+            start,
+            clip.out - start,
             f64::from(work.fps) / clip.speed,
             width,
             height,
@@ -1096,8 +1152,8 @@ fn start_clip_decoder(decoder: &mut FfmpegDecoder, clip: &Clip, work: &DecodePla
     } else {
         decoder.start(
             &work.video_path,
-            clip.in_,
-            clip.out - clip.in_,
+            start,
+            clip.out - start,
             f64::from(work.fps) / clip.speed,
             work.decode_width,
             work.decode_height,
@@ -1106,6 +1162,23 @@ fn start_clip_decoder(decoder: &mut FfmpegDecoder, clip: &Clip, work: &DecodePla
             error,
         )
     }
+}
+
+/// Starts `decoder` on the webcam video at its frame `index` (0 at its start).
+fn start_camera_decoder(decoder: &mut FfmpegDecoder, index: i32, work: &DecodePlan, error: &mut String) -> bool {
+    let camera = &work.camera_media;
+    let start = if index > 0 { still::camera_start(camera.fps, index) } else { 0.0 };
+    decoder.start(
+        &work.camera_path,
+        start,
+        camera.duration - start,
+        camera.fps,
+        work.camera_decode_width,
+        work.camera_decode_height,
+        work.camera_decode_width != camera.width || work.camera_decode_height != camera.height,
+        !camera.colour_tagged,
+        error,
+    )
 }
 
 /// The decode thread: one decoder for the clip playing (a new one at each clip, started a
@@ -1125,21 +1198,9 @@ fn decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &AtomicBoo
     let mut camera_frame = -1;
     let mut camera_eof = false;
     let camera = &work.camera_media;
-    let camera_scaled =
-        work.camera_decode_width != camera.width || work.camera_decode_height != camera.height;
     if work.camera_enabled {
         let mut camera_error = String::new();
-        if !camera_decoder.start(
-            &work.camera_path,
-            0.0,
-            camera.duration,
-            camera.fps,
-            work.camera_decode_width,
-            work.camera_decode_height,
-            camera_scaled,
-            !camera.colour_tagged,
-            &mut camera_error,
-        ) {
+        if !start_camera_decoder(&mut camera_decoder, 0, work, &mut camera_error) {
             let mut queue = lock(&shared.queue);
             queue.packets.push_back(DecodedPacket::failed(camera_error));
             queue.done = true;
@@ -1163,7 +1224,7 @@ fn decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &AtomicBoo
                 next_decoder.cancel();
                 true
             } else {
-                start_clip_decoder(&mut decoder, clip, work, &mut decode_error)
+                start_clip_decoder(&mut decoder, clip, 0, work, &mut decode_error)
             };
             next_clip = -1;
             if clip.is_media() {
@@ -1185,7 +1246,7 @@ fn decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &AtomicBoo
         if ahead_index != active_clip && next_clip < 0 {
             if let Some(ahead) = usize::try_from(ahead_index).ok().and_then(|index| work.clips.get(index)) {
                 let mut ahead_error = String::new();
-                next_clip = if start_clip_decoder(&mut next_decoder, ahead, work, &mut ahead_error) { ahead_index } else { -1 };
+                next_clip = if start_clip_decoder(&mut next_decoder, ahead, 0, work, &mut ahead_error) { ahead_index } else { -1 };
             }
         }
         let shown = if clip.is_media() { &mut insert_decoded } else { &mut decoded };
@@ -1205,28 +1266,12 @@ fn decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &AtomicBoo
         if work.camera_enabled && !clip.is_media() {
             let screen_source_time = work.timeline.source_time(output_time);
             let mapped = map_camera_time(screen_source_time, work.camera_offset, camera.duration);
-            let frames = if cfg!(target_arch = "aarch64") {
-                // GCC fuses the multiply and add into one fmadd on aarch64.
-                mapped.seconds.mul_add(camera.fps, 1e-6)
-            } else {
-                mapped.seconds * camera.fps + 1e-6
-            };
-            let wanted = cpp::max(0, cpp::int_cast(frames.floor()));
+            let wanted = still::camera_frame(mapped.seconds, camera.fps);
             if wanted < camera_frame {
                 camera_decoder.cancel();
                 camera_frame = -1;
                 camera_eof = false;
-                if !camera_decoder.start(
-                    &work.camera_path,
-                    0.0,
-                    camera.duration,
-                    camera.fps,
-                    work.camera_decode_width,
-                    work.camera_decode_height,
-                    camera_scaled,
-                    !camera.colour_tagged,
-                    &mut decode_error,
-                ) {
+                if !start_camera_decoder(&mut camera_decoder, 0, work, &mut decode_error) {
                     push_error(shared, decode_error);
                     break;
                 }
@@ -1274,6 +1319,156 @@ fn decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &AtomicBoo
     }
     decoder.cancel();
     camera_decoder.cancel();
+    lock(&shared.queue).done = true;
+    shared.ready.notify_all();
+}
+
+/// How many stills have their decoders started ahead of the one being read: each ffmpeg's
+/// start and seek (tens of milliseconds, a third of a second for 4K on the GPU) overlaps the
+/// others'.
+const STILL_AHEAD: usize = 3;
+
+/// The decoders started for one still: the clip's at the frame the export's would give there,
+/// and the webcam's when the frame shows it.
+struct StillDecoders {
+    clip_index: i32,
+    seek: still::ClipSeek,
+    decoder: FfmpegDecoder,
+    started: bool,
+    error: String,
+    /// The webcam frame, its decoder, whether that started, and why not.
+    camera: Option<(i32, FfmpegDecoder, bool, String)>,
+}
+
+fn start_still(work: &DecodePlan, frame: i32) -> StillDecoders {
+    let seek = still::clip_seek(&work.timeline, work.fps, frame);
+    let mut decoder = FfmpegDecoder::new();
+    let mut error = String::new();
+    let clip = usize::try_from(seek.clip).ok().and_then(|index| work.clips.get(index));
+    let started = clip.is_some_and(|clip| start_clip_decoder(&mut decoder, clip, seek.index, work, &mut error));
+    let camera = clip.filter(|clip| work.camera_enabled && !clip.is_media()).map(|_| {
+        let source_time = work.timeline.source_time(still::frame_time(frame, work.fps));
+        let mapped = map_camera_time(source_time, work.camera_offset, work.camera_media.duration);
+        let index = still::camera_frame(mapped.seconds, work.camera_media.fps);
+        let mut camera_decoder = FfmpegDecoder::new();
+        let mut camera_error = String::new();
+        let camera_started = start_camera_decoder(&mut camera_decoder, index, work, &mut camera_error);
+        (index, camera_decoder, camera_started, camera_error)
+    });
+    StillDecoders { clip_index: seek.clip, seek, decoder, started, error, camera }
+}
+
+/// Frame `index` of a decoder's grid, `decoder` having been started at it (`started` says
+/// whether that worked). When it gives nothing, the frame is past the video's end and the
+/// export showed the last frame it got: `restart` starts the decoder at earlier grid frames
+/// ([`still::fallback_starts`]) and the last frame read up to `index` is the one.
+fn read_still(
+    decoder: &mut FfmpegDecoder,
+    started: bool,
+    index: i32,
+    back: i32,
+    restart: &mut dyn FnMut(&mut FfmpegDecoder, i32, &mut String) -> bool,
+    error: &mut String,
+) -> Option<Vec<u8>> {
+    for (attempt, start) in still::fallback_starts(index, back).into_iter().enumerate() {
+        if if attempt == 0 { !started } else { !restart(decoder, start, error) } {
+            continue;
+        }
+        let mut last = None;
+        for _ in start..=index {
+            match decoder.read_frame(error) {
+                Some(frame) => last = Some(frame),
+                None => break,
+            }
+        }
+        if last.is_some() {
+            error.clear();
+            return last;
+        }
+    }
+    None
+}
+
+/// The decode thread of a still job: for each still, the pictures the export's decode thread
+/// would have handed over for its frame, from decoders started there.
+fn still_decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &AtomicBool) {
+    let stopped = || shared.stop.load(Ordering::SeqCst) || cancelled.load(Ordering::SeqCst);
+    let mut pending: VecDeque<StillDecoders> = VecDeque::new();
+    let mut next = 0;
+    while !stopped() {
+        while next < work.stills.len() && pending.len() < STILL_AHEAD {
+            pending.push_back(start_still(work, work.stills[next]));
+            next += 1;
+        }
+        let Some(mut decoders) = pending.pop_front() else { break };
+        let Some(clip) = usize::try_from(decoders.clip_index).ok().and_then(|index| work.clips.get(index)) else {
+            push_error(shared, "Project has no exportable clips".into());
+            break;
+        };
+        let mut error = std::mem::take(&mut decoders.error);
+        let picture = read_still(
+            &mut decoders.decoder,
+            decoders.started,
+            decoders.seek.index,
+            2 * work.fps,
+            &mut |decoder, start, error| start_clip_decoder(decoder, clip, start, work, error),
+            &mut error,
+        );
+        decoders.decoder.cancel();
+        let Some(picture) = picture else {
+            push_error(shared, if error.is_empty() { "Decoder ended before the first frame".into() } else { error });
+            break;
+        };
+        let yuv = if decoders.decoder.yuv() { work.screen_yuv } else { None };
+        let picture = Some(image(picture, decoders.decoder.width(), decoders.decoder.height(), yuv));
+        if !clip.is_media() {
+            *lock(&shared.acceleration) = decoders.decoder.acceleration();
+        }
+        let mut camera_image = None;
+        if let Some((index, mut camera_decoder, started, mut camera_error)) = decoders.camera.take() {
+            let camera_picture = read_still(
+                &mut camera_decoder,
+                started,
+                index,
+                cpp::int_cast(2.0 * work.camera_media.fps),
+                &mut |decoder, start, error| start_camera_decoder(decoder, start, work, error),
+                &mut camera_error,
+            );
+            camera_decoder.cancel();
+            let Some(camera_picture) = camera_picture else {
+                push_error(
+                    shared,
+                    if camera_error.is_empty() { "Camera decoder ended before the first frame".into() } else { camera_error },
+                );
+                break;
+            };
+            camera_image = Some(image(camera_picture, camera_decoder.width(), camera_decoder.height(), None));
+        }
+        let queue = lock(&shared.queue);
+        let mut queue = shared
+            .space
+            .wait_while(queue, |q| !(q.packets.len() < DECODE_AHEAD || stopped()))
+            .unwrap_or_else(PoisonError::into_inner);
+        if stopped() {
+            break;
+        }
+        let insert = clip.is_media();
+        queue.packets.push_back(DecodedPacket {
+            image: if insert { None } else { picture.clone() },
+            camera_image,
+            error: String::new(),
+            clip: decoders.clip_index,
+            insert_image: if insert { picture } else { None },
+        });
+        drop(queue);
+        shared.ready.notify_one();
+    }
+    for mut decoders in pending {
+        decoders.decoder.cancel();
+        if let Some((_, mut camera_decoder, _, _)) = decoders.camera {
+            camera_decoder.cancel();
+        }
+    }
     lock(&shared.queue).done = true;
     shared.ready.notify_all();
 }
