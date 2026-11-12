@@ -285,17 +285,6 @@ static bool makeEdgeClickBundle(const QString &bundle)
     return ProjectJson::save(project, QDir(bundle).filePath(QStringLiteral("project.json")), &error);
 }
 
-static QImage frameAt(const QString &video, double seconds)
-{
-    QProcess process;
-    process.start(QStringLiteral("ffmpeg"), {QStringLiteral("-v"), QStringLiteral("error"),
-        QStringLiteral("-ss"), QString::number(seconds, 'f', 3), QStringLiteral("-i"), video,
-        QStringLiteral("-frames:v"), QStringLiteral("1"), QStringLiteral("-f"), QStringLiteral("image2pipe"),
-        QStringLiteral("-c:v"), QStringLiteral("png"), QStringLiteral("-")});
-    if (!process.waitForFinished(15000)) return {};
-    return QImage::fromData(process.readAllStandardOutput(), "PNG");
-}
-
 static QSize videoSize(const QString &path)
 {
     QProcess probe;
