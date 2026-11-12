@@ -1707,11 +1707,36 @@ fn reframe_and_export_presets() {
     assert_eq!(qt.document.project().reframe, "follow");
     qt.run(|d| d.save_now());
     assert!(String::from_utf8_lossy(&std::fs::read(&project_path).unwrap()).contains("\"reframe\": \"follow\""));
-    // The preview reads the window once the motion track is built.
+    // The canvas has the recording's shape: nothing to reframe, so no window, built or not.
+    assert_eq!(qt.document.preview_zoom().reframe, None);
+    let job = qt.document.motion_job().unwrap();
+    qt.run(|d| d.apply_motion(job.run()));
+    assert_eq!(qt.document.preview_zoom().reframe, None);
+    // A vertical canvas reframes. Before the motion track is rebuilt (regression: the old
+    // track's window was drawn stretched into the new frame) the window already has the new
+    // shape: made up around the cursor while the track has none, refitted after a later change.
+    let (width, height) = (f64::from(qt.document.source_width()), f64::from(qt.document.source_height()));
+    let shape = |w: crate::reframe::ReframeWindow| w.w * width / (w.h * height);
+    qt.run(|d| d.set_project_value("aspect", "9:16".into(), false));
+    let window = qt.document.preview_zoom().reframe.expect("a provisional window");
+    assert!((shape(window) - 9.0 / 16.0).abs() < 1e-9, "{window:?}");
     let job = qt.document.motion_job().unwrap();
     qt.run(|d| d.apply_motion(job.run()));
     let window = qt.document.preview_zoom().reframe.expect("a reframe window");
-    assert!(window.w <= 1.0 && window.h <= 1.0);
+    assert!((shape(window) - 9.0 / 16.0).abs() < 1e-9, "{window:?}");
+    qt.run(|d| d.set_project_value("aspect", "1:1".into(), false));
+    let window = qt.document.preview_zoom().reframe.expect("a refitted window");
+    assert!((shape(window) - 1.0).abs() < 1e-9 && window.h == 1.0, "{window:?}");
+    let job = qt.document.motion_job().unwrap();
+    qt.run(|d| d.apply_motion(job.run()));
+    let window = qt.document.preview_zoom().reframe.expect("a rebuilt window");
+    assert!((shape(window) - 1.0).abs() < 1e-9 && window.h == 1.0, "{window:?}");
+    // Back to the recording's shape: the window goes at once.
+    qt.run(|d| d.set_project_value("aspect", Value::Null, false));
+    assert_eq!(qt.document.preview_zoom().reframe, None);
+    qt.run(|d| d.undo());
+    qt.run(|d| d.undo());
+    qt.run(|d| d.undo());
     qt.run(|d| d.undo());
     assert_eq!(qt.document.project().reframe, "");
     qt.run(|d| d.save_now());

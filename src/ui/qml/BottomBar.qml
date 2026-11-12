@@ -38,11 +38,13 @@ Rectangle {
         return 0
     }
     function shortAspect(value) { return value === "auto" ? "Auto" : value }
-    // Reframing needs a canvas of another shape than the recording, such as 9:16 or 1:1.
+    // Reframing needs a canvas of another shape than the (cropped) recording, such as 9:16 or
+    // 1:1. As reframe::active: the window would be within 2% of the whole crop otherwise, and a
+    // project set to reframe such a canvas draws exactly as one that isn't.
     readonly property bool reframeUseful: {
         const source = editor.sourceWidth * editor.project.crop.w / Math.max(1, editor.sourceHeight * editor.project.crop.h)
         const canvas = editor.outputWidth / Math.max(1, editor.outputHeight)
-        return Math.abs(canvas / Math.max(.0001, source) - 1) > .02
+        return Math.min(canvas / Math.max(.0001, source), source / Math.max(.0001, canvas)) < 1 - .02
     }
     readonly property bool reframing: editor.project.reframe === "follow"
     function toggleReframe() { editor.setReframe(root.reframing ? "off" : "follow") }
@@ -113,7 +115,8 @@ Rectangle {
                     icon.color: root.reframing ? theme.accent : contentColor
                     checkable: true; checked: root.reframing; selected: checked
                     enabled: root.reframing || root.reframeUseful
-                    tooltipText: root.reframing ? "The canvas follows the cursor and zooms"
+                    tooltipText: root.reframing && !root.reframeUseful ? "Nothing to reframe: the canvas has the recording's shape"
+                        : root.reframing ? "The canvas follows the cursor and zooms"
                         : root.reframeUseful ? "Fill the canvas and follow the action"
                         : "Pick a vertical or square canvas to reframe"
                     Accessible.name: "Auto-reframe"

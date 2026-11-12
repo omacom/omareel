@@ -142,6 +142,57 @@ static bool makeBandsBundle(const QString &bundle, bool reframe)
     return ProjectJson::save(project, QDir(bundle).filePath(QStringLiteral("project.json")), &error);
 }
 
+// A 960x540 green screen with a 48x48 yellow square at x 0.95 (by the right edge), where the cursor
+// goes and clicks at 1 s; an automatic 2x zoom covers 0.7 s to 2.4 s.
+static bool makeEdgeClickBundle(const QString &bundle)
+{
+    if (!QDir().mkpath(bundle)) return false;
+    QProcess makeVideo;
+    makeVideo.start(QStringLiteral("ffmpeg"), {QStringLiteral("-y"), QStringLiteral("-v"), QStringLiteral("error"),
+        QStringLiteral("-f"), QStringLiteral("lavfi"), QStringLiteral("-i"),
+        QStringLiteral("color=c=0x00c000:s=960x540:r=30:d=2.5,drawbox=x=888:y=246:w=48:h=48:color=yellow:t=fill"),
+        QStringLiteral("-c:v"), QStringLiteral("libx264"), QStringLiteral("-pix_fmt"), QStringLiteral("yuv420p"),
+        QDir(bundle).filePath(QStringLiteral("screen.mp4"))});
+    if (!makeVideo.waitForFinished(30000) || makeVideo.exitCode() != 0) return false;
+    QFile capture(QDir(bundle).filePath(QStringLiteral("capture.json")));
+    if (!capture.open(QIODevice::WriteOnly)) return false;
+    capture.write(R"({"fps":30,"width":960,"height":540,"first_frame_us":1000000})");
+    capture.close();
+    QFile input(QDir(bundle).filePath(QStringLiteral("input.jsonl")));
+    if (!input.open(QIODevice::WriteOnly)) return false;
+    for (int i = 0; i <= 150; ++i) {
+        const double t = i / 60.0;
+        const double x = t < 0.5 ? 480 + (912 - 480) * t / 0.5 : 912;
+        input.write(QStringLiteral("{\"t\":%1,\"k\":\"m\",\"x\":%2,\"y\":270}\n")
+                        .arg(1000000 + qRound(t * 1e6)).arg(x).toUtf8());
+    }
+    input.write("{\"t\":2000000,\"k\":\"d\",\"x\":912,\"y\":270}\n");
+    input.write("{\"t\":2050000,\"k\":\"u\",\"x\":912,\"y\":270}\n");
+    input.close();
+    QJsonObject project = ProjectJson::defaults(QStringLiteral("Edge"), 2.5);
+    ProjectJson::set(project, {"background", "type"}, QStringLiteral("none"));
+    ProjectJson::set(project, {"cursor", "visible"}, false);
+    QJsonObject zoom{{QStringLiteral("id"), QStringLiteral("z1")}, {QStringLiteral("start"), 0.7},
+                     {QStringLiteral("end"), 2.4}, {QStringLiteral("level"), 2.0},
+                     {QStringLiteral("target"), QStringLiteral("auto")}};
+    project.insert(QStringLiteral("zooms"), QJsonArray{zoom});
+    project.insert(QStringLiteral("aspect"), QStringLiteral("9:16"));
+    project.insert(QStringLiteral("reframe"), QStringLiteral("follow"));
+    QString error;
+    return ProjectJson::save(project, QDir(bundle).filePath(QStringLiteral("project.json")), &error);
+}
+
+static QImage frameAt(const QString &video, double seconds)
+{
+    QProcess process;
+    process.start(QStringLiteral("ffmpeg"), {QStringLiteral("-v"), QStringLiteral("error"),
+        QStringLiteral("-ss"), QString::number(seconds, 'f', 3), QStringLiteral("-i"), video,
+        QStringLiteral("-frames:v"), QStringLiteral("1"), QStringLiteral("-f"), QStringLiteral("image2pipe"),
+        QStringLiteral("-c:v"), QStringLiteral("png"), QStringLiteral("-")});
+    if (!process.waitForFinished(15000)) return {};
+    return QImage::fromData(process.readAllStandardOutput(), "PNG");
+}
+
 static QSize videoSize(const QString &path)
 {
     QProcess probe;
@@ -212,6 +263,73 @@ private slots:
         QVERIFY(isRed(pixelAt(options.outputPath, 2.4, 40, 320)));
         QVERIFY(isGreen(pixelAt(options.outputPath, 2.4, 180, 320)));
         QVERIFY(isBlue(pixelAt(options.outputPath, 2.4, 320, 320)));
+    }
+
+    // Regression: while zoomed, the reframe window centred on the zoom's centre, which a
+    // full-screen 2x zoom keeps within 0.25..0.75, so a click at x 0.95 was out of the 9:16 frame
+    // for the whole zoom. Now the window (about 0.16 of the width) frames the click: flush with
+    // the right edge, the square at about 0.68 of the frame's width, mid-height.
+    void reframedZoomFramesAnEdgeClick()
+    {
+        if (QStandardPaths::findExecutable(QStringLiteral("ffmpeg")).isEmpty())
+            QSKIP("ffmpeg unavailable");
+        QTemporaryDir temporary;
+        QVERIFY(temporary.isValid());
+        const QString bundle = temporary.filePath(QStringLiteral("edge.omareel"));
+        QVERIFY(makeEdgeClickBundle(bundle));
+        const QString output = temporary.filePath(QStringLiteral("edge.mp4"));
+        Exporter exporter;
+        QString failure;
+        QObject::connect(&exporter, &Exporter::failed, [&](const QString &message) { failure = message; });
+        ExportOptions options;
+        options.bundlePath = bundle;
+        options.outputPath = output;
+        options.fps = 30;
+        options.width = 360;
+        exporter.exportBundle(options);
+        QVERIFY2(failure.isEmpty(), qPrintable(failure));
+        QCOMPARE(videoSize(output), QSize(360, 640));
+        const QImage zoomed = frameAt(output, 2.0);
+        if (const QByteArray keep = qgetenv("OMAREEL_TEST_KEEP_FRAME"); !keep.isEmpty())
+            zoomed.save(QString::fromLocal8Bit(keep));
+        QVERIFY(isYellow(zoomed.pixelColor(245, 320)));
+        // The square fills about a quarter of the width (48 px of a 150 px window), so the frame's
+        // left side and top and bottom are the green screen around it.
+        QVERIFY(isGreen(zoomed.pixelColor(60, 320)));
+        QVERIFY(isGreen(zoomed.pixelColor(245, 100)));
+        QVERIFY(isGreen(zoomed.pixelColor(245, 540)));
+    }
+
+    // Regression: the window took the padded area's shape, so reframing a canvas of the
+    // recording's own shape still cropped and panned. Now there is nothing to reframe and the
+    // export is the same as without it.
+    void reframingTheRecordingsShapeChangesNothing()
+    {
+        if (QStandardPaths::findExecutable(QStringLiteral("ffmpeg")).isEmpty())
+            QSKIP("ffmpeg unavailable");
+        QTemporaryDir temporary;
+        QVERIFY(temporary.isValid());
+        const QString bundle = temporary.filePath(QStringLiteral("bands.omareel"));
+        QVERIFY(makeBandsBundle(bundle, false));
+        QImage frames[2];
+        for (int i = 0; i < 2; ++i) {
+            Exporter exporter;
+            QString failure;
+            QObject::connect(&exporter, &Exporter::failed, [&](const QString &message) { failure = message; });
+            ExportOptions options;
+            options.bundlePath = bundle;
+            options.outputPath = temporary.filePath(QStringLiteral("out%1.mp4").arg(i));
+            options.fps = 30;
+            options.width = 320;
+            options.aspect = QStringLiteral("auto");
+            options.reframe = i == 0 ? QStringLiteral("off") : QStringLiteral("follow");
+            exporter.exportBundle(options);
+            QVERIFY2(failure.isEmpty(), qPrintable(failure));
+            frames[i] = frameAt(options.outputPath, 2.0);
+        }
+        QVERIFY(!frames[0].isNull());
+        QCOMPARE(frames[1], frames[0]);
+        QVERIFY(isRed(frames[1].pixelColor(20, 90)) && isBlue(frames[1].pixelColor(300, 90)));
     }
 
     // `omareel export B --preset ID`: the preset's size and file name, and its errors.

@@ -5,7 +5,7 @@ use crate::compat::geometry::PointF;
 use crate::cursor_path::{self, CursorSample};
 use crate::input_log::{InputEvent, InputKind};
 use crate::project::{Project, Spring};
-use crate::reframe::{self, Focus, ReframeTrack, ReframeWindow};
+use crate::reframe::{self, Focus, ReframeTrack, ReframeWindow, ZoomFocus};
 use crate::zoom_timeline;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -153,18 +153,16 @@ impl MotionTrack {
         let mut cursor_rotation = SpringState::new(0.0, 0.0);
         let click_spring = Spring { mass: 0.3, stiffness: 300.0, damping: 30.0 };
         let dt = 1.0 / MotionTrack::SAMPLE_RATE;
-        let reframing = reframe::enabled(project);
+        // Nothing to reframe on a canvas of the recording's own shape: no window, as if unset.
+        let reframing = reframe::active(project, source_width, source_height);
         let mut focus: Vec<Focus> = Vec::new();
         // The reframe window lives in the crop's coordinates; the cursor and zooms in the recording's.
-        let crop = project.crop;
-        let to_crop = |p: PointF| {
-            PointF::new((p.x - crop.x) / cpp::max(0.0001, crop.width), (p.y - crop.y) / cpp::max(0.0001, crop.height))
-        };
+        let to_crop = |p: PointF| reframe::to_crop(p, &project.crop);
 
         for i in 0..count {
             let time = cpp::min(track.duration, f64::from(i) / MotionTrack::SAMPLE_RATE);
             let cursor_target = cursor_path::position_at(&raw, time);
-            let zoom_target = zoom_timeline::target_at(&project.zooms, &raw, time, &project.zoom_style);
+            let (zoom_target, interest) = zoom_timeline::target_and_interest_at(&project.zooms, &raw, time, &project.zoom_style);
             let pressed = track.clicks.iter().any(|click| time >= click.down - 0.13 && time <= click.up);
 
             let mut hidden = !project.cursor.visible;
@@ -234,7 +232,12 @@ impl MotionTrack {
                 focus.push(Focus {
                     cursor: to_crop(PointF::new(cursor_x.x, cursor_y.x)),
                     zoom_scale: zoom_scale.x,
-                    zoom_target: (zoom_target.scale > 1.0).then(|| to_crop(zoom_target.center)),
+                    // The point the zoom is about, not its centre: that one keeps a full-screen
+                    // zoom inside the frame and misses a click near a side edge in a narrow window.
+                    zoom: interest.filter(|_| zoom_target.scale > 1.0).map(|interest| ZoomFocus {
+                        center: to_crop(interest.center),
+                        follow_cursor: interest.automatic,
+                    }),
                 });
             }
         }
@@ -301,6 +304,12 @@ impl MotionTrack {
     /// The auto-reframe window at `time`, for a project that reframes.
     pub fn reframe(&self, time: f64) -> Option<ReframeWindow> {
         self.reframe.as_ref().map(|track| track.sample(time))
+    }
+
+    /// The window at `time` reshaped for unzoomed windows of `base` size ([`reframe::refit`]):
+    /// what the editor draws when the project changed shape since the track was built.
+    pub fn reframe_for(&self, time: f64, base: (f64, f64)) -> Option<ReframeWindow> {
+        self.reframe.as_ref().map(|track| reframe::refit(track.sample(time), track.base(), base))
     }
 
     /// The number of samples (`qsizetype` in the C++).

@@ -24,12 +24,20 @@ Item {
              w: comp.zoom.rw * comp.project.crop.w,
              h: comp.zoom.rh * comp.project.crop.h })
         : comp.project.crop
-    // The cursor, ripples and zoom are in the recording's coordinates; reframed, they are drawn
-    // where the window shows them.
+    // The cursor, ripples, zoom and zoom targets are normalised to the whole recording (as in
+    // input.jsonl); they are drawn where the crop, or the reframe window, shows them. Without a
+    // crop or reframing this is the identity.
     function inView(point) {
         const c = viewCrop
         return Object.assign({}, point, { x: (point.x - c.x) / Math.max(.0001, c.w),
                                           y: (point.y - c.y) / Math.max(.0001, c.h) })
+    }
+    // The frame's scale and its fixed point (normalised to the frame) for a zoom; reframed, a
+    // zoom is the window's size instead. PreviewPane maps clicks back through these.
+    readonly property real zoomScale: reframed ? 1 : comp.zoom.scale
+    readonly property point zoomOrigin: {
+        const o = inView({ x: comp.zoom.cx, y: comp.zoom.cy })
+        return Qt.point(Math.max(0, Math.min(1, o.x)), Math.max(0, Math.min(1, o.y)))
     }
     // The cursor keeps the size it had on screen: one logical screen pixel is captureScale
     // source pixels, and the (cropped) source is drawn at videoWidth output pixels. A small
@@ -42,13 +50,13 @@ Item {
     property real availableHeight: height - 2 * pad
     property real borderWidth: !noBackground && comp.project.frame.border.enabled
                                ? comp.project.frame.border.width * ref : 0
-    property real sourceAspect: (comp.sourceWidth * comp.project.crop.w) / Math.max(1, comp.sourceHeight * comp.project.crop.h)
+    // The shape of what the frame shows: the crop, or reframed the window, which has the
+    // canvas's shape (reframe.rs), so the frame is the canvas scaled down inside the padding.
+    property real sourceAspect: (comp.sourceWidth * viewCrop.w) / Math.max(1, comp.sourceHeight * viewCrop.h)
     property real videoWidth: noBackground ? width
-        : reframed ? Math.max(1, availableWidth - 2 * borderWidth)
         : Math.max(1, Math.min(availableWidth - 2 * borderWidth,
                               (availableHeight - 2 * borderWidth) * sourceAspect))
-    property real videoHeight: noBackground ? height
-        : reframed ? Math.max(1, availableHeight - 2 * borderWidth) : videoWidth / sourceAspect
+    property real videoHeight: noBackground ? height : videoWidth / sourceAspect
     readonly property bool cameraShown: comp.cameraAvailable && comp.cameraVisible
     // How far the current clip's layout has grown the camera to full frame.
     readonly property real cameraFull: cameraShown ? comp.layout.cameraFull : 0
@@ -80,10 +88,10 @@ Item {
             blur: Math.min(1, comp.zoom.velocity * .32) * comp.project.zoomStyle.motionBlur
         }
         transform: Scale {
-            origin.x: frame.x + comp.zoom.cx * frame.width
-            origin.y: frame.y + comp.zoom.cy * frame.height
-            xScale: composition.reframed ? 1 : comp.zoom.scale
-            yScale: composition.reframed ? 1 : comp.zoom.scale
+            origin.x: frame.x + composition.zoomOrigin.x * frame.width
+            origin.y: frame.y + composition.zoomOrigin.y * frame.height
+            xScale: composition.zoomScale
+            yScale: composition.zoomScale
         }
         RoundedFrame {
             id: frame
@@ -103,8 +111,8 @@ Item {
             y: frame.y
             width: frame.width
             height: frame.height
-            cursor: composition.reframed ? composition.inView(comp.cursor) : comp.cursor
-            ripples: composition.reframed ? comp.ripples.map(r => composition.inView(r)) : comp.ripples
+            cursor: composition.inView(comp.cursor)
+            ripples: comp.ripples.map(r => composition.inView(r))
             settings: comp.project.cursor
             ref: composition.cursorRef
         }

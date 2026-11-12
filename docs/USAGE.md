@@ -206,7 +206,9 @@ A 16:9 screen squeezed into a 9:16 or 1:1 canvas is a thin, unreadable strip. **
 (beside Crop in the bottom bar, available once the canvas has another shape than the recording)
 fills the canvas with a window of the screen that follows the action instead:
 
-- while a zoom is active, the window centres on the zoom's target and tightens with the zoom;
+- while a zoom is active, the window tightens with the zoom and centres on what it is about (a
+  fixed target, or the click), even near a screen edge; an automatic zoom also keeps the cursor
+  in the window as it moves;
 - otherwise it follows the smoothed cursor, once the cursor leaves the middle half of the window
   (a dead zone, so small movements don't pan);
 - it moves on the zoom spring (Zoom panel), so pans feel like the zooms;
@@ -215,7 +217,10 @@ fills the canvas with a window of the screen that follows the action instead:
 The window is worked out per moment from the recording and project alone, so the preview, the
 export, and the software renderer show the same frame. In a reframed vertical canvas the camera
 bubble moves to the middle of its edge, and keystroke pills at the bottom sit above it. Padding,
-corners, and the background still apply; choose **Remove background** for edge-to-edge video.
+corners, and the background still apply (the frame keeps the canvas's shape inside the padding);
+choose **Remove background** for edge-to-edge video. A canvas of the recording's own shape (within
+2%) has nothing to reframe: the toggle is unavailable, and a project set to reframe one looks
+exactly as if it weren't.
 
 ## Inserted videos
 
@@ -244,6 +249,10 @@ clip, style, cursor, and zoom edits are stored in `project.json`.
 were: `"reframe": "follow"` turns on [auto-reframe](#auto-reframe) (any other value, or none,
 fits the whole recording into the canvas). The canvas shape is `"aspect"` (`"9:16"` and so on;
 none for the recording's own).
+
+A zoom's fixed `"target"` (`{"x": …, "y": …}`, or `"auto"`) is normalised to the whole recording,
+0..1 across `screen.mp4` like the positions in `input.jsonl`, whatever the crop or reframing. Picking
+a target in the preview stores it that way.
 
 ### After an export
 

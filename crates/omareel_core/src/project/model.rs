@@ -97,6 +97,8 @@ pub struct ZoomSegment {
     pub end: f64,
     pub level: f64,
     pub automatic_target: bool,
+    /// The fixed target, normalised to the whole recording (like the cursor and `input.jsonl`),
+    /// not to the crop or the reframe window.
     pub target: PointF,
 }
 

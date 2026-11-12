@@ -379,8 +379,11 @@ impl ExportJob {
             maximum_zoom = cpp::max(maximum_zoom, zoom.level);
         }
         // A reframed export shows only its window of the crop, at the output's size.
-        let (window_width, window_height) =
-            if reframe::enabled(&project) { reframe::base_size(&project, media.width, media.height) } else { (1.0, 1.0) };
+        let (window_width, window_height) = if reframe::active(&project, media.width, media.height) {
+            reframe::base_size(&project, media.width, media.height)
+        } else {
+            (1.0, 1.0)
+        };
         let needed_width = maximum_zoom * f64::from(width) / cpp::max(0.0001, project.crop.width * window_width);
         let needed_height = maximum_zoom * f64::from(height) / cpp::max(0.0001, project.crop.height * window_height);
         let decode_scale = cpp::clamp(
