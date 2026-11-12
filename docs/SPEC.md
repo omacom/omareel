@@ -579,11 +579,16 @@ file or a video with sound), copies it into `media/` as an insert is copied, and
 (`music.volume`, ...), which ignores them without music. The editor runs the copy off the GUI
 thread (`addMusic(url)`, `musicImporting`).
 
-Timing (`crate::music`): the music spans the output timeline. Output time t plays file time
-`start + t` until the file ends, then, with `loop`, `(t - (duration - start)) mod duration`
-(later passes restart the file from 0); without `loop` it is silent after that. Fades are linear
-over the first `fadeIn` and last `fadeOut` seconds of the output, each cut to the output's
-length.
+Timing (`crate::music`): the music spans the output timeline. `duration` is the length of the
+file's first audio stream (`media_probe::probe_audio`), not the container's: a video's sound can
+end before its picture, and ffmpeg loops the sound alone. When the header gives no length (a
+WebM written to a pipe) or only one guessed from the bitrate (an MP3 without a Xing header), it
+is the extent of the stream's packets. Output time t plays file time `start + t` until the file
+ends, then, with `loop`, `(t - (duration - start)) mod duration` (later passes restart the file
+from 0); without `loop` it is silent after that. With `loop`, a `start` at or past `duration`
+is taken `mod duration`, as `-stream_loop -1 -ss start` plays it. Fades are linear over the
+first `fadeIn` and last `fadeOut` seconds of the output (not of the music, so a fade-out can
+fall after music that does not loop has ended), each cut to the output's length.
 
 Export: the music is one more input after the click sound,
 `[-stream_loop -1] [-ss start] -i media/file`, its chain

@@ -204,9 +204,12 @@ video whose sound you want, as background music. Like an inserted video it is co
 bundle's `media/` directory; **Replace music…** swaps the file and keeps the settings, and the
 trash button removes it (undo brings it back). The music plays under the whole edited video,
 from its start to its end, whatever the clips: it starts at the beginning of the output, starts
-over when it is shorter than the video (**Loop**; off, it plays once), and fades in and out over
-the first and last seconds (**Fade in**, **Fade out**, 0 to 10 s). **Music volume** sets its
-level without changing the recording's. With **Lower under the recording** on, the music drops
+over when it is shorter than the video (**Loop**; off, it plays once), and fades in over the
+first seconds of the video and out over its last seconds (**Fade in**, **Fade out**, 0 to 10 s).
+The fades follow the video, not the music: music that doesn't loop and ends before the video
+does is cut off where it ends, and the fade-out falls on the silence after it. For a video
+used as music, its sound's own length counts, which can be shorter than its picture's.
+**Music volume** sets its level without changing the recording's. With **Lower under the recording** on, the music drops
 while the recording's own sound (your voice, the desktop, or an inserted video's sound) plays,
 and comes back in the pauses. It shows as a thin Music lane under the timeline's tracks, with
 its waveform; click it to open the Audio panel. The preview plays it in step with the playhead;
@@ -231,7 +234,8 @@ unchanged):
 
 `file` is bundle-relative and must stay inside `media/`; `volume` is 0 to 1; the fades are
 seconds, 0 to 10; `start` is the offset in seconds into the file where the music begins (later
-loops start the file from its beginning).
+loops start the file from its beginning; with `loop`, a start past the end of the file wraps
+around, so 6 s into a 4 s file begins at 2 s).
 
 ## Environment
 
