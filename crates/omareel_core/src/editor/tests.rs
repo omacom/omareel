@@ -1817,6 +1817,17 @@ fn music_playback_follows_the_output() {
     assert_eq!(at(&qt, 1.5).gain, 0.125);
     assert!(at(&qt, 1.9).audible);
     assert!(at(&qt, 1.0).path.ends_with("/media/loop.ogg"));
+    // Each start over is a new pass, which the player seeks on however short the file; how
+    // long the sound lasts from there tells it whether it ran out early.
+    assert_eq!((at(&qt, 0.3).pass, at(&qt, 0.3).remaining_ms), (0, 100));
+    assert_eq!((at(&qt, 0.4).pass, at(&qt, 0.4).remaining_ms), (1, 500));
+    assert_eq!((at(&qt, 1.0).pass, at(&qt, 1.0).position_ms), (2, 100));
+    // A start past the end of the file starts where export does: 1.2 s into the 0.5 s loop
+    // is 0.2 s.
+    qt.run(|d| d.set_project_value("music.start", 1.2.into(), false));
+    assert_eq!((at(&qt, 0.0).position_ms, at(&qt, 0.0).pass), (200, 0));
+    assert_eq!((at(&qt, 0.35).position_ms, at(&qt, 0.35).pass), (50, 1));
+    qt.run(|d| d.set_project_value("music.start", 0.1.into(), false));
     // Without looping it runs out.
     qt.run(|d| d.set_project_value("music.loop", false.into(), false));
     assert!(!at(&qt, 0.45).audible);

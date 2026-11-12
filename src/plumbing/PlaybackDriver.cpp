@@ -259,10 +259,12 @@ void PlaybackDriver::loadMusic(const QString &path)
         m_musicPlayer.setAudioOutput(m_musicAudioOutput.get());
     }
     m_musicPlayer.stop();
+    m_musicPass = -1;
     m_musicPlayer.setSource(path.isEmpty() ? QUrl() : QUrl::fromLocalFile(path));
 }
 
-void PlaybackDriver::syncMusic(qint64 milliseconds, qint64 toleranceMs, bool play, double volume)
+void PlaybackDriver::syncMusic(qint64 milliseconds, qint64 pass, qint64 remainingMs, qint64 toleranceMs, bool play,
+                               double volume)
 {
     if (!m_musicAudioOutput || m_musicPlayer.source().isEmpty()) return;
     m_musicAudioOutput->setVolume(volume);
@@ -274,6 +276,8 @@ void PlaybackDriver::syncMusic(qint64 milliseconds, qint64 toleranceMs, bool pla
     // pending seek, so it goes to Paused first.
     const bool stalled = status == QMediaPlayer::EndOfMedia
         || m_musicPlayer.playbackState() == QMediaPlayer::StoppedState;
+    const bool newPass = pass != m_musicPass;
+    m_musicPass = pass;
     if (!play) {
         if (m_musicPlayer.playbackState() == QMediaPlayer::PlayingState) m_musicPlayer.pause();
         if (stalled) {
@@ -284,17 +288,20 @@ void PlaybackDriver::syncMusic(qint64 milliseconds, qint64 toleranceMs, bool pla
         return;
     }
     if (stalled) {
-        // Run off the end a moment before the playhead gets there: the loop (or the silence)
-        // follows soon, so it is not played again.
-        if (status == QMediaPlayer::EndOfMedia && m_musicPlayer.duration() > 0
-            && m_musicPlayer.duration() - milliseconds <= toleranceMs) return;
+        // Ran off the end of this pass a moment before the playhead gets there: the loop (or
+        // the silence) follows soon, so it is not played again. A new pass always restarts,
+        // even in a file no longer than the tolerance, where every position is near its end.
+        if (!newPass && status == QMediaPlayer::EndOfMedia && remainingMs >= 0 && remainingMs <= toleranceMs) return;
         m_musicPlayer.play();
         m_musicPlayer.pause();
         m_musicPlayer.setPosition(milliseconds);
         m_musicPlayer.play();
         return;
     }
-    if (std::abs(m_musicPlayer.position() - milliseconds) > toleranceMs) m_musicPlayer.setPosition(milliseconds);
+    // A new pass starts over at once: the player may run on past the end of the sound (a video
+    // whose sound ends before its picture), or the whole loop may be shorter than the tolerance.
+    if (newPass || std::abs(m_musicPlayer.position() - milliseconds) > toleranceMs)
+        m_musicPlayer.setPosition(milliseconds);
     if (m_musicPlayer.playbackState() != QMediaPlayer::PlayingState) m_musicPlayer.play();
 }
 

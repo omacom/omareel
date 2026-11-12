@@ -20,28 +20,55 @@ pub const DUCK_RELEASE_MS: f64 = 400.0;
 /// a music that does not loop has ended. `file_duration` is `None` when unknown (the file then
 /// never ends).
 pub fn file_time(music: &Music, file_duration: Option<f64>, output_time: f64) -> Option<f64> {
+    file_position(music, file_duration, output_time).map(|position| position.time)
+}
+
+/// Where the music is at an output time: the time in its file, and which pass over the file
+/// that is (0 the first, from `start`; 1 the first loop from the file's beginning, and so on).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FilePosition {
+    pub time: f64,
+    pub pass: i64,
+}
+
+/// [`file_time`], with the pass it is in.
+pub fn file_position(music: &Music, file_duration: Option<f64>, output_time: f64) -> Option<FilePosition> {
     let output_time = cpp::max(0.0, output_time);
-    let start = music.start;
     let Some(duration) = file_duration.filter(|duration| *duration > 0.0) else {
-        return Some(start + output_time);
+        return Some(FilePosition { time: music.start + output_time, pass: 0 });
     };
+    let start = first_pass_start(music, duration);
     let first_pass = duration - start;
     if output_time < first_pass {
-        return Some(start + output_time);
+        return Some(FilePosition { time: start + output_time, pass: 0 });
     }
     if !music.loop_ {
         return None;
     }
-    // A start past the end of the file plays nothing in its first pass.
     let into_loops = output_time - cpp::max(0.0, first_pass);
-    Some(into_loops % duration)
+    // Whole loops, then what is left of one, kept in [0, duration) against rounding.
+    let mut loops = (into_loops / duration).floor();
+    let mut time = into_loops - loops * duration;
+    if time >= duration {
+        loops += 1.0;
+        time -= duration;
+    }
+    Some(FilePosition { time: cpp::max(0.0, time), pass: 1 + loops as i64 })
+}
+
+/// Where in a file of `duration` the first pass starts. ffmpeg opens a looping file at
+/// `start` on its looped timeline (`-stream_loop -1 -ss start`), so a start past the end
+/// lands that far into a later pass: 6 s into a 4 s file starts at 2 s. Without the loop the
+/// start stays as it is, and a start past the end plays nothing.
+pub fn first_pass_start(music: &Music, duration: f64) -> f64 {
+    if music.loop_ && duration > 0.0 && music.start >= duration { music.start % duration } else { music.start }
 }
 
 /// How long the music plays in an output of `output_duration`: all of it when it loops,
 /// otherwise until the file runs out.
 pub fn extent(music: &Music, file_duration: Option<f64>, output_duration: f64) -> f64 {
     match file_duration.filter(|duration| *duration > 0.0) {
-        Some(duration) if !music.loop_ => cpp::clamp(duration - music.start, 0.0, output_duration),
+        Some(duration) if !music.loop_ => cpp::clamp(duration - first_pass_start(music, duration), 0.0, output_duration),
         _ => cpp::max(0.0, output_duration),
     }
 }
@@ -181,9 +208,39 @@ mod tests {
         assert_eq!(file_time(&once, Some(4.0), 2.9), Some(3.9));
         assert_eq!(file_time(&once, Some(4.0), 3.0), None);
         assert_eq!(file_time(&once, None, 30.0), Some(31.0));
-        // A start past the end: nothing in the first pass, then the loop from 0.
-        assert_eq!(file_time(&music(6.0, true), Some(4.0), 1.0), Some(1.0));
+        // A start past the end of a file that loops starts that far into the loops, as
+        // ffmpeg's `-stream_loop -1 -ss 6` does: 6 s into a 4 s file is 2 s.
+        assert_eq!(file_time(&music(6.0, true), Some(4.0), 0.0), Some(2.0));
+        assert_eq!(file_time(&music(6.0, true), Some(4.0), 1.0), Some(3.0));
+        assert_eq!(file_time(&music(6.0, true), Some(4.0), 2.5), Some(0.5));
+        assert_eq!(file_time(&music(10.0, true), Some(4.0), 0.0), Some(2.0));
+        assert_eq!(file_time(&music(4.0, true), Some(4.0), 1.0), Some(1.0));
+        // Without the loop it plays nothing.
         assert_eq!(file_time(&music(6.0, false), Some(4.0), 1.0), None);
+        assert_eq!(extent(&music(6.0, false), Some(4.0), 10.0), 0.0);
+    }
+
+    #[test]
+    fn file_position_counts_the_passes() {
+        let at = |m: &Music, d: f64, t: f64| file_position(m, Some(d), t).unwrap();
+        let m = music(1.0, true);
+        assert_eq!(at(&m, 4.0, 2.9), FilePosition { time: 3.9, pass: 0 });
+        assert_eq!(at(&m, 4.0, 3.0), FilePosition { time: 0.0, pass: 1 });
+        assert_eq!(at(&m, 4.0, 6.9).pass, 1);
+        assert_eq!(at(&m, 4.0, 7.0), FilePosition { time: 0.0, pass: 2 });
+        // A file shorter than the preview's 250 ms tolerance still moves on a pass every loop.
+        let short = music(0.0, true);
+        assert_eq!(at(&short, 0.03, 0.01).pass, 0);
+        assert_eq!(at(&short, 0.03, 0.04).pass, 1);
+        assert_eq!(at(&short, 0.03, 0.07).pass, 2);
+        assert!((at(&short, 0.03, 0.07).time - 0.01).abs() < 1e-9);
+        // At a loop point the pass and the time agree: the next pass, at its start.
+        for step in 1..200 {
+            let position = at(&music(0.0, true), 0.15, f64::from(step) * 0.15);
+            assert!(position.time < 0.15 && (position.time < 1e-9 || position.time > 0.15 - 1e-9), "{step}: {position:?}");
+            let expected = if position.time < 1e-9 { step } else { step - 1 };
+            assert_eq!(position.pass, i64::from(expected), "{step}: {position:?}");
+        }
     }
 
     #[test]

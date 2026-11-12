@@ -89,8 +89,8 @@ protected:
     void playbackSetAudio(int player, double volume, bool muted)
     { m_playback.setAudio(PlaybackDriver::Player(player), volume, muted); }
     void playbackLoadMusic(const QString &path) { m_playback.loadMusic(path); }
-    void playbackSyncMusic(qint64 milliseconds, qint64 toleranceMs, bool play, double volume)
-    { m_playback.syncMusic(milliseconds, toleranceMs, play, volume); }
+    void playbackSyncMusic(qint64 milliseconds, qint64 pass, qint64 remainingMs, qint64 toleranceMs, bool play, double volume)
+    { m_playback.syncMusic(milliseconds, pass, remainingMs, toleranceMs, play, volume); }
     qint64 playbackPosition(int player) const { return m_playback.position(PlaybackDriver::Player(player)); }
     bool playbackPositionReady(int player) const { return m_playback.positionReady(PlaybackDriver::Player(player)); }
     int playbackState(int player) const { return m_playback.playbackState(PlaybackDriver::Player(player)); }

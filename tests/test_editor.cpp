@@ -1700,7 +1700,7 @@ private slots:
     void backgroundMusicFollowsThePlayhead()
     {
         const QString bundle = plainBundle(QStringLiteral("music.omareel"));
-        // A quiet 1 s tone: the test plays it on whatever the machine's audio output is.
+        // A quiet 1 s tone, played at music volume 0 so nothing is heard on the machine's output.
         const QString song = QDir(m_temporary.path()).filePath(QStringLiteral("tone.wav"));
         QProcess makeSong;
         makeSong.start(QStringLiteral("ffmpeg"), {QStringLiteral("-y"), QStringLiteral("-v"), QStringLiteral("error"),
@@ -1725,6 +1725,7 @@ private slots:
         QCOMPARE(music.value("name").toString(), QStringLiteral("tone.wav"));
         QVERIFY(QFileInfo::exists(QDir(bundle).filePath(QStringLiteral("media/tone.wav"))));
         QCOMPARE(editor.projectMap().value("music").toMap().value("file").toString(), QStringLiteral("media/tone.wav"));
+        editor.setProjectValue(QStringLiteral("music.volume"), 0.0, false);
         QTRY_VERIFY_WITH_TIMEOUT(editor.musicMediaStatusForTests() >= QMediaPlayer::LoadedMedia, 5000);
         // The waveform arrives once its levels are measured.
         QTRY_VERIFY_WITH_TIMEOUT(!editor.property("music").toMap().value("waveform").toList().isEmpty(), 10000);
@@ -1775,6 +1776,54 @@ private slots:
         editor.undo();
         QVERIFY(editor.property("music").toMap().value("present").toBool());
         QTRY_VERIFY_WITH_TIMEOUT(editor.musicMediaStatusForTests() >= QMediaPlayer::LoadedMedia, 5000);
+    }
+
+    // Music shorter than the preview's 250 ms seek tolerance keeps starting over while it
+    // loops: every position in it is "near its end", which once left it silent after one pass.
+    void shortLoopingMusicKeepsStartingOver()
+    {
+        const QString bundle = plainBundle(QStringLiteral("short-music.omareel"));
+        const QString song = QDir(m_temporary.path()).filePath(QStringLiteral("blip.wav"));
+        QProcess makeSong;
+        makeSong.start(QStringLiteral("ffmpeg"), {QStringLiteral("-y"), QStringLiteral("-v"), QStringLiteral("error"),
+            QStringLiteral("-f"), QStringLiteral("lavfi"), QStringLiteral("-i"),
+            QStringLiteral("sine=frequency=440:duration=0.15,volume=0.02"), song});
+        QVERIFY(makeSong.waitForFinished(30000));
+        QCOMPARE(makeSong.exitCode(), 0);
+
+        Editor editor(bundle);
+        QVERIFY2(editor.isValid(), qPrintable(editor.errorString()));
+        QVideoSink sink;
+        QObject holder;
+        holder.setProperty("videoSink", QVariant::fromValue(&sink));
+        editor.attachVideoOutput(&holder);
+        QTRY_VERIFY_WITH_TIMEOUT(editor.playerMediaStatusForTests() >= QMediaPlayer::LoadedMedia, 15000);
+        editor.addMusic(QUrl::fromLocalFile(song));
+        QTRY_VERIFY_WITH_TIMEOUT(!editor.property("musicImporting").toBool(), 5000);
+        QVERIFY(editor.property("music").toMap().value("present").toBool());
+        editor.setProjectValue(QStringLiteral("music.volume"), 0.0, false);
+        QTRY_VERIFY_WITH_TIMEOUT(editor.musicMediaStatusForTests() >= QMediaPlayer::LoadedMedia, 5000);
+
+        editor.seek(0.0);
+        editor.play();
+        QTRY_COMPARE_WITH_TIMEOUT(editor.musicPlaybackStateForTests(), QMediaPlayer::PlayingState, 3000);
+        // Each new pass sends the player back to the start; it never sits at the end.
+        int restarts = 0, stuck = 0;
+        qint64 last = editor.musicPositionMsForTests();
+        QElapsedTimer elapsed;
+        elapsed.start();
+        while (editor.playing() && editor.position() < 1.6 && elapsed.elapsed() < 4000) {
+            QTest::qWait(5);
+            const qint64 now = editor.musicPositionMsForTests();
+            if (now < last - 50) ++restarts;
+            last = now;
+            const bool ended = editor.musicMediaStatusForTests() == QMediaPlayer::EndOfMedia;
+            stuck = ended ? stuck + 5 : 0;
+            QVERIFY2(stuck < 400, "the music stayed at its end");
+        }
+        editor.pause();
+        qInfo("0.15 s music over 1.6 s of output: %d restarts", restarts);
+        QVERIFY2(restarts >= 5, qPrintable(QString::number(restarts)));
     }
 
     void frameStepsMoveThePausedPlayer()

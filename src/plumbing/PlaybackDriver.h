@@ -65,8 +65,10 @@ public:
     // Opens the background music (sound only), or closes it for an empty path.
     void loadMusic(const QString &path);
     // Keeps the music within toleranceMs of milliseconds in its file at volume (0 to 1),
-    // playing or paused there. A player that ran off the end is revived first.
-    void syncMusic(qint64 milliseconds, qint64 toleranceMs, bool play, double volume);
+    // playing or paused there. pass counts the times the music has started over (it seeks
+    // whenever that changes, however short the file), remainingMs is how long its sound lasts
+    // from there (-1: unknown). A player that ran off the end is revived first.
+    void syncMusic(qint64 milliseconds, qint64 pass, qint64 remainingMs, qint64 toleranceMs, bool play, double volume);
 
     qint64 position(Player player) const;
     // False while the media player's file is still opening or a seek waits on it: it has no
@@ -105,6 +107,8 @@ private:
     std::unique_ptr<QAudioOutput> m_audioOutput;
     std::unique_ptr<QAudioOutput> m_mediaAudioOutput;
     std::unique_ptr<QAudioOutput> m_musicAudioOutput;
+    // The pass over the music file the music player is in (syncMusic), -1 for none yet.
+    qint64 m_musicPass = -1;
     QPointer<QVideoSink> m_videoSink;
     QPointer<QVideoSink> m_cameraVideoSink;
     QPointer<QVideoSink> m_mediaVideoSink;

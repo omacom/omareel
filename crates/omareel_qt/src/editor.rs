@@ -499,7 +499,15 @@ pub mod qobject {
         #[inherit]
         fn playback_load_music(self: Pin<&mut Editor>, path: &QString);
         #[inherit]
-        fn playback_sync_music(self: Pin<&mut Editor>, milliseconds: i64, tolerance_ms: i64, play: bool, volume: f64);
+        fn playback_sync_music(
+            self: Pin<&mut Editor>,
+            milliseconds: i64,
+            pass: i64,
+            remaining_ms: i64,
+            tolerance_ms: i64,
+            play: bool,
+            volume: f64,
+        );
         #[inherit]
         fn playback_position(self: &Editor, player: i32) -> i64;
         #[inherit]
@@ -2039,14 +2047,22 @@ impl qobject::Editor {
         let play = playing && playback.audible;
         if self.music_trace {
             print_error(&format!(
-                "music output={output:.3} target_ms={} player_ms={} gain={:.3} play={play} state={}\n",
+                "music output={output:.3} target_ms={} pass={} player_ms={} gain={:.3} play={play} state={}\n",
                 playback.position_ms,
+                playback.pass,
                 self.playback_position(MUSIC),
                 playback.gain,
                 self.playback_state(MUSIC)
             ));
         }
-        self.as_mut().playback_sync_music(playback.position_ms, MUSIC_TOLERANCE_MS, play, playback.gain);
+        self.as_mut().playback_sync_music(
+            playback.position_ms,
+            playback.pass,
+            playback.remaining_ms,
+            MUSIC_TOLERANCE_MS,
+            play,
+            playback.gain,
+        );
         // The recording's and inserted videos' levels, once ducking needs them.
         self.start_audio_levels();
     }

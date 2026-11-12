@@ -68,6 +68,11 @@ pub struct MusicPlayback {
     pub gain: f64,
     /// The music plays here (it has not run out).
     pub audible: bool,
+    /// Which pass over the file this is (see [`music::FilePosition`]): the player restarts
+    /// when it changes, however short the file.
+    pub pass: i64,
+    /// How long until the file's sound ends in this pass, in milliseconds; -1 when unknown.
+    pub remaining_ms: i64,
 }
 
 impl Document {
@@ -203,8 +208,9 @@ impl Document {
         let music = self.project.music.as_ref()?;
         let path = self.music_path()?;
         let duration = self.duration();
-        let file_time = music::file_time(music, self.music_duration(), output_time);
-        let audible = file_time.is_some() && output_time <= duration;
+        let file_duration = self.music_duration();
+        let position = music::file_position(music, file_duration, output_time);
+        let audible = position.is_some() && output_time <= duration;
         let mut gain = music.volume * music::fade_gain(music, duration, output_time);
         if music.duck {
             if let Some((source, time, speed)) = self.program_sound_at(output_time) {
@@ -214,11 +220,14 @@ impl Document {
                 }
             }
         }
+        let time = position.map_or(0.0, |position| position.time);
         Some(MusicPlayback {
             path,
-            position_ms: (file_time.unwrap_or(0.0) * 1000.0).round() as i64,
+            position_ms: (time * 1000.0).round() as i64,
             gain: gain.clamp(0.0, 1.0),
             audible,
+            pass: position.map_or(0, |position| position.pass),
+            remaining_ms: file_duration.map_or(-1, |length| ((length - time).max(0.0) * 1000.0).round() as i64),
         })
     }
 
