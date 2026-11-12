@@ -14,6 +14,7 @@
 pub mod apply;
 pub mod describe;
 pub mod runner;
+pub mod scope;
 pub mod skill;
 #[cfg(test)]
 mod tests;

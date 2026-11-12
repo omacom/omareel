@@ -52,6 +52,37 @@ pub struct OutputChapter {
     pub title: String,
 }
 
+/// chapters.json written aside by [`Chapters::stage`].
+pub struct StagedChapters {
+    target: String,
+    /// `None` when the chapters are empty: committing removes chapters.json.
+    temp: Option<String>,
+}
+
+impl StagedChapters {
+    /// Moves the chapters into place (removes chapters.json when they are empty).
+    pub fn commit(mut self) -> Result<(), String> {
+        match self.temp.take() {
+            Some(temp) => std::fs::rename(&temp, &self.target).map_err(|error| {
+                let _ = std::fs::remove_file(&temp);
+                format!("cannot write {}: {error}", self.target)
+            }),
+            None => match std::fs::remove_file(&self.target) {
+                Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(format!("cannot remove {}: {error}", self.target)),
+                _ => Ok(()),
+            },
+        }
+    }
+}
+
+impl Drop for StagedChapters {
+    fn drop(&mut self) {
+        if let Some(temp) = self.temp.take() {
+            let _ = std::fs::remove_file(temp);
+        }
+    }
+}
+
 pub fn path(bundle: &str) -> String {
     qdir::file_path(bundle, FILE_NAME)
 }
@@ -111,6 +142,27 @@ impl Chapters {
         let bytes = std::fs::read(&file).map_err(|error| format!("cannot read {file}: {error}"))?;
         let root = qjson::object_from_json(&bytes).ok_or_else(|| format!("{file} is not a JSON object"))?;
         Ok(Some(Chapters::from_json(&root)))
+    }
+
+    /// Writes chapters.json aside, to move into place with [`StagedChapters::commit`] once
+    /// whatever goes with it is saved; dropped uncommitted, the file is left as it was.
+    pub fn stage(&self, bundle: &str) -> Result<StagedChapters, String> {
+        let target = path(bundle);
+        if self.is_empty() {
+            return Ok(StagedChapters { target, temp: None });
+        }
+        let temp = format!("{target}.{}.tmp", std::process::id());
+        let write = || -> std::io::Result<()> {
+            use std::io::Write;
+            let mut file = std::fs::File::create(&temp)?;
+            file.write_all(self.to_json().to_json(Format::Indented).as_bytes())?;
+            file.sync_all()
+        };
+        if let Err(error) = write() {
+            let _ = std::fs::remove_file(&temp);
+            return Err(format!("cannot write {temp}: {error}"));
+        }
+        Ok(StagedChapters { target, temp: Some(temp) })
     }
 
     /// Writes chapters.json, or removes it when there is nothing to keep.

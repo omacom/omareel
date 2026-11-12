@@ -44,6 +44,43 @@ assert chapters["title"] == "A synthetic test", chapters
 assert [c["output"] for c in chapters["chapters"]] == [0, 2.9], chapters
 PY
 
+# Inside an agent's scope the real omareel runs only describe, apply, frame into the scratch
+# directory, and transcribe, on this bundle, and help; it refuses the rest before doing anything.
+scratch="$work/scratch"
+other="$work/Other.omareel"
+mkdir -p "$scratch" "$other"
+ln -s "$other" "$bundle/sneaky"
+scope="$bundle
+$scratch"
+scoped() { (cd "$bundle" && OMAREEL_AGENT_SCOPE="$scope" "$omareel" "$@"); }
+refused() {
+    if scoped "$@" > "$work/refused.txt" 2>&1; then fail "allowed in scope: $*"; fi
+    grep -q "omareel: refused:" "$work/refused.txt" || fail "$* failed without refusing: $(cat "$work/refused.txt")"
+}
+scoped help > /dev/null || fail "help refused"
+scoped describe . > /dev/null || fail "describe refused"
+scoped apply . '[]' --dry-run > /dev/null || fail "apply refused"
+scoped frame . --at 0.5 -o "$scratch/still.png" 2> /dev/null || fail "frame into the scratch directory refused"
+test -s "$scratch/still.png" || fail "no still"
+refused
+refused record
+refused record --region
+refused export . -o "$scratch/out.mp4"
+refused export . -o "$work/out.mp4"
+refused edit .
+refused skill install
+refused agent . polish
+refused __record-daemon
+refused describe ../Other.omareel
+refused apply "$other" '[]'
+refused apply sneaky '[]'
+refused frame . --at 0.5 -o "$work/still.png"
+refused frame . --at 0.5 -o "$scratch/../still.png"
+refused transcribe ../Other.omareel
+test ! -e "$work/out.mp4" -a ! -e "$work/still.png" || fail "a refused command wrote a file"
+# A scope that names nothing that exists refuses everything.
+if (cd "$bundle" && OMAREEL_AGENT_SCOPE="/nonexistent" "$omareel" describe . > /dev/null 2>&1); then fail "a broken scope allowed describe"; fi
+
 # An agent omareel can't run says so, and runs nothing.
 if OMAREEL_AGENT=opencode "$omareel" agent "$bundle" polish 2> "$work/unsupported.txt"; then fail "opencode ran"; fi
 grep -q "OpenCode, which omareel can't run" "$work/unsupported.txt" || fail "$(cat "$work/unsupported.txt")"

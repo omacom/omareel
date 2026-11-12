@@ -8,8 +8,9 @@ Codex's. Either way it runs real `omareel` commands in the bundle (its working d
 as an agent would: describe, then one apply (cuts and a zoom for polish; set-chapters for
 chapters; a trim of the start for anything asked), then a summary.
 
-FAKE_AGENT_SLEEP=SECONDS sleeps before the end (with a child that leaves its process group),
-to test stopping. FAKE_AGENT_LOG=FILE records the arguments it was started with.
+FAKE_AGENT_SLEEP=SECONDS sleeps before the end (with a child in its group, one that leaves
+the group, and a daemon re-parented away from it; their pids go to FAKE_AGENT_PIDS), to test
+stopping and the sweep at the end. FAKE_AGENT_LOG=FILE records the arguments it was started with.
 """
 
 import json
@@ -101,8 +102,11 @@ if os.environ.get("FAKE_AGENT_SLEEP"):
     pids = os.environ.get("FAKE_AGENT_PIDS", "/dev/null")
     child = subprocess.Popen(["sleep", "300"])
     loner = subprocess.Popen(["sleep", "300"], start_new_session=True)
-    with open(pids, "w") as out:
-        out.write(f"{os.getpid()} {child.pid} {loner.pid}\n")
+    # A daemon: its parent exits, so it is re-parented away from the agent.
+    daemon = subprocess.run(["setsid", "sh", "-c", "sleep 300 >/dev/null 2>&1 & echo $!"], capture_output=True, text=True).stdout.strip()
+    with open(pids + ".tmp", "w") as out:
+        out.write(f"{os.getpid()} {child.pid} {loner.pid} {daemon}\n")
+    os.rename(pids + ".tmp", pids)
     time.sleep(float(os.environ["FAKE_AGENT_SLEEP"]))
 
 say(text)

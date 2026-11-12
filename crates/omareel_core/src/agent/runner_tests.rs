@@ -148,7 +148,7 @@ fn command_lines_hold_the_agent_to_omareel() {
     let joined = args.join(" ");
     for expected in [
         "-p --output-format stream-json --verbose --restricted --tools Bash,Read",
-        "--allowedTools Bash(omareel:*) Read --permission-mode dontAsk",
+        "--allowedTools Bash(omareel describe:*) Bash(omareel apply:*) Bash(omareel frame:*) Bash(omareel transcribe:*) Bash(omareel help) Read --permission-mode dontAsk",
         "--strict-mcp-config --no-session-persistence --add-dir /cache/agent/Demo",
         "--model haiku --",
     ] {
@@ -162,7 +162,15 @@ fn command_lines_hold_the_agent_to_omareel() {
 
     let args = arguments(codex(), &task);
     let joined = args.join(" ");
-    assert!(joined.starts_with("exec --json --skip-git-repo-check --ephemeral --sandbox workspace-write"), "{joined}");
+    assert!(joined.starts_with("exec --json --skip-git-repo-check --ephemeral --sandbox workspace-write --ignore-user-config --ignore-rules"), "{joined}");
+    for expected in [
+        "-c sandbox_workspace_write.network_access=false",
+        "-c sandbox_workspace_write.writable_roots=[]",
+        "-c web_search=\"disabled\"",
+    ] {
+        assert!(joined.contains(expected), "{expected} in {joined}");
+    }
+    assert!(!joined.contains("Bash(omareel:*)"));
     assert!(joined.contains("--cd /videos/Demo.omareel --add-dir /cache/agent/Demo --model haiku --"));
     let prompt = args.last().unwrap();
     assert!(prompt.starts_with("---\nname: omareel") && prompt.contains("# Task") && prompt.contains("make it shorter"));
@@ -187,7 +195,16 @@ fn says_why_an_agent_cannot_run() {
 
 /// The fake agent (tests/tools/fake-agent.py) speaks each agent's stream and runs `omareel`
 /// commands; here `omareel` is a stub that records the operations and answers as apply does.
-fn fake_run(adapter: &'static Adapter, kind: TaskKind, extra_env: &[(&str, &str)]) -> (TempDir, Result<Outcome, String>, Vec<Event>) {
+fn fake_run(adapter: &'static Adapter, kind: TaskKind, extra_env: &[(&str, &str)]) -> (TempDir, Result<Outcome, String>, Vec<Event>, Runner) {
+    fake_run_with(Runner::new(), adapter, kind, extra_env)
+}
+
+fn fake_run_with(
+    runner: Runner,
+    adapter: &'static Adapter,
+    kind: TaskKind,
+    extra_env: &[(&str, &str)],
+) -> (TempDir, Result<Outcome, String>, Vec<Event>, Runner) {
     let dir = TempDir::new("agent-run");
     let bundle = dir.join("Demo.omareel");
     std::fs::create_dir_all(&bundle).unwrap();
@@ -205,7 +222,6 @@ fn fake_run(adapter: &'static Adapter, kind: TaskKind, extra_env: &[(&str, &str)
     std::fs::set_permissions(&stub, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
     let task = Task { bundle: bundle.clone(), kind, scratch: PathBuf::from(dir.join("scratch")), omareel: Some(PathBuf::from(&stub)), model: None };
     let fake = format!("{}/../../tests/tools/fake-agent.py", env!("CARGO_MANIFEST_DIR"));
-    let runner = Runner::new();
     let events = Arc::new(Mutex::new(Vec::new()));
     let seen = Arc::clone(&events);
     // The fake agent reads its settings from the environment it inherits.
@@ -217,7 +233,8 @@ fn fake_run(adapter: &'static Adapter, kind: TaskKind, extra_env: &[(&str, &str)
     std::fs::set_permissions(&program, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
     let stopper = runner.clone();
     let pids = extra_env.iter().find(|(k, _)| *k == "FAKE_AGENT_PIDS").map(|(_, v)| v.to_string());
-    if let Some(pids) = pids {
+    let stop = extra_env.iter().any(|(k, _)| *k == "FAKE_AGENT_STOP");
+    if let Some(pids) = pids.filter(|_| stop) {
         std::thread::spawn(move || {
             let started = Instant::now();
             while !Path::new(&pids).is_file() && started.elapsed() < Duration::from_secs(20) {
@@ -229,7 +246,7 @@ fn fake_run(adapter: &'static Adapter, kind: TaskKind, extra_env: &[(&str, &str)
     }
     let result = runner.run(adapter, Path::new(&program), &task, move |event| seen.lock().unwrap().push(event));
     let events = events.lock().unwrap().clone();
-    (dir, result, events)
+    (dir, result, events, runner)
 }
 
 fn have_python() -> bool {
@@ -243,7 +260,7 @@ fn runs_the_fake_agent_end_to_end() {
         return;
     }
     for adapter in [claude(), codex()] {
-        let (dir, result, events) = fake_run(adapter, TaskKind::Polish, &[]);
+        let (dir, result, events, runner) = fake_run(adapter, TaskKind::Polish, &[]);
         let outcome = result.unwrap_or_else(|error| panic!("{}: {error}", adapter.id));
         assert!(outcome.ok);
         assert_eq!(outcome.applies, 1, "{events:#?}");
@@ -263,8 +280,10 @@ fn runs_the_fake_agent_end_to_end() {
         assert_eq!(kinds, ["started", "message", "command", "apply", "command", "image", "message", "finished"], "{}: {events:#?}", adapter.id);
         assert_eq!(events[3].text(), "Applied delete, set · now 22.5 s");
         assert_eq!(events[5], Event::Looked(dir.join("scratch/sheet.jpg")));
-        // The run's output stays in the scratch directory.
+        // The run's output stays in the scratch directory, until the runner goes.
         assert!(std::fs::read_to_string(dir.join("scratch/stream.jsonl")).unwrap().lines().count() >= 8);
+        drop(runner);
+        assert!(!Path::new(&dir.join("scratch")).exists());
     }
 }
 
@@ -299,18 +318,88 @@ fn stop_kills_the_agents_process_group() {
     let pids_dir = TempDir::new("agent-stop");
     let pids = pids_dir.join("pids");
     let started = Instant::now();
-    let (_dir, result, events) = fake_run(claude(), TaskKind::Polish, &[("FAKE_AGENT_SLEEP", "60"), ("FAKE_AGENT_PIDS", &pids)]);
+    let (_dir, result, events, _runner) = fake_run(claude(), TaskKind::Polish, &[("FAKE_AGENT_SLEEP", "60"), ("FAKE_AGENT_PIDS", &pids), ("FAKE_AGENT_STOP", "1")]);
     assert_eq!(result.unwrap_err(), "Stopped");
     assert!(started.elapsed() < Duration::from_secs(15), "{:?}", started.elapsed());
     assert!(events.iter().any(|event| matches!(event, Event::Applied { ok: true, .. })));
     assert!(!events.iter().any(|event| matches!(event, Event::Finished { .. })));
-    let pids: Vec<i32> = std::fs::read_to_string(&pids).unwrap().split_whitespace().map(|p| p.parse().unwrap()).collect();
-    assert_eq!(pids.len(), 3);
+    assert_all_gone(&pids);
+}
+
+/// The agent, its child, one that left its group and a daemon re-parented away: all gone.
+fn assert_all_gone(pids: &str) {
+    let pids: Vec<i32> = std::fs::read_to_string(pids).unwrap().split_whitespace().map(|p| p.parse().unwrap()).collect();
+    assert_eq!(pids.len(), 4);
     let deadline = Instant::now() + Duration::from_secs(3);
     while !pids.iter().all(|&pid| gone(pid)) && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(50));
     }
-    for pid in pids {
-        assert!(gone(pid), "{pid} is still running");
+    for pid in &pids {
+        if !gone(*pid) {
+            // SAFETY: cleaning up after a failed test.
+            unsafe { libc::kill(*pid, libc::SIGKILL) };
+            panic!("{pid} is still running");
+        }
     }
+}
+
+/// A run that ends normally leaves nothing behind either: not what left the agent's process
+/// group, nor a daemon re-parented away from it.
+#[test]
+fn a_normal_end_kills_what_the_agent_left_running() {
+    if !have_python() {
+        eprintln!("skipped: no python3");
+        return;
+    }
+    let pids_dir = TempDir::new("agent-end");
+    let pids = pids_dir.join("pids");
+    let (_dir, result, _events, _runner) = fake_run(codex(), TaskKind::Polish, &[("FAKE_AGENT_SLEEP", "0.5"), ("FAKE_AGENT_PIDS", &pids)]);
+    assert!(result.unwrap().ok);
+    assert_all_gone(&pids);
+}
+
+/// And neither does one that times out.
+#[test]
+fn a_timeout_kills_what_the_agent_left_running() {
+    if !have_python() {
+        eprintln!("skipped: no python3");
+        return;
+    }
+    let pids_dir = TempDir::new("agent-timeout");
+    let pids = pids_dir.join("pids");
+    let started = Instant::now();
+    let runner = Runner::with_timeout(Duration::from_secs(3));
+    let (_dir, result, _events, _runner) =
+        fake_run_with(runner, claude(), TaskKind::Polish, &[("FAKE_AGENT_SLEEP", "60"), ("FAKE_AGENT_PIDS", &pids)]);
+    assert_eq!(result.unwrap_err(), "Stopped after 3 seconds");
+    assert!(started.elapsed() < Duration::from_secs(15), "{:?}", started.elapsed());
+    assert_all_gone(&pids);
+}
+
+/// The agent's `omareel` runs with the scope set, naming the bundle and this run's own
+/// scratch directory; two tasks on one bundle get different ones.
+#[test]
+fn each_run_has_its_own_scratch_directory() {
+    let dir = TempDir::new("agent-scratch");
+    let cache = dir.join("cache");
+    let bundle = dir.join("Demo.omareel");
+    std::fs::create_dir_all(&bundle).unwrap();
+    let first = Task::in_cache(&bundle, TaskKind::Polish, &cache).unwrap();
+    let second = Task::in_cache(&bundle, TaskKind::Polish, &cache).unwrap();
+    assert_ne!(first.scratch, second.scratch);
+    assert!(first.scratch.to_string_lossy().starts_with(&format!("{cache}/omareel/agent/Demo.omareel-")), "{}", first.scratch.display());
+    assert!(first.scratch.is_dir() && second.scratch.is_dir());
+    let runner = Runner::new();
+    let other = Runner::new();
+    let program = Path::new("/nonexistent/agent");
+    assert!(runner.run(claude(), program, &first, |_| {}).is_err());
+    // A second run on the same bundle doesn't touch the first's directory.
+    assert!(other.run(claude(), program, &second, |_| {}).is_err());
+    assert!(first.scratch.join("bin").is_dir());
+    let command = command(claude(), program, &first);
+    let scope = command.get_envs().find(|(key, _)| *key == "OMAREEL_AGENT_SCOPE").and_then(|(_, value)| value).unwrap();
+    assert_eq!(scope.to_string_lossy(), format!("{bundle}\n{}", first.scratch.display()));
+    drop(runner);
+    assert!(!first.scratch.exists());
+    assert!(second.scratch.exists());
 }

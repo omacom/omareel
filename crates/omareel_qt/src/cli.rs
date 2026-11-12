@@ -15,6 +15,11 @@ pub mod ffi {
         /// need no Qt application, so main() runs them before making one.
         #[cxx_name = "agentCommand"]
         fn agent_command(command: &str, args: Vec<String>) -> i32;
+        /// Why the command line (after the program's name) may not run in the coding agent's
+        /// scope `OMAREEL_AGENT_SCOPE` sets; empty when it may (agent/scope.rs). main() asks
+        /// first, before any command runs.
+        #[cxx_name = "agentScopeRefusal"]
+        fn agent_scope_refusal(arguments: Vec<String>) -> String;
         /// `omareel transcribe <arguments>`: writes the bundle's transcript.json; the exit status.
         fn transcribe(arguments: Vec<String>) -> i32;
         /// `omareel export <bundle> -o <file.srt|file.vtt>` for absolute paths; the exit status.
@@ -41,6 +46,10 @@ pub mod ffi {
 fn preload_editor(bundle: &str) {
     use omareel_core::editor::{Document, Probes};
     Document::preload(bundle, Probes::new(std::sync::Arc::new(omareel_core::media_probe::probe_video)));
+}
+
+fn agent_scope_refusal(arguments: Vec<String>) -> String {
+    omareel_core::agent::scope::refusal(&arguments)
 }
 
 fn transcribe(arguments: Vec<String>) -> i32 {

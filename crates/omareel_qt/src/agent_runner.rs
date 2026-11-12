@@ -246,7 +246,15 @@ impl qobject::AgentRunner {
         if let Some(worker) = self.as_mut().rust_mut().worker.take() {
             let _ = worker.join();
         }
-        let task = Task::new(&self.bundle, kind);
+        let task = match Task::new(&self.bundle, kind) {
+            Ok(task) => task,
+            Err(error) => {
+                let error = QString::from(error.as_str());
+                self.as_mut().entry(QString::from("problem"), error.clone(), QMap::default());
+                self.finished(false, error);
+                return;
+            }
+        };
         {
             let mut this = self.as_mut().rust_mut();
             this.runner.reset();

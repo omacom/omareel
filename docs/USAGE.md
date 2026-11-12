@@ -285,7 +285,9 @@ which no edit moves.
 
 `set-chapters` writes `chapters.json`, storing each `at` as a source time whichever timeline
 it is given in, and only once the whole list has applied; with everything empty it removes the
-file.
+file. The file is written aside first, then `project.json` is saved, then the chapters are
+moved into place, so a failure to write them saves nothing. Chapters aren't part of the
+editor's undo.
 
 ```sh
 omareel apply Recording.omareel - <<'OPS'
@@ -307,22 +309,39 @@ drawer does, and prints what it does as JSON lines (`started`, `message`, `comma
 status is 0 when the agent finished. `polish` tightens the recording, `chapters` writes
 `chapters.json`, and `ask` does what the rest of the line asks. Ctrl+C stops the agent.
 
-The agent runs in the bundle's directory with the omareel skill as instructions, and is held to
-omareel:
+The agent runs in the bundle's directory with the omareel skill as instructions. What it reads
+(speech, text on screen) can carry instructions of its own, so it is treated as untrusted:
 
+- Every `omareel` it runs is held to this recording: the run sets
+  `OMAREEL_AGENT_SCOPE=BUNDLE<newline>SCRATCH`, and omareel then allows only `describe BUNDLE`,
+  `apply BUNDLE …` (operations inline, on stdin, or in a file in the bundle or scratch
+  directory; files the operations name must be there too), `frame BUNDLE … -o FILE` with the
+  file in the scratch directory, `transcribe BUNDLE`, and `help`. Anything else (`record`,
+  `export`, `edit`, `skill`, `agent`, the launcher, another bundle, an image elsewhere) is
+  refused with exit status 126. Paths are compared with symlinks and `..` resolved.
 - Claude Code: `claude -p --output-format stream-json --verbose --restricted --tools Bash,Read
-  --allowedTools "Bash(omareel:*)" Read --permission-mode dontAsk --strict-mcp-config
-  --no-session-persistence`. Its settings files (and any broader allow rules in them) are
-  ignored, any command other than `omareel` is refused, and its file tool reads only the bundle
-  and the scratch directory.
-- Codex: `codex exec --json --sandbox workspace-write --ephemeral --skip-git-repo-check`: its
-  commands may write only to the bundle and the scratch directory, with no network.
+  --allowedTools "Bash(omareel describe:*)" "Bash(omareel apply:*)" "Bash(omareel frame:*)"
+  "Bash(omareel transcribe:*)" "Bash(omareel help)" Read --permission-mode dontAsk
+  --strict-mcp-config --no-session-persistence`. Its settings files (and any broader allow
+  rules in them) are ignored, any other command is refused, it has no MCP servers, and its
+  file tool reads only the bundle and the scratch directory.
+- Codex (experimental): `codex exec --json --sandbox workspace-write --ignore-user-config
+  --ignore-rules --ephemeral --skip-git-repo-check -c sandbox_workspace_write.network_access=false
+  -c sandbox_workspace_write.writable_roots=[] -c web_search="disabled"`. Your `config.toml`
+  isn't loaded (no MCP servers, hooks, features or extra writable roots from it; your model
+  choice there doesn't apply either, use `OMAREEL_AGENT_MODEL`). Its commands may write only to
+  the bundle and the scratch directory, without network, but **they can read any file you
+  can**, and what they read goes to OpenAI; its shell isn't limited to `omareel` either.
 
-The scratch directory, `~/.cache/omareel/agent/NAME-HASH/`, holds the frames the agent renders
-and the run's raw output (`stream.jsonl`, `stderr.txt`); it is emptied when the next run on that
-bundle starts. Its `bin/omareel` points at the running omareel, first on the agent's `PATH`.
-Omarchy's account selection is kept: `CLAUDE_CONFIG_DIR` or `CODEX_HOME` comes from
-`omarchy-agent-account-home` when unset. Other agents Omarchy offers aren't supported yet;
+Each run gets a scratch directory of its own, `~/.cache/omareel/agent/NAME-XXXXXX/`, for the
+frames the agent renders and the run's raw output (`stream.jsonl`, `stderr.txt`); it is removed
+when the next run starts in that editor, when the editor closes, or when `omareel agent` exits.
+Its `bin/omareel` points at the running omareel, first on the agent's `PATH`. The agent dies
+with the editor or `omareel agent`, even when either is killed, and at the end of every run
+(finished, failed, stopped, or after 30 minutes) everything it started is killed: its process
+group, and any process still carrying the run's `OMAREEL_AGENT_SCOPE`, which also finds what
+left the group. Omarchy's account selection is kept: `CLAUDE_CONFIG_DIR` or `CODEX_HOME` comes
+from `omarchy-agent-account-home` when unset. Other agents Omarchy offers aren't supported yet;
 `agent` says so and runs nothing.
 
 ## Editor keys

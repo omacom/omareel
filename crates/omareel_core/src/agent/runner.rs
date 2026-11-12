@@ -9,16 +9,31 @@
 //! omareel, and how to read the JSON events it prints ([`StreamParser`]) as [`Event`]s: its
 //! messages, the commands it runs, each apply, and the end with its cost.
 //!
-//! - Claude Code: `claude -p --output-format stream-json --verbose --restricted --tools
-//!   Bash,Read --allowedTools "Bash(omareel:*)" Read --permission-mode dontAsk`. Restricted
-//!   mode ignores the person's settings files (and their broader allow rules) and keeps the
-//!   file tools inside the bundle and the scratch directory; anything but an `omareel`
-//!   command is refused without asking.
-//! - Codex: `codex exec --json --sandbox workspace-write`: its sandbox lets commands write
-//!   only in the bundle and the scratch directory, with no network.
+//! The agent reads the transcript and frames, which can carry prompt injection (speech, text
+//! on screen), so it is treated as untrusted:
 //!
-//! The agent runs in a process group of its own ([`crate::transcript::job`]); [`Runner::stop`]
-//! kills that group and anything the agent started outside it.
+//! - Every `omareel` it runs is held to the bundle ([`super::scope`]): the runner sets
+//!   `OMAREEL_AGENT_SCOPE`, and omareel then runs only describe, apply, frame (into the scratch
+//!   directory) and transcribe on this bundle.
+//! - Claude Code: `claude -p --output-format stream-json --verbose --restricted --tools
+//!   Bash,Read --allowedTools "Bash(omareel describe:*)" "Bash(omareel apply:*)" … Read
+//!   --permission-mode dontAsk`. Restricted mode ignores the person's settings files (and
+//!   their broader allow rules) and keeps the file tools inside the bundle and the scratch
+//!   directory; any other command is refused without asking. No MCP servers
+//!   (`--strict-mcp-config`).
+//! - Codex (experimental here): `codex exec --json --sandbox workspace-write
+//!   --ignore-user-config --ignore-rules` with network access and web search off and no extra
+//!   writable roots. The person's config.toml isn't loaded, so their MCP servers, network
+//!   setting, writable roots, features and hooks don't apply (system-wide config still does).
+//!   Its sandbox holds what commands *write* to the bundle and the scratch directory, with no
+//!   network for them, but it does NOT restrict reads: a command can read any file the person
+//!   can, and what it reads goes to OpenAI. Nor does anything hold its shell to `omareel`;
+//!   `OMAREEL_AGENT_SCOPE` holds only what omareel itself does.
+//!
+//! The agent runs in a process group of its own ([`crate::transcript::job`]), dies with the
+//! process that started it, and at the end of every run (finished, failed, timed out or
+//! stopped) everything it started is killed: the group, and any process carrying this run's
+//! `OMAREEL_AGENT_SCOPE`, which finds those that left the group or were re-parented away.
 
 use super::skill::SKILL;
 use crate::compat::qdir;
@@ -28,6 +43,7 @@ use crate::transcript::job::{self, Control, Stopped};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 /// The longest a run may take before it is stopped.
@@ -55,6 +71,9 @@ pub struct Adapter {
     /// The environment variable that picks its account's config home (Omarchy's
     /// `omarchy-agent-account-home`).
     pub account_env: &'static str,
+    /// Less contained than the others (Codex: its commands can read any file), so the editor
+    /// calls it experimental.
+    pub experimental: bool,
 }
 
 pub const ADAPTERS: &[Adapter] = &[
@@ -65,6 +84,7 @@ pub const ADAPTERS: &[Adapter] = &[
         format: StreamFormat::ClaudeStreamJson,
         provider: "Anthropic",
         account_env: "CLAUDE_CONFIG_DIR",
+        experimental: false,
     },
     Adapter {
         id: "codex",
@@ -73,6 +93,7 @@ pub const ADAPTERS: &[Adapter] = &[
         format: StreamFormat::CodexJson,
         provider: "OpenAI",
         account_env: "CODEX_HOME",
+        experimental: true,
     },
 ];
 
@@ -219,8 +240,10 @@ pub struct Task {
     /// The bundle's absolute path; the agent's working directory.
     pub bundle: String,
     pub kind: TaskKind,
-    /// Where the agent may write (frames to look at); emptied before the run. The run leaves
-    /// the agent's output there (stream.jsonl, stderr.txt).
+    /// Where the agent may write (frames to look at): a directory of this run's own
+    /// ([`Task::new`] makes it), which the [`Runner`] removes when its next run starts or
+    /// when it goes (the editor closing, `omareel agent` ending). The run leaves the agent's
+    /// output there too (stream.jsonl, stderr.txt).
     pub scratch: PathBuf,
     /// The omareel binary the agent's `omareel` runs, put first on its `$PATH`, so it is the
     /// version of the editor that started it.
@@ -230,26 +253,54 @@ pub struct Task {
 }
 
 impl Task {
-    /// A task with the scratch directory under `~/.cache/omareel/agent/`, this omareel binary,
-    /// and `$OMAREEL_AGENT_MODEL`.
-    pub fn new(bundle: &str, kind: TaskKind) -> Task {
+    /// A task with a new scratch directory of its own under `~/.cache/omareel/agent/`, this
+    /// omareel binary, and `$OMAREEL_AGENT_MODEL`.
+    pub fn new(bundle: &str, kind: TaskKind) -> Result<Task, String> {
+        Task::in_cache(bundle, kind, &qstandardpaths::writable_location(Location::GenericCache))
+    }
+
+    /// [`Task::new`] with the scratch directory under `<cache>/omareel/agent/`.
+    pub fn in_cache(bundle: &str, kind: TaskKind, cache: &str) -> Result<Task, String> {
         let name: String = qdir::FileInfo::new(bundle)
             .file_name()
             .chars()
             .map(|c| if c.is_alphanumeric() || c == '-' || c == '.' { c } else { '_' })
             .collect();
-        let hash = bundle.bytes().fold(0xcbf29ce484222325u64, |hash, byte| (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3));
-        let scratch = format!(
-            "{}/omareel/agent/{name}-{:08x}",
-            qstandardpaths::writable_location(Location::GenericCache),
-            hash as u32
-        );
-        Task {
+        let parent = PathBuf::from(format!("{cache}/omareel/agent"));
+        std::fs::create_dir_all(&parent).map_err(|error| format!("cannot create {}: {error}", parent.display()))?;
+        remove_stale_scratches(&parent);
+        Ok(Task {
             bundle: bundle.to_owned(),
             kind,
-            scratch: PathBuf::from(scratch),
+            scratch: make_temp_dir(&parent, &name)?,
             omareel: std::env::current_exe().ok(),
             model: env("OMAREEL_AGENT_MODEL"),
+        })
+    }
+}
+
+/// A new directory `<parent>/<name>-XXXXXX` (mkdtemp: unique, only for this user).
+fn make_temp_dir(parent: &Path, name: &str) -> Result<PathBuf, String> {
+    use std::os::unix::ffi::OsStrExt;
+    let template = parent.join(format!("{name}-XXXXXX"));
+    let mut bytes = template.as_os_str().as_bytes().to_vec();
+    bytes.push(0);
+    // SAFETY: mkdtemp fills in the NUL-terminated template in place.
+    let made = unsafe { libc::mkdtemp(bytes.as_mut_ptr().cast()) };
+    if made.is_null() {
+        return Err(format!("cannot create {}: {}", template.display(), std::io::Error::last_os_error()));
+    }
+    bytes.pop();
+    Ok(PathBuf::from(std::ffi::OsStr::from_bytes(&bytes)))
+}
+
+/// Scratch directories a day old: left by an editor that didn't get to remove its own.
+fn remove_stale_scratches(parent: &Path) {
+    let Ok(entries) = std::fs::read_dir(parent) else { return };
+    for entry in entries.flatten() {
+        let old = entry.metadata().and_then(|metadata| metadata.modified()).ok().and_then(|modified| modified.elapsed().ok());
+        if old.is_some_and(|age| age > Duration::from_secs(24 * 60 * 60)) {
+            let _ = std::fs::remove_dir_all(entry.path());
         }
     }
 }
@@ -353,8 +404,13 @@ pub fn arguments(adapter: &Adapter, task: &Task) -> Vec<String> {
                     "--restricted",
                     "--tools",
                     "Bash,Read",
+                    // Only the commands omareel itself allows in the agent's scope.
                     "--allowedTools",
-                    "Bash(omareel:*)",
+                    "Bash(omareel describe:*)",
+                    "Bash(omareel apply:*)",
+                    "Bash(omareel frame:*)",
+                    "Bash(omareel transcribe:*)",
+                    "Bash(omareel help)",
                     "Read",
                     "--permission-mode",
                     "dontAsk",
@@ -382,8 +438,19 @@ pub fn arguments(adapter: &Adapter, task: &Task) -> Vec<String> {
                     "--ephemeral",
                     "--sandbox",
                     "workspace-write",
+                    // Not the person's config.toml (their MCP servers, network setting,
+                    // writable roots, features, hooks) nor their exec rules; and network, web
+                    // search and extra writable roots off whatever system config says.
+                    "--ignore-user-config",
+                    "--ignore-rules",
                     "-c",
                     "approval_policy=\"never\"",
+                    "-c",
+                    "sandbox_workspace_write.network_access=false",
+                    "-c",
+                    "sandbox_workspace_write.writable_roots=[]",
+                    "-c",
+                    "web_search=\"disabled\"",
                     "--cd",
                 ]
                 .map(String::from),
@@ -401,14 +468,17 @@ pub fn arguments(adapter: &Adapter, task: &Task) -> Vec<String> {
     args
 }
 
-/// Empties the scratch directory and links the omareel binary into its `bin/`.
+/// Links the omareel binary into the scratch directory's `bin/`.
 fn prepare(task: &Task) -> Result<(), String> {
-    let scratch = &task.scratch;
-    let _ = std::fs::remove_dir_all(scratch);
-    let bin = scratch.join("bin");
+    if task.bundle.contains('\n') || task.scratch.to_string_lossy().contains('\n') {
+        return Err("the recording's path has a line break in it, which the agent can't be held to".into());
+    }
+    let bin = task.scratch.join("bin");
     std::fs::create_dir_all(&bin).map_err(|error| format!("cannot create {}: {error}", bin.display()))?;
     if let Some(omareel) = &task.omareel {
-        std::os::unix::fs::symlink(omareel, bin.join("omareel")).map_err(|error| format!("cannot link omareel into {}: {error}", bin.display()))?;
+        let link = bin.join("omareel");
+        let _ = std::fs::remove_file(&link);
+        std::os::unix::fs::symlink(omareel, &link).map_err(|error| format!("cannot link omareel into {}: {error}", bin.display()))?;
     }
     Ok(())
 }
@@ -439,6 +509,9 @@ pub fn command(adapter: &Adapter, program: &Path, task: &Task) -> Command {
     command.env("PATH", format!("{}:{path}", bin.display()));
     command.env("OMAREEL_BUNDLE", &task.bundle);
     command.env("OMAREEL_AGENT_TASK", task.kind.name());
+    // Holds every omareel the agent runs to this bundle; also marks its processes for the
+    // sweep at the end ([`sweep`]).
+    command.env(super::scope::SCOPE_ENV, super::scope::value(&task.bundle, &task.scratch));
     if let Some(home) = account_home(adapter) {
         command.env(adapter.account_env, home);
     }
@@ -918,9 +991,41 @@ pub struct Outcome {
 }
 
 /// Starting, following and stopping runs, one at a time, from any thread.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Runner {
     control: Control,
+    current: Arc<Current>,
+    timeout: Duration,
+}
+
+impl Default for Runner {
+    fn default() -> Runner {
+        Runner { control: Control::default(), current: Arc::default(), timeout: TIMEOUT }
+    }
+}
+
+/// The run going on or last ended: its scope (marking its processes) and its scratch
+/// directory, removed when the next run starts or the last clone of the runner goes.
+#[derive(Default)]
+struct Current(Mutex<Option<(String, PathBuf)>>);
+
+impl Current {
+    fn replace(&self, next: Option<(String, PathBuf)>) {
+        let previous = std::mem::replace(&mut *self.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner()), next);
+        if let Some((_, scratch)) = previous {
+            let _ = std::fs::remove_dir_all(scratch);
+        }
+    }
+
+    fn scope(&self) -> Option<String> {
+        self.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).as_ref().map(|(scope, _)| scope.clone())
+    }
+}
+
+impl Drop for Current {
+    fn drop(&mut self) {
+        self.replace(None);
+    }
 }
 
 impl Runner {
@@ -928,9 +1033,23 @@ impl Runner {
         Runner::default()
     }
 
+    /// A runner that stops runs after `timeout` instead of [`TIMEOUT`].
+    pub fn with_timeout(timeout: Duration) -> Runner {
+        Runner { timeout, ..Runner::default() }
+    }
+
     /// Runs the agent to its end (on the calling thread), handing each event to `on_event` as
     /// it comes. An error says why it couldn't start, was stopped, or ended without a result.
-    pub fn run(&self, adapter: &Adapter, program: &Path, task: &Task, mut on_event: impl FnMut(Event)) -> Result<Outcome, String> {
+    pub fn run(&self, adapter: &Adapter, program: &Path, task: &Task, on_event: impl FnMut(Event)) -> Result<Outcome, String> {
+        let scope = super::scope::value(&task.bundle, &task.scratch);
+        self.current.replace(Some((scope.clone(), task.scratch.clone())));
+        let result = self.run_task(adapter, program, task, on_event);
+        // However it ended, nothing the agent started outlives the run.
+        sweep(&scope);
+        result
+    }
+
+    fn run_task(&self, adapter: &Adapter, program: &Path, task: &Task, mut on_event: impl FnMut(Event)) -> Result<Outcome, String> {
         prepare(task)?;
         let mut parser = StreamParser::new(adapter).in_directory(&task.bundle);
         let mut outcome = Outcome::default();
@@ -949,7 +1068,7 @@ impl Runner {
         };
         // The agent's own words, kept for looking into a run afterwards.
         let mut transcript = std::fs::File::create(task.scratch.join("stream.jsonl")).ok();
-        let result = job::run_streaming(command(adapter, program, task), Some(TIMEOUT), &self.control, |chunk| {
+        let result = job::run_streaming(command(adapter, program, task), Some(self.timeout), &self.control, |chunk| {
             if let Some(file) = transcript.as_mut() {
                 let _ = std::io::Write::write_all(file, chunk);
             }
@@ -964,7 +1083,8 @@ impl Runner {
         let output = match result {
             Ok(output) => output,
             Err(Stopped::Cancelled) => return Err("Stopped".into()),
-            Err(Stopped::TimedOut) => return Err(format!("Stopped after {} minutes", TIMEOUT.as_secs() / 60)),
+            Err(Stopped::TimedOut) if self.timeout.as_secs() >= 60 => return Err(format!("Stopped after {} minutes", self.timeout.as_secs() / 60)),
+            Err(Stopped::TimedOut) => return Err(format!("Stopped after {} seconds", self.timeout.as_secs_f64())),
             Err(Stopped::Held) => return Err("Stopped".into()),
             Err(Stopped::Failed(error)) => return Err(error),
         };
@@ -981,7 +1101,7 @@ impl Runner {
     }
 
     /// Stops the run now: kills the agent's process group, and anything it started that left
-    /// the group (a tool's own session).
+    /// the group (a tool's own session, a daemon).
     pub fn stop(&self) {
         let groups = self.control.children.groups();
         let mut doomed = Vec::new();
@@ -993,9 +1113,13 @@ impl Runner {
             // SAFETY: kill with a pid we just found among the agent's descendants.
             unsafe { libc::kill(pid, libc::SIGKILL) };
         }
+        if let Some(scope) = self.current.scope() {
+            sweep(&scope);
+        }
     }
 
-    /// Ready for another run after [`Runner::stop`].
+    /// Ready for another run after [`Runner::stop`] (the scratch directory it keeps stays
+    /// until the next run starts).
     pub fn reset(&mut self) {
         self.control = Control::default();
     }
@@ -1003,6 +1127,31 @@ impl Runner {
     pub fn stopped(&self) -> bool {
         self.control.cancelled()
     }
+}
+
+/// Kills every process of this user's that has `OMAREEL_AGENT_SCOPE=scope` in its
+/// environment: what a run started, also what left its process group or was re-parented away
+/// from it (each run's scope names a scratch directory of its own). A process that cleared
+/// its environment isn't found.
+pub fn sweep(scope: &str) -> usize {
+    let marker = format!("{}={scope}", super::scope::SCOPE_ENV).into_bytes();
+    let own = std::process::id() as i32;
+    let mut killed = 0;
+    let Ok(entries) = std::fs::read_dir("/proc") else { return 0 };
+    for entry in entries.flatten() {
+        let Some(pid) = entry.file_name().to_str().and_then(|name| name.parse::<i32>().ok()) else { continue };
+        if pid == own {
+            continue;
+        }
+        // Readable only for this user's processes.
+        let Ok(environ) = std::fs::read(entry.path().join("environ")) else { continue };
+        if environ.split(|&byte| byte == 0).any(|variable| variable == marker.as_slice()) {
+            // SAFETY: kill with a pid whose environment names this run.
+            unsafe { libc::kill(pid, libc::SIGKILL) };
+            killed += 1;
+        }
+    }
+    killed
 }
 
 /// Every process below `pid`, from /proc.
@@ -1057,7 +1206,13 @@ pub fn agent_command(arguments: &[String]) -> i32 {
     };
     let runner = Runner::new();
     stop_on_interrupt(&runner);
-    let task = Task::new(&bundle, kind);
+    let task = match Task::new(&bundle, kind) {
+        Ok(task) => task,
+        Err(error) => {
+            let _ = writeln!(std::io::stderr(), "omareel: {error}");
+            return 1;
+        }
+    };
     let print = |object: Object| {
         let mut out = std::io::stdout().lock();
         let _ = writeln!(out, "{}", object.to_json(Format::Compact));

@@ -400,3 +400,79 @@ fn chapters_are_written_at_source_times_and_follow_later_cuts() {
     assert!(ok);
     assert!(!std::path::Path::new(&chapters_file).exists());
 }
+
+/// chapters.json that can't be written saves nothing, so trying again applies the cuts once.
+#[test]
+fn chapters_that_cannot_be_written_save_nothing() {
+    let dir = TempDir::new("agent-chapters-atomic");
+    let bundle = bundle(&dir);
+    let project_file = format!("{bundle}/project.json");
+    let ops = r#"[{"op": "delete", "from": 0, "to": 2},
+                  {"op": "set-chapters", "title": "Demo", "chapters": [{"at": 0, "title": "Start"}]}]"#;
+    let run = || {
+        let (report, ok) = super::apply::run_on(|| Ok(open(&bundle, &dir)), ops.as_bytes(), false, false);
+        (crate::compat::qjson::object_from_json(report.as_bytes()).unwrap(), ok)
+    };
+    let before = std::fs::read(&project_file).ok();
+    // A directory where chapters.json's temporary file goes.
+    let blocker = format!("{}.{}.tmp", crate::chapters::path(&bundle), std::process::id());
+    std::fs::create_dir_all(&blocker).unwrap();
+    let (report, ok) = run();
+    assert!(!ok);
+    assert!(report.value("error").to_string_or("").starts_with("nothing was saved: cannot write"), "{report:?}");
+    assert_eq!(std::fs::read(&project_file).ok(), before, "project.json was saved");
+    assert!(!std::path::Path::new(&crate::chapters::path(&bundle)).exists());
+    std::fs::remove_dir(&blocker).unwrap();
+    let (report, ok) = run();
+    assert!(ok, "{report:?}");
+    assert_eq!(report.value("output_duration").to_double(0.0), 8.0, "{report:?}");
+    assert_eq!(crate::chapters::Chapters::load(&bundle).unwrap().unwrap().title, "Demo");
+    // No temporary file is left behind.
+    let leftovers: Vec<String> = std::fs::read_dir(&bundle)
+        .unwrap()
+        .flatten()
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| name.ends_with(".tmp"))
+        .collect();
+    assert!(leftovers.is_empty(), "{leftovers:?}");
+}
+
+/// Inside an agent's scope, operations can't pull files from outside the bundle and the
+/// scratch directory into the project.
+#[test]
+fn scoped_operations_name_only_files_inside() {
+    let dir = TempDir::new("agent-scoped-apply");
+    let bundle = bundle(&dir);
+    let scratch = dir.join("scratch");
+    std::fs::create_dir_all(&scratch).unwrap();
+    let outside = dir.join("private.png");
+    std::fs::write(&outside, b"png").unwrap();
+    std::fs::write(format!("{scratch}/fine.png"), b"png").unwrap();
+    let scope = super::scope::Scope::parse(&super::scope::value(&bundle, std::path::Path::new(&scratch))).unwrap();
+    let run = |ops: String| {
+        let (report, ok) = super::apply::run_in(|| Ok(open(&bundle, &dir)), ops.as_bytes(), false, false, Some(scope.clone()));
+        (crate::compat::qjson::object_from_json(report.as_bytes()).unwrap(), ok)
+    };
+    for ops in [
+        format!(r#"[{{"op": "insert", "file": "{outside}"}}]"#),
+        format!(r#"[{{"op": "music", "file": "{outside}"}}]"#),
+        format!(r#"[{{"op": "set", "path": "background.image", "value": "{outside}"}}]"#),
+        format!(r#"[{{"op": "set", "path": "background.image", "value": "{scratch}/../private.png"}}]"#),
+    ] {
+        let (report, ok) = run(ops.clone());
+        assert!(!ok, "{ops}: {report:?}");
+        assert!(report.value("error").to_string_or("").contains("outside the recording"), "{ops}: {report:?}");
+    }
+    assert!(!std::path::Path::new(&format!("{bundle}/media/private.png")).exists());
+    // A file in the scratch directory is fine, and without a scope anything is.
+    let (report, ok) = run(format!(r#"[{{"op": "set", "path": "background.image", "value": "{scratch}/fine.png"}}]"#));
+    assert!(ok, "{report:?}");
+    let (report, ok) = super::apply::run_on(
+        || Ok(open(&bundle, &dir)),
+        format!(r#"[{{"op": "set", "path": "background.image", "value": "{outside}"}}]"#).as_bytes(),
+        false,
+        false,
+    );
+    assert!(ok, "{report}");
+}
+

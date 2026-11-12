@@ -53,6 +53,7 @@ extern "C" int omr_ff_preload(void);
 #include <QRegion>
 #include <cerrno>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <functional>
 #include <unistd.h>
@@ -523,6 +524,19 @@ static int waitForOpenRequest(qint64 starterPid, int graceMs)
 
 int main(int argc, char **argv)
 {
+    // A coding agent omareel started (the editor's Polish, `omareel agent`) may only describe,
+    // edit, look at and transcribe its own recording, whichever omareel it runs
+    // (crates/omareel_core/src/agent/scope.rs).
+    if (std::getenv("OMAREEL_AGENT_SCOPE")) {
+        ::rust::Vec<::rust::String> arguments;
+        for (int i = 1; i < argc; ++i)
+            arguments.push_back(::rust::String(QString::fromLocal8Bit(argv[i]).toStdString()));
+        const ::rust::String refusal = omareel::cli::agentScopeRefusal(std::move(arguments));
+        if (!refusal.empty()) {
+            std::fputs(std::string(refusal).c_str(), stderr);
+            return 126;
+        }
+    }
     if (waitingEditor(argc, argv) || waitingBar(argc, argv)) installOpenRequest();
     if (waitingBar(argc, argv)) omareel::record::registerWaitingBar();
     omareel::cli::installMessageHandler();
