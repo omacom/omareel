@@ -10,7 +10,8 @@ use crate::compat::qprocess;
 use crate::compat::qstring;
 use crate::input_log::InputLog;
 use crate::project::{sanitized_media_path, Clip, Project};
-use crate::zoom_timeline;
+use super::markers::{apply_recording_marks, generate_visible_zooms};
+use crate::recording_marks::RecordingMarks;
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::sync::Arc;
@@ -325,6 +326,11 @@ pub fn load_bundle(bundle_path: &str, probes: &Probes) -> Result<Bundle, String>
         result?;
         project
     };
+    if new {
+        let marks = RecordingMarks::load_bundle(&bundle_path);
+        let first_frame_us = capture_root.value("first_frame_us").to_variant_long_long();
+        apply_recording_marks(&mut project, &marks, first_frame_us, recording.source_duration);
+    }
     if project.clips.iter().all(Clip::is_media) {
         project.clips.insert(
             0,
@@ -344,7 +350,7 @@ pub fn load_bundle(bundle_path: &str, probes: &Probes) -> Result<Bundle, String>
     let input = InputLog::load_bundle(&bundle_path, recording.source_duration)?;
     if new {
         let clicks: Vec<f64> = input.click_downs(true).iter().map(|click| click.time).collect();
-        project.zooms = zoom_timeline::generate(&clicks, recording.source_duration);
+        project.zooms = generate_visible_zooms(&clicks, &project.clips, recording.source_duration);
     }
     Ok(Bundle { recording, project, input, inserts, new_project: new })
 }
