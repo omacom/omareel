@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 """Markers, a pause and a retake in a real recording, in a nested compositor:
 
-    OMAREEL_NESTED_ROOT=~/.cache/omn tests/tools/nested-hyprland.sh --directory ~/.cache/omn/marks --timeout 240 -- \
+    OMAREEL_NESTED_ROOT=~/.cache/o tests/tools/nested-hyprland.sh --directory ~/.cache/o/marks --timeout 240 -- \
         python3 tests/tools/recording-marks-proof.py BUILD/omareel
 
-(a short root: Hyprland's socket paths must fit in 108 bytes). It records the nested output with
-an animated window on it, drops a labelled marker, pauses and resumes, asks for a retake (which
-cuts back to the resume), drops another marker and stops. Then it checks markers.jsonl, that the
-video has no frames while paused (the native capture holds its last frame), that input.jsonl has
-nothing from the pause, and that the editor, opened offscreen, makes a project whose clips skip
-the pause and the retake and whose markers are the recorded ones. report.json and the editor's
+(a short root: Hyprland's socket paths must fit in 108 bytes, and ~/.cache/omn is already too
+long for a 63-character instance signature). Recorded with the gpu-screen-recorder fallback
+(OMAREEL_CAPTURE=gsr), which keeps capturing while paused, it skips the frame check; that needs a
+real session, as gpu-screen-recorder captures DRM connectors and a nested output is not one.
+
+It records the nested output with an animated window on it, drops a labelled marker, pauses and
+resumes, asks for a retake (which cuts back to the resume), drops another marker and stops. Then
+it checks markers.jsonl, that the video has no frames while paused (the native capture holds its
+last frame), that input.jsonl has nothing from the pause, and that the editor, opened offscreen,
+makes a project whose clips skip the pause and the retake and whose markers are the recorded
+ones. report.json and the editor's
 screenshot are left in the artifacts directory."""
 import json
 import os
@@ -96,7 +101,8 @@ try:
     assert abs(retake_from - seconds['resume']) < 1e-6, 'the retake cuts back to the resume'
 
     # The video holds its last frame while paused: no frames from just after the pause until the
-    # resume, and frames again after it.
+    # resume, and frames again after it. The fallback keeps capturing; the project cuts it.
+    native = capture.get('backend') != 'gsr'
     packets = run('ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'packet=pts_time', '-of',
                   'csv=p=0', str(bundle / 'screen.mp4'), timeout=60)
     times = sorted(float(line.split(',')[0]) for line in packets.split() if line.strip())
@@ -104,7 +110,7 @@ try:
     report['frames'] = {'total': len(times), 'while_paused': paused_frames,
                         'before_pause': sum(t < seconds['pause'] for t in times),
                         'after_resume': sum(t >= seconds['resume'] for t in times)}
-    assert not paused_frames, paused_frames
+    assert not native or not paused_frames, paused_frames
     assert report['frames']['before_pause'] > 30 and report['frames']['after_resume'] > 30, report['frames']
 
     events = [json.loads(line) for line in (bundle / 'input.jsonl').read_text().splitlines() if line.strip()]
