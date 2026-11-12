@@ -76,6 +76,8 @@ Rectangle {
                 width: Math.min(parent.width, Math.max(80, Math.min(360, nameMetrics.advanceWidth + 22)))
                 height: 30
                 text: editor.bundleName
+                // Renaming moves the bundle the agent is working in.
+                enabled: !editor.readOnly
                 selectByMouse: true
                 hoverEnabled: true
                 font.family: theme.fontFamily
@@ -131,7 +133,7 @@ Rectangle {
             }
         }
         OmIconButton {
-            enabled: editor.canUndo
+            enabled: editor.canUndo && !editor.readOnly
             icon.source: "qrc:/omareel/assets/icons/lucide/undo-2.svg"
             Accessible.name: "Undo"
             tooltipText: "Undo"
@@ -139,7 +141,7 @@ Rectangle {
             onClicked: editor.undo()
         }
         OmIconButton {
-            enabled: editor.canRedo
+            enabled: editor.canRedo && !editor.readOnly
             icon.source: "qrc:/omareel/assets/icons/lucide/redo-2.svg"
             Accessible.name: "Redo"
             tooltipText: "Redo"
@@ -173,6 +175,7 @@ Rectangle {
                 : !window.agentRunner.available ? window.agentRunner.problem
                 : "Polish with " + window.agentRunner.agentName + ". It reads the timeline, transcript and frames"
                   + (window.agentRunner.provider ? " and sends them to " + window.agentRunner.provider : "")
+                  + (window.agentRunner.consented ? "" : "; you start it in the drawer")
             tooltipShortcut: "Ctrl Shift P"
             onClicked: window.agentRunner.running ? window.openAgent("") : window.openAgent("polish")
         }
@@ -188,6 +191,7 @@ Rectangle {
             Layout.preferredWidth: implicitWidth
             Layout.minimumWidth: implicitWidth
             text: "Presets"
+            enabled: !editor.readOnly
             trailingIconSource: "qrc:/omareel/assets/icons/lucide/chevron-down.svg"
             selected: presetsMenu.visible
             onClicked: presetsMenu.visible ? presetsMenu.close() : presetsMenu.open()

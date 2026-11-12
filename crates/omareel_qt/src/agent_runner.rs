@@ -40,6 +40,11 @@ pub mod qobject {
         #[qproperty(QString, provider, READ, NOTIFY = agent_changed)]
         #[qproperty(bool, available, READ, NOTIFY = agent_changed)]
         #[qproperty(QString, problem, READ, NOTIFY = agent_changed)]
+        // Whether the person let this agent run without asking first (agent/consent.rs): the
+        // top bar's Polish and Ctrl+Shift+P start it directly then, else open the drawer.
+        #[qproperty(bool, consented, READ, NOTIFY = agent_changed)]
+        // Codex: less contained (its commands can read any file), so called experimental.
+        #[qproperty(bool, experimental, READ, NOTIFY = agent_changed)]
         #[qproperty(bool, running, READ, NOTIFY = running_changed)]
         // "polish", "ask", "chapters" while running; the last one after.
         #[qproperty(QString, task, READ, NOTIFY = running_changed)]
@@ -73,6 +78,14 @@ pub mod qobject {
         fn write_description(self: Pin<&mut AgentRunner>);
         #[qinvokable]
         fn stop(self: Pin<&mut AgentRunner>);
+        /// Lets this agent start without asking from now on (the drawer's Start).
+        #[qinvokable]
+        #[cxx_name = "grantConsent"]
+        fn grant_consent(self: Pin<&mut AgentRunner>);
+        /// Asks again before this agent runs (the drawer's "Ask first").
+        #[qinvokable]
+        #[cxx_name = "revokeConsent"]
+        fn revoke_consent(self: Pin<&mut AgentRunner>);
         /// Looks for the default agent again (it may have changed in Omarchy).
         #[qinvokable]
         #[cxx_name = "refreshAgent"]
@@ -103,6 +116,8 @@ pub struct AgentRunnerRust {
     provider: QString,
     available: bool,
     problem: QString,
+    consented: bool,
+    experimental: bool,
     running: bool,
     task: QString,
     chapters: QMap<QMapPair_QString_QVariant>,
@@ -136,6 +151,8 @@ impl cxx_qt::Constructor<(QString,)> for qobject::AgentRunner {
             provider: QString::default(),
             available: false,
             problem: QString::default(),
+            consented: false,
+            experimental: false,
             running: false,
             task: QString::default(),
             chapters: QMap::default(),
@@ -165,7 +182,15 @@ impl qobject::AgentRunner {
             Choice::Unsupported { id } => (omareel_core::agent::runner::agent_name(id), ""),
             Choice::NoneChosen => (String::new(), ""),
         };
+        let (consented, experimental) = match &choice {
+            Choice::Ready { adapter, .. } | Choice::NotInstalled { adapter } => {
+                (omareel_core::agent::consent::allowed(adapter.id), adapter.experimental)
+            }
+            _ => (false, false),
+        };
         let mut this = self.as_mut().rust_mut();
+        this.consented = consented;
+        this.experimental = experimental;
         this.agent_name = QString::from(name.as_str());
         this.provider = QString::from(provider);
         this.available = matches!(choice, Choice::Ready { .. });
@@ -232,6 +257,27 @@ impl qobject::AgentRunner {
         }
     }
 
+    fn grant_consent(self: Pin<&mut Self>) {
+        self.set_consent(true);
+    }
+
+    fn revoke_consent(self: Pin<&mut Self>) {
+        self.set_consent(false);
+    }
+
+    fn set_consent(mut self: Pin<&mut Self>, allowed: bool) {
+        let id = match &self.choice {
+            Choice::Ready { adapter, .. } | Choice::NotInstalled { adapter } => adapter.id,
+            _ => return,
+        };
+        if let Err(error) = omareel_core::agent::consent::set_allowed(id, allowed) {
+            // Still allowed for this window; the drawer asks again next time.
+            omareel_core::compat::qlog::warning(&format!("omareel: {error}"));
+        }
+        self.as_mut().rust_mut().consented = allowed;
+        self.agent_changed();
+    }
+
     fn start(mut self: Pin<&mut Self>, kind: TaskKind) {
         if self.running {
             return;
@@ -243,6 +289,13 @@ impl qobject::AgentRunner {
             self.finished(false, problem);
             return;
         };
+        // Only once the person saw what runs and what it sends, and started it (grantConsent).
+        if !self.consented {
+            let problem = QString::from(format!("Start {} from the drawer first.", adapter.name).as_str());
+            self.as_mut().entry(QString::from("problem"), problem.clone(), QMap::default());
+            self.finished(false, problem);
+            return;
+        }
         if let Some(worker) = self.as_mut().rust_mut().worker.take() {
             let _ = worker.join();
         }

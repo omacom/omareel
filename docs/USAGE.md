@@ -127,16 +127,23 @@ within half a second as one undoable change; edits made in the editor just befor
 
 **Editing with AI.** The top bar's Polish button (`Ctrl+Shift+P`) and the speech-bubble button
 beside it open a drawer that runs the coding agent chosen in Omarchy (Setup › Defaults › Agent;
-Claude Code and Codex are supported) on the recording, the way `omareel agent` does. Nothing
-runs until one of its actions is clicked: Polish (trim the ends, cut idle stretches and pauses,
-fix zooms, show keystrokes when shortcuts matter, then check a contact sheet), "Ask the
-editor…" (any request, such as "make it under 60 seconds"), or Write description (chapters, a
-title and a description). The agent reads the timeline, the transcript and frames, which go to
-its provider. It edits through `omareel apply`, so each change appears in the editor as it
-lands and is one `Ctrl+Z` away. The drawer lists its messages, the commands it runs, each
-change, and the frames it looked at; Stop ends it at once. Closing the editor stops it too.
-Chapters show as flags on the timeline's ruler (hover for the title, click to seek), and the
-drawer lists them with "Copy YouTube description".
+Claude Code, and Codex as experimental) on the recording, the way `omareel agent` does. Nothing
+runs until you start it. The first time, Polish only opens the drawer: it says which agent runs,
+that it reads the timeline, the transcript and frames of the video and sends them to its
+provider, and has a Start button. Once started, an agent is remembered
+(`~/.config/omareel/agent.json`), and Polish and `Ctrl+Shift+P` run it at once; the drawer's
+"Ask first" takes that back. Its actions: Polish (trim the ends, cut idle stretches and pauses,
+fix zooms, show keystrokes when shortcuts matter, then check a contact sheet), "Ask the editor…"
+(any request, such as "make it under 60 seconds"), or Write description (chapters, a title and
+a description). The project is saved before the agent starts. It edits through `omareel
+apply`, so each change appears in the editor as it lands and is one `Ctrl+Z` away; chapters
+and the description are saved on their own (`chapters.json`) and can't be undone. While it
+runs, the editor's own editing is off ("The agent is editing… Stop to edit" over the timeline),
+so nothing you change is lost to its next change; it comes back when the agent finishes or
+stops. The drawer lists its messages, the commands it runs, each change, and the frames it
+looked at; Stop ends it at once. Closing the editor stops it too. Chapters show as flags on
+the timeline's ruler (hover for the title, click to seek), and the drawer lists them with
+"Copy YouTube description".
 
 Legacy `.omarecord` bundles remain supported, including bundles under
 `~/Videos/omarecord`. The legacy command name is installed as a compatibility alias. If only

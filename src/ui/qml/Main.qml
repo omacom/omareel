@@ -19,12 +19,24 @@ ApplicationWindow {
     // The coding agent (AgentDrawer.qml); null where the editor runs without it (tests).
     readonly property var agentRunner: typeof agent === "undefined" ? null : agent
     property bool agentOpen: false
+    // While the agent edits, the editor's own edits are refused (Editor.readOnly), so none is
+    // lost when the agent's next change comes in; Stop gives editing back.
+    readonly property bool agentEditing: agentRunner !== null && agentRunner.running
+    Binding { target: editor; property: "readOnly"; value: window.agentEditing }
+    // Polish from the top bar or Ctrl+Shift+P: runs at once only for an agent the person
+    // started from the drawer before; otherwise the drawer says what runs and what it sends,
+    // with a Start button.
     function openAgent(task) {
         if (!agentRunner) return
         agentDrawerLoader.active = true
         agentOpen = true
-        if (task && agentRunner.available && !agentRunner.running) agentDrawerLoader.item.start(task)
+        if (task && agentRunner.available && !agentRunner.running) agentDrawerLoader.item.request(task, "")
         else if (!task) Qt.callLater(() => agentDrawerLoader.item && agentDrawerLoader.item.focusPrompt())
+    }
+    // The agent starts from project.json: what is edited here goes there first.
+    function saveForAgent() {
+        topBar.commitProjectName()
+        return editor.saveNow()
     }
     function closeAgent() { agentOpen = false; restoreEditorFocus() }
     readonly property bool singleKeyShortcutsBlocked: activeFocusItem !== null
@@ -117,6 +129,7 @@ ApplicationWindow {
                     Layout.minimumWidth: 376
                     Layout.maximumWidth: 376
                     Layout.fillHeight: true
+                    enabled: !editor.readOnly
                 }
             }
             Timeline {
@@ -204,12 +217,12 @@ ApplicationWindow {
     Shortcut { sequence: "Right"; enabled: !window.singleKeyShortcutsBlocked; onActivated: editor.stepFrames(1) }
     Shortcut { sequence: "Shift+Left"; enabled: !window.singleKeyShortcutsBlocked; onActivated: editor.seek(editor.position - 1) }
     Shortcut { sequence: "Shift+Right"; enabled: !window.singleKeyShortcutsBlocked; onActivated: editor.seek(editor.position + 1) }
-    Shortcut { sequence: "S"; enabled: !window.singleKeyShortcutsBlocked; onActivated: editor.splitAtPlayhead() }
-    Shortcut { sequence: "Z"; enabled: !window.singleKeyShortcutsBlocked; onActivated: editor.addZoomAt(editor.position) }
-    Shortcut { sequence: "I"; enabled: !window.singleKeyShortcutsBlocked; onActivated: bottomBar.openInsertDialog() }
+    Shortcut { sequence: "S"; enabled: !window.singleKeyShortcutsBlocked && !editor.readOnly; onActivated: editor.splitAtPlayhead() }
+    Shortcut { sequence: "Z"; enabled: !window.singleKeyShortcutsBlocked && !editor.readOnly; onActivated: editor.addZoomAt(editor.position) }
+    Shortcut { sequence: "I"; enabled: !window.singleKeyShortcutsBlocked && !editor.readOnly; onActivated: bottomBar.openInsertDialog() }
     Shortcut {
         sequence: "Delete"
-        enabled: !window.singleKeyShortcutsBlocked
+        enabled: !window.singleKeyShortcutsBlocked && !editor.readOnly
         onActivated: {
             if (timeline.hasRange) timeline.deleteSelectedRange()
             else if (editor.selectedZoomIds.length) editor.removeSelectedZooms()
@@ -218,11 +231,11 @@ ApplicationWindow {
     }
     Shortcut {
         sequence: "Backspace"
-        enabled: !window.singleKeyShortcutsBlocked && timeline.hasRange
+        enabled: !window.singleKeyShortcutsBlocked && timeline.hasRange && !editor.readOnly
         onActivated: timeline.deleteSelectedRange()
     }
-    Shortcut { sequence: "Ctrl+Z"; onActivated: editor.undo() }
-    Shortcut { sequence: "Ctrl+Shift+Z"; onActivated: editor.redo() }
+    Shortcut { sequence: "Ctrl+Z"; enabled: !editor.readOnly; onActivated: editor.undo() }
+    Shortcut { sequence: "Ctrl+Shift+Z"; enabled: !editor.readOnly; onActivated: editor.redo() }
     Shortcut { sequence: "Ctrl+S"; onActivated: { topBar.commitProjectName(); editor.saveNow() } }
     Shortcut { sequence: "Ctrl+E"; onActivated: window.openExport() }
     Shortcut {

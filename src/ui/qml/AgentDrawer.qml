@@ -5,8 +5,11 @@ import QtQuick.Layouts
 import Omareel.Ui
 
 // Editing with the person's coding agent (the one chosen in Omarchy): Polish, "Ask the
-// editor…" and "Write description". Nothing runs until one of them is clicked. The agent edits
-// through `omareel apply`, so each change shows in the editor as it lands, as one undo step.
+// editor…" and "Write description". Nothing runs until the person starts it: the first time,
+// the drawer says which agent runs and what goes to its provider, with a Start button; after
+// that (remembered per agent, until "Ask first"), the actions and Ctrl+Shift+P run it directly.
+// The agent edits through `omareel apply`, so each change shows in the editor as it lands, as
+// one undo step.
 Rectangle {
     id: root
     color: theme.surface
@@ -16,13 +19,42 @@ Rectangle {
     readonly property var markers: agent.chapters.exists ? agent.chapterMarkers(JSON.stringify(editor.clips)) : []
     property int applies: 0
     property string copied: ""
+    // A run asked for before the person allowed this agent: the Start button runs it.
+    property string pendingTask: ""
+    property string pendingRequest: ""
 
+    // Runs `task` now if the person allowed this agent before; else waits for Start.
+    function request(task, text) {
+        if (agent.consented) start(task, text)
+        else {
+            pendingTask = task
+            pendingRequest = text || ""
+        }
+    }
+    function consentAndStart() {
+        agent.grantConsent()
+        if (pendingTask) start(pendingTask, pendingRequest)
+    }
     function start(task, request) {
+        pendingTask = ""
+        pendingRequest = ""
         log.clear()
         root.applies = 0
+        // The agent works from project.json: what was edited here goes there first.
+        const saved = typeof window !== "undefined" && window.saveForAgent ? window.saveForAgent() : editor.saveNow()
+        if (!saved) {
+            log.append({ kind: "problem", text: "The project couldn't be saved, so the agent didn't start.", path: "" })
+            return
+        }
         if (task === "polish") agent.polish()
         else if (task === "chapters") agent.writeDescription()
         else agent.ask(request)
+    }
+    function startText() {
+        if (pendingTask === "polish") return "Start polishing"
+        if (pendingTask === "chapters") return "Start writing the description"
+        if (pendingTask === "ask") return "Start"
+        return "Allow " + agent.agentName
     }
     function focusPrompt() { if (prompt.enabled) prompt.forceActiveFocus() }
     function timeText(seconds) {
@@ -81,7 +113,8 @@ Rectangle {
             }
             Label {
                 Layout.fillWidth: true
-                text: agent.available ? "Edit with " + agent.agentName : "Edit with a coding agent"
+                textFormat: Text.PlainText
+                text: agent.available ? "Edit with " + agent.agentName + (agent.experimental ? " (experimental)" : "") : "Edit with a coding agent"
                 font.pixelSize: theme.type.title
                 font.weight: Font.DemiBold
                 color: theme.textStrong
@@ -95,19 +128,108 @@ Rectangle {
             }
         }
 
-        // What runs, and what leaves this computer, before anything does.
+        // Why it can't run.
         Text {
+            visible: !agent.available
             Layout.fillWidth: true
             wrapMode: Text.Wrap
             textFormat: Text.PlainText
             font.family: theme.fontFamily
             font.pixelSize: theme.type.small
-            color: agent.available ? theme.textMuted : theme.record
-            text: agent.available
-                ? agent.agentName + " runs only when you click below. It reads this recording's timeline, "
-                  + "transcript and frames" + (agent.provider ? ", which go to " + agent.provider : "")
-                  + ", and edits with omareel apply. Each change is one undo step."
-                : agent.problem
+            color: theme.record
+            text: agent.problem
+        }
+
+        // What runs, and what leaves this computer, before anything does: the first time, with
+        // the Start button that lets it run.
+        Rectangle {
+            objectName: "agentConsent"
+            visible: agent.available && !agent.consented
+            Layout.fillWidth: true
+            implicitHeight: consentColumn.implicitHeight + 24
+            radius: theme.controlRadius
+            color: theme.raised
+            border.width: 1
+            border.color: theme.strokeStrong
+            ColumnLayout {
+                id: consentColumn
+                anchors.fill: parent
+                anchors.margins: 12
+                spacing: 10
+                Text {
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    textFormat: Text.PlainText
+                    font.family: theme.fontFamily
+                    font.pixelSize: theme.type.small
+                    color: theme.foreground
+                    text: agent.agentName + " runs only when you start it. It reads this recording's timeline, "
+                        + "its transcript and frames of the video, and sends them to "
+                        + (agent.provider || "its provider") + ". It changes only this recording, through omareel apply."
+                }
+                Text {
+                    visible: agent.experimental
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    textFormat: Text.PlainText
+                    font.family: theme.fontFamily
+                    font.pixelSize: theme.type.small
+                    color: theme.record
+                    text: "Codex support is experimental: the commands it runs can read other files on this computer, "
+                        + "and what they read goes to " + (agent.provider || "its provider") + " too."
+                }
+                Text {
+                    visible: root.pendingTask === "ask" && root.pendingRequest !== ""
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    textFormat: Text.PlainText
+                    font.family: theme.fontFamily
+                    font.pixelSize: theme.type.small
+                    color: theme.textMuted
+                    text: "“" + root.pendingRequest + "”"
+                }
+                Text {
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    textFormat: Text.PlainText
+                    font.family: theme.fontFamily
+                    font.pixelSize: theme.type.small
+                    color: theme.textFaint
+                    text: "After this, Polish and Ctrl+Shift+P start " + agent.agentName + " right away, until you choose Ask first."
+                }
+                OmButton {
+                    objectName: "agentConsentStart"
+                    Layout.fillWidth: true
+                    primary: true
+                    enabled: !root.running
+                    text: root.startText()
+                    icon.source: "qrc:/omareel/assets/icons/lucide/sparkles.svg"
+                    onClicked: root.consentAndStart()
+                }
+            }
+        }
+
+        // Once allowed: what it reads and sends, what can be undone, and taking it back.
+        Text {
+            visible: agent.available && agent.consented
+            Layout.fillWidth: true
+            wrapMode: Text.Wrap
+            textFormat: Text.PlainText
+            font.family: theme.fontFamily
+            font.pixelSize: theme.type.small
+            color: theme.textMuted
+            text: agent.agentName + " reads this recording's timeline, transcript and frames"
+                + (agent.provider ? ", which go to " + agent.provider : "")
+                + ", and edits it with omareel apply. Each edit is one undo step; chapters and the "
+                + "description are saved on their own and can't be undone."
+                + (agent.experimental ? " Codex support is experimental: its commands can read other files on this computer." : "")
+        }
+        OmButton {
+            objectName: "agentRevoke"
+            visible: agent.available && agent.consented && !root.running
+            text: "Ask first"
+            tooltipText: "Polish and Ctrl+Shift+P will show this drawer again before " + agent.agentName + " runs"
+            onClicked: agent.revokeConsent()
         }
 
         RowLayout {
@@ -121,7 +243,7 @@ Rectangle {
                 icon.source: "qrc:/omareel/assets/icons/lucide/sparkles.svg"
                 tooltipText: "Trim, cut idle stretches and pauses, fix zooms"
                 tooltipShortcut: "Ctrl Shift P"
-                onClicked: root.start("polish")
+                onClicked: root.request("polish", "")
             }
             OmButton {
                 Layout.fillWidth: true
@@ -130,7 +252,7 @@ Rectangle {
                 text: "Write description"
                 icon.source: "qrc:/omareel/assets/icons/lucide/bookmark.svg"
                 tooltipText: "Chapters, a title and a description, for YouTube"
-                onClicked: root.start("chapters")
+                onClicked: root.request("chapters", "")
             }
         }
 
@@ -143,7 +265,7 @@ Rectangle {
             selectByMouse: true
             onAccepted: {
                 if (text.trim().length === 0) return
-                root.start("ask", text)
+                root.request("ask", text)
                 text = ""
             }
             Keys.onEscapePressed: event => { focus = false; window.restoreEditorFocus(); event.accepted = true }

@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Layouts
 import QtQuick.Shapes
 import QtQuick.Controls.impl
 import Omareel.Ui
@@ -780,6 +781,48 @@ FocusScope {
                 Behavior on color {
                     enabled: !editor.loading
                     ColorAnimation { duration: 120; easing.type: Easing.OutCubic }
+                }
+            }
+        }
+    }
+    // While the coding agent edits (Editor.readOnly), the timeline only shows its changes.
+    Rectangle {
+        objectName: "agentEditingOverlay"
+        anchors.fill: parent
+        visible: editor.readOnly
+        color: Qt.alpha(theme.surface, .55)
+        // Clicks and drags stop here; the wheel still scrolls and zooms the timeline.
+        MouseArea {
+            anchors.fill: parent
+            hoverEnabled: true
+            acceptedButtons: Qt.AllButtons
+            onWheel: wheel => wheel.accepted = false
+        }
+        Rectangle {
+            anchors.centerIn: parent
+            width: lockRow.implicitWidth + 24
+            height: lockRow.implicitHeight + 14
+            radius: theme.controlRadius
+            color: theme.raised
+            border.width: 1
+            border.color: theme.strokeStrong
+            RowLayout {
+                id: lockRow
+                anchors.centerIn: parent
+                spacing: 10
+                Label {
+                    textFormat: Text.PlainText
+                    text: "The agent is editing… Stop to edit"
+                    color: theme.textStrong
+                    font.pixelSize: theme.type.small
+                }
+                OmButton {
+                    visible: typeof agent !== "undefined"
+                    bordered: true
+                    destructive: true
+                    text: "Stop"
+                    icon.source: "qrc:/omareel/assets/icons/lucide/square.svg"
+                    onClicked: agent.stop()
                 }
             }
         }

@@ -10,7 +10,10 @@
 #include <QProcess>
 #include <QSignalSpy>
 #include <QTemporaryDir>
+#include <QNetworkAccessManager>
+#include <QNetworkRequest>
 #include <QQmlComponent>
+#include <QQmlNetworkAccessManagerFactory>
 #include <QQmlContext>
 #include <QQmlEngine>
 #include <QQmlPropertyMap>
@@ -26,6 +29,32 @@
 #include <QtTest>
 
 using namespace Omareel;
+
+// Records every network request QML makes (a rich-text <img src=http://…> would make one).
+class RecordingNetworkManager : public QNetworkAccessManager
+{
+public:
+    QStringList *requests;
+    RecordingNetworkManager(QStringList *list, QObject *parent) : QNetworkAccessManager(parent), requests(list) {}
+
+protected:
+    QNetworkReply *createRequest(Operation op, const QNetworkRequest &request, QIODevice *data) override
+    {
+        requests->append(request.url().toString());
+        // Nothing leaves the machine: ask a port nothing listens on instead.
+        QNetworkRequest local(request);
+        local.setUrl(QUrl(QStringLiteral("http://127.0.0.1:9/")));
+        return QNetworkAccessManager::createRequest(op, local, data);
+    }
+};
+
+class RecordingNetworkFactory : public QQmlNetworkAccessManagerFactory
+{
+public:
+    QStringList *requests;
+    explicit RecordingNetworkFactory(QStringList *list) : requests(list) {}
+    QNetworkAccessManager *create(QObject *parent) override { return new RecordingNetworkManager(requests, parent); }
+};
 
 class EditorTest : public QObject
 {
@@ -212,6 +241,157 @@ private slots:
         background = editor.projectMap().value(QStringLiteral("background")).toMap();
         QCOMPARE(background.value(QStringLiteral("gradient")).toMap()
                      .value(QStringLiteral("stops")).toList(), expectedStops(3));
+    }
+
+    // Text the agent, the transcript or the bundle supplies (chapter titles, the agent's
+    // messages, tooltips) shows as written: an <img src=http://…> in it neither loads nor shows
+    // as an image. And Polish asks first: the drawer shows what runs and what it sends, and only
+    // its Start runs the agent, which saves the project before it starts.
+    void agentDrawerShowsSuppliedTextLiterallyAndAsksFirst()
+    {
+        QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));
+        Editor editor(m_bundle);
+        QVERIFY(editor.isValid());
+        const QString img = QStringLiteral("<img src=\"http://127.0.0.1:8765/leak?k=SECRET\">");
+        QStringList requests;
+        RecordingNetworkFactory factory(&requests);
+        Theme theme;
+        QQmlEngine engine;
+        engine.setNetworkAccessManagerFactory(&factory);
+        // (Given from here: moc reads a // in a raw string as a comment.)
+        engine.rootContext()->setContextProperty(QStringLiteral("markup"), img);
+        QQmlComponent agentComponent(&engine);
+        agentComponent.setData(R"(
+            import QtQml
+            QtObject {
+                readonly property string img: markup
+                property bool available: true
+                property bool running: false
+                property bool consented: false
+                property bool experimental: true
+                property string agentName: "Codex"
+                property string provider: "OpenAI"
+                property string problem: ""
+                property string task: ""
+                property int runs: 0
+                property var chapters: ({ exists: true, title: img + "Title", description: img + "About" })
+                signal entry(string kind, string text, var detail)
+                function chapterMarkers(clips) { return [{ time: 0.5, source: 0.5, title: img + "Intro" }] }
+                function youtubeDescription(clips, duration) { return "" }
+                function polish() { runs += 1 }
+                function ask(request) { runs += 1 }
+                function writeDescription() { runs += 1 }
+                function stop() {}
+                function grantConsent() { consented = true }
+                function revokeConsent() { consented = false }
+                function refreshChapters() {}
+                function say(text) { entry("message", text, {}) }
+            })", QUrl());
+        QVERIFY2(agentComponent.isReady(), qPrintable(agentComponent.errorString()));
+        std::unique_ptr<QObject> agent(agentComponent.create());
+        QVERIFY(agent);
+        engine.rootContext()->setContextProperty(QStringLiteral("editor"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("comp"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"), agent.get());
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import QtQuick
+            import QtQuick.Window
+            import Omareel
+            import Omareel.Ui
+            Window {
+                width: 380; height: 900; visible: true
+                property alias drawer: drawer
+                AgentDrawer { id: drawer; objectName: "drawer"; width: 376; height: 820 }
+                Item {
+                    id: flag; y: 840; width: 9; height: 20
+                    OmLazyToolTip { target: flag; shown: true; delay: 0; text: agent.img + "Chapter flag" }
+                }
+            })", QUrl());
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        std::unique_ptr<QObject> object(component.create());
+        auto *window = qobject_cast<QQuickWindow *>(object.get());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        QVERIFY(QMetaObject::invokeMethod(agent.get(), "say", Q_ARG(QVariant, QVariant(img + QStringLiteral("Message")))));
+
+        std::function<void(QQuickItem *, QList<QQuickItem *> &)> collect = [&](QQuickItem *item, QList<QQuickItem *> &into) {
+            into.append(item);
+            for (QQuickItem *child : item->childItems()) collect(child, into);
+        };
+        const auto texts = [&] {
+            QList<QQuickItem *> items;
+            collect(window->contentItem(), items);
+            // The tooltip is a popup: its items live in the window's overlay.
+            QList<QQuickItem *> shown;
+            for (QQuickItem *item : items)
+                if (item->inherits("QQuickText") && item->property("text").toString().contains(QStringLiteral("<img")))
+                    shown.append(item);
+            return shown;
+        };
+        // The title, description, chapter, message and tooltip all show the markup as text.
+        QTRY_VERIFY_WITH_TIMEOUT(texts().size() >= 5, 3000);
+        for (QQuickItem *text : texts())
+            QVERIFY2(text->property("textFormat").toInt() == 0,
+                     qPrintable(QStringLiteral("rich text: ") + text->property("text").toString()));
+        QTest::qWait(500);
+        QVERIFY2(requests.isEmpty(), qPrintable(requests.join(QLatin1Char(' '))));
+
+        // The first Polish only shows what runs and what it sends; Start runs it.
+        QObject *drawer = object->property("drawer").value<QObject *>();
+        QVERIFY(drawer);
+        const auto findItem = [&](const QString &name) {
+            QList<QQuickItem *> items;
+            collect(window->contentItem(), items);
+            for (QQuickItem *item : items)
+                if (item->objectName() == name) return item;
+            return static_cast<QQuickItem *>(nullptr);
+        };
+        QQuickItem *consent = findItem(QStringLiteral("agentConsent"));
+        QVERIFY(consent);
+        QVERIFY(consent->isVisible());
+        QVERIFY(QMetaObject::invokeMethod(drawer, "request", Q_ARG(QVariant, QStringLiteral("polish")), Q_ARG(QVariant, QString())));
+        QCOMPARE(agent->property("runs").toInt(), 0);
+        QCOMPARE(drawer->property("pendingTask").toString(), QStringLiteral("polish"));
+        // What is edited here reaches project.json before the agent starts.
+        QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));
+        QQuickItem *start = findItem(QStringLiteral("agentConsentStart"));
+        QVERIFY(start);
+        QCOMPARE(start->property("text").toString(), QStringLiteral("Start polishing"));
+        const QPoint point = start->mapToScene(QPointF(start->width() / 2, start->height() / 2)).toPoint();
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, point);
+        QTRY_COMPARE(agent->property("runs").toInt(), 1);
+        QVERIFY(agent->property("consented").toBool());
+        QVERIFY(QFileInfo::exists(QDir(m_bundle).filePath(QStringLiteral("project.json"))));
+        QTRY_VERIFY(!consent->isVisible());
+        // Allowed now: the next Polish runs at once, until "Ask first".
+        QVERIFY(QMetaObject::invokeMethod(drawer, "request", Q_ARG(QVariant, QStringLiteral("polish")), Q_ARG(QVariant, QString())));
+        QCOMPARE(agent->property("runs").toInt(), 2);
+        QQuickItem *revoke = findItem(QStringLiteral("agentRevoke"));
+        QVERIFY(revoke && revoke->isVisible());
+        QVERIFY(QMetaObject::invokeMethod(revoke, "clicked"));
+        QVERIFY(!agent->property("consented").toBool());
+        QVERIFY(QMetaObject::invokeMethod(drawer, "request", Q_ARG(QVariant, QStringLiteral("chapters")), Q_ARG(QVariant, QString())));
+        QCOMPARE(agent->property("runs").toInt(), 2);
+    }
+
+    // While the agent edits, the editor's own edits are refused; afterwards they work again.
+    void readOnlyEditorRefusesEdits()
+    {
+        QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));
+        Editor editor(m_bundle);
+        QVERIFY(editor.isValid());
+        QSignalSpy changed(&editor, SIGNAL(readOnlyChanged()));
+        editor.setProperty("readOnly", true);
+        QVERIFY(editor.property("readOnly").toBool());
+        QCOMPARE(changed.size(), 1);
+        editor.seek(1.0);
+        editor.splitAtPlayhead();
+        QCOMPARE(editor.clips().size(), 1);
+        editor.setProperty("readOnly", false);
+        QVERIFY(editor.splitAtPlayhead());
+        QCOMPARE(editor.clips().size(), 2);
     }
 
     void zoomTrackDragUsesTrackCoordinates()

@@ -5,7 +5,7 @@ use super::apply::{apply_ops, parse_ops};
 use super::describe::describe;
 use crate::compat::qdir::tests::TempDir;
 use crate::compat::qjson::{Object, Value};
-use crate::editor::{DiskChange, Document, Locations, MediaInfo, Probes, VideoInfo};
+use crate::editor::{DiskChange, Document, Effect, Locations, MediaInfo, Probes, VideoInfo};
 use std::sync::Arc;
 
 fn fixture(file: &str) -> String {
@@ -476,3 +476,47 @@ fn scoped_operations_name_only_files_inside() {
     assert!(ok, "{report}");
 }
 
+/// While an agent edits, the editor refuses its own edits (each undone at once, nothing to
+/// save, undo and redo do nothing) but still takes in the agent's.
+#[test]
+fn a_read_only_editor_refuses_edits_but_takes_in_the_agents() {
+    let dir = TempDir::new("agent-read-only");
+    let bundle = bundle(&dir);
+    let mut editor = open(&bundle, &dir);
+    editor.set_project_value("background.blur", Value::from(0.05), false);
+    assert!(editor.save_now());
+    editor.take_effects();
+    let undo_before = editor.can_undo();
+    editor.set_read_only(true);
+    assert!(editor.read_only());
+
+    editor.set_project_value("background.blur", Value::from(0.2), false);
+    editor.set_output_position(4.0);
+    assert!(!editor.split_at_playhead() || editor.project().clips.len() == 1);
+    assert_eq!(editor.project().clips.len(), 1);
+    assert_eq!(editor.project().background.blur, 0.05);
+    assert!(!editor.dirty(), "a refused edit leaves nothing to save");
+    let effects = editor.take_effects();
+    assert!(!effects.iter().any(|effect| matches!(effect, Effect::StartAutosaveTimer)), "{effects:?}");
+    assert!(effects.iter().any(|effect| matches!(effect, Effect::ProjectChanged)), "the views go back");
+    editor.undo();
+    assert_eq!(editor.project().background.blur, 0.05);
+    assert_eq!(editor.can_undo(), undo_before);
+
+    // The agent's apply comes in.
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    let mut other = open(&bundle, &dir);
+    apply_ops(&mut other, &ops(r#"{"op": "split", "at": 4}"#), false).unwrap();
+    assert!(other.save_now());
+    assert_eq!(editor.reload_if_changed_on_disk(), DiskChange::Reloaded);
+    assert_eq!(editor.project().clips.len(), 2);
+    assert!(editor.read_only());
+
+    // Once the agent is done, editing and undo work again, the agent's change one step away.
+    editor.set_read_only(false);
+    editor.set_project_value("background.blur", Value::from(0.3), false);
+    assert_eq!(editor.project().background.blur, 0.3);
+    editor.undo();
+    editor.undo();
+    assert_eq!(editor.project().clips.len(), 1);
+}

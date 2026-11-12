@@ -83,6 +83,7 @@ Rectangle {
                         ? root.shortAspect(root.aspects[Math.max(0, currentIndex)].value)
                         : root.aspects[Math.max(0, currentIndex)].text
                     currentIndex: root.aspectIndex(editor.project.aspect)
+                    enabled: !editor.readOnly
                     onActivated: editor.setProjectValue("aspect", model[currentIndex].value)
                 }
                 OmButton {
@@ -93,6 +94,7 @@ Rectangle {
                                                : "qrc:/omareel/assets/icons/lucide/crop.svg"
                     icon.color: root.cropMode ? theme.accent : contentColor
                     checkable: true; checked: root.cropMode; selected: checked
+                    enabled: !editor.readOnly
                     tooltipText: root.cropMode ? "" : "Crop the recording"
                     onToggled: root.cropMode = checked
                 }
@@ -186,7 +188,7 @@ Rectangle {
                     Layout.preferredWidth: root.compact ? 32 : implicitWidth
                     text: root.compact ? "" : "Insert"
                     icon.source: "qrc:/omareel/assets/icons/lucide/film.svg"
-                    enabled: !editor.importing
+                    enabled: !editor.importing && !editor.readOnly
                     Accessible.name: "Insert video"
                     tooltipText: "Insert a video at the playhead"
                     tooltipShortcut: "I"
@@ -195,6 +197,7 @@ Rectangle {
                 OmButton {
                     Layout.preferredWidth: root.compact ? 32 : implicitWidth
                     text: root.compact ? "" : "Split"
+                    enabled: !editor.readOnly
                     icon.source: "qrc:/omareel/assets/icons/lucide/scissors.svg"
                     Accessible.name: "Split clip"
                     tooltipText: "Split at playhead"
@@ -274,6 +277,7 @@ Rectangle {
                 delegate: OmButton {
                     required property var modelData
                     Layout.fillWidth: true
+                    enabled: !editor.readOnly
                     selected: editor.project.aspect === modelData.value
                     text: modelData.text
                     onClicked: {
@@ -287,6 +291,7 @@ Rectangle {
                 Layout.fillWidth: true
                 bordered: true
                 selected: root.cropMode
+                enabled: !editor.readOnly
                 text: root.cropMode ? "Finish crop" : "Crop"
                 icon.source: "qrc:/omareel/assets/icons/lucide/crop.svg"
                 onClicked: { root.cropMode = !root.cropMode; overflowMenu.close() }
