@@ -9,7 +9,7 @@
 //! | op | fields |
 //! | --- | --- |
 //! | `split` | `at` |
-//! | `delete` | `from`, `to` |
+//! | `delete` | `from`, `to`, or `ranges`: `[[from, to], ...]` (one undo step with source times) |
 //! | `trim` | `clip`, `in` and/or `out` (source seconds, or the inserted video's own) |
 //! | `remove-clip` | `clip` |
 //! | `merge` | `clip`, `with`: `next` or `previous` |
@@ -26,6 +26,8 @@
 //! | `regenerate-zooms` | |
 //! | `music` | `file` (audio, or a video whose sound is used) and/or any of `volume` (0–1), `fadeIn`, `fadeOut` (seconds), `duck`, `loop` (booleans), `start` (seconds into the file) |
 //! | `remove-music` | |
+//! | `trim-pauses` | optional `min` (seconds of silence, default 1), `keep` (seconds left, default 0.4) |
+//! | `remove-fillers` | (needs a transcript with measured word times) |
 //! | `set` | `path` (dotted, as in describe's `settings`), `value` |
 
 use super::{ms, source_span_outputs, source_time_outputs};
@@ -33,6 +35,8 @@ use crate::compat::qdir;
 use crate::compat::qjson::{self, Format, Object, Value};
 use crate::editor::{Document, Effect, ImportedInsert, ImportedMusic, ZoomTarget};
 use crate::project::{allowed_clip_speeds, Project};
+use crate::transcript::trim::PauseSettings;
+use crate::transcript::{audio, job::Control, stillness, vad};
 
 /// One operation's failure, before the operation's number is added.
 type OpResult = Result<Object, String>;
@@ -182,6 +186,46 @@ fn note_copy(document: &Document, run: &mut Run, before: &[String], path: &str) 
     }
 }
 
+/// `ranges`: `[[from, to], ...]`, each with `to` after `from`.
+fn ranges(op: &Object) -> Result<Vec<(f64, f64)>, String> {
+    let invalid = || "\"ranges\" must be a list of [from, to] pairs".to_string();
+    let list = op.value("ranges").as_array().ok_or_else(invalid)?;
+    if list.is_empty() {
+        return Err(invalid());
+    }
+    list.iter()
+        .map(|pair| match pair.as_array() {
+            Some([from, to]) if from.is_double() && to.is_double() => {
+                let (from, to) = (from.to_double(0.0), to.to_double(0.0));
+                if to > from && from.is_finite() && to.is_finite() { Ok((from, to)) } else { Err(invalid()) }
+            }
+            _ => Err(invalid()),
+        })
+        .collect()
+}
+
+/// What "Trim pauses" needs and the editor measures in the background: where the recording's
+/// sound has speech, and which silences the screen stays still through. Measured here, once.
+fn measure_pauses(document: &mut Document) -> Result<(), String> {
+    let control = Control::default();
+    if document.speech_regions().is_none() {
+        let speech = if document.recording().has_audio {
+            let sound = audio::extract_with(document.video_path(), &control)?;
+            vad::speech_regions(&sound.samples, &vad::VadSettings::default())
+        } else {
+            Vec::new()
+        };
+        document.set_speech_regions(speech);
+    }
+    if document.still_windows().is_none() {
+        let silences = document.silences_to_check().unwrap_or_default();
+        let geometry = (document.source_width(), document.source_height(), document.capture_scale());
+        let still = stillness::still_windows(document.video_path(), &silences, document.source_duration(), geometry, &control)?;
+        document.set_still_windows(still);
+    }
+    Ok(())
+}
+
 fn ok() -> OpResult {
     Ok(Object::new())
 }
@@ -212,6 +256,31 @@ fn run_op(document: &mut Document, op: &Object, run: &mut Run) -> OpResult {
                 return Err("can't split within 0.1 s of a clip's start or end".into());
             }
             with("clip", document.selected_clip_id())
+        }
+        "delete" if !op.value("ranges").is_undefined() => {
+            let ranges = ranges(op)?;
+            let before = document.duration();
+            if source_timeline(op)? {
+                // One cut of the recording's ranges, wherever they play.
+                if document.remove_source_ranges(&ranges) == 0 {
+                    return Err("none of the ranges is in the edited video, or they would remove all of the recording".into());
+                }
+            } else {
+                let mut spans = ranges;
+                spans.sort_by(|a, b| b.0.total_cmp(&a.0));
+                for (from, to) in spans {
+                    if from < 0.0 || to > document.duration() + 1e-6 {
+                        return Err(format!("{from}–{to} is outside the video (0 to {})", ms(document.duration())));
+                    }
+                    if !document.delete_output_range(from, to) {
+                        return Err(format!("nothing to cut at {from}–{to}, or the cut would remove all of the recording"));
+                    }
+                }
+            }
+            Ok(Object::from_iter([
+                ("removed_seconds", Value::from(ms(before - document.duration()))),
+                ("output_duration", ms(document.duration()).into()),
+            ]))
         }
         "delete" => {
             let mut spans = output_spans(document, op)?;
@@ -461,6 +530,37 @@ fn run_op(document: &mut Document, op: &Object, run: &mut Run) -> OpResult {
                 return Err("there is no music".into());
             }
             ok()
+        }
+        "trim-pauses" => {
+            let settings = PauseSettings {
+                min_pause: optional_number(op, "min")?.unwrap_or(PauseSettings::default().min_pause).max(0.2),
+                keep: optional_number(op, "keep")?.unwrap_or(PauseSettings::default().keep).max(0.0),
+            };
+            measure_pauses(document)?;
+            let pauses = document.pause_ranges(&settings);
+            let before = document.duration();
+            let cut = if pauses.is_empty() { 0 } else { document.remove_source_ranges(&pauses) };
+            Ok(Object::from_iter([
+                ("pauses", Value::from(cut as i64)),
+                ("removed_seconds", ms(before - document.duration()).into()),
+                ("output_duration", ms(document.duration()).into()),
+            ]))
+        }
+        "remove-fillers" => {
+            if document.transcript().is_none() {
+                return Err("no transcript: run `omareel transcribe` first".into());
+            }
+            if !document.can_remove_fillers() {
+                return Err("the transcript's word times are estimated; filler words need measured times (install whisper-cpp and run `omareel transcribe --force`)".into());
+            }
+            let fillers = document.filler_ranges();
+            let before = document.duration();
+            let cut = if fillers.is_empty() { 0 } else { document.remove_source_ranges(&fillers) };
+            Ok(Object::from_iter([
+                ("fillers", Value::from(cut as i64)),
+                ("removed_seconds", ms(before - document.duration()).into()),
+                ("output_duration", ms(document.duration()).into()),
+            ]))
         }
         "set" => {
             let path = text(op, "path")?;

@@ -197,6 +197,28 @@ pub fn describe(document: &Document) -> Object {
         ("settings", settings.into()),
         ("allowed", allowed.into()),
     ]);
+    if let Some(transcript) = document.transcript() {
+        let segments: Vec<Value> = transcript
+            .segments
+            .iter()
+            .map(|segment| {
+                Object::from_iter([
+                    ("source", span(segment.start, segment.end)),
+                    ("output", spans(&source_span_outputs(clips, segment.start, segment.end))),
+                    ("text", segment.text.as_str().into()),
+                ])
+                .into()
+            })
+            .collect();
+        summary.insert(
+            "transcript",
+            Object::from_iter([
+                ("backend", Value::from(transcript.backend.as_str())),
+                ("word_timing", transcript.word_timing.name().into()),
+                ("segments", segments.into()),
+            ]),
+        );
+    }
     if let Some(music) = document.music() {
         let mut object = Object::from_iter([("file", Value::from(music.file.as_str()))]);
         if let Some(duration) = document.music_duration() {

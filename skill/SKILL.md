@@ -85,7 +85,7 @@ was cut).
 | op | fields |
 | --- | --- |
 | `split` | `at` |
-| `delete` | `from`, `to` |
+| `delete` | `from`, `to`; or `ranges`: `[[from, to], ...]` (with `"timeline": "source"`, one undo step) |
 | `trim` | `clip`, `in` and/or `out` (source seconds; an inserted video's own) |
 | `remove-clip` | `clip` |
 | `merge` | `clip`, `with`: `next` or `previous` |
@@ -102,6 +102,8 @@ was cut).
 | `regenerate-zooms` | (rebuilds the automatic zooms around clicks) |
 | `music` | `file` (audio, or a video whose sound is used) and/or `volume` 0–1, `fadeIn`, `fadeOut`, `start` (seconds), `duck`, `loop` (true/false) |
 | `remove-music` | |
+| `trim-pauses` | optional `min` (silence length, default 1 s), `keep` (seconds left, default 0.4) |
+| `remove-fillers` | (needs measured word times; see below) |
 | `set` | `path`, `value`, e.g. `{"op": "set", "path": "keystrokes.enabled", "value": true}` |
 
 Rules the editor enforces, which `apply` reports as errors:
@@ -125,6 +127,33 @@ omareel apply ~/Videos/omareel/Demo.omareel - <<'OPS'
 ]
 OPS
 ```
+
+## Speech
+
+If the recording has speech, `describe` has a `transcript`: each phrase's
+`text` with its `source` span and the `output` spans where it plays. Use it to
+find moments by what was said ("cut the part where I explain the config").
+Delete the phrases' source spans together:
+`{"op": "delete", "ranges": [[12.3, 18.9], [40.1, 44.0]], "timeline": "source"}`.
+For word-level times, read `transcript.json` in the bundle
+(`segments[].words[]`, source seconds).
+
+- No `transcript`? Run `omareel transcribe <bundle>`. It uses the speech
+  engine the person picked in Omarchy (Setup › Defaults › Dictation) and
+  runs on this computer. If it says no engine is set up, tell the person;
+  don't install one yourself.
+- `transcript.word_timing` is `measured` (whisper-cpp timed every word) or
+  `estimated` (the engine gave text only; phrases are timed, words guessed).
+  With estimated times, cut whole phrases, never single words.
+- `trim-pauses` shortens silences longer than `min` to `keep`, but only
+  where the screen stayed still and nothing was clicked or scrolled, so silent
+  typing and running builds stay. It needs no transcript, and measuring takes
+  a moment on long recordings.
+- `remove-fillers` cuts "um", "uh" and the like. It needs measured word
+  times.
+- Captions: `{"op": "set", "path": "captions.enabled", "value": true}`
+  (also `captions.position` `bottom`/`top`, `captions.size`). Subtitle files:
+  `omareel export <bundle> -o out.srt` (or `.vtt`).
 
 ## Good edits
 

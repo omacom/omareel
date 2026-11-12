@@ -236,6 +236,77 @@ fn music_is_added_set_and_removed() {
     assert!(apply_ops(&mut document, &ops(r#"{"op": "remove-music"}"#), false).is_err());
 }
 
+fn word(start: f64, end: f64, text: &str) -> crate::transcript::Word {
+    crate::transcript::Word { start, end, text: text.into() }
+}
+
+fn transcript(timing: crate::transcript::WordTiming) -> crate::transcript::Transcript {
+    let words = vec![word(1.0, 1.4, "Hello"), word(1.45, 1.7, "um"), word(1.75, 2.2, "world.")];
+    crate::transcript::Transcript {
+        backend: "whisper-cpp".into(),
+        word_timing: timing,
+        segments: vec![crate::transcript::Segment { start: 1.0, end: 2.2, text: "Hello um world.".into(), words }],
+        ..Default::default()
+    }
+}
+
+#[test]
+fn speech_operations_cut_by_the_transcript() {
+    use crate::transcript::WordTiming;
+    let dir = TempDir::new("agent-speech");
+    let bundle = bundle(&dir);
+    let mut document = open(&bundle, &dir);
+    let error = apply_ops(&mut document, &ops(r#"{"op": "remove-fillers"}"#), false).unwrap_err();
+    assert!(error.contains("omareel transcribe"), "{error}");
+    document.set_transcript(Some(transcript(WordTiming::Estimated)));
+    let error = apply_ops(&mut document, &ops(r#"{"op": "remove-fillers"}"#), false).unwrap_err();
+    assert!(error.contains("estimated"), "{error}");
+
+    document.set_transcript(Some(transcript(WordTiming::Measured)));
+    // describe maps what was said onto the edited timeline.
+    apply_ops(&mut document, &ops(r#"{"op": "delete", "from": 0, "to": 0.5}"#), false).unwrap();
+    let summary = Value::Object(describe(&document));
+    let segment = &summary.get("transcript").get("segments").to_array()[0];
+    assert_eq!(segment.get("text").to_string_or(""), "Hello um world.");
+    assert_eq!(segment.get("output").to_array()[0].get("start").to_double(-1.0), 0.5);
+    assert_eq!(summary.get("transcript").get("word_timing").to_string_or(""), "measured");
+
+    let (results, _) = apply_ops(&mut document, &ops(r#"{"op": "remove-fillers"}"#), false).unwrap();
+    assert_eq!(results[0].get("fillers").to_int(0), 1);
+    let removed = results[0].get("removed_seconds").to_double(0.0);
+    assert!(removed > 0.2 && removed < 0.5, "{removed}");
+
+    // Several source ranges are one cut; output ranges are cut from the last.
+    let mut document = open(&bundle, &dir);
+    apply_ops(&mut document, &ops(r#"{"op": "delete", "ranges": [[6, 7], [2, 3]], "timeline": "source"}"#), false).unwrap();
+    assert_eq!(spans(&document), vec![(0.0, 2.0, 1.0), (3.0, 6.0, 1.0), (7.0, 10.0, 1.0)]);
+    document.undo();
+    assert_eq!(spans(&document), vec![(0.0, 10.0, 1.0)], "one undo step");
+    apply_ops(&mut document, &ops(r#"{"op": "delete", "ranges": [[2, 3], [6, 7]]}"#), false).unwrap();
+    assert_eq!(spans(&document), vec![(0.0, 2.0, 1.0), (3.0, 6.0, 1.0), (7.0, 10.0, 1.0)]);
+    assert!(apply_ops(&mut document, &ops(r#"{"op": "delete", "ranges": [[3, 2]]}"#), false).is_err());
+}
+
+#[test]
+fn pauses_are_trimmed_where_the_screen_is_still() {
+    let dir = TempDir::new("agent-pauses");
+    let bundle = bundle(&dir);
+    // No pointer or keys: activity would keep the silence it falls in.
+    std::fs::write(format!("{bundle}/input.jsonl"), b"").unwrap();
+    let mut document = open(&bundle, &dir);
+    // Speech at 0–1 and 5–10, silent 1–5: the measurements the editor would make.
+    document.set_speech_regions(vec![(0.0, 1.0), (5.0, 10.0)]);
+    let silences = document.silences_to_check().unwrap();
+    document.set_still_windows(silences);
+    let (results, _) = apply_ops(&mut document, &ops(r#"{"op": "trim-pauses", "keep": 0.5}"#), false).unwrap();
+    assert_eq!(results[0].get("pauses").to_int(0), 1);
+    let removed = results[0].get("removed_seconds").to_double(0.0);
+    assert!((removed - 3.5).abs() < 1e-3, "4 s of silence, 0.5 s kept: {removed}");
+    // Measured once: a second trim with the same setting finds nothing more.
+    let (results, _) = apply_ops(&mut document, &ops(r#"{"op": "trim-pauses", "keep": 0.5}"#), false).unwrap();
+    assert_eq!(results[0].get("pauses").to_int(-1), 0, "{:?} {:?}", results, spans(&document));
+}
+
 #[test]
 fn zoom_edges_levels_and_ranges() {
     let dir = TempDir::new("agent-zoom");

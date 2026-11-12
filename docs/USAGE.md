@@ -211,6 +211,10 @@ Prints the edited timeline as JSON, for scripts and AI agents:
 - `settings`: the rest of `project.json` (background, frame, cursor, keystrokes, audio, camera,
   export settings), whose dotted paths `apply`'s `set` takes.
 - `allowed`: the clip speeds, layouts and fits the editor offers.
+- `transcript` (once the recording is transcribed): the engine, whether word times are
+  `measured` or `estimated`, and each phrase's `text` with its `source` span and the `output`
+  spans where it plays.
+- `music` (when set): its file and length.
 
 "Source" seconds are times in `screen.mp4`; "output" seconds are times in the edited video.
 
@@ -239,7 +243,7 @@ which no edit moves.
 | Operation | Fields |
 | --- | --- |
 | `split` | `at` |
-| `delete` | `from`, `to` |
+| `delete` | `from`, `to`; or `ranges`: `[[from, to], ...]` (one undo step with `"timeline": "source"`) |
 | `trim` | `clip`, `in` and/or `out` (source seconds; an inserted video's own) |
 | `remove-clip` | `clip` |
 | `merge` | `clip`, `with`: `next` or `previous` |
@@ -256,6 +260,8 @@ which no edit moves.
 | `regenerate-zooms` | |
 | `music` | `file` (audio, or a video whose sound is used) and/or `volume` (0–1), `fadeIn`, `fadeOut`, `start` (seconds), `duck`, `loop` (true or false) |
 | `remove-music` | |
+| `trim-pauses` | optional `min` (seconds of silence, default 1), `keep` (seconds left, default 0.4) |
+| `remove-fillers` | (needs a transcript with measured word times) |
 | `set` | `path` (dotted, e.g. `background.blur`), `value` |
 
 ```sh
