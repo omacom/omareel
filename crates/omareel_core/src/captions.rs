@@ -185,8 +185,8 @@ pub fn to_srt(cues: &[Cue]) -> String {
 pub fn to_vtt(cues: &[Cue]) -> String {
     let mut out = String::from("WEBVTT\n\n");
     for cue in cues {
-        // "-->" may not appear in a cue's text.
-        let text = cue.lines.join("\n").replace("-->", "->");
+        // Cue text is markup: escape it ("R&D", "<div>"), which also keeps out "-->".
+        let text = cue.lines.join("\n").replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
         out.push_str(&format!("{} --> {}\n{}\n\n", timestamp(cue.start, '.'), timestamp(cue.end, '.'), text));
     }
     out
@@ -279,11 +279,17 @@ mod tests {
         let cues = vec![
             Cue { start: 0.5, end: 2.25, lines: vec!["Hello".into(), "there".into()] },
             Cue { start: 3661.001, end: 3662.0, lines: vec!["a --> b".into()] },
+            Cue { start: 4000.0, end: 4001.0, lines: vec!["R&D <b>is</b> fun".into()] },
         ];
-        assert_eq!(to_srt(&cues), "1\n00:00:00,500 --> 00:00:02,250\nHello\nthere\n\n2\n01:01:01,001 --> 01:01:02,000\na --> b\n\n");
+        assert_eq!(
+            to_srt(&cues),
+            "1\n00:00:00,500 --> 00:00:02,250\nHello\nthere\n\n2\n01:01:01,001 --> 01:01:02,000\na --> b\n\n\
+             3\n01:06:40,000 --> 01:06:41,000\nR&D <b>is</b> fun\n\n"
+        );
         assert_eq!(
             to_vtt(&cues),
-            "WEBVTT\n\n00:00:00.500 --> 00:00:02.250\nHello\nthere\n\n01:01:01.001 --> 01:01:02.000\na -> b\n\n"
+            "WEBVTT\n\n00:00:00.500 --> 00:00:02.250\nHello\nthere\n\n01:01:01.001 --> 01:01:02.000\na --&gt; b\n\n\
+             01:06:40.000 --> 01:06:41.000\nR&amp;D &lt;b&gt;is&lt;/b&gt; fun\n\n"
         );
     }
 }
