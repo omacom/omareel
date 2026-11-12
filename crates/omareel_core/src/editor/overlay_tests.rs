@@ -266,3 +266,29 @@ fn the_preview_shows_a_blur_early_and_late_and_across_cuts() {
     qt.seek(1.4);
     assert!(!shown(&qt));
 }
+
+// Trimming pauses and fillers cut source ranges: frame items after each cut move back with it,
+// screen items shrink as zooms do, and a blur keeps its whole span.
+#[test]
+fn source_range_cuts_move_frame_items_and_keep_blurs() {
+    let world = World::new("overlay-source-cuts");
+    let mut qt = world.open(&world.bundle("editor.omareel"));
+    let late = qt.run(|d| d.add_overlay("text", 1.5, 1.8, None, &Object::new()));
+    let inside = qt.run(|d| d.add_overlay("text", 0.25, 0.35, None, &Object::new()));
+    let label = qt.run(|d| d.add_overlay("box", 0.2, 0.6, None, &Object::new()));
+    let blur = qt.run(|d| d.add_overlay("blur", 0.2, 0.6, Some(RectF::new(0.1, 0.1, 0.2, 0.2)), &Object::new()));
+    // Two cuts of the 2 s recording: 0.2–0.4 and 1.0–1.2 (0.2 s each).
+    assert_eq!(qt.run(|d| d.remove_source_ranges(&[(1.0, 1.2), (0.2, 0.4)])), 2);
+    let l = overlay(&qt, &late);
+    assert!((l.start - 1.1).abs() < 1e-9 && (l.end - 1.4).abs() < 1e-9, "{l:?}");
+    // An item inside a cut goes, as with a deleted range.
+    assert!(qt.document.overlay(&inside).is_none());
+    let b = overlay(&qt, &label);
+    assert!((b.start - 0.4).abs() < 1e-9 && (b.end - 0.6).abs() < 1e-9, "{b:?}");
+    let r = overlay(&qt, &blur);
+    assert_eq!((r.start, r.end), (0.2, 0.6));
+    // One undo step brings everything back.
+    qt.run(Document::undo);
+    assert!(qt.document.overlay(&inside).is_some());
+    assert_eq!(overlay(&qt, &late).start, 1.5);
+}
