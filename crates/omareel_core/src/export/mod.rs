@@ -1078,13 +1078,24 @@ fn image(pixels: Vec<u8>, width: i32, height: i32, yuv: Option<YuvLayout>) -> Im
     Image { width, height, pixels: Arc::new(pixels), yuv }
 }
 
-/// The recording's frame for `output_time` with the blur overlays showing then baked in, or
-/// the frame as decoded (shared, not copied) when none show.
-fn redacted(decoded: Option<&Image>, work: &DecodePlan, output_time: f64) -> Option<Image> {
+/// The recording's frame with the blur overlays near any of `times` baked in, or the frame as
+/// decoded (shared, not copied) when none are. Each time is a recording time the timeline put
+/// the frame at, with the speed of its clip: the frame's own (when it was decoded) and, for a
+/// frame held on after its decoder ran out, the time it stands in for now. A blur covers a
+/// margin around its span ([`overlay_track::export_blur_pad`]), since the decoder's frame can
+/// be a frame or two away from the time the timeline names.
+fn redacted(decoded: Option<&Image>, work: &DecodePlan, times: &[(f64, f64)]) -> Option<Image> {
     let image = decoded?;
-    let source_time = work.timeline.recording_source_time(output_time);
-    let regions: Vec<redact::Redaction> =
-        overlay_track::redactions_at(&work.redactions, source_time).into_iter().map(redact::Redaction::of).collect();
+    let pads: Vec<(f64, f64)> = times
+        .iter()
+        .map(|&(source_time, speed)| (source_time, overlay_track::export_blur_pad(work.media.fps, f64::from(work.fps), speed)))
+        .collect();
+    let regions: Vec<redact::Redaction> = work
+        .redactions
+        .iter()
+        .filter(|overlay| pads.iter().any(|&(source_time, pad)| overlay_track::blur_near(overlay, source_time, pad)))
+        .map(redact::Redaction::of)
+        .collect();
     if regions.is_empty() {
         return Some(image.clone());
     }
@@ -1145,6 +1156,9 @@ fn decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &AtomicBoo
     // The last frame of the recording and of the current inserted clip, kept apart so a clip
     // that runs out of frames repeats its own last frame, never the other's.
     let mut decoded: Option<Image> = None;
+    // The recording time (and clip speed) `decoded` was read for: a frame held on (its clip's
+    // decoder ran out, or an inserted video plays) is redacted for that time too.
+    let mut decoded_at = (0.0, 1.0);
     let mut insert_decoded: Option<Image> = None;
     let mut camera_decoded: Option<Image> = None;
     let mut camera_frame = -1;
@@ -1218,6 +1232,7 @@ fn decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &AtomicBoo
             let yuv = if decoder.yuv() { work.screen_yuv } else { None };
             *shown = Some(image(next, decoder.width(), decoder.height(), yuv));
             if !clip.is_media() {
+                decoded_at = (work.timeline.source_time(output_time), clip.speed);
                 *lock(&shared.acceleration) = decoder.acceleration();
             }
         } else if shown.is_none() {
@@ -1287,7 +1302,11 @@ fn decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &AtomicBoo
             break;
         }
         queue.packets.push_back(DecodedPacket {
-            image: if clip.is_media() { decoded.clone() } else { redacted(decoded.as_ref(), work, output_time) },
+            image: if clip.is_media() {
+                redacted(decoded.as_ref(), work, &[decoded_at])
+            } else {
+                redacted(decoded.as_ref(), work, &[decoded_at, (work.timeline.source_time(output_time), clip.speed)])
+            },
             camera_image: camera_decoded.clone(),
             error: String::new(),
             clip: clip_index,

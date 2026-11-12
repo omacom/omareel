@@ -141,7 +141,7 @@ impl CompositionState {
             self.ripples.extend(sources.motion.ripples(source_time));
         }
         self.keystroke_pills = if insert { Vec::new() } else { sources.keystrokes.sample(source_time) };
-        self.overlays = overlay_track::sample_json(&project.overlays, source_time, output_time, !insert);
+        self.overlays = overlay_track::sample_json(&project.overlays, source_time, output_time, !insert, 0.0);
         let layout = sample_layout(
             &project.clips,
             output_time,

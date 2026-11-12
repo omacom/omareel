@@ -139,16 +139,48 @@ impl Document {
 
     /// The overlays in effect at the output position, as the exporter samples them
     /// ([`overlay_track::sample_json`]), except that the selected one shows at full opacity
-    /// while it is being edited (a new one starts at the playhead, where its fade-in hides it).
+    /// while it is being edited (a new one starts at the playhead, where its fade-in hides it),
+    /// and a blur region shows from [`overlay_track::PREVIEW_BLUR_PAD`] of output before its
+    /// span to as long after ([`Document::preview_blur_shown`]).
     pub fn preview_overlays(&self) -> Vec<Object> {
-        let mut items =
-            overlay_track::sample_json(&self.project.overlays, self.source_position(), self.output_position, !self.showing_insert());
+        let sampled = overlay_track::sample_by(
+            &self.project.overlays,
+            self.source_position(),
+            self.output_position,
+            !self.showing_insert(),
+            &|overlay| self.preview_blur_shown(overlay),
+        );
+        let mut items = overlay_track::to_json(&self.project.overlays, sampled);
         for item in &mut items {
             if !self.selected_overlay_id.is_empty() && item.value("id").as_str() == Some(self.selected_overlay_id.as_str()) {
                 item.insert("opacity", 1.0);
             }
         }
         items
+    }
+
+    /// Whether the preview shows a blur region now: some recording that plays within
+    /// [`overlay_track::PREVIEW_BLUR_PAD`] of output either side of the playhead falls in its
+    /// span. The video presents its frames ahead of the overlays that follow them, and across
+    /// a cut it may still show the other side's frame, so the region covers the frames either
+    /// way.
+    pub fn preview_blur_shown(&self, overlay: &crate::project::Overlay) -> bool {
+        let pad = overlay_track::PREVIEW_BLUR_PAD;
+        let (from, to) = (self.output_position - pad, self.output_position + pad);
+        let mut start = 0.0;
+        for clip in &self.project.clips {
+            let length = (clip.out - clip.in_) / clip.speed;
+            let end = start + length;
+            if !clip.is_media() && end >= from && start <= to {
+                let first = clip.in_ + (cpp::max(from, start) - start) * clip.speed;
+                let last = clip.in_ + (cpp::min(to, end) - start) * clip.speed;
+                if last >= overlay.start && first < overlay.end {
+                    return true;
+                }
+            }
+            start = end;
+        }
+        false
     }
 
     /// `cameraVisible()`: a camera, no inserted clip, and the camera started; a full-frame camera

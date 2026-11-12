@@ -265,7 +265,7 @@ if(BUILD_TESTING)
     target_link_libraries(test_exporter_smoke PRIVATE omareel_render Qt6::Test)
     add_test(NAME exporter_smoke COMMAND test_exporter_smoke)
     # The blur test again on the software scene graph (offscreen), whatever the run's platform.
-    add_test(NAME exporter_overlays_software COMMAND test_exporter_smoke blurRegionsHideWhatTheyCover)
+    add_test(NAME exporter_overlays_software COMMAND test_exporter_smoke blurRegionsHideWhatTheyCover blurNeverLeaksAFrame)
     set_tests_properties(exporter_overlays_software PROPERTIES ENVIRONMENT QT_QPA_PLATFORM=offscreen)
     qt_add_executable(test_editor tests/test_editor.cpp)
     target_link_libraries(test_editor PRIVATE omareel_render Qt6::Test)

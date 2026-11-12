@@ -178,8 +178,12 @@ annotation at the playhead, three seconds long:
 - **Step** (`N`): a numbered circle; each new one takes the next number.
 - **Blur** (`B`): pixelates or blurs the recording under a rectangle, to hide a password, key,
   or message. The export bakes it into the recording's own pixels before anything is drawn, so
-  it covers exactly the frames and place the preview shows, on the GPU and the software path
-  alike, and it never fades.
+  it covers the place the preview shows on the GPU and the software path alike, and it never
+  fades. It errs on the safe side in time: the export blurs from a frame of the recording plus
+  two of the export (times the clip's speed) before its span to as long after, and the preview
+  shows it 0.05 s early and late, so no frame of what it hides slips through at either end. Even
+  the lowest strength makes text unreadable: cells (or the blur's radius) are an eighth of the
+  region's height, and 4 % of the recording's height, at the least.
 - **Card** (`Shift+T`): a full-frame title card with a title and subtitle over the project's
   background, styled from the Omarchy theme.
 

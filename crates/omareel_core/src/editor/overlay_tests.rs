@@ -153,3 +153,28 @@ fn preview_samples_what_the_exporter_samples() {
     qt.seek(1.6);
     assert!(qt.document.preview_overlays().is_empty());
 }
+
+#[test]
+fn the_preview_shows_a_blur_early_and_late_and_across_cuts() {
+    let world = World::new("overlay-blur-preview");
+    let mut qt = world.open(&world.bundle("editor.omareel"));
+    let none = Object::new();
+    let blur = qt.run(|d| d.add_overlay("blur", 1.0, 1.5, None, &none));
+    qt.run(|d| d.set_selected_overlay_id(""));
+    let shown = |qt: &Qt| qt.document.preview_overlays().iter().any(|o| o.value("id").as_str() == Some(blur.as_str()));
+    for (at, expected) in [(0.9, false), (0.97, true), (1.2, true), (1.53, true), (1.6, false)] {
+        qt.seek(at);
+        assert_eq!(shown(&qt), expected, "at {at}: position {}, source {}", qt.document.output_position(), qt.document.source_position());
+    }
+    // The cell size comes along for the preview's grid.
+    qt.seek(1.2);
+    let item = qt.document.preview_overlays().into_iter().find(|o| o.value("id").as_str() == Some(blur.as_str())).unwrap();
+    assert!(item.value("block").to_double(0.0) >= 0.04);
+    // Cut 1.3–1.9: just after the cut (recording 1.9, past the blur), the video may still be on
+    // the frame before it, so the blur stays a moment.
+    assert!(qt.run(|d| d.delete_output_range(1.3, 1.9)));
+    qt.seek(1.32);
+    assert!(shown(&qt));
+    qt.seek(1.4);
+    assert!(!shown(&qt));
+}
