@@ -130,6 +130,29 @@ GIF-specific overrides are `--gif-fps N` and `--gif-width W`.
 Add `--timing` to print average decode wait, upload, render, readback, encoder-write, and
 end-to-end throughput measurements.
 
+### `frame BUNDLE --at SECONDS -o OUTPUT`
+
+Renders frames of the export as images, without exporting the video: the same composition
+(background, zoom, cursor, camera bubble, keystrokes, inserted videos) from the same decoded
+pictures, so a still matches the export's frame at that moment. Times are on the edited video's
+timeline, after cuts and speed changes, as seconds (`12.5`) or `m:ss.s` (`1:02.5`). Each time
+shows the frame on screen then; a time past the end shows the last frame, with a note on stderr.
+Each still seeks straight to its frame, so one an hour into a recording takes as long as one at
+the start, well under a second at 1080p.
+
+- `--at SECONDS` may be repeated. With one time, OUTPUT is the image. With several, the stills
+  are numbered from 1 before the extension (`out.png` gives `out-1.png`, `out-2.png`...), or
+  replace a `%d` in OUTPUT (`frames/%d.jpg`).
+- `--count N` renders N frames spread evenly over the video (the middle of N equal parts)
+  instead of `--at`.
+- `--sheet` puts the frames on one contact sheet, a near-square grid with each tile labelled
+  with its time (`mm:ss.s`).
+- `--width W` sets each still's width, or the whole sheet's (1920 by default); the height
+  follows the project's aspect. `--fps N` picks the frame grid as for `export`.
+
+OUTPUT ends in `.png`, `.jpg` or `.webp`. Each written path is printed on stdout; errors go to
+stderr with a non-zero exit (2 for bad arguments, 1 when rendering or writing fails).
+
 ### `probe BUNDLE`
 
 Prints JSON containing source duration, frame rate, dimensions, input-event counts, and the

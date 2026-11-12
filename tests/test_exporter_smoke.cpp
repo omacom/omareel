@@ -285,6 +285,85 @@ private slots:
         QVERIFY(isBlue(pixelAt(output, 1.7, 320, 180)));
     }
 
+    // `omareel frame`: stills seek straight to their frame, so they meet the screen's gaps where
+    // the export's decoder had walked to them (the same recording as above).
+    void rendersStillsAndAContactSheet()
+    {
+        if (QStandardPaths::findExecutable(QStringLiteral("ffmpeg")).isEmpty()
+            || QStandardPaths::findExecutable(QStringLiteral("ffprobe")).isEmpty())
+            QSKIP("ffmpeg/ffprobe unavailable");
+        QTemporaryDir temporary;
+        QVERIFY(temporary.isValid());
+        const QString bundle = temporary.filePath(QStringLiteral("frames.omareel"));
+        QVERIFY(QDir().mkpath(bundle));
+        QProcess makeVideo;
+        makeVideo.start(QStringLiteral("ffmpeg"), {QStringLiteral("-y"), QStringLiteral("-v"), QStringLiteral("error"),
+            QStringLiteral("-f"), QStringLiteral("lavfi"), QStringLiteral("-i"),
+            QStringLiteral("color=c=red:size=640x360:rate=30:duration=1.5[r];"
+                           "color=c=blue:size=640x360:rate=30:duration=1.5[b];[r][b]concat=n=2"),
+            QStringLiteral("-vf"), QStringLiteral("select='lt(t\\,0.5)+gte(t\\,2.5)'"),
+            QStringLiteral("-c:v"), QStringLiteral("libx264"), QStringLiteral("-bf"), QStringLiteral("0"),
+            QStringLiteral("-g"), QStringLiteral("30"), QStringLiteral("-pix_fmt"), QStringLiteral("yuv420p"),
+            QStringLiteral("-fps_mode"), QStringLiteral("vfr"), QStringLiteral("-enc_time_base"),
+            QStringLiteral("1/30"), QDir(bundle).filePath(QStringLiteral("screen.mp4"))});
+        QVERIFY(makeVideo.waitForFinished(30000) && makeVideo.exitCode() == 0);
+        QFile capture(QDir(bundle).filePath(QStringLiteral("capture.json")));
+        QVERIFY(capture.open(QIODevice::WriteOnly));
+        capture.write(R"({"fps":30,"first_frame_us":1000})");
+        capture.close();
+        QFile input(QDir(bundle).filePath(QStringLiteral("input.jsonl")));
+        QVERIFY(input.open(QIODevice::WriteOnly));
+        input.close();
+        QJsonObject project = ProjectJson::defaults(QStringLiteral("Frames"), 3.0);
+        project.insert(QStringLiteral("clips"), QJsonArray{ProjectJson::clip(QStringLiteral("a"), 1.0, 2.0),
+                                                           ProjectJson::clip(QStringLiteral("b"), 2.0, 3.0)});
+        ProjectJson::set(project, {"background", "type"}, QStringLiteral("color"));
+        ProjectJson::set(project, {"background", "color"}, QStringLiteral("#00c000"));
+        ProjectJson::set(project, {"cursor", "visible"}, false);
+        QString error;
+        QVERIFY2(ProjectJson::save(project, QDir(bundle).filePath(QStringLiteral("project.json")), &error),
+                 qPrintable(error));
+
+        Exporter exporter;
+        StillOptions options;
+        options.bundlePath = bundle;
+        options.width = 640;
+        options.fps = 30;
+        // Past the end shows the last frame.
+        options.times = {0.5, 1.3, 1.7, 99.0};
+        QList<Still> stills;
+        double duration = 0.0;
+        QVERIFY2(exporter.renderStills(options, &stills, &duration, &error), qPrintable(error));
+        QVERIFY(qAbs(duration - 2.0) < 1e-9);
+        QCOMPARE(stills.size(), 4);
+        for (const Still &still : std::as_const(stills)) {
+            QCOMPARE(still.image.size(), QSize(640, 360));
+            QVERIFY(isGreen(still.image.pixelColor(4, 4)));
+        }
+        QVERIFY(isRed(stills[0].image.pixelColor(320, 180)));
+        // The second clip starts on a still screen and holds red until its source reaches 2.5 s.
+        QVERIFY(isRed(stills[1].image.pixelColor(320, 180)));
+        QVERIFY(isBlue(stills[2].image.pixelColor(320, 180)));
+        QVERIFY(isBlue(stills[3].image.pixelColor(320, 180)));
+        // Each still shows the start of its frame.
+        QCOMPARE(stills[1].time, 39 / 30.0);
+        QCOMPARE(stills[3].time, 59 / 30.0);
+
+        // A contact sheet of four spread over the video, two by two with a gap around each.
+        options.times.clear();
+        options.count = 4;
+        options.width = 320;
+        QVERIFY2(exporter.renderStills(options, &stills, &duration, &error), qPrintable(error));
+        QCOMPARE(stills.size(), 4);
+        QCOMPARE(stills.first().image.size(), QSize(320, 180));
+        QCOMPARE(stills[0].time, 7 / 30.0);
+        const QImage sheet = Exporter::contactSheet(stills, 2, 8);
+        QCOMPARE(sheet.size(), QSize(2 * 320 + 3 * 8, 2 * 180 + 3 * 8));
+        QVERIFY(isRed(sheet.pixelColor(8 + 160, 8 + 60)));
+        QVERIFY(isBlue(sheet.pixelColor(8 + 320 + 8 + 160, 8 + 180 + 8 + 60)));
+        QVERIFY(sheet.pixelColor(2, 2).value() < 40);
+    }
+
     void cameraLayoutsRenderFullFrame()
     {
         if (QStandardPaths::findExecutable(QStringLiteral("ffmpeg")).isEmpty()
