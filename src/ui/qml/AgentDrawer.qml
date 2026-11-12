@@ -237,7 +237,9 @@ Rectangle {
             spacing: 8
             OmButton {
                 Layout.fillWidth: true
-                primary: true
+                // The Start button above is the one call to action until the agent is allowed.
+                primary: agent.consented
+                bordered: !agent.consented
                 enabled: agent.available && !root.running
                 text: "Polish"
                 icon.source: "qrc:/omareel/assets/icons/lucide/sparkles.svg"
