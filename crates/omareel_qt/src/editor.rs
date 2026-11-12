@@ -210,6 +210,8 @@ pub mod qobject {
         fn autosaved(self: Pin<&mut Editor>, path: QString);
         #[qsignal]
         fn error_occurred(self: Pin<&mut Editor>, message: QString);
+        #[qsignal]
+        fn transcript_changed(self: Pin<&mut Editor>);
 
         fn is_valid(self: &Editor) -> bool;
         fn error_string(self: &Editor) -> QString;
@@ -760,6 +762,7 @@ impl qobject::Editor {
             Effect::ExportFinished(path) => self.as_mut().export_finished(qstring(&path)),
             Effect::ErrorOccurred(message) => self.as_mut().error_occurred(qstring(&message)),
             Effect::Autosaved(path) => self.as_mut().autosaved(qstring(&path)),
+            Effect::TranscriptChanged => self.as_mut().transcript_changed(),
             Effect::Seek(output_time) => self.as_mut().seek(output_time),
             Effect::Pause => self.as_mut().pause(),
             Effect::SyncCamera { screen_source_time, force } => self.as_mut().sync_camera(screen_source_time, force),

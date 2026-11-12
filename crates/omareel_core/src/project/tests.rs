@@ -351,3 +351,21 @@ fn camera_crop_folds_into_shape() {
         assert_eq!(Project::from_json(&loaded.to_json()).camera.shape, expected_shape, "{row}");
     }
 }
+
+#[test]
+fn captions_are_written_only_once_set() {
+    let project = Project::defaults("Captions", 3.0);
+    let bytes = project.to_json().to_json(Format::Indented);
+    assert!(!bytes.contains("captions"));
+    let read = Project::from_json(&qjson::object_from_json(bytes.as_bytes()).unwrap());
+    assert_eq!(read.captions, None);
+    assert_eq!(read.to_json().to_json(Format::Indented), bytes);
+
+    let mut json = project.to_json();
+    json.insert("captions", Object::from_iter([("enabled", Value::Bool(true)), ("position", "middle".into()), ("size", 9.into())]));
+    let read = Project::from_json(&json);
+    assert_eq!(read.captions, Some(Captions { enabled: true, position: "bottom".into(), size: 2.0 }));
+    let written = read.to_json();
+    assert_eq!(written.value("captions").to_object().value("size").to_double(0.0), 2.0);
+    assert_eq!(Project::from_json(&written), read);
+}

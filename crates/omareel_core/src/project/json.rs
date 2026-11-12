@@ -321,6 +321,16 @@ impl Project {
         // typing, and the keystroke track hides any an older recording has.
         p.keystrokes.hold_ms = cpp::clamp(keystrokes.value("holdMs").to_int(900), 100, 5000);
 
+        p.captions = source.value("captions").as_object().map(|captions| {
+            let d = Captions::default();
+            let position = captions.value("position").to_string_or(&d.position);
+            Captions {
+                enabled: captions.value("enabled").to_bool(d.enabled),
+                position: if position == "top" { position } else { d.position },
+                size: cpp::clamp(captions.value("size").to_double(d.size), 0.5, 2.0),
+            }
+        });
+
         let a = source.value("audio").to_object();
         p.audio.desktop = a.value("desktop").to_bool(true);
         p.audio.mic = a.value("mic").to_bool(true);
@@ -474,6 +484,9 @@ impl Project {
         ]);
         let k = &self.keystrokes;
         let a = &self.audio;
+        let captions = self.captions.as_ref().map_or(Value::Undefined, |c| {
+            obj([("enabled", c.enabled.into()), ("position", c.position.as_str().into()), ("size", c.size.into())])
+        });
         let cam = &self.camera;
         let e = &self.export_settings;
         Object::from_iter([
@@ -514,6 +527,8 @@ impl Project {
                 ]),
             ),
             ("audio", obj([("desktop", a.desktop.into()), ("mic", a.mic.into()), ("volume", a.volume.into())])),
+            // Absent until the user changes captions (inserting Undefined leaves it out).
+            ("captions", captions),
             (
                 "camera",
                 obj([
