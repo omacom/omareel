@@ -1009,7 +1009,9 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
     audio.insert("microphoneDevice", options.microphone_device.as_str());
     capture.insert("audio", audio);
     if native_capture {
-        let captured_span_us = (screen_capture.last_frame_us() - screen_capture.first_frame_us()).max(1);
+        // A pause still open at stop is after the last frame, so only the finished ones count.
+        let captured_span_us =
+            (screen_capture.last_frame_us() - screen_capture.first_frame_us() - pause_control.total_us()).max(1);
         let frames = screen_capture.encoded_frames();
         let measured_rate =
             if frames > 1 { f64::from(frames - 1) * 1_000_000.0 / captured_span_us as f64 } else { 0.0 };

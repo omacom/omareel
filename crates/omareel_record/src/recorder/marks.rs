@@ -165,6 +165,11 @@ impl PauseControl {
         self.paused
     }
 
+    /// The paused time so far, without a pause still open.
+    pub fn total_us(&self) -> i64 {
+        self.total_us
+    }
+
     /// At most every 50 ms: reads the state with `read` and, when it asks for the other state,
     /// switches, writes the mark, and publishes `paused`, `paused_since_us` and
     /// `paused_total_us`. The new state when it switched; the caller pauses or resumes the
