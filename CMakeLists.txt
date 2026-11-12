@@ -205,7 +205,7 @@ qt_add_resources(omareel_render "omareel_assets"
         assets/icons/lucide/mouse-pointer-2.svg assets/icons/lucide/zoom-in.svg
         assets/icons/lucide/zoom-out.svg
         assets/icons/lucide/film.svg assets/icons/lucide/camera.svg assets/icons/lucide/volume-2.svg
-        assets/icons/lucide/play.svg assets/icons/lucide/pause.svg
+        assets/icons/lucide/play.svg assets/icons/lucide/pause.svg assets/icons/lucide/flag.svg
         assets/icons/lucide/skip-back.svg assets/icons/lucide/skip-forward.svg
         assets/icons/lucide/scissors.svg assets/icons/lucide/crop.svg assets/icons/lucide/image.svg
         assets/icons/lucide/monitor.svg assets/icons/lucide/app-window.svg assets/icons/lucide/scan.svg

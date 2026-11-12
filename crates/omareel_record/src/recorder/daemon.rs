@@ -15,6 +15,7 @@
 //! thread, the audio recorder, gpu-screen-recorder, and the samplers last.
 
 use super::audio::{finish_audio_capture, start_audio_capture};
+use super::marks::{scrub_input, PauseControl};
 use super::files::{
     drain_recorder_output, first_frame_timestamp, last_non_empty_line, write_input_log, write_json,
 };
@@ -39,6 +40,7 @@ use omareel_core::compat::qjson::{self, Object, Value};
 use omareel_core::compat::qprocess::{self, ChannelMode, DetachedChannels, ExitStatus, Process, ProcessState};
 use omareel_core::compat::qround::q_round;
 use omareel_core::compat::{qfile, qnumber, qstring};
+use omareel_core::recording_marks::RecordingMarks;
 use omareel_core::recording_preferences::RecordingPreferences;
 use std::fs::File;
 use std::io::Write;
@@ -355,7 +357,7 @@ fn initial_state(
     state.insert("countdown_width", 240);
     state.insert("countdown_height", 240);
     state.insert("bar_visible", !options.no_bar && !overlay_monitor.is_empty());
-    state.insert("bar_width", if options.webcam { 448 } else { 288 });
+    state.insert("bar_width", if options.webcam { 560 } else { 400 });
     state.insert("bar_height", 40);
     state.insert("selfview", self_view.visible);
     state.insert("selfview_safe", self_view.safe);
@@ -766,7 +768,14 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
         );
     }
     refresh_indicators();
+    let mut pause_control = PauseControl::new(&bundle);
     while !stop_requested() && !capture_loop_failed {
+        // `omareel record --pause` and the bar ask through the state file (marks.rs).
+        if let Some(paused) = pause_control.poll(read_state) {
+            if native_capture {
+                screen_capture.set_paused(paused);
+            }
+        }
         if options.webcam && !camera_available && read_state().value("camera_status").to_string_or("") == "ready" {
             camera_available = true;
             camera_backend = "ffmpeg-pipe".into();
@@ -923,8 +932,10 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
     cursor_sampler.stop();
     evdev_listener.stop();
 
-    let cursor = cursor_sampler.samples();
-    let device_events = evdev_listener.events();
+    // What happened while paused, and the keybinds and clicks that made marks, stay out of
+    // input.jsonl; without marks it is written as before.
+    let (cursor, device_events) =
+        scrub_input(&cursor_sampler.samples(), &evdev_listener.events(), &RecordingMarks::load_bundle(&bundle));
     let first_frame_us = first_frame_timestamp(&timestamp_path);
 
     let (duration_ok, probed_duration) = match recorded_duration(&video) {
