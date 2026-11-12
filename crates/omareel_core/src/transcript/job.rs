@@ -32,6 +32,11 @@ impl Children {
         }
     }
 
+    /// The process groups running now (each its leader's pid).
+    pub fn groups(&self) -> Vec<i32> {
+        self.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).clone()
+    }
+
     fn add(&self, group: i32) {
         self.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).push(group);
     }

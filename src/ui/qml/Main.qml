@@ -16,6 +16,17 @@ ApplicationWindow {
     title: editor.bundleName + " — Omareel"
     property real timelineScale: 1
     property bool cropMode: false
+    // The coding agent (AgentDrawer.qml); null where the editor runs without it (tests).
+    readonly property var agentRunner: typeof agent === "undefined" ? null : agent
+    property bool agentOpen: false
+    function openAgent(task) {
+        if (!agentRunner) return
+        agentDrawerLoader.active = true
+        agentOpen = true
+        if (task && agentRunner.available && !agentRunner.running) agentDrawerLoader.item.start(task)
+        else if (!task) Qt.callLater(() => agentDrawerLoader.item && agentDrawerLoader.item.focusPrompt())
+    }
+    function closeAgent() { agentOpen = false; restoreEditorFocus() }
     readonly property bool singleKeyShortcutsBlocked: activeFocusItem !== null
         && !previewPane.activeFocus && !timeline.activeFocus
     function restoreEditorFocus() { previewPane.forceActiveFocus() }
@@ -36,6 +47,8 @@ ApplicationWindow {
             Qt.callLater(window.openExport)
         }
         else if (view === "aspect") bottomBar.openAspectMenu()
+        else if (view === "agent") openAgent("")
+        else if (view === "agent-polish") openAgent("polish")
         else if (view === "shortcuts") bottomBar.openShortcuts()
         else if (view === "background-hover") sidePanel.setBackgroundHoverProof(3)
         else if (view === "background-expanded"
@@ -119,6 +132,24 @@ ApplicationWindow {
         }
     }
 
+    // Over the side panel, between the top bar and the timeline; made the first time it opens.
+    Loader {
+        id: agentDrawerLoader
+        active: false
+        visible: window.agentOpen
+        x: parent.width - width
+        y: topBar.height
+        width: sidePanel.width
+        height: timeline.y - topBar.height
+        sourceComponent: Component { AgentDrawer { onCloseRequested: window.closeAgent() } }
+    }
+    Timer {
+        interval: 1500
+        repeat: true
+        running: window.agentRunner !== null
+        onTriggered: window.agentRunner.refreshChapters()
+    }
+
     // Shown only when opening takes a while. A spinning indicator redraws every frame, and
     // with the threaded render loop each redraw holds the GUI thread for the render thread's
     // swap: the player's set-up steps queued behind them (0.6 s on n1x before the video showed).
@@ -194,6 +225,11 @@ ApplicationWindow {
     Shortcut { sequence: "Ctrl+Shift+Z"; onActivated: editor.redo() }
     Shortcut { sequence: "Ctrl+S"; onActivated: { topBar.commitProjectName(); editor.saveNow() } }
     Shortcut { sequence: "Ctrl+E"; onActivated: window.openExport() }
+    Shortcut {
+        sequence: "Ctrl+Shift+P"
+        enabled: window.agentRunner !== null
+        onActivated: window.openAgent(window.agentRunner.running ? "" : "polish")
+    }
     Shortcut { sequence: "?"; enabled: !window.singleKeyShortcutsBlocked; onActivated: bottomBar.openShortcuts() }
     Shortcut {
         sequence: "Escape"

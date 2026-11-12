@@ -13,6 +13,7 @@
 
 pub mod apply;
 pub mod describe;
+pub mod runner;
 pub mod skill;
 #[cfg(test)]
 mod tests;

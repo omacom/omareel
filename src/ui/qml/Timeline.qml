@@ -347,6 +347,27 @@ FocusScope {
                         selectingRange = false
                     }
                 }
+                // Chapters (chapters.json), at their place on the edited timeline.
+                Repeater {
+                    model: typeof agent === "undefined" || !agent.chapters.exists ? []
+                        : agent.chapterMarkers(JSON.stringify(editor.clips))
+                    delegate: Item {
+                        id: chapterMarker
+                        required property var modelData
+                        x: modelData.time * root.pixelsPerSecond
+                        width: 9
+                        height: ruler.height
+                        Rectangle { x: 0; width: 1.5; height: parent.height; color: theme.accent }
+                        Rectangle {
+                            x: 0; y: 0; width: 8; height: 7
+                            radius: theme.rounded ? 1.5 : 0
+                            color: theme.accent
+                        }
+                        HoverHandler { id: chapterHover; cursorShape: Qt.PointingHandCursor }
+                        TapHandler { onTapped: editor.seek(chapterMarker.modelData.time) }
+                        OmLazyToolTip { target: chapterMarker; shown: chapterHover.hovered; text: chapterMarker.modelData.title }
+                    }
+                }
             }
 
             Rectangle {

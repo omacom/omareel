@@ -19,8 +19,9 @@ here needs a display.
 1. Read: `omareel describe <bundle>` prints the edited timeline as JSON. Read it
    before you edit, and again after.
 2. Edit: write the operations as JSON and run
-   `omareel apply <bundle> ops.json` (or `-` to read stdin). Check first with
-   `--dry-run`; add `--describe` to get the new timeline back. A failing
+   `omareel apply <bundle> ops.json` (or `-` to read stdin, or the JSON itself
+   as one single-quoted argument: `omareel apply <bundle> '[{"op": ...}]'`).
+   Check first with `--dry-run`; add `--describe` to get the new timeline back. A failing
    operation saves nothing and the report names it, so fix it and run the whole
    list again.
 3. Look: `omareel frame <bundle> --at 12.5 -o /tmp/omareel-frame.png` renders
@@ -105,6 +106,7 @@ was cut).
 | `trim-pauses` | optional `min` (silence length, default 1 s), `keep` (seconds left, default 0.4) |
 | `remove-fillers` | (needs measured word times; see below) |
 | `set` | `path`, `value`, e.g. `{"op": "set", "path": "keystrokes.enabled", "value": true}` |
+| `set-chapters` | any of `chapters` (`[{"at", "title"}, ...]`, replaces the list), `title`, `description` (see Chapters) |
 
 Rules the editor enforces, which `apply` reports as errors:
 - Zooms can't overlap, cover at least a second of the recording, and have a
@@ -154,6 +156,32 @@ For word-level times, read `transcript.json` in the bundle
 - Captions: `{"op": "set", "path": "captions.enabled", "value": true}`
   (also `captions.position` `bottom`/`top`, `captions.size`). Subtitle files:
   `omareel export <bundle> -o out.srt` (or `.vtt`).
+
+## Chapters
+
+Chapters, a title and a short description for publishing (YouTube) live in the
+bundle's `chapters.json`, written with `set-chapters` and listed by `describe`
+as `chapters` (each with its `source` time, and its `output` time, or `null`
+when its stretch was cut). The editor shows them on the timeline and copies
+them as a YouTube description.
+
+```json
+{"op": "set-chapters", "timeline": "source",
+ "title": "Omarchy themes in two minutes",
+ "description": "How to install a theme and switch between themes.",
+ "chapters": [{"at": 0, "title": "Opening the menu"},
+              {"at": 14.2, "title": "Installing a theme"}]}
+```
+
+- Give source times (`"timeline": "source"`): they are stored as source
+  times, so later cuts move the chapters with the video. A chapter whose
+  start is cut begins where the video picks up again.
+- Find where the topic changes from the transcript, markers if `describe`
+  lists any, and the activity; look at a contact sheet for what's on screen.
+- 3 to 8 chapters, the first at the start, each at least 10 s, titles of 2–6
+  words. A title under 70 characters, and one to three plain sentences of
+  description.
+- `set-chapters` replaces only the fields it has: send `title` alone to retitle.
 
 ## Good edits
 

@@ -1,6 +1,7 @@
 //! Bridges omareel_core and omareel_record to Qt and C++. Nothing here may panic across the FFI
 //! boundary.
 
+pub mod agent_runner;
 pub mod cli;
 pub mod editor;
 pub mod export;

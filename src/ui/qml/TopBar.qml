@@ -161,6 +161,28 @@ Rectangle {
             color: theme.separator
         }
         OmButton {
+            objectName: "polishButton"
+            visible: window.agentRunner !== null
+            Layout.preferredWidth: implicitWidth
+            Layout.minimumWidth: implicitWidth
+            text: window.agentRunner && window.agentRunner.running ? "Working…" : "Polish"
+            icon.source: "qrc:/omareel/assets/icons/lucide/sparkles.svg"
+            selected: window.agentOpen
+            tooltipText: !window.agentRunner ? ""
+                : !window.agentRunner.available ? window.agentRunner.problem
+                : "Polish with " + window.agentRunner.agentName + ". It reads the timeline, transcript and frames"
+                  + (window.agentRunner.provider ? " and sends them to " + window.agentRunner.provider : "")
+            tooltipShortcut: "Ctrl Shift P"
+            onClicked: window.agentRunner.running ? window.openAgent("") : window.openAgent("polish")
+        }
+        OmIconButton {
+            visible: window.agentRunner !== null
+            icon.source: "qrc:/omareel/assets/icons/lucide/message-square.svg"
+            Accessible.name: "Ask the editor"
+            tooltipText: "Ask the editor, write a description"
+            onClicked: window.agentOpen ? window.closeAgent() : window.openAgent("")
+        }
+        OmButton {
             id: presetButton
             Layout.preferredWidth: implicitWidth
             Layout.minimumWidth: implicitWidth

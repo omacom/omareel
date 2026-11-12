@@ -3,6 +3,7 @@
 #include <wayland-client.h>
 #include "Exporter.h"
 #include "render/VideoDecoding.h"
+#include "omareel_qt/src/agent_runner.cxxqt.h"
 #include "omareel_qt/src/cli.cxxqt.h"
 extern "C" int omr_ff_preload(void);
 #include "omareel_qt/src/editor.cxxqt.h"
@@ -556,7 +557,7 @@ int main(int argc, char **argv)
     // bar's and self-view's commands: a QGuiApplication's display connection, fonts and D-Bus
     // registration were 40 ms of each, before Stop even reached the recorder.
     if (argc > 1 && (std::strcmp(argv[1], "describe") == 0 || std::strcmp(argv[1], "apply") == 0
-                     || std::strcmp(argv[1], "skill") == 0)) {
+                     || std::strcmp(argv[1], "skill") == 0 || std::strcmp(argv[1], "agent") == 0)) {
         ::rust::Vec<::rust::String> arguments;
         // rust::String throws on invalid UTF-8; QString substitutes it as other commands do.
         for (int i = 2; i < argc; ++i)
@@ -885,6 +886,9 @@ int main(int argc, char **argv)
             QTextStream(stderr) << "omareel: " << editor.errorString() << '\n';
             return 1;
         }
+        // The coding agent the AI drawer runs on this bundle (agent_runner.rs); made before the
+        // engine so it outlives the QML that reads it.
+        AgentRunner agent(bundle);
         std::unique_ptr<Theme> ownTheme = waiting ? std::move(waitingTheme) : std::make_unique<Theme>();
         Theme &theme = *ownTheme;
         std::unique_ptr<QQmlApplicationEngine> ownEngine = waiting ? std::move(waitingEngine) : std::make_unique<QQmlApplicationEngine>();
@@ -893,6 +897,7 @@ int main(int argc, char **argv)
         engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
         engine.rootContext()->setContextProperty(QStringLiteral("editor"), &editor);
         engine.rootContext()->setContextProperty(QStringLiteral("comp"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"), &agent);
         QObject::connect(&theme, &Theme::sourceChanged, &editor, &Editor::refreshOmarchyTheme);
         engine.load(QUrl(QStringLiteral("qrc:/qt/qml/Omareel/Main.qml")));
         if (engine.rootObjects().isEmpty()) return 2;
