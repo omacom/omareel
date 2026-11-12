@@ -38,6 +38,16 @@ Rectangle {
         return 0
     }
     function shortAspect(value) { return value === "auto" ? "Auto" : value }
+    // Reframing needs a canvas of another shape than the (cropped) recording, such as 9:16 or
+    // 1:1. As reframe::active: the window would be within 2% of the whole crop otherwise, and a
+    // project set to reframe such a canvas draws exactly as one that isn't.
+    readonly property bool reframeUseful: {
+        const source = editor.sourceWidth * editor.project.crop.w / Math.max(1, editor.sourceHeight * editor.project.crop.h)
+        const canvas = editor.outputWidth / Math.max(1, editor.outputHeight)
+        return Math.min(canvas / Math.max(.0001, source), source / Math.max(.0001, canvas)) < 1 - .02
+    }
+    readonly property bool reframing: editor.project.reframe === "follow"
+    function toggleReframe() { editor.setReframe(root.reframing ? "off" : "follow") }
     function openAspectMenu() {
         if (root.narrow) overflowMenu.open()
         else aspectBox.popup.open()
@@ -65,7 +75,7 @@ Rectangle {
 
         Item {
             Layout.fillWidth: true
-            Layout.minimumWidth: root.narrow ? 36 : root.compact ? 196 : 228
+            Layout.minimumWidth: root.narrow ? 36 : root.compact ? 240 : 336
             Layout.fillHeight: true
             RowLayout {
                 anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
@@ -95,6 +105,22 @@ Rectangle {
                     checkable: true; checked: root.cropMode; selected: checked
                     tooltipText: root.cropMode ? "" : "Crop the recording"
                     onToggled: root.cropMode = checked
+                }
+                OmButton {
+                    objectName: "reframeButton"
+                    visible: !root.narrow
+                    Layout.preferredWidth: implicitWidth
+                    text: root.compact ? "" : "Reframe"
+                    icon.source: "qrc:/omareel/assets/icons/lucide/scan.svg"
+                    icon.color: root.reframing ? theme.accent : contentColor
+                    checkable: true; checked: root.reframing; selected: checked
+                    enabled: root.reframing || root.reframeUseful
+                    tooltipText: root.reframing && !root.reframeUseful ? "Nothing to reframe: the canvas has the recording's shape"
+                        : root.reframing ? "The canvas follows the cursor and zooms"
+                        : root.reframeUseful ? "Fill the canvas and follow the action"
+                        : "Pick a vertical or square canvas to reframe"
+                    Accessible.name: "Auto-reframe"
+                    onToggled: root.toggleReframe()
                 }
                 OmIconButton {
                     id: overflowButton
@@ -288,6 +314,15 @@ Rectangle {
                 text: root.cropMode ? "Finish crop" : "Crop"
                 icon.source: "qrc:/omareel/assets/icons/lucide/crop.svg"
                 onClicked: { root.cropMode = !root.cropMode; overflowMenu.close() }
+            }
+            OmButton {
+                Layout.fillWidth: true
+                bordered: true
+                selected: root.reframing
+                enabled: root.reframing || root.reframeUseful
+                text: root.reframing ? "Stop reframing" : "Reframe"
+                icon.source: "qrc:/omareel/assets/icons/lucide/scan.svg"
+                onClicked: { root.toggleReframe(); overflowMenu.close() }
             }
         }
     }

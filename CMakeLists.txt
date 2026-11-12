@@ -220,6 +220,7 @@ qt_add_resources(omareel_render "omareel_assets"
         assets/icons/lucide/eye.svg assets/icons/lucide/eye-off.svg assets/icons/lucide/trash-2.svg
         assets/icons/lucide/video-off.svg assets/icons/lucide/volume-x.svg
         assets/icons/lucide/sparkles.svg
+        assets/icons/lucide/copy.svg
         assets/icons/reel.svg
         assets/fonts/Inter-Regular.ttf assets/fonts/Inter-Medium.ttf
         assets/fonts/Inter-SemiBold.ttf assets/fonts/Inter-Bold.ttf
@@ -246,6 +247,7 @@ if(BUILD_TESTING)
     qt_add_executable(test_exporter_smoke tests/test_exporter_smoke.cpp)
     target_link_libraries(test_exporter_smoke PRIVATE omareel_render Qt6::Test)
     add_test(NAME exporter_smoke COMMAND test_exporter_smoke)
+    set_tests_properties(exporter_smoke PROPERTIES ENVIRONMENT "OMAREEL_BINARY=$<TARGET_FILE:omareel>")
     qt_add_executable(test_editor tests/test_editor.cpp)
     target_link_libraries(test_editor PRIVATE omareel_render Qt6::Test)
     add_test(NAME editor COMMAND test_editor)

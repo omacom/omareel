@@ -15,7 +15,9 @@ commands:\n\
 \x20     Open a recording bundle in the editor.\n\
 \x20 export <bundle> -o <file.mp4|file.gif> [options]\n\
 \x20     Export with --fps N, --width W, --quality LEVEL, --gif-fps N,\n\
-\x20     --gif-width W, or --timing.\n\
+\x20     --gif-width W, --aspect A, --reframe follow|off, or --timing.\n\
+\x20     --preset youtube|shorts|x|github-gif|slack sets them all for one\n\
+\x20     platform (and the file name when -o is left out).\n\
 \x20 probe <bundle>\n\
 \x20     Print a JSON summary of a recording bundle.\n\
 \x20 help\n\

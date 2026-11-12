@@ -173,6 +173,9 @@ pub struct Project {
     pub name: String,
     pub aspect: String,
     pub crop: RectF,
+    /// "follow" fills the canvas with a crop window of the screen that follows the action
+    /// (crate::reframe); empty fits the whole recording into the canvas.
+    pub reframe: String,
     pub clips: Vec<Clip>,
     pub zooms: Vec<ZoomSegment>,
     pub zoom_style: ZoomStyle,
@@ -197,6 +200,7 @@ impl Default for Project {
             name: "Untitled Recording".into(),
             aspect: "auto".into(),
             crop: RectF::new(0.0, 0.0, 1.0, 1.0),
+            reframe: String::new(),
             clips: Vec::new(),
             zooms: Vec::new(),
             zoom_style: ZoomStyle::default(),

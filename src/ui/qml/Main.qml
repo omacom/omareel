@@ -31,8 +31,10 @@ ApplicationWindow {
         })
     }
     function prepareScreenshot(view) {
-        if (view === "export") {
+        if (view === "export" || view === "export-shorts") {
             editor.seek(2)
+            exportDialogLoader.active = true
+            exportDialogLoader.item.dialog.presetId = view === "export-shorts" ? "shorts" : ""
             Qt.callLater(window.openExport)
         }
         else if (view === "aspect") bottomBar.openAspectMenu()

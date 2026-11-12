@@ -18,6 +18,7 @@ pub mod decoder;
 pub mod encoder_pipe;
 pub mod hardware;
 pub mod plan;
+pub mod presets;
 
 use crate::clip_timeline::ClipTimeline;
 use crate::compat::qdir::{self, FileInfo};
@@ -32,7 +33,8 @@ use crate::keystroke_track::KeystrokeTrack;
 use crate::media_probe::{self, VideoInfo};
 use crate::motion_track::MotionTrack;
 use crate::omarchy_paths;
-use crate::project::{Clip, Project};
+use crate::project::{Clip, Project, allowed_aspects};
+use crate::reframe;
 use crate::zoom_timeline;
 use composition::{CompositionState, Sources};
 use decoder::FfmpegDecoder;
@@ -58,6 +60,12 @@ pub struct ExportOptions {
     pub gif_fps: i32,
     pub gif_width: i32,
     pub timing: bool,
+    /// An [`presets`] id: its settings stand in for the project's, under the options above.
+    pub preset: String,
+    /// A project aspect for this export only.
+    pub aspect: String,
+    /// "follow" or "off": reframing for this export only.
+    pub reframe: String,
 }
 
 /// A decoded frame, shared by the frames that repeat it: tightly packed RGBA rows, or with
@@ -233,6 +241,34 @@ pub struct ExportJob {
     decode_thread: Option<JoinHandle<()>>,
 }
 
+/// The options' preset, aspect and reframing applied to the export's copy of the project.
+fn apply_overrides(project: &mut Project, options: &ExportOptions) -> Result<(), String> {
+    if !options.preset.is_empty() {
+        let preset = presets::find(&options.preset)
+            .ok_or_else(|| format!("Unknown export preset {} (try {})", options.preset, presets::ids()))?;
+        let output = options.output_path.as_bytes();
+        let gif = output.len() >= 4 && output[output.len() - 4..].eq_ignore_ascii_case(b".gif");
+        if gif != (preset.format == "gif") {
+            return Err(format!("The {} preset exports {}; name the output .{}", preset.id,
+                if preset.format == "gif" { "a GIF" } else { "an MP4" }, preset.format));
+        }
+        preset.apply(project);
+    }
+    if !options.aspect.is_empty() {
+        if !allowed_aspects().contains(&options.aspect.as_str()) {
+            return Err(format!("Unknown aspect {} (try {})", options.aspect, allowed_aspects().join(", ")));
+        }
+        project.aspect = options.aspect.clone();
+    }
+    match options.reframe.as_str() {
+        "" => {}
+        "off" => project.reframe.clear(),
+        mode if reframe::MODES.contains(&mode) => project.reframe = mode.into(),
+        mode => return Err(format!("Unknown reframe mode {mode} (try follow or off)")),
+    }
+    Ok(())
+}
+
 impl ExportJob {
     /// Probes the recording, loads the bundle (or makes a project for one without
     /// `project.json`), probes inserted clips and the webcam video, builds the motion and
@@ -274,6 +310,7 @@ impl ExportJob {
             let clicks: Vec<f64> = input.click_downs(true).iter().map(|event| event.time).collect();
             project.zooms = zoom_timeline::generate(&clicks, media.duration);
         }
+        apply_overrides(&mut project, options)?;
         if project.clips.is_empty() {
             project.clips = vec![Clip { id: "c1".into(), in_: 0.0, out: media.duration, speed: 1.0, ..Clip::default() }];
         }
@@ -341,8 +378,14 @@ impl ExportJob {
         for zoom in &project.zooms {
             maximum_zoom = cpp::max(maximum_zoom, zoom.level);
         }
-        let needed_width = maximum_zoom * f64::from(width) / cpp::max(0.0001, project.crop.width);
-        let needed_height = maximum_zoom * f64::from(height) / cpp::max(0.0001, project.crop.height);
+        // A reframed export shows only its window of the crop, at the output's size.
+        let (window_width, window_height) = if reframe::active(&project, media.width, media.height) {
+            reframe::base_size(&project, media.width, media.height)
+        } else {
+            (1.0, 1.0)
+        };
+        let needed_width = maximum_zoom * f64::from(width) / cpp::max(0.0001, project.crop.width * window_width);
+        let needed_height = maximum_zoom * f64::from(height) / cpp::max(0.0001, project.crop.height * window_height);
         let decode_scale = cpp::clamp(
             cpp::max(needed_width / f64::from(media.width), needed_height / f64::from(media.height)),
             0.01,
