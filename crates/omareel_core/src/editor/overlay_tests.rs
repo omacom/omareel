@@ -84,12 +84,14 @@ fn edits_are_one_undo_step_each_and_drags_coalesce() {
 }
 
 #[test]
-fn cuts_shrink_and_remove_overlays() {
+fn cuts_shrink_and_remove_overlays_but_never_a_blur() {
     let world = World::new("overlay-cut");
     let mut qt = world.open(&world.bundle("editor.omareel"));
     let none = Object::new();
     let box_id = qt.run(|d| d.add_overlay("box", 0.2, 1.6, None, &none));
-    let gone_box = qt.run(|d| d.add_overlay("blur", 0.5, 1.0, None, &none));
+    let gone_arrow = qt.run(|d| d.add_overlay("arrow", 0.5, 1.0, None, &none));
+    let blur = qt.run(|d| d.add_overlay("blur", 0.5, 1.5, None, &none));
+    let cut_blur = qt.run(|d| d.add_overlay("blur", 0.6, 1.0, None, &none));
     let late_title = qt.run(|d| d.add_overlay("text", 1.4, 1.9, None, &none));
     let inside_title = qt.run(|d| d.add_overlay("text", 0.5, 1.0, None, &none));
     let across_title = qt.run(|d| d.add_overlay("card", 0.0, 0.6, None, &none));
@@ -97,7 +99,13 @@ fn cuts_shrink_and_remove_overlays() {
     // Screen items keep source times: what still shows of them.
     let b = overlay(&qt, &box_id);
     assert!((b.start - 0.2).abs() < 0.03 && (b.end - 1.6).abs() < 0.03, "{b:?}");
-    assert!(qt.document.overlay(&gone_box).is_none());
+    assert!(qt.document.overlay(&gone_arrow).is_none());
+    // A blur keeps its whole span, even one whose footage is all cut.
+    let b2 = overlay(&qt, &blur);
+    assert_eq!((b2.start, b2.end), (0.5, 1.5));
+    let b3 = overlay(&qt, &cut_blur);
+    assert_eq!((b3.start, b3.end), (0.6, 1.0));
+    assert_eq!(qt.document.overlay_output_range(&b3), (-1.0, -1.0));
     // Frame items keep output times: later ones move back, ones across shrink, ones inside go.
     let late = overlay(&qt, &late_title);
     assert!((late.start - 0.5).abs() < 0.03 && (late.end - 1.0).abs() < 0.03, "{late:?}");
@@ -109,7 +117,7 @@ fn cuts_shrink_and_remove_overlays() {
     assert!((start - 0.2).abs() < 0.03 && (end - 0.7).abs() < 0.03, "{start} {end}");
     // The cut is one step, overlays included.
     qt.run(Document::undo);
-    assert_eq!(qt.document.overlays().len(), 5);
+    assert_eq!(qt.document.overlays().len(), 7);
     assert_eq!(overlay(&qt, &late_title).start, 1.4);
 
     // Removing a clip cuts its output span the same way.
@@ -152,6 +160,86 @@ fn preview_samples_what_the_exporter_samples() {
     assert_eq!(shown[0].value("opacity").to_double(0.0), 1.0);
     qt.seek(1.6);
     assert!(qt.document.preview_overlays().is_empty());
+}
+
+#[test]
+fn footage_restored_after_a_cut_comes_back_blurred() {
+    let world = World::new("overlay-blur-restore");
+    let mut qt = world.open(&world.bundle("editor.omareel"));
+    let none = Object::new();
+    let blur = qt.run(|d| d.add_overlay("blur", 0.5, 1.5, None, &none));
+    let all_cut = qt.run(|d| d.add_overlay("blur", 1.2, 1.8, None, &none));
+    assert!(qt.run(|d| d.delete_output_range(1.0, 5.0)));
+    assert_eq!((overlay(&qt, &blur).start, overlay(&qt, &blur).end), (0.5, 1.5));
+    assert_eq!((overlay(&qt, &all_cut).start, overlay(&qt, &all_cut).end), (1.2, 1.8));
+    // Restoring the footage by any edit brings the region back over all of it.
+    let c = qt.clip_id(0);
+    assert!(qt.run(|d| d.reset_clip_trims(&c)));
+    let (start, end) = qt.document.overlay_output_range(&overlay(&qt, &blur));
+    assert!((start - 0.5).abs() < 1e-9 && (end - 1.5).abs() < 1e-9, "{start} {end}");
+    let (start, end) = qt.document.overlay_output_range(&overlay(&qt, &all_cut));
+    assert!((start - 1.2).abs() < 1e-9 && (end - 1.8).abs() < 1e-9, "{start} {end}");
+    // And by a trim.
+    qt.run(Document::undo);
+    let c = qt.clip_id(0);
+    assert!(qt.run(|d| d.trim_clip(&c, 0.0, 1.7)));
+    assert_eq!((overlay(&qt, &blur).start, overlay(&qt, &blur).end), (0.5, 1.5));
+}
+
+#[test]
+fn frame_items_keep_to_the_video_on_every_edit() {
+    let world = World::new("overlay-end-card");
+    let mut qt = world.open(&world.bundle("editor.omareel"));
+    let none = Object::new();
+    let d0 = qt.document.duration();
+    let card = qt.run(|d| d.add_overlay("card", d0 - 0.5, d0, None, &none));
+    let title = qt.run(|d| d.add_overlay("text", 0.2, 0.8, None, &none));
+    let late = qt.run(|d| d.add_overlay("text", d0 - 1.0, d0 - 0.7, None, &none));
+    let at_end = |qt: &Qt, what: &str| {
+        let duration = qt.document.duration();
+        let o = overlay(qt, &card);
+        assert!((o.end - duration).abs() < 1e-9 && (o.start - (duration - 0.5)).abs() < 1e-9, "{what}: {o:?}, duration {duration}");
+        // An item in the middle keeps its output times.
+        let t = overlay(qt, &title);
+        assert_eq!((t.start, t.end), (0.2, 0.8), "{what}");
+    };
+
+    // A trim shortens the video: the end card stays at the end; an item past the end moves in.
+    let c = qt.clip_id(0);
+    assert!(qt.run(|d| d.trim_clip(&c, 0.0, 1.0)));
+    at_end(&qt, "trim");
+    let l = overlay(&qt, &late);
+    assert!(l.end <= qt.document.duration() + 1e-9 && (l.end - l.start - 0.3).abs() < 1e-9, "{l:?}");
+    // Trimming back out takes the card along again; the late item stays where it went.
+    assert!(qt.run(|d| d.trim_clip(&c, 0.0, d0)));
+    at_end(&qt, "trim back");
+    qt.run(Document::undo);
+    assert_eq!(overlay(&qt, &card).end, d0);
+
+    // A speed change.
+    let c = qt.clip_id(0);
+    assert!(qt.run(|d| d.set_clip_speed(&c, 2.0)));
+    at_end(&qt, "speed");
+    qt.run(Document::undo);
+    assert_eq!(overlay(&qt, &card).end, d0);
+
+    // An inserted video at the end.
+    qt.seek(d0);
+    qt.document.finish_import(ImportedInsert {
+        path: "media/clip.mp4".into(),
+        info: crate::media_probe::VideoInfo { width: 640, height: 360, duration: 2.0, fps: 30.0, audio: false },
+        error: String::new(),
+    });
+    assert!((qt.document.duration() - (d0 + 2.0)).abs() < 1e-9);
+    at_end(&qt, "insert");
+
+    // A split and a merge change nothing.
+    qt.seek(0.5);
+    assert!(qt.run(Document::split_at_playhead));
+    at_end(&qt, "split");
+    let c = qt.clip_id(0);
+    assert!(qt.run(|d| d.merge_clip(&c, 1)));
+    at_end(&qt, "merge");
 }
 
 #[test]

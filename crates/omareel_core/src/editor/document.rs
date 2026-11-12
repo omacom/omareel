@@ -108,6 +108,9 @@ pub struct Document {
     pub(crate) selected_zoom_id: String,
     pub(crate) selected_zoom_ids: Vec<String>,
     pub(crate) selected_overlay_id: String,
+    /// The video's length at the edit's snapshot, until the edit's `changed` refits the
+    /// frame-anchored overlays to the new length ([`Document::fit_frame_overlays`]).
+    pub(crate) duration_before_edit: Option<f64>,
     pub(crate) picking_zoom_target: bool,
     pub(crate) output_position: f64,
     pub(crate) playback_range_start: f64,
@@ -217,6 +220,7 @@ impl Document {
             selected_zoom_id: String::new(),
             selected_zoom_ids: Vec::new(),
             selected_overlay_id: String::new(),
+            duration_before_edit: None,
             picking_zoom_target: false,
             output_position: 0.0,
             playback_range_start: -1.0,
@@ -612,6 +616,7 @@ impl Document {
 
     /// `snapshot(coalesceKey)`.
     pub(crate) fn snapshot(&mut self, coalesce_key: &str) {
+        self.duration_before_edit = Some(self.duration());
         let current = self.project.to_json();
         if self.history.snapshot(coalesce_key, current) {
             self.emit(Effect::HistoryChanged);
@@ -621,6 +626,9 @@ impl Document {
     /// `changed(motion)`: the project changed. The keystroke pills are rebuilt here; the rest is
     /// queued.
     pub(crate) fn changed(&mut self, motion: bool) {
+        if let Some(before) = self.duration_before_edit.take() {
+            self.fit_frame_overlays(before);
+        }
         self.project_map_revision += 1;
         self.keystroke_track = KeystrokeTrack::build(self.input.events(), &self.project.keystrokes);
         let (volume, muted) = self.screen_audio();
@@ -653,6 +661,7 @@ impl Document {
     /// the clip at the playhead, zoom selections that are gone dropped, and a seek to where the
     /// playhead now falls.
     fn restore(&mut self, json: &Object) {
+        self.duration_before_edit = None;
         self.project = Project::from_json(json);
         if !self.selected_clip_id.is_empty() && self.clip_index(&self.selected_clip_id) < 0 {
             self.selected_clip_id = if self.project.clips.is_empty() {

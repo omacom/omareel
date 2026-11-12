@@ -15,6 +15,10 @@ use crate::project::{Clip, Overlay, MIN_OVERLAY_LENGTH};
 /// How long a new overlay lasts when nothing says.
 pub const DEFAULT_OVERLAY_LENGTH: f64 = 3.0;
 
+/// How close to the end of the video a frame-anchored overlay's end must be to stay at the end
+/// when the video's length changes ([`Document::fit_frame_overlays`]).
+const END_TOLERANCE: f64 = 1e-3;
+
 impl Document {
     pub fn overlays(&self) -> &[Overlay] {
         &self.project.overlays
@@ -239,8 +243,10 @@ impl Document {
     }
 
     /// An output span `from`..`to` was cut: frame-anchored overlays after it move back, those
-    /// across it shrink, and those inside it go.
+    /// across it shrink, and those inside it go. (They are then where they belong, so the
+    /// edit's [`Document::fit_frame_overlays`] leaves them be.)
     pub(crate) fn cut_frame_overlays(&mut self, from: f64, to: f64) {
+        self.duration_before_edit = None;
         let removed = to - from;
         if removed <= 0.0 {
             return;
@@ -265,12 +271,15 @@ impl Document {
     }
 
     /// The clips became `clips`: screen-anchored overlays shrink to the part of their span that
-    /// still shows, and those that no longer show at all go, as zooms do.
+    /// still shows, and those that no longer show at all go, as zooms do. Except blur regions:
+    /// they keep their whole span always, so footage that comes back (a trim undone by hand,
+    /// a reset or a merge) comes back hidden. One whose footage is all cut stays in the list,
+    /// unseen.
     pub(crate) fn cut_screen_overlays(&mut self, clips: &[Clip]) {
         let before_clips = self.project.clips.clone();
         let selected = self.selected_overlay_id.clone();
         self.project.overlays.retain_mut(|overlay| {
-            if !overlay.is_screen_anchored() {
+            if !overlay.is_screen_anchored() || overlay.kind == "blur" {
                 return true;
             }
             let before = visible_span(overlay.start, overlay.end, &before_clips);
@@ -286,6 +295,35 @@ impl Document {
         });
         if !selected.is_empty() && self.overlay_index(&selected) < 0 {
             self.selected_overlay_id.clear();
+        }
+    }
+
+    /// After an edit that changed the video's length from `before` (any edit to the clips:
+    /// trims, speed, splits and merges, inserted videos), frame-anchored overlays keep their
+    /// output times, except that one that ended at the end of the video still does (it moves
+    /// with the end, keeping its length: an end card), and one that now runs past the end
+    /// moves back to end there (shortened only if it is longer than the video). The cuts
+    /// ([`Document::cut_frame_overlays`]) place them themselves.
+    pub(crate) fn fit_frame_overlays(&mut self, before: f64) {
+        let after = self.duration();
+        if !(after > 0.0) || !before.is_finite() {
+            return;
+        }
+        let moved = after - before;
+        for overlay in self.project.overlays.iter_mut().filter(|overlay| !overlay.is_screen_anchored()) {
+            let length = overlay.end - overlay.start;
+            if overlay.end >= before - END_TOLERANCE && moved.abs() > 1e-9 {
+                overlay.end = after;
+                overlay.start = cpp::max(0.0, after - length);
+            }
+            if overlay.end > after {
+                overlay.end = after;
+                overlay.start = cpp::max(0.0, after - length);
+            }
+            if overlay.end - overlay.start < MIN_OVERLAY_LENGTH {
+                overlay.start = cpp::max(0.0, overlay.end - MIN_OVERLAY_LENGTH);
+                overlay.end = overlay.start + MIN_OVERLAY_LENGTH;
+            }
         }
     }
 }

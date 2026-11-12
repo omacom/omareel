@@ -5,11 +5,14 @@
 //! - `"screen"`: `rect` is 0–1 of the recording's full frame (before the project's crop), and
 //!   `start`/`end` are SOURCE seconds. The item belongs to a moment and a place in the recording:
 //!   it follows zooms and the crop, survives cuts the way zooms do, and hides while an inserted
-//!   video plays. Blur regions are always screen-anchored.
+//!   video plays. Blur regions are always screen-anchored, and cuts never shrink or remove one
+//!   (footage restored later must come back hidden).
 //! - `"frame"`: `rect` is 0–1 of the output canvas, and `start`/`end` are OUTPUT seconds. Titles
 //!   and cards sit on the edited timeline, not on the recording: a title at 0–3 s stays at the
-//!   start whatever is trimmed under it, and an output-range cut before an end card moves it
-//!   along with the end. Title/end cards are always frame-anchored.
+//!   start whatever is trimmed under it; an output-range cut moves later items back with it;
+//!   and after any edit that changes the video's length, an item that ended at the end still
+//!   does (an end card) and one past the end moves back inside
+//!   (`Document::fit_frame_overlays`). Title/end cards are always frame-anchored.
 //!
 //! The list is written only when it is non-empty, so projects without overlays stay byte for
 //! byte as they were.

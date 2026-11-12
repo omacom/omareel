@@ -260,7 +260,12 @@ stay byte for byte as they were). Each item:
 
 Deleting a range of the timeline shrinks or removes annotations: `screen` items keep what still
 shows of their source span, as zooms do; `frame` items after the cut move back with it, and those
-inside it go.
+inside it go. Blur regions are the exception: a cut never shrinks or removes one, so footage that
+comes back later (resetting a clip's trims, a trim or a merge) comes back hidden; one whose
+footage is all cut stays in the list, unseen. Any other edit that changes the video's length
+(trims, speed, inserted videos) leaves `frame` items at their times, except that one that ended
+at the end of the video stays at the end (an end card keeps its length and moves with it), and
+one that would run past the end moves back to end there.
 
 ## Environment
 
