@@ -29,7 +29,7 @@
 use super::{ms, source_span_outputs, source_time_outputs};
 use crate::compat::qdir;
 use crate::compat::qjson::{self, Format, Object, Value};
-use crate::editor::{Document, Effect, ZoomTarget};
+use crate::editor::{Document, Effect, ImportedInsert, ZoomTarget};
 use crate::project::{allowed_clip_speeds, Project};
 
 /// One operation's failure, before the operation's number is added.
@@ -110,6 +110,9 @@ fn output_spans(document: &Document, op: &Object) -> Result<Vec<(f64, f64)>, Str
         }
         return Ok(spans);
     }
+    if from < 0.0 || to > document.duration() + 1e-6 {
+        return Err(format!("{from}–{to} is outside the video (0 to {})", ms(document.duration())));
+    }
     Ok(vec![(from, to)])
 }
 
@@ -147,12 +150,17 @@ fn zoom_target(value: &Value) -> Result<ZoomTarget, String> {
     Err("\"target\" must be \"auto\" or {\"x\": 0–1, \"y\": 0–1}".into())
 }
 
-/// The recording time an output time shows, for a zoom's end: the time just before `to`, so a
-/// zoom ending at a clip's end stays in that clip.
-fn zoom_source_range(document: &Document, from: f64, to: f64) -> (f64, f64) {
-    let start = document.output_to_source(from);
-    let end = document.output_to_source((to - 1e-6).max(from)) + 1e-6;
-    (start, end.max(start))
+/// The recording time a zoom ending at output `to` ends at: that of the moment just before
+/// `to`, so a zoom ending where a clip ends stays in that clip.
+fn zoom_source_end(document: &Document, to: f64) -> f64 {
+    document.output_to_source((to - 1e-6).max(0.0)) + 1e-6
+}
+
+fn zoom_level(op: &Object) -> Result<Option<f64>, String> {
+    match optional_number(op, "level")? {
+        Some(level) if !(1.0..=4.0).contains(&level) => Err("\"level\" must be from 1 to 4".into()),
+        level => Ok(level),
+    }
 }
 
 fn ok() -> OpResult {
@@ -163,8 +171,19 @@ fn with(key: &str, value: impl Into<Value>) -> OpResult {
     Ok(Object::from_iter([(key, value.into())]))
 }
 
+/// What a run of operations keeps beside the document.
+#[derive(Default)]
+struct Run {
+    /// Check only: nothing is written, not even an inserted video's copy.
+    dry_run: bool,
+    warnings: Vec<String>,
+    /// Videos copied into media/ by this run, removed again if it fails.
+    copied: Vec<String>,
+}
+
 /// The edits of [`Document`] the operations use, refusing what the editor would refuse.
-fn run_op(document: &mut Document, op: &Object, warnings: &mut Vec<String>) -> OpResult {
+fn run_op(document: &mut Document, op: &Object, run: &mut Run) -> OpResult {
+    let warnings = &mut run.warnings;
     let name = op.value("op").to_string_or("");
     match name.as_str() {
         "split" => {
@@ -269,8 +288,32 @@ fn run_op(document: &mut Document, op: &Object, warnings: &mut Vec<String>) -> O
                 return Err("an import is already running".into());
             }
             let job = document.import_job(&file);
+            let imported = if run.dry_run {
+                // What the import would find, without copying the video into the bundle.
+                match (job.probe_video)(&file) {
+                    Ok(info) if info.is_valid() => ImportedInsert {
+                        path: format!("media/{}", qdir::FileInfo::new(file.as_str()).file_name()),
+                        info,
+                        error: String::new(),
+                    },
+                    Ok(_) => return Err(format!("{file} has no video to insert")),
+                    Err(error) => return Err(error),
+                }
+            } else {
+                let media = qdir::file_path(document.bundle_path(), "media");
+                let before: Vec<String> = std::fs::read_dir(&media)
+                    .map(|entries| entries.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().into_owned()).collect())
+                    .unwrap_or_default();
+                let imported = job.run();
+                if let Some(name) = imported.path.strip_prefix("media/") {
+                    if !before.iter().any(|existing| existing == name) {
+                        run.copied.push(qdir::file_path(&media, name));
+                    }
+                }
+                imported
+            };
             document.start_import(&file);
-            document.finish_import(job.run());
+            document.finish_import(imported);
             if !document.import_error().is_empty() {
                 return Err(document.import_error().to_owned());
             }
@@ -282,9 +325,12 @@ fn run_op(document: &mut Document, op: &Object, warnings: &mut Vec<String>) -> O
                 return Err("that source span plays in several places; zoom each with output times".into());
             }
             let (from, to) = spans[0];
-            let level = optional_number(op, "level")?.unwrap_or(2.0);
+            let level = zoom_level(op)?.unwrap_or(2.0);
             let target = if op.value("target").is_undefined() { ZoomTarget::Auto } else { zoom_target(op.value("target"))? };
-            let (start, end) = zoom_source_range(document, from, to);
+            let (start, end) = (document.output_to_source(from), zoom_source_end(document, to));
+            if end - start < 1.0 - 1e-6 {
+                return Err("a zoom must cover at least a second of the recording".into());
+            }
             let overlapping: Vec<&str> = document
                 .project()
                 .zooms
@@ -299,11 +345,7 @@ fn run_op(document: &mut Document, op: &Object, warnings: &mut Vec<String>) -> O
             if id.is_empty() {
                 return Err("no room for a zoom there: zooms can't overlap, last under a second, or sit on an inserted video".into());
             }
-            if end - start >= 1.0 {
-                document.resize_zoom(&id, start, end);
-            } else {
-                warnings.push(format!("zoom {id}: zooms last at least a second of the recording"));
-            }
+            document.resize_zoom(&id, start, end.max(start + 1.0));
             document.set_zoom_level(&id, level, false);
             document.set_zoom_target(&id, target);
             with("id", id)
@@ -327,14 +369,14 @@ fn run_op(document: &mut Document, op: &Object, warnings: &mut Vec<String>) -> O
                         start = document.output_to_source(from);
                     }
                     if let Some(to) = to {
-                        end = zoom_source_range(document, to, to).1;
+                        end = zoom_source_end(document, to);
                     }
                 }
                 if !document.resize_zoom(&id, start, end) {
                     return Err("a zoom lasts at least a second and can't overlap its neighbours".into());
                 }
             }
-            if let Some(level) = optional_number(op, "level")? {
+            if let Some(level) = zoom_level(op)? {
                 document.set_zoom_level(&id, level, false);
             }
             if !op.value("target").is_undefined() {
@@ -382,18 +424,29 @@ fn run_op(document: &mut Document, op: &Object, warnings: &mut Vec<String>) -> O
 }
 
 /// Runs the operations in order. The error names the operation that failed; the document may
-/// then hold some of the edits, so the caller must not save it.
-pub fn apply_ops(document: &mut Document, ops: &[Object]) -> Result<(Vec<Value>, Vec<String>), String> {
+/// then hold some of the edits, so the caller must not save it. Videos the run copied into
+/// the bundle are removed again on failure; a `dry_run` copies none.
+pub fn apply_ops(document: &mut Document, ops: &[Object], dry_run: bool) -> Result<(Vec<Value>, Vec<String>), String> {
+    let mut run = Run { dry_run, ..Run::default() };
     let mut results = Vec::new();
-    let mut warnings = Vec::new();
     for (index, op) in ops.iter().enumerate() {
         let name = op.value("op").to_string_or("");
-        let mut result = run_op(document, op, &mut warnings).map_err(|error| format!("operation {} ({name}): {error}", index + 1))?;
+        let outcome = run_op(document, op, &mut run);
         document.take_effects();
-        result.insert("op", name.as_str());
-        results.push(result.into());
+        match outcome {
+            Ok(mut result) => {
+                result.insert("op", name.as_str());
+                results.push(result.into());
+            }
+            Err(error) => {
+                for copy in &run.copied {
+                    let _ = std::fs::remove_file(copy);
+                }
+                return Err(format!("operation {} ({name}): {error}", index + 1));
+            }
+        }
     }
-    Ok((results, warnings))
+    Ok((results, run.warnings))
 }
 
 /// `omareel apply`: the JSON report, and whether it succeeded. Nothing is saved on failure or
@@ -420,7 +473,7 @@ pub fn run_on(
         Ok(document) => document,
         Err(error) => return failure(error),
     };
-    let (results, warnings) = match apply_ops(&mut document, &ops) {
+    let (results, warnings) = match apply_ops(&mut document, &ops, dry_run) {
         Ok(done) => done,
         Err(error) => return failure(error),
     };

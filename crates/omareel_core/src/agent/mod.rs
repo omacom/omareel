@@ -25,13 +25,14 @@ pub(crate) fn ms(t: f64) -> f64 {
     if t.is_finite() { (t * 1000.0).round() / 1000.0 } else { t }
 }
 
-/// Opens a bundle the way the editor does, without starting any of its background work.
+/// Opens a bundle the way the editor does, without starting any of its background work or
+/// writing anything (a project.json that needs migrating is migrated in memory).
 pub fn open_document(bundle: &str) -> Result<Document, String> {
     if !std::path::Path::new(bundle).is_dir() {
         return Err(format!("bundle does not exist: {bundle}"));
     }
     let probes = Probes::new(Arc::new(crate::media_probe::probe_video));
-    let document = Document::open(bundle, &probes)?;
+    let document = Document::open_read_only(bundle, &probes)?;
     // Nothing runs the effects the editor would perform (players, timers).
     document.take_effects();
     Ok(document)

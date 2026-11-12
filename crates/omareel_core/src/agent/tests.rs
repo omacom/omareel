@@ -5,7 +5,7 @@ use super::apply::{apply_ops, parse_ops};
 use super::describe::describe;
 use crate::compat::qdir::tests::TempDir;
 use crate::compat::qjson::{Object, Value};
-use crate::editor::{Document, Locations, MediaInfo, Probes, VideoInfo};
+use crate::editor::{DiskChange, Document, Locations, MediaInfo, Probes, VideoInfo};
 use std::sync::Arc;
 
 fn fixture(file: &str) -> String {
@@ -55,9 +55,7 @@ fn operations_edit_like_the_editor() {
     let dir = TempDir::new("agent-apply");
     let bundle = bundle(&dir);
     let mut document = open(&bundle, &dir);
-    let (results, warnings) = apply_ops(
-        &mut document,
-        &ops(r#"[
+    let (results, warnings) = apply_ops(&mut document, &ops(r#"[
             {"op": "clear-zooms"},
             {"op": "split", "at": 3},
             {"op": "delete", "from": 4, "to": 6},
@@ -65,8 +63,7 @@ fn operations_edit_like_the_editor() {
             {"op": "zoom", "from": 1, "to": 2.5, "level": 2.5, "target": {"x": 0.2, "y": 0.3}},
             {"op": "set", "path": "background.blur", "value": 0.1},
             {"op": "set", "path": "background.nonsense", "value": 1}
-        ]"#),
-    )
+        ]"#), false)
     .unwrap();
     assert_eq!(spans(&document), vec![(0.0, 3.0, 1.0), (3.0, 4.0, 1.0), (6.0, 10.0, 2.0)]);
     assert_eq!(document.duration(), 6.0);
@@ -75,7 +72,7 @@ fn operations_edit_like_the_editor() {
     assert!(!zoom.automatic_target);
     assert_eq!(document.project().background.blur, 0.1);
     assert_eq!(results.len(), 7);
-    let error = apply_ops(&mut document, &ops(r#"{"op": "zoom", "from": 2, "to": 3}"#)).unwrap_err();
+    let error = apply_ops(&mut document, &ops(r#"{"op": "zoom", "from": 2, "to": 3}"#), false).unwrap_err();
     assert!(error.contains("zooms can't overlap; edit or remove z-"), "{error}");
     assert_eq!(warnings.len(), 1, "{warnings:?}");
     assert!(warnings[0].starts_with("set background.nonsense"));
@@ -86,14 +83,11 @@ fn source_times_stay_put_across_cuts() {
     let dir = TempDir::new("agent-source");
     let bundle = bundle(&dir);
     let mut document = open(&bundle, &dir);
-    apply_ops(
-        &mut document,
-        &ops(r#"[
+    apply_ops(&mut document, &ops(r#"[
             {"op": "delete", "from": 1, "to": 2, "timeline": "source"},
             {"op": "delete", "from": 5, "to": 7, "timeline": "source"},
             {"op": "split", "at": 8, "timeline": "source"}
-        ]"#),
-    )
+        ]"#), false)
     .unwrap();
     assert_eq!(spans(&document), vec![(0.0, 1.0, 1.0), (2.0, 5.0, 1.0), (7.0, 8.0, 1.0), (8.0, 10.0, 1.0)]);
 }
@@ -103,12 +97,12 @@ fn a_failing_operation_says_which_and_why() {
     let dir = TempDir::new("agent-fail");
     let bundle = bundle(&dir);
     let mut document = open(&bundle, &dir);
-    let error = apply_ops(&mut document, &ops(r#"[{"op": "split", "at": 5}, {"op": "speed", "at": 1, "speed": 1.5}]"#))
+    let error = apply_ops(&mut document, &ops(r#"[{"op": "split", "at": 5}, {"op": "speed", "at": 1, "speed": 1.5}]"#), false)
         .unwrap_err();
     assert!(error.starts_with("operation 2 (speed): speed must be one of 0.5, 0.75, 1,"), "{error}");
-    let error = apply_ops(&mut document, &ops(r#"{"op": "delete", "from": 0, "to": 10}"#)).unwrap_err();
+    let error = apply_ops(&mut document, &ops(r#"{"op": "delete", "from": 0, "to": 10}"#), false).unwrap_err();
     assert!(error.contains("remove all of the recording"), "{error}");
-    let error = apply_ops(&mut document, &ops(r#"{"op": "split", "at": 99}"#)).unwrap_err();
+    let error = apply_ops(&mut document, &ops(r#"{"op": "split", "at": 99}"#), false).unwrap_err();
     assert!(error.contains("outside the video"), "{error}");
     assert!(parse_ops(b"[1]").is_err());
 }
@@ -135,7 +129,7 @@ fn describe_maps_activity_onto_the_edited_timeline() {
     let dir = TempDir::new("agent-describe");
     let bundle = bundle(&dir);
     let mut document = open(&bundle, &dir);
-    apply_ops(&mut document, &ops(r#"{"op": "delete", "from": 0, "to": 1}"#)).unwrap();
+    apply_ops(&mut document, &ops(r#"{"op": "delete", "from": 0, "to": 1}"#), false).unwrap();
     let summary = Value::Object(describe(&document));
     assert_eq!(summary.get("output").get("duration").to_double(0.0), 9.0);
     let clips = summary.get("clips").to_array();
@@ -163,19 +157,19 @@ fn an_open_editor_takes_in_a_project_written_elsewhere() {
     let mut editor = open(&bundle, &dir);
     assert!(editor.save_now());
     editor.take_effects();
-    assert!(!editor.reload_if_changed_on_disk(), "its own save is not a change");
+    assert_eq!(editor.reload_if_changed_on_disk(), DiskChange::Unchanged, "its own save is not a change");
 
     // An unsaved edit in the editor, then another program's edit on disk.
     editor.set_project_value("background.blur", Value::from(0.05), false);
     editor.take_effects();
     std::thread::sleep(std::time::Duration::from_millis(20));
     let mut other = open(&bundle, &dir);
-    apply_ops(&mut other, &ops(r#"{"op": "split", "at": 4}"#)).unwrap();
+    apply_ops(&mut other, &ops(r#"{"op": "split", "at": 4}"#), false).unwrap();
     assert!(other.save_now());
 
-    assert!(editor.reload_if_changed_on_disk());
+    assert_eq!(editor.reload_if_changed_on_disk(), DiskChange::Reloaded);
     assert_eq!(editor.project().clips.len(), 2);
-    assert!(!editor.reload_if_changed_on_disk(), "taken in once");
+    assert_eq!(editor.reload_if_changed_on_disk(), DiskChange::Unchanged, "taken in once");
     // The editor's own state before the reload is one undo away.
     editor.undo();
     assert_eq!(editor.project().clips.len(), 1);
@@ -186,5 +180,71 @@ fn an_open_editor_takes_in_a_project_written_elsewhere() {
     // A half-written file is ignored until it parses.
     std::thread::sleep(std::time::Duration::from_millis(20));
     std::fs::write(format!("{bundle}/project.json"), b"{\"clips\": [").unwrap();
-    assert!(!editor.reload_if_changed_on_disk());
+    assert_eq!(editor.reload_if_changed_on_disk(), DiskChange::Unreadable);
+    assert_eq!(editor.reload_if_changed_on_disk(), DiskChange::Unreadable, "read again until it parses");
+    assert!(editor.disk_changed());
+
+    // What opening corrects is corrected on a reload too: a timeline of inserted videos only
+    // gets the recording back, and audio the recording lacks (the fixture has none) stays off.
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    let mut project = editor.project().to_json();
+    let clips = Value::array(vec![Value::Object(Object::from_iter([
+        ("id", Value::from("m1")),
+        ("in", 0.0.into()),
+        ("out", 2.0.into()),
+        ("speed", 1.0.into()),
+        ("media", "media/x.mp4".into()),
+    ]))]);
+    project.insert("clips", clips);
+    let mut audio = project.value("audio").to_object();
+    audio.insert("desktop", true);
+    project.insert("audio", audio);
+    std::fs::write(format!("{bundle}/project.json"), Value::Object(project).to_json(crate::compat::qjson::Format::Indented)).unwrap();
+    assert_eq!(editor.reload_if_changed_on_disk(), DiskChange::Reloaded);
+    let ids: Vec<&str> = editor.project().clips.iter().map(|clip| clip.id.as_str()).collect();
+    assert_eq!(ids, ["c1", "m1"]);
+    assert!(!editor.project().audio.desktop);
+}
+
+#[test]
+fn zoom_edges_levels_and_ranges() {
+    let dir = TempDir::new("agent-zoom");
+    let bundle = bundle(&dir);
+    let mut document = open(&bundle, &dir);
+    // Cut source 4–6, so output 4 is where two clips meet.
+    apply_ops(&mut document, &ops(r#"[{"op": "clear-zooms"}, {"op": "delete", "from": 4, "to": 6}, {"op": "zoom", "from": 1, "to": 3}]"#), false).unwrap();
+    let id = document.project().zooms[0].id.clone();
+    let edit = format!(r#"{{"op": "edit-zoom", "id": "{id}", "to": 4}}"#);
+    apply_ops(&mut document, &ops(&edit), false).unwrap();
+    let zoom = &document.project().zooms[0];
+    assert!((zoom.end - 4.0).abs() < 1e-3, "the zoom stays before the cut: {zoom:?}");
+    apply_ops(&mut document, &ops(r#"{"op": "zoom", "from": 4, "to": 5.5}"#), false).unwrap();
+    for (json, expected) in [
+        (r#"{"op": "zoom", "from": 6, "to": 6.5}"#, "at least a second"),
+        (r#"{"op": "zoom", "from": 6, "to": 7.5, "level": 6}"#, "level"),
+        (r#"{"op": "zoom", "from": 7, "to": 9}"#, "outside the video"),
+        (r#"{"op": "delete", "from": 7, "to": 9}"#, "outside the video"),
+    ] {
+        let error = apply_ops(&mut document, &ops(json), false).unwrap_err();
+        assert!(error.contains(expected), "{json}: {error}");
+    }
+}
+
+#[test]
+fn inserts_copy_nothing_on_a_dry_run_or_a_failed_batch() {
+    let dir = TempDir::new("agent-insert");
+    let bundle = bundle(&dir);
+    let video = dir.join("clip.mp4");
+    std::fs::write(&video, b"video").unwrap();
+    let insert = format!(r#"[{{"op": "insert", "file": "{video}", "at": 2}}, {{"op": "bogus"}}]"#);
+    let mut document = open(&bundle, &dir);
+    apply_ops(&mut document, &ops(&insert)[..1], true).unwrap();
+    assert_eq!(document.project().clips.iter().filter(|clip| clip.is_media()).count(), 1);
+    assert!(!std::path::Path::new(&format!("{bundle}/media/clip.mp4")).exists());
+    let mut document = open(&bundle, &dir);
+    assert!(apply_ops(&mut document, &ops(&insert), false).is_err());
+    assert!(!std::path::Path::new(&format!("{bundle}/media/clip.mp4")).exists());
+    let mut document = open(&bundle, &dir);
+    apply_ops(&mut document, &ops(&insert)[..1], false).unwrap();
+    assert!(std::path::Path::new(&format!("{bundle}/media/clip.mp4")).exists());
 }
