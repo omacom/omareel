@@ -18,7 +18,8 @@ Rectangle {
         {name:"Clip", meta:"Trim and speed", icon:"film.svg"},
         {name:"Camera", meta:"Webcam bubble", icon:"camera.svg"},
         {name:"Keystrokes", meta:"Shortcut overlay", icon:"keyboard.svg"},
-        {name:"Audio", meta:"Tracks and volume", icon:"volume-2.svg"}
+        {name:"Audio", meta:"Tracks and volume", icon:"volume-2.svg"},
+        {name:"Speech", meta:"Captions, pauses, and filler words", icon:"captions.svg"}
     ]
 
     onSectionChanged: {
@@ -206,7 +207,8 @@ Rectangle {
                                 : root.displayedSection === 3 ? zoomPanel
                                 : root.displayedSection === 4 ? clipPanel
                                 : root.displayedSection === 5 ? cameraPanel
-                                : root.displayedSection === 6 ? keystrokesPanel : audioPanel
+                                : root.displayedSection === 6 ? keystrokesPanel
+                                : root.displayedSection === 7 ? audioPanel : speechPanel
                         }
                     }
                 }
@@ -222,6 +224,7 @@ Rectangle {
     Component { id: cameraPanel; CameraPanel { } }
     Component { id: keystrokesPanel; KeystrokesPanel { } }
     Component { id: audioPanel; AudioPanel { } }
+    Component { id: speechPanel; SpeechPanel { } }
 
     Connections {
         target: editor

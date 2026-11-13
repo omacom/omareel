@@ -183,6 +183,9 @@ pub struct Project {
     pub audio: Audio,
     pub camera: Camera,
     pub export_settings: ExportSettings,
+    /// Captions from the transcript; `None` until the user first changes them, so projects
+    /// that never did keep their bytes.
+    pub captions: Option<Captions>,
 }
 
 impl Project {
@@ -207,6 +210,7 @@ impl Default for Project {
             audio: Audio::default(),
             camera: Camera::default(),
             export_settings: ExportSettings::default(),
+            captions: None,
         }
     }
 }

@@ -123,7 +123,7 @@ static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplicat
         {QStringLiteral("background"), 0}, {QStringLiteral("shape"), 1},
         {QStringLiteral("cursor"), 2}, {QStringLiteral("zoom"), 3},
         {QStringLiteral("clip"), 4}, {QStringLiteral("camera"), 5},
-        {QStringLiteral("keystrokes"), 6}, {QStringLiteral("audio"), 7}
+        {QStringLiteral("keystrokes"), 6}, {QStringLiteral("audio"), 7}, {QStringLiteral("speech"), 8}
     };
     const QString panel = qEnvironmentVariable("OMAREEL_SCREENSHOT_PANEL").toLower();
     if (panels.contains(panel)) {
@@ -262,9 +262,12 @@ static int exportCommand(const QStringList &arguments)
         else return usage(QStringLiteral("unknown export option %1").arg(arg));
     }
     if (options.outputPath.isEmpty()) return usage(QStringLiteral("export requires -o <file>"));
+    if (options.outputPath.endsWith(QStringLiteral(".srt"), Qt::CaseInsensitive)
+        || options.outputPath.endsWith(QStringLiteral(".vtt"), Qt::CaseInsensitive))
+        return omareel::cli::exportSubtitles(options.bundlePath.toStdString(), options.outputPath.toStdString());
     if (!options.outputPath.endsWith(QStringLiteral(".mp4"), Qt::CaseInsensitive)
         && !options.outputPath.endsWith(QStringLiteral(".gif"), Qt::CaseInsensitive))
-        return usage(QStringLiteral("export output must end in .mp4 or .gif"));
+        return usage(QStringLiteral("export output must end in .mp4, .gif, .srt or .vtt"));
     if (options.fps < 0 || options.width < 0 || options.gifFps < 0 || options.gifWidth < 0)
         return usage(QStringLiteral("frame rate and size options must be positive"));
     const QStringList qualities{QStringLiteral("low"), QStringLiteral("medium"), QStringLiteral("high"),
@@ -464,6 +467,12 @@ int main(int argc, char **argv)
     }
     // The recorder daemon shows nothing, so it has no display connection: its screen capture
     // opens the only one it needs.
+    // Transcribing needs no Qt application.
+    if (argc > 1 && std::strcmp(argv[1], "transcribe") == 0) {
+        ::rust::Vec<::rust::String> arguments;
+        for (int i = 2; i < argc; ++i) arguments.push_back(::rust::String(argv[i]));
+        return omareel::cli::transcribe(std::move(arguments));
+    }
     if (argc > 1 && std::strcmp(argv[1], "__record-daemon") == 0) {
         QCoreApplication app(argc, argv);
         app.setApplicationName(QStringLiteral("omareel"));

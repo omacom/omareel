@@ -26,6 +26,7 @@ use omareel_core::media_probe;
 use omareel_core::project::Project;
 use std::cell::RefCell;
 use std::collections::VecDeque;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Instant;
@@ -154,12 +155,26 @@ pub mod qobject {
         #[qproperty(QMap_QString_QVariant, cursor, READ = preview_cursor, NOTIFY = composition_changed)]
         #[qproperty(QList_QVariant, ripples, READ = preview_ripples, NOTIFY = composition_changed)]
         #[qproperty(QList_QVariant, keystroke_pills, READ = preview_keystroke_pills, NOTIFY = composition_changed)]
+        #[qproperty(QMap_QString_QVariant, caption, READ = preview_caption, NOTIFY = composition_changed)]
         #[qproperty(bool, software_rendering, READ = software_rendering, CONSTANT)]
         #[qproperty(bool, camera_available, READ = has_camera, CONSTANT)]
         #[qproperty(bool, camera_visible, READ = camera_visible, NOTIFY = composition_changed)]
         #[qproperty(i32, camera_source_width, READ = camera_source_width, CONSTANT)]
         #[qproperty(i32, camera_source_height, READ = camera_source_height, CONSTANT)]
         #[qproperty(QString, camera_status, READ = camera_status, CONSTANT)]
+        // Speech: the transcript, captions, and trimming pauses and filler words.
+        #[qproperty(bool, has_transcript, READ = has_transcript, NOTIFY = speech_changed)]
+        #[qproperty(QString, transcript_summary, READ = transcript_summary, NOTIFY = speech_changed)]
+        #[qproperty(i32, pause_count, READ = pause_count, NOTIFY = speech_changed)]
+        #[qproperty(i32, filler_count, READ = filler_count, NOTIFY = speech_changed)]
+        // The speech is measured and the screen checked, so pause_count is known.
+        #[qproperty(bool, pauses_ready, READ = pauses_ready, NOTIFY = speech_changed)]
+        // The transcript's word times are measured, so filler words can be cut.
+        #[qproperty(bool, can_remove_fillers, READ = can_remove_fillers, NOTIFY = speech_changed)]
+        // "", "analyzing", "transcribing", "done", "unavailable", "failed".
+        #[qproperty(QString, transcription_state, READ = transcription_state, NOTIFY = transcription_changed)]
+        #[qproperty(QString, transcription_message, READ = transcription_message, NOTIFY = transcription_changed)]
+        #[qproperty(f64, transcription_progress, READ = transcription_progress, NOTIFY = transcription_changed)]
         type Editor = super::EditorRust;
 
         #[qsignal]
@@ -210,6 +225,10 @@ pub mod qobject {
         fn autosaved(self: Pin<&mut Editor>, path: QString);
         #[qsignal]
         fn error_occurred(self: Pin<&mut Editor>, message: QString);
+        #[qsignal]
+        fn speech_changed(self: Pin<&mut Editor>);
+        #[qsignal]
+        fn transcription_changed(self: Pin<&mut Editor>);
 
         fn is_valid(self: &Editor) -> bool;
         fn error_string(self: &Editor) -> QString;
@@ -262,11 +281,21 @@ pub mod qobject {
         fn preview_cursor(self: &Editor) -> QMap_QString_QVariant;
         fn preview_ripples(self: &Editor) -> QList_QVariant;
         fn preview_keystroke_pills(self: &Editor) -> QList_QVariant;
+        fn preview_caption(self: &Editor) -> QMap_QString_QVariant;
         fn software_rendering(self: &Editor) -> bool;
         fn camera_source_width(self: &Editor) -> i32;
         fn camera_source_height(self: &Editor) -> i32;
         fn camera_status(self: &Editor) -> QString;
         fn camera_visible(self: &Editor) -> bool;
+        fn has_transcript(self: &Editor) -> bool;
+        fn transcript_summary(self: &Editor) -> QString;
+        fn pause_count(self: &Editor) -> i32;
+        fn filler_count(self: &Editor) -> i32;
+        fn pauses_ready(self: &Editor) -> bool;
+        fn can_remove_fillers(self: &Editor) -> bool;
+        fn transcription_state(self: &Editor) -> QString;
+        fn transcription_message(self: &Editor) -> QString;
+        fn transcription_progress(self: &Editor) -> f64;
         // Test hook (no UI use).
         fn screen_frame_times_ready_for_tests(self: &Editor) -> bool;
 
@@ -412,6 +441,17 @@ pub mod qobject {
         fn export_to_with_settings(self: Pin<&mut Editor>, path: &QString, settings: &QMap_QString_QVariant);
         #[qinvokable]
         fn default_export_path(self: &Editor, format: &QString) -> QString;
+        // Transcribes the recording again in the background.
+        #[qinvokable]
+        fn transcribe(self: Pin<&mut Editor>);
+        // Cuts the pauses (or filler words) out as one undo step; how many.
+        #[qinvokable]
+        fn trim_pauses(self: Pin<&mut Editor>) -> i32;
+        #[qinvokable]
+        fn remove_filler_words(self: Pin<&mut Editor>) -> i32;
+        // Writes the captions beside the default export ("srt" or "vtt"); the path, or empty.
+        #[qinvokable]
+        fn save_subtitles(self: &Editor, format: &QString) -> QString;
         #[qinvokable]
         fn format_time(self: &Editor, seconds: f64) -> QString;
         #[qinvokable]
@@ -601,6 +641,16 @@ pub struct EditorRust {
     project_map: RefCell<Option<(u64, QMap<QMapPair_QString_QVariant>)>>,
     workers: RefCell<Vec<JoinHandle<()>>>,
     wallpaper_jobs: Arc<WallpaperQueue>,
+    /// Stops the speech work (and kills what it runs) when the editor goes.
+    speech_control: omareel_core::transcript::job::Control,
+    /// Holds the speech work back while an export runs.
+    export_busy: Arc<AtomicBool>,
+    speech_running: bool,
+    /// The screen is being checked for stillness during silences (pause trimming needs it).
+    stillness_running: bool,
+    transcription_state: String,
+    transcription_message: String,
+    transcription_progress: f64,
 }
 
 impl EditorRust {
@@ -624,6 +674,13 @@ impl EditorRust {
             project_map: RefCell::new(None),
             workers: RefCell::new(Vec::new()),
             wallpaper_jobs: Arc::new(WallpaperQueue::default()),
+            speech_control: omareel_core::transcript::job::Control::default(),
+            export_busy: Arc::new(AtomicBool::new(false)),
+            speech_running: false,
+            stillness_running: false,
+            transcription_state: String::new(),
+            transcription_message: String::new(),
+            transcription_progress: 0.0,
         }
     }
 
@@ -656,12 +713,15 @@ impl EditorRust {
 impl Drop for EditorRust {
     /// `~Editor`: unsaved edits are written, then the workers are waited for. Nothing is
     /// emitted: the object is being destroyed. EditorBase cancels a running export after this.
+    /// The speech work is not waited for: it is stopped and what it runs killed at once, and
+    /// its threads end on their own.
     fn drop(&mut self) {
         if let Some(document) = self.document.as_mut() {
             if document.dirty() {
                 document.save_now();
             }
         }
+        self.speech_control.stop();
         for worker in self.workers.get_mut().drain(..) {
             let _ = worker.join();
         }
@@ -715,6 +775,7 @@ impl qobject::Editor {
             self.as_mut().playback_load_camera(&camera_path);
         }
         self.start_frame_times();
+        self.as_mut().start_speech(false);
         self.as_mut().rebuild_motion();
         self.as_mut().call_later(RELEASE_THUMBNAILS_CALL, THUMBNAIL_HOLD_MS);
         self.as_mut().call_later(FINISH_LOADING_CALL, 1500);
@@ -741,7 +802,10 @@ impl qobject::Editor {
             Effect::UpdateInsertAudio => self.as_mut().update_insert_audio(),
             Effect::DirtyChanged => self.as_mut().dirty_changed(),
             Effect::StartAutosaveTimer => self.as_mut().start_editor_timer(AUTOSAVE_TIMER),
-            Effect::ProjectChanged => self.as_mut().project_changed(),
+            Effect::ProjectChanged => {
+                self.as_mut().project_changed();
+                self.as_mut().speech_changed();
+            }
             Effect::DurationChanged => self.as_mut().duration_changed(),
             Effect::OutputSizeChanged => self.as_mut().output_size_changed(),
             Effect::StartMotionTimer => self.as_mut().start_editor_timer(MOTION_TIMER),
@@ -754,12 +818,17 @@ impl qobject::Editor {
             Effect::WallpapersChanged => self.as_mut().wallpapers_changed(),
             Effect::ImportingChanged => self.as_mut().importing_changed(),
             Effect::VideoThumbnailRevisionChanged => self.as_mut().video_thumbnail_revision_changed(),
-            Effect::ExportingChanged => self.as_mut().exporting_changed(),
+            Effect::ExportingChanged => {
+                let exporting = self.exporting();
+                self.export_busy.store(exporting, Ordering::Relaxed);
+                self.as_mut().exporting_changed();
+            }
             Effect::ExportProgressChanged => self.as_mut().export_progress_changed(),
             Effect::ExportErrorChanged => self.as_mut().export_error_changed(),
             Effect::ExportFinished(path) => self.as_mut().export_finished(qstring(&path)),
             Effect::ErrorOccurred(message) => self.as_mut().error_occurred(qstring(&message)),
             Effect::Autosaved(path) => self.as_mut().autosaved(qstring(&path)),
+            Effect::TranscriptChanged => self.as_mut().speech_changed(),
             Effect::Seek(output_time) => self.as_mut().seek(output_time),
             Effect::Pause => self.as_mut().pause(),
             Effect::SyncCamera { screen_source_time, force } => self.as_mut().sync_camera(screen_source_time, force),
@@ -785,6 +854,184 @@ impl qobject::Editor {
                 }
             });
         });
+    }
+
+    /// Measures where the recording speaks and checks the screen during the silences (both for
+    /// pause trimming) and, when there is no transcript yet or `force` asks, transcribes it with
+    /// Omarchy's dictation engine, all on threads of their own. Everything waits while a
+    /// recording or an export runs (the editor is opened ahead during a recording), stopping
+    /// what it runs then and taking it up again after. Closing the editor never waits for it:
+    /// it is stopped and its commands killed. `OMAREEL_NO_TRANSCRIBE=1` leaves the transcript
+    /// alone unless asked.
+    fn start_speech(mut self: Pin<&mut Self>, force: bool) {
+        use omareel_core::transcript::{audio, backend, stillness, vad};
+        if self.speech_running {
+            return;
+        }
+        let Some(document) = self.document.as_ref() else { return };
+        if !document.has_audio() {
+            return;
+        }
+        let transcribe = force || (document.transcript().is_none() && qenv::int_value_or_zero("OMAREEL_NO_TRANSCRIBE") != 1);
+        let measure = document.speech_regions().is_none();
+        let check_screen = document.still_windows().is_none() && !self.stillness_running;
+        if !transcribe && !measure && !check_screen {
+            return;
+        }
+        let screen = document.video_path().to_owned();
+        let bundle = document.bundle_path().to_owned();
+        let duration = document.recording().source_duration;
+        let geometry = (document.source_width(), document.source_height(), document.capture_scale());
+        // Silences already known (the speech was measured on an earlier run).
+        let known_silences = document.silences_to_check();
+        let export_busy = Arc::clone(&self.export_busy);
+        let hold: Arc<dyn Fn() -> bool + Send + Sync> = Arc::new(move || {
+            export_busy.load(Ordering::Relaxed) || omareel_record::recorder::state::is_recording()
+        });
+        let mut control = self.speech_control.clone();
+        control.hold = Some(hold);
+        {
+            let mut rust = self.as_mut().rust_mut();
+            rust.speech_running = true;
+            rust.stillness_running |= check_screen;
+            if transcribe {
+                rust.transcription_state = "analyzing".into();
+                rust.transcription_message.clear();
+                rust.transcription_progress = 0.0;
+            }
+        }
+        if transcribe {
+            self.as_mut().transcription_changed();
+        }
+        self.as_mut().speech_changed();
+        let thread = self.qt_thread();
+        let screen_for_audio = screen.clone();
+        // The screen check reads the video, the rest the sound: they run side by side.
+        let start_stillness = {
+            let thread = thread.clone();
+            let control = control.clone();
+            move |silences: Vec<(f64, f64)>| {
+                let spawned = std::thread::Builder::new().name("omareel-stillness".into()).spawn(move || {
+                    let still = match stillness::still_windows(&screen, &silences, duration, geometry, &control) {
+                        Ok(still) => Some(still),
+                        Err(_) if control.cancelled() => None,
+                        Err(error) => {
+                            eprintln!("omareel: could not check the screen for pauses: {error}");
+                            Some(Vec::new())
+                        }
+                    };
+                    let _ = thread.queue(move |mut editor| {
+                        editor.as_mut().rust_mut().stillness_running = false;
+                        match still {
+                            Some(still) => {
+                                editor.edit(|document| document.set_still_windows(still));
+                            }
+                            None => editor.as_mut().speech_changed(),
+                        }
+                    });
+                });
+                spawned.is_ok()
+            }
+        };
+        let mut start_stillness = Some(start_stillness);
+        let check_thread = thread.clone();
+        let mut check = move |silences: Vec<(f64, f64)>| {
+            if let Some(start) = start_stillness.take() {
+                if !start(silences) {
+                    let _ = check_thread.queue(|mut editor| editor.as_mut().rust_mut().stillness_running = false);
+                }
+            }
+        };
+        if check_screen && !measure {
+            check(known_silences.unwrap_or_default());
+        }
+        let worker_thread = thread.clone();
+        let work = move || {
+            let thread = worker_thread;
+            let status = |state: &'static str, message: String, progress: f64| {
+                let _ = thread.queue(move |mut editor| {
+                    let mut rust = editor.as_mut().rust_mut();
+                    rust.transcription_state = state.into();
+                    rust.transcription_message = message;
+                    rust.transcription_progress = progress;
+                    editor.as_mut().transcription_changed();
+                });
+            };
+            let finish = || {
+                let _ = thread.queue(|mut editor| {
+                    let mut rust = editor.as_mut().rust_mut();
+                    rust.speech_running = false;
+                    if rust.transcription_state == "analyzing" {
+                        rust.transcription_state.clear();
+                        editor.as_mut().transcription_changed();
+                    }
+                });
+            };
+            let audio = match audio::extract_with(&screen_for_audio, &control) {
+                Ok(audio) => audio,
+                Err(error) => {
+                    if transcribe && !control.cancelled() {
+                        status("failed", error, 0.0);
+                    }
+                    if check_screen && measure {
+                        let _ = thread.queue(|mut editor| editor.as_mut().rust_mut().stillness_running = false);
+                    }
+                    finish();
+                    return;
+                }
+            };
+            if measure {
+                let regions = vad::speech_regions(&audio.samples, &vad::VadSettings::default());
+                if check_screen {
+                    check(stillness::silences_to_check(&regions, duration));
+                }
+                let _ = thread.queue(move |editor| {
+                    editor.edit(|document| document.set_speech_regions(regions));
+                });
+            }
+            if !transcribe || control.cancelled() {
+                finish();
+                return;
+            }
+            let engines = backend::plan(backend::Choice::Auto);
+            if engines.is_empty() {
+                status("unavailable", "No speech-to-text engine: choose one in Omarchy's Setup › Defaults › Dictation".into(), 0.0);
+                finish();
+                return;
+            }
+            status("transcribing", String::new(), 0.0);
+            let progress_thread = thread.clone();
+            let progress: Arc<dyn Fn(f64) + Send + Sync> = Arc::new(move |fraction| {
+                let _ = progress_thread.queue(move |mut editor| {
+                    editor.as_mut().rust_mut().transcription_progress = fraction;
+                    editor.as_mut().transcription_changed();
+                });
+            });
+            let control = backend::Control { progress: Some(progress), ..control.clone() };
+            match backend::transcribe_audio(&audio, &engines, &control) {
+                Ok(transcript) => {
+                    let saved = transcript.save(&bundle);
+                    let empty = transcript.is_empty();
+                    let _ = thread.queue(move |editor| {
+                        editor.edit(|document| document.set_transcript(Some(transcript)));
+                    });
+                    match saved {
+                        Err(error) => status("failed", error, 1.0),
+                        Ok(()) if empty => status("done", "No speech found".into(), 1.0),
+                        Ok(()) => status("done", String::new(), 1.0),
+                    }
+                }
+                Err(_) if control.cancelled() => {}
+                Err(error) => status("failed", error, 0.0),
+            }
+            finish();
+        };
+        // Not one of `workers`: closing the editor must not wait for it.
+        if std::thread::Builder::new().name("omareel-speech".into()).spawn(work).is_err() {
+            let mut rust = self.as_mut().rust_mut();
+            rust.speech_running = false;
+            rust.stillness_running = false;
+        }
     }
 
     /// `rebuildMotion()`: builds the motion track off the GUI thread, unless a build runs.
@@ -1218,6 +1465,11 @@ impl qobject::Editor {
             .collect()
     }
 
+    fn preview_caption(&self) -> QMap<QMapPair_QString_QVariant> {
+        let Some(document) = self.document.as_ref() else { return QMap::default() };
+        crate::export::caption_map(&document.preview_caption(), &document.captions())
+    }
+
     fn preview_keystroke_pills(&self) -> QList<QVariant> {
         let Some(document) = self.document.as_ref() else { return QList::default() };
         document
@@ -1254,6 +1506,93 @@ impl qobject::Editor {
 
     fn camera_visible(&self) -> bool {
         self.document.as_ref().is_some_and(Document::camera_visible)
+    }
+
+    fn has_transcript(&self) -> bool {
+        self.document.as_ref().is_some_and(|document| document.transcript().is_some())
+    }
+
+    /// "voxtype · base.en · 120 words, estimated timing", or empty without a transcript.
+    fn transcript_summary(&self) -> QString {
+        let Some(transcript) = self.document.as_ref().and_then(Document::transcript) else { return QString::default() };
+        let mut parts = vec![transcript.backend.clone()];
+        if !transcript.model.is_empty() {
+            parts.push(transcript.model.clone());
+        }
+        let words = transcript.words().count();
+        let timing = match transcript.word_timing {
+            omareel_core::transcript::WordTiming::Measured => "",
+            omareel_core::transcript::WordTiming::Estimated => ", estimated timing",
+        };
+        parts.push(format!("{words} word{}{timing}", if words == 1 { "" } else { "s" }));
+        qstring(&parts.join(" · "))
+    }
+
+    fn pause_count(&self) -> i32 {
+        self.document.as_ref().map_or(0, |document| document.pause_ranges(&Default::default()).len() as i32)
+    }
+
+    fn filler_count(&self) -> i32 {
+        self.document.as_ref().map_or(0, |document| document.filler_ranges().len() as i32)
+    }
+
+    fn pauses_ready(&self) -> bool {
+        self.document.as_ref().is_some_and(Document::pauses_ready)
+    }
+
+    fn can_remove_fillers(&self) -> bool {
+        self.document.as_ref().is_some_and(Document::can_remove_fillers)
+    }
+
+    fn transcription_state(&self) -> QString {
+        qstring(&self.transcription_state)
+    }
+
+    fn transcription_message(&self) -> QString {
+        qstring(&self.transcription_message)
+    }
+
+    fn transcription_progress(&self) -> f64 {
+        self.transcription_progress
+    }
+
+    fn transcribe(self: Pin<&mut Self>) {
+        self.start_speech(true);
+    }
+
+    fn trim_pauses(self: Pin<&mut Self>) -> i32 {
+        self.edit(|document| {
+            let ranges = document.pause_ranges(&Default::default());
+            document.remove_source_ranges(&ranges) as i32
+        })
+        .unwrap_or(0)
+    }
+
+    fn remove_filler_words(self: Pin<&mut Self>) -> i32 {
+        self.edit(|document| {
+            let ranges = document.filler_ranges();
+            document.remove_source_ranges(&ranges) as i32
+        })
+        .unwrap_or(0)
+    }
+
+    fn save_subtitles(&self, format: &QString) -> QString {
+        let Some(document) = self.document.as_ref() else { return QString::default() };
+        let format = format.to_string();
+        let text = match format.as_str() {
+            "srt" => omareel_core::captions::to_srt(document.caption_cues()),
+            "vtt" => omareel_core::captions::to_vtt(document.caption_cues()),
+            _ => return QString::default(),
+        };
+        let video = document.default_export_path("mp4");
+        let path = match video.rsplit_once('.') {
+            Some((stem, _)) => format!("{stem}.{format}"),
+            None => format!("{video}.{format}"),
+        };
+        match omareel_core::compat::qsavefile::save(&path, text.as_bytes()) {
+            Ok(()) => qstring(&path),
+            Err(_) => QString::default(),
+        }
     }
 
     fn screen_frame_times_ready_for_tests(&self) -> bool {
