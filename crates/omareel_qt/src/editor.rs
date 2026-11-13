@@ -142,6 +142,9 @@ pub mod qobject {
         #[qproperty(QString, selected_zoom_id, READ = selected_zoom_id, WRITE = set_selected_zoom_id, NOTIFY = selection_changed)]
         #[qproperty(QStringList, selected_zoom_ids, READ = selected_zoom_ids, WRITE = set_selected_zoom_ids, NOTIFY = selection_changed)]
         #[qproperty(bool, picking_zoom_target, READ = picking_zoom_target, WRITE = set_picking_zoom_target, NOTIFY = picking_zoom_target_changed)]
+        // While a coding agent edits the project (the AI drawer's run), edits here are refused
+        // (Document::set_read_only); its changes still come in through the live reload.
+        #[qproperty(bool, read_only, READ = read_only, WRITE = set_read_only, NOTIFY = read_only_changed)]
         #[qproperty(QStringList, preset_names, READ = preset_names, NOTIFY = presets_changed)]
         #[qproperty(QList_QVariant, wallpaper_groups, READ = wallpaper_groups, NOTIFY = wallpapers_changed)]
         #[qproperty(QList_QVariant, gradients, READ = gradients, CONSTANT)]
@@ -207,6 +210,8 @@ pub mod qobject {
         fn selection_changed(self: Pin<&mut Editor>);
         #[qsignal]
         fn picking_zoom_target_changed(self: Pin<&mut Editor>);
+        #[qsignal]
+        fn read_only_changed(self: Pin<&mut Editor>);
         #[qsignal]
         fn presets_changed(self: Pin<&mut Editor>);
         #[qsignal]
@@ -279,6 +284,7 @@ pub mod qobject {
         fn selected_zoom_id(self: &Editor) -> QString;
         fn selected_zoom_ids(self: &Editor) -> QStringList;
         fn picking_zoom_target(self: &Editor) -> bool;
+        fn read_only(self: &Editor) -> bool;
         fn preset_names(self: &Editor) -> QStringList;
         fn wallpaper_groups(self: &Editor) -> QList_QVariant;
         fn gradients(self: &Editor) -> QList_QVariant;
@@ -319,6 +325,7 @@ pub mod qobject {
         fn set_selected_zoom_id(self: Pin<&mut Editor>, id: &QString);
         fn set_selected_zoom_ids(self: Pin<&mut Editor>, ids: &QStringList);
         fn set_picking_zoom_target(self: Pin<&mut Editor>, value: bool);
+        fn set_read_only(self: Pin<&mut Editor>, value: bool);
 
         #[qinvokable]
         fn set_project_value(self: Pin<&mut Editor>, path: &QString, value: &QVariant);
@@ -1474,6 +1481,10 @@ impl qobject::Editor {
         self.document.as_ref().is_some_and(Document::picking_zoom_target)
     }
 
+    fn read_only(&self) -> bool {
+        self.document.as_ref().is_some_and(Document::read_only)
+    }
+
     fn preset_names(&self) -> QStringList {
         self.document.as_ref().map_or_else(QStringList::default, |document| string_list(&document.preset_names()))
     }
@@ -1773,6 +1784,18 @@ impl qobject::Editor {
 
     fn set_picking_zoom_target(self: Pin<&mut Self>, value: bool) {
         self.edit(|document| document.set_picking_zoom_target(value));
+    }
+
+    fn set_read_only(mut self: Pin<&mut Self>, value: bool) {
+        if self.read_only() == value {
+            return;
+        }
+        // A slider drag in progress ends here rather than coalescing with what comes after.
+        self.as_mut().edit(|document| {
+            document.end_coalesced_edit();
+            document.set_read_only(value);
+        });
+        self.read_only_changed();
     }
 
     // ---------------------------------------------------------------------------------------

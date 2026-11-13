@@ -24,6 +24,7 @@ MenuItem {
             anchors.right: check.left
             anchors.rightMargin: 8
             anchors.verticalCenter: parent.verticalCenter
+            textFormat: Text.PlainText
             text: item.text
             color: !item.enabled ? theme.textFaint
                  : item.destructive ? theme.record

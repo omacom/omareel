@@ -55,6 +55,7 @@ Switch {
             spacing: 2
             Text {
                 width: parent.width
+                textFormat: Text.PlainText
                 text: control.text
                 color: control.enabled ? theme.foreground : theme.textFaint
                 font: control.font
@@ -63,6 +64,7 @@ Switch {
             Text {
                 visible: control.description !== ""
                 width: parent.width
+                textFormat: Text.PlainText
                 text: control.description
                 color: theme.textMuted
                 font.family: theme.fontFamily

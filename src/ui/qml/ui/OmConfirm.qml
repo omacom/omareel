@@ -15,7 +15,7 @@ Item {
         width: Math.min(parent.width - 32, 370)
         height: messageText.implicitHeight + buttons.implicitHeight + theme.space.popupPadding * 3 + 4
         anchors.centerIn: parent
-        Text { id: messageText; width: parent.width; text: root.message; wrapMode: Text.WordWrap; color: theme.foreground; font.family: theme.fontFamily; font.pixelSize: theme.font.title }
+        Text { id: messageText; width: parent.width; textFormat: Text.PlainText; text: root.message; wrapMode: Text.WordWrap; color: theme.foreground; font.family: theme.fontFamily; font.pixelSize: theme.font.title }
         RowLayout {
             id: buttons; width: parent.width; anchors.bottom: parent.bottom; spacing: theme.space.xl
             Item { Layout.fillWidth: true }

@@ -5,7 +5,7 @@ use super::apply::{apply_ops, parse_ops};
 use super::describe::describe;
 use crate::compat::qdir::tests::TempDir;
 use crate::compat::qjson::{Object, Value};
-use crate::editor::{DiskChange, Document, Locations, MediaInfo, Probes, VideoInfo};
+use crate::editor::{DiskChange, Document, Effect, Locations, MediaInfo, Probes, VideoInfo};
 use std::sync::Arc;
 
 fn fixture(file: &str) -> String {
@@ -348,4 +348,175 @@ fn inserts_copy_nothing_on_a_dry_run_or_a_failed_batch() {
     let mut document = open(&bundle, &dir);
     apply_ops(&mut document, &ops(&insert)[..1], false).unwrap();
     assert!(std::path::Path::new(&format!("{bundle}/media/clip.mp4")).exists());
+}
+
+#[test]
+fn chapters_are_written_at_source_times_and_follow_later_cuts() {
+    let dir = TempDir::new("agent-chapters");
+    let bundle = bundle(&dir);
+    let chapters_file = crate::chapters::path(&bundle);
+    let run = |ops: &str, dry_run: bool| {
+        let (report, ok) = super::apply::run_on(|| Ok(open(&bundle, &dir)), ops.as_bytes(), dry_run, true);
+        (crate::compat::qjson::object_from_json(report.as_bytes()).unwrap(), ok)
+    };
+    // Output times after a cut of 0–2 s are stored as source times.
+    let (report, ok) = run(
+        r#"[{"op": "delete", "from": 0, "to": 2},
+            {"op": "set-chapters", "title": " Demo ", "description": "Two parts.",
+             "chapters": [{"at": 4, "title": "Second"}, {"at": 0, "title": "First"}]}]"#,
+        true,
+    );
+    assert!(ok, "{report:?}");
+    assert!(!std::path::Path::new(&chapters_file).exists(), "a dry run writes nothing");
+    assert!(report.value("describe").get("chapters").is_undefined());
+    let (report, ok) = run(
+        r#"[{"op": "delete", "from": 0, "to": 2},
+            {"op": "set-chapters", "title": " Demo ", "description": "Two parts.",
+             "chapters": [{"at": 4, "title": "Second"}, {"at": 0, "title": "First"}]}]"#,
+        false,
+    );
+    assert!(ok, "{report:?}");
+    let saved = crate::chapters::Chapters::load(&bundle).unwrap().unwrap();
+    assert_eq!(saved.title, "Demo");
+    let sources: Vec<(f64, &str)> = saved.chapters.iter().map(|c| (c.source, c.title.as_str())).collect();
+    assert_eq!(sources, vec![(2.0, "First"), (6.0, "Second")]);
+    let chapters = report.value("describe").get("chapters").clone();
+    assert_eq!(chapters.get("chapters").to_array()[1].get("output").to_double(-1.0), 4.0);
+    // A later cut before the second chapter moves it; only the title changes the file's text.
+    let (report, ok) = run(r#"[{"op": "delete", "from": 1, "to": 2}, {"op": "set-chapters", "title": "Better"}]"#, false);
+    assert!(ok, "{report:?}");
+    let listed = report.value("describe").get("chapters").get("chapters").to_array();
+    assert_eq!(listed[1].get("output").to_double(-1.0), 3.0);
+    assert_eq!(listed[1].get("source").to_double(-1.0), 6.0);
+    assert_eq!(crate::chapters::Chapters::load(&bundle).unwrap().unwrap().title, "Better");
+    // Errors name the chapter; nothing is saved.
+    let (report, ok) = run(r#"[{"op": "set-chapters", "chapters": [{"at": 1, "title": ""}]}]"#, false);
+    assert!(!ok);
+    assert_eq!(report.value("error").as_str(), Some("operation 1 (set-chapters): chapter 1 needs a \"title\""));
+    let (report, _) = run(r#"[{"op": "set-chapters", "timeline": "source", "chapters": [{"at": 99, "title": "Late"}]}]"#, false);
+    assert!(report.value("error").to_string_or("").contains("outside the recording (0 to 10)"), "{report:?}");
+    // An empty set removes the file.
+    let (_, ok) = run(r#"[{"op": "set-chapters", "title": "", "description": "", "chapters": []}]"#, false);
+    assert!(ok);
+    assert!(!std::path::Path::new(&chapters_file).exists());
+}
+
+/// chapters.json that can't be written saves nothing, so trying again applies the cuts once.
+#[test]
+fn chapters_that_cannot_be_written_save_nothing() {
+    let dir = TempDir::new("agent-chapters-atomic");
+    let bundle = bundle(&dir);
+    let project_file = format!("{bundle}/project.json");
+    let ops = r#"[{"op": "delete", "from": 0, "to": 2},
+                  {"op": "set-chapters", "title": "Demo", "chapters": [{"at": 0, "title": "Start"}]}]"#;
+    let run = || {
+        let (report, ok) = super::apply::run_on(|| Ok(open(&bundle, &dir)), ops.as_bytes(), false, false);
+        (crate::compat::qjson::object_from_json(report.as_bytes()).unwrap(), ok)
+    };
+    let before = std::fs::read(&project_file).ok();
+    // A directory where chapters.json's temporary file goes.
+    let blocker = format!("{}.{}.tmp", crate::chapters::path(&bundle), std::process::id());
+    std::fs::create_dir_all(&blocker).unwrap();
+    let (report, ok) = run();
+    assert!(!ok);
+    assert!(report.value("error").to_string_or("").starts_with("nothing was saved: cannot write"), "{report:?}");
+    assert_eq!(std::fs::read(&project_file).ok(), before, "project.json was saved");
+    assert!(!std::path::Path::new(&crate::chapters::path(&bundle)).exists());
+    std::fs::remove_dir(&blocker).unwrap();
+    let (report, ok) = run();
+    assert!(ok, "{report:?}");
+    assert_eq!(report.value("output_duration").to_double(0.0), 8.0, "{report:?}");
+    assert_eq!(crate::chapters::Chapters::load(&bundle).unwrap().unwrap().title, "Demo");
+    // No temporary file is left behind.
+    let leftovers: Vec<String> = std::fs::read_dir(&bundle)
+        .unwrap()
+        .flatten()
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| name.ends_with(".tmp"))
+        .collect();
+    assert!(leftovers.is_empty(), "{leftovers:?}");
+}
+
+/// Inside an agent's scope, operations can't pull files from outside the bundle and the
+/// scratch directory into the project.
+#[test]
+fn scoped_operations_name_only_files_inside() {
+    let dir = TempDir::new("agent-scoped-apply");
+    let bundle = bundle(&dir);
+    let scratch = dir.join("scratch");
+    std::fs::create_dir_all(&scratch).unwrap();
+    let outside = dir.join("private.png");
+    std::fs::write(&outside, b"png").unwrap();
+    std::fs::write(format!("{scratch}/fine.png"), b"png").unwrap();
+    let scope = super::scope::Scope::parse(&super::scope::value(&bundle, std::path::Path::new(&scratch))).unwrap();
+    let run = |ops: String| {
+        let (report, ok) = super::apply::run_in(|| Ok(open(&bundle, &dir)), ops.as_bytes(), false, false, Some(scope.clone()));
+        (crate::compat::qjson::object_from_json(report.as_bytes()).unwrap(), ok)
+    };
+    for ops in [
+        format!(r#"[{{"op": "insert", "file": "{outside}"}}]"#),
+        format!(r#"[{{"op": "music", "file": "{outside}"}}]"#),
+        format!(r#"[{{"op": "set", "path": "background.image", "value": "{outside}"}}]"#),
+        format!(r#"[{{"op": "set", "path": "background.image", "value": "{scratch}/../private.png"}}]"#),
+    ] {
+        let (report, ok) = run(ops.clone());
+        assert!(!ok, "{ops}: {report:?}");
+        assert!(report.value("error").to_string_or("").contains("outside the recording"), "{ops}: {report:?}");
+    }
+    assert!(!std::path::Path::new(&format!("{bundle}/media/private.png")).exists());
+    // A file in the scratch directory is fine, and without a scope anything is.
+    let (report, ok) = run(format!(r#"[{{"op": "set", "path": "background.image", "value": "{scratch}/fine.png"}}]"#));
+    assert!(ok, "{report:?}");
+    let (report, ok) = super::apply::run_on(
+        || Ok(open(&bundle, &dir)),
+        format!(r#"[{{"op": "set", "path": "background.image", "value": "{outside}"}}]"#).as_bytes(),
+        false,
+        false,
+    );
+    assert!(ok, "{report}");
+}
+
+/// While an agent edits, the editor refuses its own edits (each undone at once, nothing to
+/// save, undo and redo do nothing) but still takes in the agent's.
+#[test]
+fn a_read_only_editor_refuses_edits_but_takes_in_the_agents() {
+    let dir = TempDir::new("agent-read-only");
+    let bundle = bundle(&dir);
+    let mut editor = open(&bundle, &dir);
+    editor.set_project_value("background.blur", Value::from(0.05), false);
+    assert!(editor.save_now());
+    editor.take_effects();
+    let undo_before = editor.can_undo();
+    editor.set_read_only(true);
+    assert!(editor.read_only());
+
+    editor.set_project_value("background.blur", Value::from(0.2), false);
+    editor.set_output_position(4.0);
+    assert!(!editor.split_at_playhead() || editor.project().clips.len() == 1);
+    assert_eq!(editor.project().clips.len(), 1);
+    assert_eq!(editor.project().background.blur, 0.05);
+    assert!(!editor.dirty(), "a refused edit leaves nothing to save");
+    let effects = editor.take_effects();
+    assert!(!effects.iter().any(|effect| matches!(effect, Effect::StartAutosaveTimer)), "{effects:?}");
+    assert!(effects.iter().any(|effect| matches!(effect, Effect::ProjectChanged)), "the views go back");
+    editor.undo();
+    assert_eq!(editor.project().background.blur, 0.05);
+    assert_eq!(editor.can_undo(), undo_before);
+
+    // The agent's apply comes in.
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    let mut other = open(&bundle, &dir);
+    apply_ops(&mut other, &ops(r#"{"op": "split", "at": 4}"#), false).unwrap();
+    assert!(other.save_now());
+    assert_eq!(editor.reload_if_changed_on_disk(), DiskChange::Reloaded);
+    assert_eq!(editor.project().clips.len(), 2);
+    assert!(editor.read_only());
+
+    // Once the agent is done, editing and undo work again, the agent's change one step away.
+    editor.set_read_only(false);
+    editor.set_project_value("background.blur", Value::from(0.3), false);
+    assert_eq!(editor.project().background.blur, 0.3);
+    editor.undo();
+    editor.undo();
+    assert_eq!(editor.project().clips.len(), 1);
 }

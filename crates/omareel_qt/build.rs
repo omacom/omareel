@@ -14,6 +14,7 @@ fn main() {
         .qt_module("Multimedia")
         .qt_module("Quick")
         .files([
+            "src/agent_runner.rs",
             "src/cli.rs",
             "src/editor.rs",
             "src/export.rs",

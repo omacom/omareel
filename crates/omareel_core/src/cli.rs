@@ -29,9 +29,13 @@ commands:\n\
 \x20 describe <bundle>\n\
 \x20     Print the edited timeline as JSON: clips, zooms, clicks, shortcuts,\n\
 \x20     idle stretches and settings, in output and source seconds.\n\
-\x20 apply <bundle> <ops.json|-> [--dry-run] [--describe]\n\
-\x20     Run edit operations (split, delete, speed, zoom, set, ...) as the\n\
-\x20     editor would, all or nothing; an open editor takes the result in.\n\
+\x20 apply <bundle> <ops.json|-|'[...]'> [--dry-run] [--describe]\n\
+\x20     Run edit operations (split, delete, speed, zoom, set, set-chapters,\n\
+\x20     ...) as the editor would, all or nothing; an open editor takes the\n\
+\x20     result in. The operations come from a file, stdin, or the argument.\n\
+\x20 agent <bundle> polish|chapters|ask <request...>\n\
+\x20     Run Omarchy's default coding agent (Claude Code or Codex) on the\n\
+\x20     recording, printing what it does as JSON lines.\n\
 \x20 skill [install]\n\
 \x20     Print the skill for coding agents, or install it for them.\n\
 \x20 help\n\

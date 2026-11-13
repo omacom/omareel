@@ -76,6 +76,8 @@ Rectangle {
                 width: Math.min(parent.width, Math.max(80, Math.min(360, nameMetrics.advanceWidth + 22)))
                 height: 30
                 text: editor.bundleName
+                // Renaming moves the bundle the agent is working in.
+                enabled: !editor.readOnly
                 selectByMouse: true
                 hoverEnabled: true
                 font.family: theme.fontFamily
@@ -122,6 +124,7 @@ Rectangle {
             }
             Label {
                 anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
                 text: root.projectUnreadable ? "project.json can't be read · Ctrl+S overwrites it"
                     : root.updatedExternally ? "Updated from project.json"
                     : editor.dirty ? "Unsaved changes" : "Saved " + root.savedTime
@@ -130,7 +133,7 @@ Rectangle {
             }
         }
         OmIconButton {
-            enabled: editor.canUndo
+            enabled: editor.canUndo && !editor.readOnly
             icon.source: "qrc:/omareel/assets/icons/lucide/undo-2.svg"
             Accessible.name: "Undo"
             tooltipText: "Undo"
@@ -138,7 +141,7 @@ Rectangle {
             onClicked: editor.undo()
         }
         OmIconButton {
-            enabled: editor.canRedo
+            enabled: editor.canRedo && !editor.readOnly
             icon.source: "qrc:/omareel/assets/icons/lucide/redo-2.svg"
             Accessible.name: "Redo"
             tooltipText: "Redo"
@@ -161,10 +164,34 @@ Rectangle {
             color: theme.separator
         }
         OmButton {
+            objectName: "polishButton"
+            visible: window.agentRunner !== null
+            Layout.preferredWidth: implicitWidth
+            Layout.minimumWidth: implicitWidth
+            text: window.agentRunner && window.agentRunner.running ? "Working…" : "Polish"
+            icon.source: "qrc:/omareel/assets/icons/lucide/sparkles.svg"
+            selected: window.agentOpen
+            tooltipText: !window.agentRunner ? ""
+                : !window.agentRunner.available ? window.agentRunner.problem
+                : "Polish with " + window.agentRunner.agentName + ". It reads the timeline, transcript and frames"
+                  + (window.agentRunner.provider ? " and sends them to " + window.agentRunner.provider : "")
+                  + (window.agentRunner.consented ? "" : "; you start it in the drawer")
+            tooltipShortcut: "Ctrl Shift P"
+            onClicked: window.agentRunner.running ? window.openAgent("") : window.openAgent("polish")
+        }
+        OmIconButton {
+            visible: window.agentRunner !== null
+            icon.source: "qrc:/omareel/assets/icons/lucide/message-square.svg"
+            Accessible.name: "Ask the editor"
+            tooltipText: "Ask the editor, write a description"
+            onClicked: window.agentOpen ? window.closeAgent() : window.openAgent("")
+        }
+        OmButton {
             id: presetButton
             Layout.preferredWidth: implicitWidth
             Layout.minimumWidth: implicitWidth
             text: "Presets"
+            enabled: !editor.readOnly
             trailingIconSource: "qrc:/omareel/assets/icons/lucide/chevron-down.svg"
             selected: presetsMenu.visible
             onClicked: presetsMenu.visible ? presetsMenu.close() : presetsMenu.open()

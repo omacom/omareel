@@ -85,6 +85,7 @@ ApplicationWindow {
             Label {
                 Layout.leftMargin: 4
                 Layout.rightMargin: 6
+                textFormat: Text.PlainText
                 text: recordingBar.elapsed
                 color: theme.textStrong
                 font.family: theme.monoFamily
@@ -166,6 +167,7 @@ ApplicationWindow {
                     }
                     Label {
                         anchors.verticalCenter: parent.verticalCenter
+                        textFormat: Text.PlainText
                         text: recordingBar.stopping ? "Saving…" : "Stop"
                         color: "white"
                         font.pixelSize: theme.type.small
@@ -275,6 +277,7 @@ ApplicationWindow {
                 id: countdownNumber
                 anchors.centerIn: parent
                 anchors.verticalCenterOffset: -6
+                textFormat: Text.PlainText
                 text: recordingBar.countdownValue
                 color: theme.textStrong
                 font.family: theme.monoFamily
@@ -385,6 +388,7 @@ ApplicationWindow {
                 anchors.centerIn: parent
                 width: parent.width - 20
                 visible: text !== ""
+                textFormat: Text.PlainText
                 text: recordingBar.cameraError !== "" ? recordingBar.cameraError
                     : recordingBar.cameraReady ? "" : "Starting camera…"
                 wrapMode: Text.WordWrap

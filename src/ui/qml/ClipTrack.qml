@@ -253,6 +253,7 @@ Item {
                         width: Math.min(implicitWidth, Math.max(0, clipBlock.width - 32 - speedLabel.implicitWidth
                                                                    - (badgeMouse.containsMouse ? 34 : 6)))
                         elide: Text.ElideRight
+                        textFormat: Text.PlainText
                         text: clipBlock.modelData.kind === "media"
                             ? (clipBlock.modelData.missing ? "Missing · " : "") + clipBlock.modelData.mediaName
                             : clipBlock.modelData.layout === "camera" ? "Camera"
@@ -264,6 +265,7 @@ Item {
                     Label {
                         id: speedLabel
                         anchors.verticalCenter: parent.verticalCenter
+                        textFormat: Text.PlainText
                         text: Number(clipBlock.modelData.speed).toFixed(clipBlock.modelData.speed % 1 ? 2 : 0) + "×"
                         font.family: theme.monoFamily
                         font.pixelSize: theme.type.caption

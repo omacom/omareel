@@ -12,7 +12,10 @@
 //! [`Document::reload_if_changed_on_disk`]: crate::editor::Document::reload_if_changed_on_disk
 
 pub mod apply;
+pub mod consent;
 pub mod describe;
+pub mod runner;
+pub mod scope;
 pub mod skill;
 #[cfg(test)]
 mod tests;

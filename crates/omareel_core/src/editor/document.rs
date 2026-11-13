@@ -108,6 +108,12 @@ pub struct Document {
     pub(crate) inserts: HashMap<String, VideoInfo>,
     pub(crate) probe_video: ProbeVideo,
     pub(crate) history: History,
+    /// While set (an agent is editing the project through `omareel apply`), edits made here
+    /// are undone as soon as they are made, so none is lost when the agent's next change is
+    /// taken in. Reloads from disk still come in.
+    pub(crate) read_only: bool,
+    /// The project before an edit [`Document::read_only`] refuses, to go back to.
+    pub(crate) refused_from: Option<Object>,
     pub(crate) dirty: bool,
     pub(crate) selected_clip_id: String,
     pub(crate) selected_zoom_id: String,
@@ -268,6 +274,8 @@ impl Document {
             inserts,
             probe_video,
             history: History::default(),
+            read_only: false,
+            refused_from: None,
             dirty: false,
             selected_clip_id: String::new(),
             selected_zoom_id: String::new(),
@@ -669,6 +677,13 @@ impl Document {
 
     /// `snapshot(coalesceKey)`.
     pub(crate) fn snapshot(&mut self, coalesce_key: &str) {
+        if self.read_only {
+            // The edit about to be made is undone in `changed`.
+            if self.refused_from.is_none() {
+                self.refused_from = Some(self.project.to_json());
+            }
+            return;
+        }
         let current = self.project.to_json();
         if self.history.snapshot(coalesce_key, current) {
             self.emit(Effect::HistoryChanged);
@@ -678,6 +693,14 @@ impl Document {
     /// `changed(motion)`: the project changed. The keystroke pills are rebuilt here; the rest is
     /// queued.
     pub(crate) fn changed(&mut self, motion: bool) {
+        let refused = match self.refused_from.take() {
+            Some(before) => {
+                self.project = Project::from_json(&before);
+                self.fix_selection();
+                true
+            }
+            None => false,
+        };
         self.project_map_revision += 1;
         self.keystroke_track = KeystrokeTrack::build(self.input.events(), &self.project.keystrokes);
         self.probe_music();
@@ -685,11 +708,16 @@ impl Document {
         let (volume, muted) = self.screen_audio();
         self.emit(Effect::SetScreenAudio { volume, muted });
         self.emit(Effect::UpdateInsertAudio);
-        if !self.dirty {
-            self.dirty = true;
-            self.emit(Effect::DirtyChanged);
+        if refused {
+            // Nothing changed after all: nothing to save, and the views go back.
+            self.emit(Effect::SelectionChanged);
+        } else {
+            if !self.dirty {
+                self.dirty = true;
+                self.emit(Effect::DirtyChanged);
+            }
+            self.emit(Effect::StartAutosaveTimer);
         }
-        self.emit(Effect::StartAutosaveTimer);
         self.emit(Effect::ProjectChanged);
         self.emit(Effect::DurationChanged);
         self.emit(Effect::OutputSizeChanged);
@@ -713,6 +741,30 @@ impl Document {
     /// playhead now falls.
     fn restore(&mut self, json: &Object) {
         self.project = Project::from_json(json);
+        self.fix_selection();
+        self.changed(true);
+        if !self.project.clips.is_empty() {
+            self.emit(Effect::Seek(cpp::min(self.output_position, self.duration())));
+        }
+        self.emit(Effect::SelectionChanged);
+    }
+
+    /// Whether edits are refused ([`Document::set_read_only`]).
+    pub fn read_only(&self) -> bool {
+        self.read_only
+    }
+
+    /// Refuses edits (each is undone as soon as it is made, and undo and redo do nothing)
+    /// while `read_only`, as when an agent is editing the project through `omareel apply`;
+    /// project.json written by someone else is still taken in.
+    pub fn set_read_only(&mut self, read_only: bool) {
+        self.read_only = read_only;
+        self.refused_from = None;
+    }
+
+    /// A selected clip that is gone replaced by the clip at the playhead, and zoom selections
+    /// that are gone dropped.
+    fn fix_selection(&mut self) {
         if !self.selected_clip_id.is_empty() && self.clip_index(&self.selected_clip_id) < 0 {
             self.selected_clip_id = if self.project.clips.is_empty() {
                 String::new()
@@ -727,14 +779,12 @@ impl Document {
         if self.zoom_index(&self.selected_zoom_id) < 0 {
             self.selected_zoom_id = self.selected_zoom_ids.first().cloned().unwrap_or_default();
         }
-        self.changed(true);
-        if !self.project.clips.is_empty() {
-            self.emit(Effect::Seek(cpp::min(self.output_position, self.duration())));
-        }
-        self.emit(Effect::SelectionChanged);
     }
 
     pub fn undo(&mut self) {
+        if self.read_only {
+            return;
+        }
         let Some(value) = self.history.undo.pop() else { return };
         self.history.redo.push(self.project.to_json());
         self.end_coalesced_edit();
@@ -744,6 +794,9 @@ impl Document {
 
     /// Unlike `undo`, leaves a coalesced edit open.
     pub fn redo(&mut self) {
+        if self.read_only {
+            return;
+        }
         let Some(value) = self.history.redo.pop() else { return };
         self.history.undo.push(self.project.to_json());
         self.restore(&value);
@@ -791,9 +844,12 @@ impl Document {
         for clip in project.clips.iter().filter(|clip| clip.is_media()) {
             self.insert_info(&clip.media);
         }
+        // Taken in even while read-only: that is how the agent's edits arrive.
+        let read_only = std::mem::replace(&mut self.read_only, false);
         self.end_coalesced_edit();
         self.snapshot("");
         self.restore(&next);
+        self.read_only = read_only;
         DiskChange::Reloaded
     }
 

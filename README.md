@@ -29,6 +29,11 @@ cursor-following zooms. Finished projects export to MP4 or GIF.
   as JSON, `omareel apply` runs checked edit operations, and an open editor follows along.
   `omareel skill install` teaches your coding agents (Claude Code, Codex, pi, Gemini, Hermes)
   to use them.
+- Editing with AI in the editor: Polish (`Ctrl+Shift+P`), "Ask the editor…", and Write
+  description run the coding agent chosen in Omarchy (Claude Code or Codex) on the recording,
+  only when you click. You watch each change land, and each is one undo step. Chapters, a
+  title and a description go in `chapters.json`, show on the timeline, and copy as a YouTube
+  description.
 
 ## Install
 
@@ -93,6 +98,7 @@ omareel export Recording.omareel -o recording.srt
 omareel probe Recording.omareel
 omareel describe Recording.omareel
 omareel apply Recording.omareel edits.json
+omareel agent Recording.omareel polish
 omareel help
 ```
 

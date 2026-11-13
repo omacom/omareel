@@ -11,10 +11,15 @@ pub mod ffi {
         /// `omareel probe <bundle>` for an absolute bundle path: prints the summary and returns
         /// the exit status.
         fn probe(bundle: &str) -> i32;
-        /// `omareel describe`, `apply` and `skill` with the arguments after the command; they
+        /// `omareel describe`, `apply`, `skill` and `agent` with the arguments after the command; they
         /// need no Qt application, so main() runs them before making one.
         #[cxx_name = "agentCommand"]
         fn agent_command(command: &str, args: Vec<String>) -> i32;
+        /// Why the command line (after the program's name) may not run in the coding agent's
+        /// scope `OMAREEL_AGENT_SCOPE` sets; empty when it may (agent/scope.rs). main() asks
+        /// first, before any command runs.
+        #[cxx_name = "agentScopeRefusal"]
+        fn agent_scope_refusal(arguments: Vec<String>) -> String;
         /// `omareel transcribe <arguments>`: writes the bundle's transcript.json; the exit status.
         fn transcribe(arguments: Vec<String>) -> i32;
         /// `omareel export <bundle> -o <file.srt|file.vtt>` for absolute paths; the exit status.
@@ -41,6 +46,10 @@ pub mod ffi {
 fn preload_editor(bundle: &str) {
     use omareel_core::editor::{Document, Probes};
     Document::preload(bundle, Probes::new(std::sync::Arc::new(omareel_core::media_probe::probe_video)));
+}
+
+fn agent_scope_refusal(arguments: Vec<String>) -> String {
+    omareel_core::agent::scope::refusal(&arguments)
 }
 
 fn transcribe(arguments: Vec<String>) -> i32 {
@@ -77,6 +86,9 @@ fn usage(error: &str) -> i32 {
 
 fn agent_command(command: &str, args: Vec<String>) -> i32 {
     let absolute = |path: &str| omareel_core::compat::qdir::absolute_path(path);
+    if command == "agent" {
+        return omareel_core::agent::runner::agent_command(&args);
+    }
     if command == "skill" {
         return skill(&args);
     }
@@ -98,7 +110,7 @@ fn agent_command(command: &str, args: Vec<String>) -> i32 {
     }
     match positional.as_slice() {
         [bundle, ops] => apply(&absolute(bundle), ops, dry_run, describe_after),
-        _ => usage("apply requires a bundle and an operations file (or - for stdin)"),
+        _ => usage("apply requires a bundle and operations: a file, - for stdin, or the JSON itself"),
     }
 }
 
@@ -153,6 +165,10 @@ fn apply(bundle: &str, ops: &str, dry_run: bool, describe_after: bool) -> i32 {
     let mut bytes = Vec::new();
     let read = if ops == "-" {
         std::io::stdin().lock().read_to_end(&mut bytes).map(|_| ())
+    } else if ops.trim_start().starts_with(['[', '{']) {
+        // The operations themselves, for agents whose tools allow a command but not a heredoc.
+        bytes = ops.as_bytes().to_vec();
+        Ok(())
     } else {
         std::fs::read(ops).map(|contents| bytes = contents)
     };
