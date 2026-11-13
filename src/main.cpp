@@ -25,6 +25,7 @@ extern "C" int omr_ff_preload(void);
 #include <QFileInfo>
 #include <QHash>
 #include <QImage>
+#include <QImageWriter>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -123,7 +124,7 @@ static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplicat
         {QStringLiteral("background"), 0}, {QStringLiteral("shape"), 1},
         {QStringLiteral("cursor"), 2}, {QStringLiteral("zoom"), 3},
         {QStringLiteral("clip"), 4}, {QStringLiteral("camera"), 5},
-        {QStringLiteral("keystrokes"), 6}, {QStringLiteral("audio"), 7}
+        {QStringLiteral("keystrokes"), 6}, {QStringLiteral("audio"), 7}, {QStringLiteral("speech"), 8}
     };
     const QString panel = qEnvironmentVariable("OMAREEL_SCREENSHOT_PANEL").toLower();
     if (panels.contains(panel)) {
@@ -262,9 +263,12 @@ static int exportCommand(const QStringList &arguments)
         else return usage(QStringLiteral("unknown export option %1").arg(arg));
     }
     if (options.outputPath.isEmpty()) return usage(QStringLiteral("export requires -o <file>"));
+    if (options.outputPath.endsWith(QStringLiteral(".srt"), Qt::CaseInsensitive)
+        || options.outputPath.endsWith(QStringLiteral(".vtt"), Qt::CaseInsensitive))
+        return omareel::cli::exportSubtitles(options.bundlePath.toStdString(), options.outputPath.toStdString());
     if (!options.outputPath.endsWith(QStringLiteral(".mp4"), Qt::CaseInsensitive)
         && !options.outputPath.endsWith(QStringLiteral(".gif"), Qt::CaseInsensitive))
-        return usage(QStringLiteral("export output must end in .mp4 or .gif"));
+        return usage(QStringLiteral("export output must end in .mp4, .gif, .srt or .vtt"));
     if (options.fps < 0 || options.width < 0 || options.gifFps < 0 || options.gifWidth < 0)
         return usage(QStringLiteral("frame rate and size options must be positive"));
     const QStringList qualities{QStringLiteral("low"), QStringLiteral("medium"), QStringLiteral("high"),
@@ -293,6 +297,77 @@ static int exportCommand(const QStringList &arguments)
         return 1;
     }
     return 0;
+}
+
+// `omareel frame`: frames of the export as images (Exporter::renderStills), one file per time or
+// a contact sheet. The arguments are checked in Rust (export::still::parse_frame_args).
+static int frameCommand(const QStringList &arguments)
+{
+    const omareel::exporter::FrameRequest request = omareel::exporter::parseFrameArgs(arguments);
+    if (!request.error.isEmpty()) return usage(request.error);
+    StillOptions options;
+    options.bundlePath = QDir(request.bundle).absolutePath();
+    for (const double time : request.times) options.times.append(time);
+    options.count = request.count;
+    options.fps = request.fps;
+    const int stills = request.count > 0 ? request.count : int(request.times.size());
+    const omareel::exporter::SheetGrid grid = omareel::exporter::sheetGrid(stills, request.width);
+    // A sheet's --width is the sheet's; each tile renders at its share.
+    options.width = request.sheet ? grid.tile_width : request.width;
+    const QString output = QFileInfo(request.output).absoluteFilePath();
+    // Bad arguments, found before anything renders: exit status 2, as for the others.
+    if (!QFileInfo(QFileInfo(output).absolutePath()).isDir()) {
+        QTextStream(stderr) << "omareel: no directory " << QFileInfo(output).absolutePath() << '\n';
+        return 2;
+    }
+    if (!QImageWriter::supportedImageFormats().contains(QFileInfo(output).suffix().toLower().toLatin1())) {
+        QTextStream(stderr) << "omareel: this Qt cannot write ." << QFileInfo(output).suffix() << " images\n";
+        return 2;
+    }
+
+    Exporter exporter;
+    // Progress only for a person watching: an agent reading stderr gets the errors alone.
+    if (stills > 1 && isatty(STDERR_FILENO)) {
+        QObject::connect(&exporter, &Exporter::progress, [](int frame, int total) {
+            QTextStream(stderr) << '\r' << "Rendering " << frame << '/' << total << (frame == total ? "\n" : "")
+                                << Qt::flush;
+        });
+    }
+    const auto save = [](const QImage &image, const QString &path) {
+        const bool jpeg = path.endsWith(QStringLiteral(".jpg"), Qt::CaseInsensitive)
+                       || path.endsWith(QStringLiteral(".jpeg"), Qt::CaseInsensitive);
+        if (image.save(path, nullptr, jpeg ? 90 : -1)) {
+            QTextStream(stdout) << path << Qt::endl;
+            return true;
+        }
+        return false;
+    };
+    // Separate stills are written as they render, so only one is held at a time and an
+    // unwritable output stops at the first. A sheet's tiles are small; it keeps them.
+    const QStringList paths = omareel::exporter::stillOutputPaths(output, stills);
+    if (!request.sheet) {
+        options.take = [&](int index, const Still &still, QString *error) {
+            if (save(still.image, paths[index])) return true;
+            *error = QStringLiteral("could not write %1").arg(paths[index]);
+            return false;
+        };
+    }
+    QList<Still> rendered;
+    double duration = 0.0;
+    QString failure;
+    if (!exporter.renderStills(options, &rendered, &duration, &failure)) {
+        QTextStream(stderr) << "omareel: " << (failure.isEmpty() ? QStringLiteral("Rendering failed") : failure) << '\n';
+        return 1;
+    }
+    for (const double time : request.times) {
+        if (time >= duration)
+            QTextStream(stderr) << "omareel: " << time << " s is past the end (" << duration
+                                << " s); showing the last frame\n";
+    }
+    if (!request.sheet) return 0;
+    if (save(Exporter::contactSheet(rendered, grid.columns, grid.gap), output)) return 0;
+    QTextStream(stderr) << "omareel: could not write " << output << '\n';
+    return 1;
 }
 
 static QScreen *recordBarScreen(const QString &recordedMonitor)
@@ -464,6 +539,12 @@ int main(int argc, char **argv)
     }
     // The recorder daemon shows nothing, so it has no display connection: its screen capture
     // opens the only one it needs.
+    // Transcribing needs no Qt application.
+    if (argc > 1 && std::strcmp(argv[1], "transcribe") == 0) {
+        ::rust::Vec<::rust::String> arguments;
+        for (int i = 2; i < argc; ++i) arguments.push_back(::rust::String(argv[i]));
+        return omareel::cli::transcribe(std::move(arguments));
+    }
     if (argc > 1 && std::strcmp(argv[1], "__record-daemon") == 0) {
         QCoreApplication app(argc, argv);
         app.setApplicationName(QStringLiteral("omareel"));
@@ -474,6 +555,14 @@ int main(int argc, char **argv)
     // Nor do `omareel record` (the keybinding's start and stop, and the launcher's) and the
     // bar's and self-view's commands: a QGuiApplication's display connection, fonts and D-Bus
     // registration were 40 ms of each, before Stop even reached the recorder.
+    if (argc > 1 && (std::strcmp(argv[1], "describe") == 0 || std::strcmp(argv[1], "apply") == 0
+                     || std::strcmp(argv[1], "skill") == 0)) {
+        ::rust::Vec<::rust::String> arguments;
+        // rust::String throws on invalid UTF-8; QString substitutes it as other commands do.
+        for (int i = 2; i < argc; ++i)
+            arguments.push_back(::rust::String(QString::fromLocal8Bit(argv[i]).toStdString()));
+        return omareel::cli::agentCommand(argv[1], std::move(arguments));
+    }
     if (argc > 1 && (std::strcmp(argv[1], "record") == 0 || std::strcmp(argv[1], "__selfview-ipc") == 0
                      || std::strcmp(argv[1], "__record-bar-ipc") == 0)) {
         QCoreApplication app(argc, argv);
@@ -485,7 +574,7 @@ int main(int argc, char **argv)
         if (args[1] == QLatin1String("__selfview-ipc")) return omareel::record::selfViewIpc(args.mid(2));
         return omareel::record::recordBarIpc(args.mid(2));
     }
-    const bool exporting = argc > 1 && QByteArray(argv[1]) == "export";
+    const bool exporting = argc > 1 && (QByteArray(argv[1]) == "export" || QByteArray(argv[1]) == "frame");
     const bool layerTest = argc > 1 && QByteArray(argv[1]) == "__layer-test";
     const bool windowTest = argc > 1 && QByteArray(argv[1]) == "__window-test";
     const bool recordBar = argc > 1 && QByteArray(argv[1]) == "__record-bar";
@@ -774,6 +863,7 @@ int main(int argc, char **argv)
         return omareel::cli::probe(QDir(args[2]).absolutePath().toStdString());
     }
     if (command == QLatin1String("export")) return exportCommand(args.mid(2));
+    if (command == QLatin1String("frame")) return frameCommand(args.mid(2));
     if (command == QLatin1String("edit")) {
         const bool waiting = waitingEditor(argc, argv);
         if (args.size() != 3 && !waiting) return usage(QStringLiteral("edit requires a bundle"));

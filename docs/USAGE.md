@@ -10,8 +10,12 @@
 omareel
 omareel record [--region|--fullscreen|--window] [options]
 omareel edit BUNDLE.omareel
-omareel export BUNDLE.omareel -o OUTPUT.mp4|OUTPUT.gif [options]
+omareel export BUNDLE.omareel -o OUTPUT.mp4|OUTPUT.gif|OUTPUT.srt|OUTPUT.vtt [options]
+omareel transcribe BUNDLE.omareel [--backend NAME] [--force]
 omareel probe BUNDLE.omareel
+omareel describe BUNDLE.omareel
+omareel apply BUNDLE.omareel OPS.json|- [--dry-run] [--describe]
+omareel skill [install]
 omareel help
 omareel --version
 ```
@@ -115,7 +119,10 @@ settings file. The fallback cannot omit overlays placed inside its capture area.
 ### `edit BUNDLE`
 
 Opens an `.omareel` bundle. Changes autosave to `project.json` after 500 ms and may also be
-saved immediately with `Ctrl+S`.
+saved immediately with `Ctrl+S`. When another program writes `project.json` while the editor
+is open (`omareel apply`, an AI agent, a text editor), the editor takes the new project in
+within half a second as one undoable change; edits made in the editor just before are one
+`Ctrl+Z` away. A file that does not parse yet is ignored until it does.
 
 Legacy `.omarecord` bundles remain supported, including bundles under
 `~/Videos/omarecord`. The legacy command name is installed as a compatibility alias. If only
@@ -130,10 +137,143 @@ GIF-specific overrides are `--gif-fps N` and `--gif-width W`.
 Add `--timing` to print average decode wait, upload, render, readback, encoder-write, and
 end-to-end throughput measurements.
 
+An output ending in `.srt` (SubRip) or `.vtt` (WebVTT) writes the recording's captions instead,
+on the edited timeline: cut parts are left out and sped-up clips shorten their captions. It needs
+`transcript.json` (see `transcribe`). MP4 and GIF exports draw the captions into the video when
+they are turned on in the editor.
+
+### `frame BUNDLE --at SECONDS -o OUTPUT`
+
+Renders frames of the export as images, without exporting the video: the same composition
+(background, zoom, cursor, camera bubble, keystrokes, inserted videos) from the same decoded
+pictures, so a still matches the export's frame at that moment. Times are on the edited video's
+timeline, after cuts and speed changes, as seconds (`12.5`) or `m:ss.s` (`1:02.5`). Each time
+shows the frame on screen then; a time past the end shows the last frame, with a note on stderr.
+Each still seeks straight to its frame, so one an hour into a recording takes as long as one at
+the start, well under a second at 1080p.
+
+- `--at SECONDS` may be repeated. With one time, OUTPUT is the image. With several, the stills
+  are numbered from 1 before the extension (`out.png` gives `out-1.png`, `out-2.png`...), or
+  replace a `%d` in OUTPUT (`frames/%d.jpg`).
+- `--count N` renders N frames spread evenly over the video (the middle of N equal parts)
+  instead of `--at`.
+- `--sheet` puts the frames on one contact sheet, a near-square grid with each tile labelled
+  with its time (`mm:ss.s`).
+- `--width W` sets each still's width, or the whole sheet's (1920 by default; a sheet of many
+  tiles can come out a few pixels wider, as tiles stay even and at least 16 px wide); the
+  height follows the project's aspect. `--fps N` picks the frame grid as for `export`.
+  Stills use the MP4 export's frame rate and size; for a GIF's frames, pass its `--fps` and
+  `--width`.
+
+OUTPUT ends in `.png`, `.jpg` or `.webp`. Each written path is printed on stdout; errors go to
+stderr with a non-zero exit (2 for bad arguments, 1 when rendering or writing fails).
+
+### `transcribe BUNDLE`
+
+Writes `transcript.json` in the bundle with a speech-to-text engine on this computer; nothing is
+uploaded by omareel. `--backend` picks the engine:
+
+- `auto` (the default) follows Omarchy's dictation choice
+  (`~/.config/omarchy/defaults/dictation`). When that is voxtype on a Whisper model and
+  `whisper-cli` is installed, voxtype's model runs through `whisper-cli` first, for measured word
+  times. Then the chosen backend, then `whisper-cli` with any model, then voxtype.
+- `voxtype` runs `voxtype transcribe` with its configured engine and model. Text only.
+- `hex` runs `hex transcribe`, which needs Hex running with Labs > Transcribe files on. Text only.
+- `superwhisper` runs `superwhisper transcribe` through its service. Text only. (Superwhisper's
+  own cloud mode, if selected there, is Superwhisper's choice, not omareel's.)
+- `whisper-cpp` runs `whisper-cli` with voxtype's model, a model in
+  `~/.local/share/whisper.cpp/models`, or `OMAREEL_WHISPER_MODEL`. Times every word.
+
+The recording's audio is read with ffmpeg at 16 kHz mono, and a loudness-based speech finder
+splits it into phrases. Text-only engines transcribe one phrase at a time, which times the
+phrases; their words are spread over the phrase's speech and marked `estimated`. An existing
+transcript is kept unless `--force` is given. Without any engine the command says how to set one
+up in Omarchy and exits 1.
+
 ### `probe BUNDLE`
 
 Prints JSON containing source duration, frame rate, dimensions, input-event counts, and the
 auto-generated zoom summary.
+
+### `describe BUNDLE`
+
+Prints the edited timeline as JSON, for scripts and AI agents:
+
+- `source` and `output`: the recording (size, frame rate, audio, camera) and the edited video
+  (duration, aspect, export size).
+- `clips`: each clip's `id`, `kind` (`recording` or `video`), `output` span, `source` span (or
+  `media` and `media_range` for an inserted video), `speed`, and `layout` or `fit`.
+- `zooms`: each zoom's `id`, `source` span, the `output` spans where it plays, `level` and
+  `target` (`"auto"` or `{x, y}` from 0 to 1).
+- `activity`: clicks (with normalized positions), keyboard shortcuts, and `idle` stretches of
+  two seconds or more without any input, each with its source time and the output times where
+  it plays (an empty list when it was cut).
+- `settings`: the rest of `project.json` (background, frame, cursor, keystrokes, audio, camera,
+  export settings), whose dotted paths `apply`'s `set` takes.
+- `allowed`: the clip speeds, layouts and fits the editor offers.
+- `transcript` (once the recording is transcribed): the engine, whether word times are
+  `measured` or `estimated`, and each phrase's `text` with its `source` span and the `output`
+  spans where it plays.
+- `music` (when set): its file and length.
+
+"Source" seconds are times in `screen.mp4`; "output" seconds are times in the edited video.
+
+### `skill [install]`
+
+Prints the skill that teaches coding agents to edit and export recordings with `describe`,
+`apply` and `export`. `skill install` writes it to `~/.agents/skills/omareel/SKILL.md` and links
+it from each agent skills directory Omarchy sets up that exists (`~/.claude/skills`,
+`~/.codex/skills`, `~/.pi/agent/skills`, `~/.gemini/config/skills`, `~/.hermes/skills`),
+leaving alone anything else already named `omareel` there. Run it again after an upgrade to
+refresh the skill.
+
+### `apply BUNDLE OPS`
+
+Runs edit operations from a JSON file (or `-` for standard input) through the editor's own
+logic, so they are checked as the editor checks them, and saves `project.json`. It is all or
+nothing: if any operation fails, nothing is saved and the error names it. `--dry-run` checks
+without saving; `--describe` adds the resulting timeline to the report. The report is JSON on
+standard output; the exit status is 1 on failure.
+
+The operations are a JSON array (or `{"ops": [...]}`, or a single operation). They run in
+order, and output times refer to the timeline as it is when each one runs, so a cut moves what
+comes after it. Add `"timeline": "source"` to an operation to give recording times instead,
+which no edit moves.
+
+| Operation | Fields |
+| --- | --- |
+| `split` | `at` |
+| `delete` | `from`, `to`; or `ranges`: `[[from, to], ...]` (one undo step with `"timeline": "source"`) |
+| `trim` | `clip`, `in` and/or `out` (source seconds; an inserted video's own) |
+| `remove-clip` | `clip` |
+| `merge` | `clip`, `with`: `next` or `previous` |
+| `move-clip` | `clip` (an inserted video), `direction`: `earlier` or `later` |
+| `reset-trims` | `clip` |
+| `speed` | `clip` or `at`, `speed` (one of `allowed.speeds`) |
+| `layout` | `clip` or `at`, `layout`: `default`, `camera` or `screen` |
+| `fit` | `clip` or `at`, `fit`: `fit`, `fill` or `framed` |
+| `insert` | `file`, `at` (default: the end) |
+| `zoom` | `from`, `to`, `level` (1–4, default 2), `target` (`"auto"` or `{"x": 0–1, "y": 0–1}`) |
+| `edit-zoom` | `id`, any of `from`, `to`, `level`, `target` |
+| `remove-zoom` | `id` |
+| `clear-zooms` | |
+| `regenerate-zooms` | |
+| `music` | `file` (audio, or a video whose sound is used) and/or `volume` (0–1), `fadeIn`, `fadeOut`, `start` (seconds), `duck`, `loop` (true or false) |
+| `remove-music` | |
+| `trim-pauses` | optional `min` (seconds of silence, default 1), `keep` (seconds left, default 0.4) |
+| `remove-fillers` | (needs a transcript with measured word times) |
+| `set` | `path` (dotted, e.g. `background.blur`), `value` |
+
+```sh
+omareel apply Recording.omareel - <<'OPS'
+[
+  {"op": "delete", "from": 0, "to": 1.5},
+  {"op": "speed", "at": 20, "speed": 2},
+  {"op": "zoom", "from": 31, "to": 35, "level": 2.5, "target": {"x": 0.7, "y": 0.4}},
+  {"op": "set", "path": "keystrokes.enabled", "value": true}
+]
+OPS
+```
 
 ## Editor keys
 
@@ -197,19 +337,102 @@ earlier** and **Move later** move it past its neighbour. Recording clips keep th
 inserted video goes missing from `media/`, its clip is marked Missing and export stops until it
 is restored or deleted.
 
+## Background music
+
+**Add music…** in the Audio panel sets an audio file (MP3, M4A, AAC, Ogg, Opus, FLAC, WAV), or a
+video whose sound you want, as background music. Like an inserted video it is copied into the
+bundle's `media/` directory; **Replace music…** swaps the file and keeps the settings, and the
+trash button removes it (undo brings it back). The music plays under the whole edited video,
+from its start to its end, whatever the clips: it starts at the beginning of the output, starts
+over when it is shorter than the video (**Loop**; off, it plays once), and fades in over the
+first seconds of the video and out over its last seconds (**Fade in**, **Fade out**, 0 to 10 s).
+The fades follow the video, not the music: music that doesn't loop and ends before the video
+does is cut off where it ends, and the fade-out falls on the silence after it. For a video
+used as music, its sound's own length counts, which can be shorter than its picture's.
+**Music volume** sets its level without changing the recording's. With **Lower under the recording** on, the music drops
+while the recording's own sound (your voice, the desktop, or an inserted video's sound) plays,
+and comes back in the pauses. It shows as a thin Music lane under the timeline's tracks, with
+its waveform; click it to open the Audio panel. The preview plays it in step with the playhead;
+its ducking there is an approximation of the export's, from the recording's measured loudness.
+GIF exports have no sound. If the music file goes missing from `media/`, export stops until it is
+restored or the music is removed.
+
 ## Project bundle
 
 The bundle directory contains `screen.mp4`, its `screen.mp4.ts` first-frame timestamp,
 `capture.json`, `input.jsonl`, `project.json`, `thumb.jpg`, and `media/` with any inserted
-videos. Video remains unchanged while
-clip, style, cursor, and zoom edits are stored in `project.json`.
+videos and background music. Video remains unchanged while
+clip, style, cursor, zoom, and music edits are stored in `project.json`.
+
+`project.json` holds a `music` object only while there is music (projects without it are
+unchanged):
+
+```json
+"music": {"file": "media/song.mp3", "volume": 0.25, "fadeIn": 1.0, "fadeOut": 2.0,
+          "duck": true, "loop": true, "start": 0.0}
+```
+
+`file` is bundle-relative and must stay inside `media/`; `volume` is 0 to 1; the fades are
+seconds, 0 to 10; `start` is the offset in seconds into the file where the music begins (later
+loops start the file from its beginning; with `loop`, a start past the end of the file wraps
+around, so 6 s into a 4 s file begins at 2 s).
+
+`transcript.json` (once transcribed) has every time in seconds of `screen.mp4`, so edits never
+invalidate it:
+
+```json
+{
+  "version": 1, "backend": "voxtype", "model": "base.en", "language": "en",
+  "wordTiming": "estimated",
+  "segments": [
+    { "start": 0.42, "end": 3.1, "text": "Hello there.",
+      "words": [ { "start": 0.42, "end": 0.8, "text": "Hello" }, ... ] }
+  ]
+}
+```
+
+`wordTiming` is `measured` when the engine timed each word (whisper-cli), `estimated` otherwise.
+Times count from the start of `screen.mp4`, even though its sound track usually starts a little
+after its video (the recorder places the sound by its first sample).
+
+`project.json` gains a `captions` object only once captions are changed in the editor, so older
+projects keep their bytes: `{ "enabled": false, "position": "bottom", "size": 1 }` (`position`
+`bottom` or `top`, `size` 0.5 to 2).
+
+## Speech in the editor
+
+When a recording with sound opens, the editor measures where it speaks, checks the screen
+during the silences and, with no transcript yet, transcribes it in the background. That never
+blocks editing; while a recording or an export runs it stops what it is running and carries on
+afterwards, and closing the editor stops it at once. The Speech section shows its progress, or
+why there is no transcript, and offers:
+
+- Show captions, with position and size: drawn in the preview and the export, at most two lines
+  of about 42 characters, in the keystroke pills' style.
+- Save .srt / .vtt beside the default export.
+- Trim pauses: each silence over a second shrinks to 0.4 s, and the silence before the first
+  and after the last words shrinks to 0.2 s. A silence is kept when anything changes on screen
+  during it (typing, a video, scrolling output; a blinking text cursor does not count) or it
+  has clicks, scrolling, pointer travel or shortcuts in it, since on a screen recording that is
+  someone showing something. The screen is read from `screen.mp4`, five frames a second, only
+  during the silences. Needs no engine. Desktop audio counts as sound, so music under the
+  voice hides pauses.
+- Remove filler words (um, uh, erm, hmm…), with the hesitation around them. Only with measured
+  word times (whisper-cli, from the `whisper-cpp` package): estimated times can miss a short
+  "um" and cut the words beside it.
+
+Both trims are one undo step. Engines differ in whether they write fillers out.
 
 ## Environment
 
 - `OMAREEL_DEBUG=1` appends `gpu-screen-recorder` stderr to `/tmp/omareel.log`.
 - `OMAREEL_PREVIEW_STATS=1` plays an opened recording and logs preview frame rate, average
   frame handling cost, and drops once per second.
+- `OMAREEL_MUSIC_TRACE=1` logs each background-music sync in the editor: output time, the
+  music's target and reported positions in milliseconds, its gain, and whether it plays.
 - `OMAREEL_CAPTURE=gsr` forces the fallback screen capture backend.
+- `OMAREEL_NO_TRANSCRIBE=1` stops the editor transcribing recordings on its own.
+- `OMAREEL_WHISPER_MODEL=PATH` is the ggml model `whisper-cli` uses.
 - `OMAREEL_CAPTURE=native` selects the native screen capture backend when supported.
 - `OMAREEL_PLUGIN_PATH` selects the capture-exclusion plugin file. An explicit missing path
   forces overlay fallback placement.

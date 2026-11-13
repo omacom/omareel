@@ -2,6 +2,9 @@
 
 #include "omareel_qt/src/export.cxxqt.h"
 
+#include <QImage>
+#include <functional>
+#include <QList>
 #include <QObject>
 #include <QSize>
 #include <QString>
@@ -21,6 +24,25 @@ struct ExportOptions {
     bool timing = false;
 };
 
+// What `omareel frame` renders: stills at output times, or `count` spread over the output.
+// Zero means the project's width and frame rate, as for an export.
+struct StillOptions {
+    QString bundlePath;
+    QList<double> times;
+    int count = 0;
+    int width = 0;
+    int fps = 0;
+    // Takes each still as it is rendered (its index, the still), instead of the list holding
+    // them all; false stops with the error it set. Without it the stills are listed.
+    std::function<bool(int, const struct Still &, QString *)> take;
+};
+
+struct Still {
+    QImage image;
+    // The output time the still shows: the start of the frame on screen at the time asked for.
+    double time = 0.0;
+};
+
 // Exports a bundle to MP4 or GIF. What to export and how is decided in Rust
 // (crates/omareel_core/src/export, through crates/omareel_qt/src/export.rs); this class renders
 // the composition with ExportRenderer (src/plumbing), runs the event loop while it waits, and
@@ -33,6 +55,13 @@ public:
     explicit Exporter(QObject *parent = nullptr);
     ~Exporter() override;
     void exportBundle(const ExportOptions &options);
+    // Renders frames of the export as images, each the frame the export shows at its time
+    // (same composition, same decoded pictures), without encoding anything. `duration` gets the
+    // output's length. False with *error set.
+    bool renderStills(const StillOptions &options, QList<Still> *stills, double *duration, QString *error);
+    // The stills as one image: a grid `columns` wide with `gap` pixels around the tiles, each
+    // labelled with its time.
+    static QImage contactSheet(const QList<Still> &stills, int columns, int gap);
 
 public slots:
     // Safe from any thread and while an export runs: it only sets the flag the export checks.

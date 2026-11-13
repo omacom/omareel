@@ -19,13 +19,14 @@ use omareel_core::compat::qdir;
 use omareel_core::compat::qenv;
 use omareel_core::compat::qjson::{self, Value};
 use omareel_core::editor::{
-    self, containing_folder, format_time, preview_stats_line, takes_local_file, trace_input_line, Document, Effect,
+    self, containing_folder, format_time, preview_stats_line, takes_local_file, trace_input_line, DiskChange, Document, Effect,
     ExportDialogSettings, NextClipKind, Player, Probes, Transport, ZoomTarget,
 };
 use omareel_core::media_probe;
 use omareel_core::project::Project;
 use std::cell::RefCell;
 use std::collections::VecDeque;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Instant;
@@ -124,6 +125,12 @@ pub mod qobject {
         // A video being copied into the bundle by insertMedia().
         #[qproperty(bool, importing, READ = importing, NOTIFY = importing_changed)]
         #[qproperty(QString, import_error, READ = import_error, NOTIFY = importing_changed)]
+        // Background music being copied into the bundle by addMusic().
+        #[qproperty(bool, music_importing, READ = music_importing, NOTIFY = importing_changed)]
+        // The music's lane on the timeline: present, file, name, duration (of the file, -1
+        // unknown), extent (output seconds it plays) and waveform (loudness 0 to 1 in equal
+        // steps across the output, empty until measured). Its settings are project.music.
+        #[qproperty(QMap_QString_QVariant, music, READ = music_map, NOTIFY = music_changed)]
         #[qproperty(f64, position, READ = position, NOTIFY = position_changed)]
         #[qproperty(f64, playhead_position, READ = playhead_position, NOTIFY = playhead_position_changed)]
         #[qproperty(bool, playing, READ = playing, NOTIFY = playing_changed)]
@@ -154,16 +161,32 @@ pub mod qobject {
         #[qproperty(QMap_QString_QVariant, cursor, READ = preview_cursor, NOTIFY = composition_changed)]
         #[qproperty(QList_QVariant, ripples, READ = preview_ripples, NOTIFY = composition_changed)]
         #[qproperty(QList_QVariant, keystroke_pills, READ = preview_keystroke_pills, NOTIFY = composition_changed)]
+        #[qproperty(QMap_QString_QVariant, caption, READ = preview_caption, NOTIFY = composition_changed)]
         #[qproperty(bool, software_rendering, READ = software_rendering, CONSTANT)]
         #[qproperty(bool, camera_available, READ = has_camera, CONSTANT)]
         #[qproperty(bool, camera_visible, READ = camera_visible, NOTIFY = composition_changed)]
         #[qproperty(i32, camera_source_width, READ = camera_source_width, CONSTANT)]
         #[qproperty(i32, camera_source_height, READ = camera_source_height, CONSTANT)]
         #[qproperty(QString, camera_status, READ = camera_status, CONSTANT)]
+        // Speech: the transcript, captions, and trimming pauses and filler words.
+        #[qproperty(bool, has_transcript, READ = has_transcript, NOTIFY = speech_changed)]
+        #[qproperty(QString, transcript_summary, READ = transcript_summary, NOTIFY = speech_changed)]
+        #[qproperty(i32, pause_count, READ = pause_count, NOTIFY = speech_changed)]
+        #[qproperty(i32, filler_count, READ = filler_count, NOTIFY = speech_changed)]
+        // The speech is measured and the screen checked, so pause_count is known.
+        #[qproperty(bool, pauses_ready, READ = pauses_ready, NOTIFY = speech_changed)]
+        // The transcript's word times are measured, so filler words can be cut.
+        #[qproperty(bool, can_remove_fillers, READ = can_remove_fillers, NOTIFY = speech_changed)]
+        // "", "analyzing", "transcribing", "done", "unavailable", "failed".
+        #[qproperty(QString, transcription_state, READ = transcription_state, NOTIFY = transcription_changed)]
+        #[qproperty(QString, transcription_message, READ = transcription_message, NOTIFY = transcription_changed)]
+        #[qproperty(f64, transcription_progress, READ = transcription_progress, NOTIFY = transcription_changed)]
         type Editor = super::EditorRust;
 
         #[qsignal]
         fn project_changed(self: Pin<&mut Editor>);
+        #[qsignal]
+        fn music_changed(self: Pin<&mut Editor>);
         #[qsignal]
         fn duration_changed(self: Pin<&mut Editor>);
         #[qsignal]
@@ -208,8 +231,18 @@ pub mod qobject {
         fn export_finished(self: Pin<&mut Editor>, path: QString);
         #[qsignal]
         fn autosaved(self: Pin<&mut Editor>, path: QString);
+        /// project.json changed on disk (another program wrote it) and the editor took it in.
+        #[qsignal]
+        fn project_reloaded(self: Pin<&mut Editor>);
+        /// project.json changed on disk but can't be read; autosave stops until it can.
+        #[qsignal]
+        fn project_unreadable(self: Pin<&mut Editor>);
         #[qsignal]
         fn error_occurred(self: Pin<&mut Editor>, message: QString);
+        #[qsignal]
+        fn speech_changed(self: Pin<&mut Editor>);
+        #[qsignal]
+        fn transcription_changed(self: Pin<&mut Editor>);
 
         fn is_valid(self: &Editor) -> bool;
         fn error_string(self: &Editor) -> QString;
@@ -233,6 +266,8 @@ pub mod qobject {
         fn loading(self: &Editor) -> bool;
         fn importing(self: &Editor) -> bool;
         fn import_error(self: &Editor) -> QString;
+        fn music_importing(self: &Editor) -> bool;
+        fn music_map(self: &Editor) -> QMap_QString_QVariant;
         fn position(self: &Editor) -> f64;
         fn playhead_position(self: &Editor) -> f64;
         fn playing(self: &Editor) -> bool;
@@ -262,11 +297,21 @@ pub mod qobject {
         fn preview_cursor(self: &Editor) -> QMap_QString_QVariant;
         fn preview_ripples(self: &Editor) -> QList_QVariant;
         fn preview_keystroke_pills(self: &Editor) -> QList_QVariant;
+        fn preview_caption(self: &Editor) -> QMap_QString_QVariant;
         fn software_rendering(self: &Editor) -> bool;
         fn camera_source_width(self: &Editor) -> i32;
         fn camera_source_height(self: &Editor) -> i32;
         fn camera_status(self: &Editor) -> QString;
         fn camera_visible(self: &Editor) -> bool;
+        fn has_transcript(self: &Editor) -> bool;
+        fn transcript_summary(self: &Editor) -> QString;
+        fn pause_count(self: &Editor) -> i32;
+        fn filler_count(self: &Editor) -> i32;
+        fn pauses_ready(self: &Editor) -> bool;
+        fn can_remove_fillers(self: &Editor) -> bool;
+        fn transcription_state(self: &Editor) -> QString;
+        fn transcription_message(self: &Editor) -> QString;
+        fn transcription_progress(self: &Editor) -> f64;
         // Test hook (no UI use).
         fn screen_frame_times_ready_for_tests(self: &Editor) -> bool;
 
@@ -371,6 +416,12 @@ pub mod qobject {
         fn insert_media(self: Pin<&mut Editor>, url: &QUrl);
         #[qinvokable]
         fn clear_import_error(self: Pin<&mut Editor>);
+        // Copies an audio file (or a video, whose sound is used) into the bundle's media/
+        // directory and sets it as the background music, replacing any.
+        #[qinvokable]
+        fn add_music(self: Pin<&mut Editor>, url: &QUrl);
+        #[qinvokable]
+        fn clear_music(self: Pin<&mut Editor>);
         #[qinvokable]
         fn add_zoom_at(self: Pin<&mut Editor>, output_time: f64) -> QString;
         #[qinvokable]
@@ -412,6 +463,17 @@ pub mod qobject {
         fn export_to_with_settings(self: Pin<&mut Editor>, path: &QString, settings: &QMap_QString_QVariant);
         #[qinvokable]
         fn default_export_path(self: &Editor, format: &QString) -> QString;
+        // Transcribes the recording again in the background.
+        #[qinvokable]
+        fn transcribe(self: Pin<&mut Editor>);
+        // Cuts the pauses (or filler words) out as one undo step; how many.
+        #[qinvokable]
+        fn trim_pauses(self: Pin<&mut Editor>) -> i32;
+        #[qinvokable]
+        fn remove_filler_words(self: Pin<&mut Editor>) -> i32;
+        // Writes the captions beside the default export ("srt" or "vtt"); the path, or empty.
+        #[qinvokable]
+        fn save_subtitles(self: &Editor, format: &QString) -> QString;
         #[qinvokable]
         fn format_time(self: &Editor, seconds: f64) -> QString;
         #[qinvokable]
@@ -481,6 +543,18 @@ pub mod qobject {
         #[inherit]
         fn playback_set_audio(self: Pin<&mut Editor>, player: i32, volume: f64, muted: bool);
         #[inherit]
+        fn playback_load_music(self: Pin<&mut Editor>, path: &QString);
+        #[inherit]
+        fn playback_sync_music(
+            self: Pin<&mut Editor>,
+            milliseconds: i64,
+            pass: i64,
+            remaining_ms: i64,
+            tolerance_ms: i64,
+            play: bool,
+            volume: f64,
+        );
+        #[inherit]
         fn playback_position(self: &Editor, player: i32) -> i64;
         #[inherit]
         fn playback_position_ready(self: &Editor, player: i32) -> bool;
@@ -508,6 +582,14 @@ pub mod qobject {
 const SCREEN: i32 = 0;
 const CAMERA: i32 = 1;
 const MEDIA: i32 = 2;
+const MUSIC: i32 = 3;
+
+/// How far the music may drift from the playhead while playing before it is moved back: each
+/// correction is an audible skip. QMediaPlayer reports an audio file's position in steps of its
+/// decode chunks (93 ms for 4096 samples at 44.1 kHz), so it reads up to a step behind.
+const MUSIC_TOLERANCE_MS: i64 = 250;
+/// The waveform's steps across the timeline.
+const MUSIC_WAVEFORM_STEPS: usize = 400;
 
 // QMediaPlayer::PlaybackState and MediaStatus.
 const PLAYING_STATE: i32 = 1;
@@ -523,6 +605,7 @@ const MOTION_TIMER: i32 = 1;
 const SCRUB_TIMER: i32 = 2;
 const PREVIEW_TIMER: i32 = 3;
 const PREVIEW_STATS_TIMER: i32 = 4;
+const PROJECT_WATCH_TIMER: i32 = 5;
 const FINISH_LOADING_CALL: i32 = 0;
 const ADVANCE_CLIP_CALL: i32 = 1;
 const RELEASE_THUMBNAILS_CALL: i32 = 2;
@@ -585,6 +668,13 @@ pub struct EditorRust {
     playhead_clock: Option<Instant>,
     /// The inserted video the media player holds.
     media_player_source: String,
+    /// The music file the music player holds (absolute).
+    music_player_source: String,
+    /// `OMAREEL_MUSIC_TRACE=1`: each music sync is written to stderr.
+    music_trace: bool,
+    /// What the `music` property was last made from, so it changes (and the timeline rebuilds
+    /// the waveform) only when the lane does, not on every slider step.
+    music_lane_key: String,
     pending_scrub_position: f64,
     loading: bool,
     /// The filmstrip and camera strip wait while the editor opens: their decoders took ten cores
@@ -597,10 +687,22 @@ pub struct EditorRust {
     preview_stats_clock: Option<Instant>,
     camera_thumbnails: QList<QVariant>,
     export_timer: Option<Instant>,
+    /// `projectUnreadable` was emitted for the project.json on disk now.
+    project_unreadable_reported: bool,
     /// The converted `project` map and the document revision it was made at.
     project_map: RefCell<Option<(u64, QMap<QMapPair_QString_QVariant>)>>,
     workers: RefCell<Vec<JoinHandle<()>>>,
     wallpaper_jobs: Arc<WallpaperQueue>,
+    /// Stops the speech work (and kills what it runs) when the editor goes.
+    speech_control: omareel_core::transcript::job::Control,
+    /// Holds the speech work back while an export runs.
+    export_busy: Arc<AtomicBool>,
+    speech_running: bool,
+    /// The screen is being checked for stillness during silences (pause trimming needs it).
+    stillness_running: bool,
+    transcription_state: String,
+    transcription_message: String,
+    transcription_progress: f64,
 }
 
 impl EditorRust {
@@ -612,6 +714,9 @@ impl EditorRust {
             transport: Transport::default(),
             playhead_clock: None,
             media_player_source: String::new(),
+            music_player_source: String::new(),
+            music_trace: std::env::var_os("OMAREEL_MUSIC_TRACE").is_some_and(|value| value == "1"),
+            music_lane_key: String::new(),
             pending_scrub_position: -1.0,
             loading: true,
             thumbnails_held: true,
@@ -621,9 +726,17 @@ impl EditorRust {
             preview_stats_clock: None,
             camera_thumbnails: QList::default(),
             export_timer: None,
+            project_unreadable_reported: false,
             project_map: RefCell::new(None),
             workers: RefCell::new(Vec::new()),
             wallpaper_jobs: Arc::new(WallpaperQueue::default()),
+            speech_control: omareel_core::transcript::job::Control::default(),
+            export_busy: Arc::new(AtomicBool::new(false)),
+            speech_running: false,
+            stillness_running: false,
+            transcription_state: String::new(),
+            transcription_message: String::new(),
+            transcription_progress: 0.0,
         }
     }
 
@@ -656,12 +769,17 @@ impl EditorRust {
 impl Drop for EditorRust {
     /// `~Editor`: unsaved edits are written, then the workers are waited for. Nothing is
     /// emitted: the object is being destroyed. EditorBase cancels a running export after this.
+    /// The speech work is not waited for: it is stopped and what it runs killed at once, and
+    /// its threads end on their own.
     fn drop(&mut self) {
         if let Some(document) = self.document.as_mut() {
-            if document.dirty() {
+            // A project.json another program wrote since the last look is kept over edits made
+            // here in the last moments: the window is closing and could not show the choice.
+            if document.dirty() && !document.disk_changed() {
                 document.save_now();
             }
         }
+        self.speech_control.stop();
         for worker in self.workers.get_mut().drain(..) {
             let _ = worker.join();
         }
@@ -715,9 +833,27 @@ impl qobject::Editor {
             self.as_mut().playback_load_camera(&camera_path);
         }
         self.start_frame_times();
+        // The music opens with the recording, ready when play is pressed.
+        self.as_mut().update_music();
+        self.as_mut().start_speech(false);
         self.as_mut().rebuild_motion();
         self.as_mut().call_later(RELEASE_THUMBNAILS_CALL, THUMBNAIL_HOLD_MS);
         self.as_mut().call_later(FINISH_LOADING_CALL, 1500);
+        self.as_mut().start_editor_timer(PROJECT_WATCH_TIMER);
+    }
+
+    /// Takes in a project.json another program wrote ([`Document::reload_if_changed_on_disk`])
+    /// and tells QML: `projectReloaded`, or `projectUnreadable` once while it can't be read.
+    fn reload_project_from_disk(mut self: Pin<&mut Self>) -> DiskChange {
+        let change = self.as_mut().edit(Document::reload_if_changed_on_disk).unwrap_or(DiskChange::Unchanged);
+        let reported = self.project_unreadable_reported;
+        self.as_mut().rust_mut().project_unreadable_reported = change == DiskChange::Unreadable;
+        match change {
+            DiskChange::Reloaded => self.as_mut().project_reloaded(),
+            DiskChange::Unreadable if !reported => self.as_mut().project_unreadable(),
+            _ => {}
+        }
+        change
     }
 
     /// Changes the document, then performs what it queued; `None` without a document.
@@ -738,10 +874,18 @@ impl qobject::Editor {
     fn perform(mut self: Pin<&mut Self>, effect: Effect) {
         match effect {
             Effect::SetScreenAudio { volume, muted } => self.as_mut().playback_set_audio(SCREEN, volume, muted),
-            Effect::UpdateInsertAudio => self.as_mut().update_insert_audio(),
+            Effect::UpdateInsertAudio => {
+                // The music's volume and file follow the project like the inserted video's sound.
+                self.as_mut().update_insert_audio();
+                self.as_mut().update_music();
+            }
             Effect::DirtyChanged => self.as_mut().dirty_changed(),
             Effect::StartAutosaveTimer => self.as_mut().start_editor_timer(AUTOSAVE_TIMER),
-            Effect::ProjectChanged => self.as_mut().project_changed(),
+            Effect::ProjectChanged => {
+                self.as_mut().project_changed();
+                self.as_mut().update_music_lane();
+                self.as_mut().speech_changed();
+            }
             Effect::DurationChanged => self.as_mut().duration_changed(),
             Effect::OutputSizeChanged => self.as_mut().output_size_changed(),
             Effect::StartMotionTimer => self.as_mut().start_editor_timer(MOTION_TIMER),
@@ -754,17 +898,23 @@ impl qobject::Editor {
             Effect::WallpapersChanged => self.as_mut().wallpapers_changed(),
             Effect::ImportingChanged => self.as_mut().importing_changed(),
             Effect::VideoThumbnailRevisionChanged => self.as_mut().video_thumbnail_revision_changed(),
-            Effect::ExportingChanged => self.as_mut().exporting_changed(),
+            Effect::ExportingChanged => {
+                let exporting = self.exporting();
+                self.export_busy.store(exporting, Ordering::Relaxed);
+                self.as_mut().exporting_changed();
+            }
             Effect::ExportProgressChanged => self.as_mut().export_progress_changed(),
             Effect::ExportErrorChanged => self.as_mut().export_error_changed(),
             Effect::ExportFinished(path) => self.as_mut().export_finished(qstring(&path)),
             Effect::ErrorOccurred(message) => self.as_mut().error_occurred(qstring(&message)),
             Effect::Autosaved(path) => self.as_mut().autosaved(qstring(&path)),
+            Effect::TranscriptChanged => self.as_mut().speech_changed(),
             Effect::Seek(output_time) => self.as_mut().seek(output_time),
             Effect::Pause => self.as_mut().pause(),
             Effect::SyncCamera { screen_source_time, force } => self.as_mut().sync_camera(screen_source_time, force),
             Effect::StartNextVideoThumbnail => self.as_mut().start_next_video_thumbnail(),
             Effect::StartImport(source) => self.start_import(&source),
+            Effect::StartMusicImport(source) => self.start_music_import(&source),
             Effect::GenerateWallpaperThumbnail { path, thumbnail } => self.generate_wallpaper_thumbnail(path, thumbnail),
         }
     }
@@ -785,6 +935,184 @@ impl qobject::Editor {
                 }
             });
         });
+    }
+
+    /// Measures where the recording speaks and checks the screen during the silences (both for
+    /// pause trimming) and, when there is no transcript yet or `force` asks, transcribes it with
+    /// Omarchy's dictation engine, all on threads of their own. Everything waits while a
+    /// recording or an export runs (the editor is opened ahead during a recording), stopping
+    /// what it runs then and taking it up again after. Closing the editor never waits for it:
+    /// it is stopped and its commands killed. `OMAREEL_NO_TRANSCRIBE=1` leaves the transcript
+    /// alone unless asked.
+    fn start_speech(mut self: Pin<&mut Self>, force: bool) {
+        use omareel_core::transcript::{audio, backend, stillness, vad};
+        if self.speech_running {
+            return;
+        }
+        let Some(document) = self.document.as_ref() else { return };
+        if !document.has_audio() {
+            return;
+        }
+        let transcribe = force || (document.transcript().is_none() && qenv::int_value_or_zero("OMAREEL_NO_TRANSCRIBE") != 1);
+        let measure = document.speech_regions().is_none();
+        let check_screen = document.still_windows().is_none() && !self.stillness_running;
+        if !transcribe && !measure && !check_screen {
+            return;
+        }
+        let screen = document.video_path().to_owned();
+        let bundle = document.bundle_path().to_owned();
+        let duration = document.recording().source_duration;
+        let geometry = (document.source_width(), document.source_height(), document.capture_scale());
+        // Silences already known (the speech was measured on an earlier run).
+        let known_silences = document.silences_to_check();
+        let export_busy = Arc::clone(&self.export_busy);
+        let hold: Arc<dyn Fn() -> bool + Send + Sync> = Arc::new(move || {
+            export_busy.load(Ordering::Relaxed) || omareel_record::recorder::state::is_recording()
+        });
+        let mut control = self.speech_control.clone();
+        control.hold = Some(hold);
+        {
+            let mut rust = self.as_mut().rust_mut();
+            rust.speech_running = true;
+            rust.stillness_running |= check_screen;
+            if transcribe {
+                rust.transcription_state = "analyzing".into();
+                rust.transcription_message.clear();
+                rust.transcription_progress = 0.0;
+            }
+        }
+        if transcribe {
+            self.as_mut().transcription_changed();
+        }
+        self.as_mut().speech_changed();
+        let thread = self.qt_thread();
+        let screen_for_audio = screen.clone();
+        // The screen check reads the video, the rest the sound: they run side by side.
+        let start_stillness = {
+            let thread = thread.clone();
+            let control = control.clone();
+            move |silences: Vec<(f64, f64)>| {
+                let spawned = std::thread::Builder::new().name("omareel-stillness".into()).spawn(move || {
+                    let still = match stillness::still_windows(&screen, &silences, duration, geometry, &control) {
+                        Ok(still) => Some(still),
+                        Err(_) if control.cancelled() => None,
+                        Err(error) => {
+                            eprintln!("omareel: could not check the screen for pauses: {error}");
+                            Some(Vec::new())
+                        }
+                    };
+                    let _ = thread.queue(move |mut editor| {
+                        editor.as_mut().rust_mut().stillness_running = false;
+                        match still {
+                            Some(still) => {
+                                editor.edit(|document| document.set_still_windows(still));
+                            }
+                            None => editor.as_mut().speech_changed(),
+                        }
+                    });
+                });
+                spawned.is_ok()
+            }
+        };
+        let mut start_stillness = Some(start_stillness);
+        let check_thread = thread.clone();
+        let mut check = move |silences: Vec<(f64, f64)>| {
+            if let Some(start) = start_stillness.take() {
+                if !start(silences) {
+                    let _ = check_thread.queue(|mut editor| editor.as_mut().rust_mut().stillness_running = false);
+                }
+            }
+        };
+        if check_screen && !measure {
+            check(known_silences.unwrap_or_default());
+        }
+        let worker_thread = thread.clone();
+        let work = move || {
+            let thread = worker_thread;
+            let status = |state: &'static str, message: String, progress: f64| {
+                let _ = thread.queue(move |mut editor| {
+                    let mut rust = editor.as_mut().rust_mut();
+                    rust.transcription_state = state.into();
+                    rust.transcription_message = message;
+                    rust.transcription_progress = progress;
+                    editor.as_mut().transcription_changed();
+                });
+            };
+            let finish = || {
+                let _ = thread.queue(|mut editor| {
+                    let mut rust = editor.as_mut().rust_mut();
+                    rust.speech_running = false;
+                    if rust.transcription_state == "analyzing" {
+                        rust.transcription_state.clear();
+                        editor.as_mut().transcription_changed();
+                    }
+                });
+            };
+            let audio = match audio::extract_with(&screen_for_audio, &control) {
+                Ok(audio) => audio,
+                Err(error) => {
+                    if transcribe && !control.cancelled() {
+                        status("failed", error, 0.0);
+                    }
+                    if check_screen && measure {
+                        let _ = thread.queue(|mut editor| editor.as_mut().rust_mut().stillness_running = false);
+                    }
+                    finish();
+                    return;
+                }
+            };
+            if measure {
+                let regions = vad::speech_regions(&audio.samples, &vad::VadSettings::default());
+                if check_screen {
+                    check(stillness::silences_to_check(&regions, duration));
+                }
+                let _ = thread.queue(move |editor| {
+                    editor.edit(|document| document.set_speech_regions(regions));
+                });
+            }
+            if !transcribe || control.cancelled() {
+                finish();
+                return;
+            }
+            let engines = backend::plan(backend::Choice::Auto);
+            if engines.is_empty() {
+                status("unavailable", "No speech-to-text engine: choose one in Omarchy's Setup › Defaults › Dictation".into(), 0.0);
+                finish();
+                return;
+            }
+            status("transcribing", String::new(), 0.0);
+            let progress_thread = thread.clone();
+            let progress: Arc<dyn Fn(f64) + Send + Sync> = Arc::new(move |fraction| {
+                let _ = progress_thread.queue(move |mut editor| {
+                    editor.as_mut().rust_mut().transcription_progress = fraction;
+                    editor.as_mut().transcription_changed();
+                });
+            });
+            let control = backend::Control { progress: Some(progress), ..control.clone() };
+            match backend::transcribe_audio(&audio, &engines, &control) {
+                Ok(transcript) => {
+                    let saved = transcript.save(&bundle);
+                    let empty = transcript.is_empty();
+                    let _ = thread.queue(move |editor| {
+                        editor.edit(|document| document.set_transcript(Some(transcript)));
+                    });
+                    match saved {
+                        Err(error) => status("failed", error, 1.0),
+                        Ok(()) if empty => status("done", "No speech found".into(), 1.0),
+                        Ok(()) => status("done", String::new(), 1.0),
+                    }
+                }
+                Err(_) if control.cancelled() => {}
+                Err(error) => status("failed", error, 0.0),
+            }
+            finish();
+        };
+        // Not one of `workers`: closing the editor must not wait for it.
+        if std::thread::Builder::new().name("omareel-speech".into()).spawn(work).is_err() {
+            let mut rust = self.as_mut().rust_mut();
+            rust.speech_running = false;
+            rust.stillness_running = false;
+        }
     }
 
     /// `rebuildMotion()`: builds the motion track off the GUI thread, unless a build runs.
@@ -848,6 +1176,40 @@ impl qobject::Editor {
         });
     }
 
+    /// The music import [`Effect::StartMusicImport`] asks for.
+    fn start_music_import(&self, source: &str) {
+        let Some(job) = self.document.as_ref().map(|document| document.music_import_job(source)) else { return };
+        let thread = self.qt_thread();
+        self.spawn(move || {
+            let imported = job.run();
+            let _ = thread.queue(move |editor| {
+                editor.edit(|document| document.finish_music_import(imported));
+            });
+        });
+    }
+
+    /// Measures the sound levels the music's waveform and the preview's ducking need, each file
+    /// once, off the GUI thread.
+    fn start_audio_levels(mut self: Pin<&mut Self>) {
+        let requests = match self.as_mut().rust_mut().document.as_mut() {
+            Some(document) => document.take_audio_levels_requests(),
+            None => return,
+        };
+        for path in requests {
+            let thread = self.qt_thread();
+            self.spawn(move || {
+                let levels = omareel_core::music::measure_levels(&path).unwrap_or_default();
+                let _ = thread.queue(move |mut editor| {
+                    if let Some(document) = editor.as_mut().rust_mut().document.as_mut() {
+                        document.set_audio_levels(&path, levels);
+                    }
+                    editor.as_mut().update_music_lane();
+                    editor.update_music();
+                });
+            });
+        }
+    }
+
     /// A wallpaper picker thumbnail, generated off the GUI thread.
     fn generate_wallpaper_thumbnail(&self, path: String, thumbnail: String) {
         let queue = Arc::clone(&self.wallpaper_jobs);
@@ -905,6 +1267,48 @@ impl qobject::Editor {
 
     // ---------------------------------------------------------------------------------------
     // Properties.
+
+    /// Emits `musicChanged` when what the music lane shows changed.
+    fn update_music_lane(mut self: Pin<&mut Self>) {
+        let Some(document) = self.document.as_ref() else { return };
+        let key = match document.music() {
+            Some(music) => format!(
+                "{}|{}|{}|{:?}|{}|{}",
+                music.file,
+                music.start,
+                music.loop_,
+                document.music_duration(),
+                document.duration(),
+                document.audio_levels_revision()
+            ),
+            None => String::new(),
+        };
+        if key != self.music_lane_key {
+            self.as_mut().rust_mut().music_lane_key = key;
+            self.music_changed();
+        }
+    }
+
+    fn music_importing(&self) -> bool {
+        self.document.as_ref().is_some_and(Document::music_importing)
+    }
+
+    fn music_map(&self) -> QMap<QMapPair_QString_QVariant> {
+        let Some(document) = self.document.as_ref() else { return QMap::default() };
+        let (Some(music), Some((extent, waveform))) = (document.music(), document.music_lane(MUSIC_WAVEFORM_STEPS)) else {
+            return map([("present", QVariant::from(&false))]);
+        };
+        let name = music.file.rsplit('/').next().unwrap_or(&music.file).to_owned();
+        let waveform = Value::Array(waveform.into_iter().map(Value::from).collect());
+        map([
+            ("present", QVariant::from(&true)),
+            ("file", QVariant::from(&qstring(&music.file))),
+            ("name", QVariant::from(&qstring(&name))),
+            ("duration", QVariant::from(&document.music_duration().unwrap_or(-1.0))),
+            ("extent", QVariant::from(&extent)),
+            ("waveform", json_variant(&waveform)),
+        ])
+    }
 
     fn is_valid(&self) -> bool {
         self.document.is_some()
@@ -1218,6 +1622,11 @@ impl qobject::Editor {
             .collect()
     }
 
+    fn preview_caption(&self) -> QMap<QMapPair_QString_QVariant> {
+        let Some(document) = self.document.as_ref() else { return QMap::default() };
+        crate::export::caption_map(&document.preview_caption(), &document.captions())
+    }
+
     fn preview_keystroke_pills(&self) -> QList<QVariant> {
         let Some(document) = self.document.as_ref() else { return QList::default() };
         document
@@ -1254,6 +1663,93 @@ impl qobject::Editor {
 
     fn camera_visible(&self) -> bool {
         self.document.as_ref().is_some_and(Document::camera_visible)
+    }
+
+    fn has_transcript(&self) -> bool {
+        self.document.as_ref().is_some_and(|document| document.transcript().is_some())
+    }
+
+    /// "voxtype · base.en · 120 words, estimated timing", or empty without a transcript.
+    fn transcript_summary(&self) -> QString {
+        let Some(transcript) = self.document.as_ref().and_then(Document::transcript) else { return QString::default() };
+        let mut parts = vec![transcript.backend.clone()];
+        if !transcript.model.is_empty() {
+            parts.push(transcript.model.clone());
+        }
+        let words = transcript.words().count();
+        let timing = match transcript.word_timing {
+            omareel_core::transcript::WordTiming::Measured => "",
+            omareel_core::transcript::WordTiming::Estimated => ", estimated timing",
+        };
+        parts.push(format!("{words} word{}{timing}", if words == 1 { "" } else { "s" }));
+        qstring(&parts.join(" · "))
+    }
+
+    fn pause_count(&self) -> i32 {
+        self.document.as_ref().map_or(0, |document| document.pause_ranges(&Default::default()).len() as i32)
+    }
+
+    fn filler_count(&self) -> i32 {
+        self.document.as_ref().map_or(0, |document| document.filler_ranges().len() as i32)
+    }
+
+    fn pauses_ready(&self) -> bool {
+        self.document.as_ref().is_some_and(Document::pauses_ready)
+    }
+
+    fn can_remove_fillers(&self) -> bool {
+        self.document.as_ref().is_some_and(Document::can_remove_fillers)
+    }
+
+    fn transcription_state(&self) -> QString {
+        qstring(&self.transcription_state)
+    }
+
+    fn transcription_message(&self) -> QString {
+        qstring(&self.transcription_message)
+    }
+
+    fn transcription_progress(&self) -> f64 {
+        self.transcription_progress
+    }
+
+    fn transcribe(self: Pin<&mut Self>) {
+        self.start_speech(true);
+    }
+
+    fn trim_pauses(self: Pin<&mut Self>) -> i32 {
+        self.edit(|document| {
+            let ranges = document.pause_ranges(&Default::default());
+            document.remove_source_ranges(&ranges) as i32
+        })
+        .unwrap_or(0)
+    }
+
+    fn remove_filler_words(self: Pin<&mut Self>) -> i32 {
+        self.edit(|document| {
+            let ranges = document.filler_ranges();
+            document.remove_source_ranges(&ranges) as i32
+        })
+        .unwrap_or(0)
+    }
+
+    fn save_subtitles(&self, format: &QString) -> QString {
+        let Some(document) = self.document.as_ref() else { return QString::default() };
+        let format = format.to_string();
+        let text = match format.as_str() {
+            "srt" => omareel_core::captions::to_srt(document.caption_cues()),
+            "vtt" => omareel_core::captions::to_vtt(document.caption_cues()),
+            _ => return QString::default(),
+        };
+        let video = document.default_export_path("mp4");
+        let path = match video.rsplit_once('.') {
+            Some((stem, _)) => format!("{stem}.{format}"),
+            None => format!("{video}.{format}"),
+        };
+        match omareel_core::compat::qsavefile::save(&path, text.as_bytes()) {
+            Ok(()) => qstring(&path),
+            Err(_) => QString::default(),
+        }
     }
 
     fn screen_frame_times_ready_for_tests(&self) -> bool {
@@ -1319,7 +1815,19 @@ impl qobject::Editor {
         self.edit(Document::redo);
     }
 
+    /// Ctrl+S and the Save button: an explicit save, which also replaces a project.json that
+    /// can't be read.
     fn save_now(self: Pin<&mut Self>) -> bool {
+        self.save_project(true)
+    }
+
+    /// Saves project.json, first taking in one another program wrote, so it becomes an undo
+    /// step instead of being overwritten. Autosave leaves a project.json that can't be read
+    /// alone (and the top bar says so); an explicit save replaces it.
+    fn save_project(mut self: Pin<&mut Self>, explicit: bool) -> bool {
+        if self.as_mut().reload_project_from_disk() == DiskChange::Unreadable && !explicit {
+            return false;
+        }
         self.edit(Document::save_now).unwrap_or(false)
     }
 
@@ -1452,6 +1960,15 @@ impl qobject::Editor {
         self.edit(Document::clear_import_error);
     }
 
+    fn add_music(self: Pin<&mut Self>, url: &QUrl) {
+        let source = qobject::url_path(url).to_string();
+        self.edit(|document| document.start_music_import(&source));
+    }
+
+    fn clear_music(self: Pin<&mut Self>) {
+        self.edit(Document::clear_music);
+    }
+
     fn add_zoom_at(self: Pin<&mut Self>, output_time: f64) -> QString {
         self.add_zoom_at_with_length(output_time, 2.0)
     }
@@ -1543,7 +2060,8 @@ impl qobject::Editor {
         if self.document.as_ref().is_none_or(|document| document.export_state().exporting) {
             return;
         }
-        self.as_mut().save_now();
+        // The export reads project.json, so this save must happen.
+        self.as_mut().save_project(true);
         let path = qobject::text_url_path(path).to_string();
         let (mut fps, mut height, mut quality) = (0, 0, QString::default());
         qobject::export_settings(settings, &mut fps, &mut height, &mut quality);
@@ -1648,6 +2166,7 @@ impl qobject::Editor {
             self.as_mut().sync_camera(source, true);
         }
         self.as_mut().update_insert_audio();
+        self.as_mut().update_music();
         self.prepare_next_clip();
     }
 
@@ -1655,7 +2174,8 @@ impl qobject::Editor {
         self.as_mut().set_transport_playing(false);
         self.as_mut().playback_pause(SCREEN);
         self.as_mut().playback_pause(CAMERA);
-        self.playback_pause(MEDIA);
+        self.as_mut().playback_pause(MEDIA);
+        self.update_music();
     }
 
     fn step_frames(mut self: Pin<&mut Self>, frames: i32) {
@@ -1751,7 +2271,8 @@ impl qobject::Editor {
         let position = self.position();
         self.as_mut().reset_playhead_clock(position);
         self.as_mut().position_changed();
-        self.composition_changed();
+        self.as_mut().composition_changed();
+        self.update_music();
     }
 
     fn set_playhead_position(mut self: Pin<&mut Self>, output_time: f64) {
@@ -1881,6 +2402,48 @@ impl qobject::Editor {
         self.as_mut().playback_set_audio(MEDIA, volume, muted);
     }
 
+    /// Keeps the music player on the playhead: its file, where in it, playing or paused, and
+    /// its volume with the fades and ducking there. Called as the transport moves and on every
+    /// tick while playing.
+    fn update_music(mut self: Pin<&mut Self>) {
+        let output = self.position();
+        let playing = self.transport.playing && !self.transport.scrubbing;
+        let Some(playback) = self.document.as_ref().map(|document| document.music_playback(output)) else { return };
+        let Some(playback) = playback else {
+            if !self.music_player_source.is_empty() {
+                self.as_mut().rust_mut().music_player_source.clear();
+                self.as_mut().playback_load_music(&QString::default());
+            }
+            return;
+        };
+        if self.music_player_source != playback.path {
+            self.as_mut().rust_mut().music_player_source = playback.path.clone();
+            self.as_mut().playback_load_music(&qstring(&playback.path));
+            self.as_mut().start_audio_levels();
+        }
+        let play = playing && playback.audible;
+        if self.music_trace {
+            print_error(&format!(
+                "music output={output:.3} target_ms={} pass={} player_ms={} gain={:.3} play={play} state={}\n",
+                playback.position_ms,
+                playback.pass,
+                self.playback_position(MUSIC),
+                playback.gain,
+                self.playback_state(MUSIC)
+            ));
+        }
+        self.as_mut().playback_sync_music(
+            playback.position_ms,
+            playback.pass,
+            playback.remaining_ms,
+            MUSIC_TOLERANCE_MS,
+            play,
+            playback.gain,
+        );
+        // The recording's and inserted videos' levels, once ducking needs them.
+        self.start_audio_levels();
+    }
+
     /// `setTransportPlaying(value)`: what Space controls; the players follow it as clips change
     /// hands.
     fn set_transport_playing(mut self: Pin<&mut Self>, value: bool) {
@@ -1956,7 +2519,8 @@ impl qobject::Editor {
             let position = self.playback_position(player);
             self.as_mut().handle_player_position(position);
         }
-        self.update_playhead_position();
+        self.as_mut().update_playhead_position();
+        self.update_music();
     }
 
     /// `handlePreviewStats()`.
@@ -2052,6 +2616,9 @@ impl qobject::Editor {
             }
         } else if player == MEDIA && status == END_OF_MEDIA && self.transport.playing && self.clip_is_media(active) {
             self.call_later(ADVANCE_CLIP_CALL, 0);
+        } else if player == MUSIC && [LOADED_MEDIA, BUFFERED_MEDIA].contains(&status) {
+            // A file still opening ignored where it was asked to be.
+            self.update_music();
         }
     }
 
@@ -2079,7 +2646,10 @@ impl qobject::Editor {
     fn timer_fired(self: Pin<&mut Self>, timer: i32) {
         match timer {
             AUTOSAVE_TIMER => {
-                self.save_now();
+                self.save_project(false);
+            }
+            PROJECT_WATCH_TIMER => {
+                self.reload_project_from_disk();
             }
             MOTION_TIMER => self.rebuild_motion(),
             SCRUB_TIMER => self.flush_scrub_seek(),

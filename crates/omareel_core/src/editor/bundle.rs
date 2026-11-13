@@ -260,6 +260,25 @@ pub fn camera_offset(capture: &Object) -> f64 {
 /// `Editor::loadBundle`, with the bundle path made absolute as the constructor made it. The
 /// error is `m_error` as the C++ left it (empty when ffprobe could not run).
 pub fn load_bundle(bundle_path: &str, probes: &Probes) -> Result<Bundle, String> {
+    load_bundle_with(bundle_path, probes, true)
+}
+
+/// What opening a bundle corrects in any project it reads: a timeline of inserted videos alone
+/// gets the recording back as its first clip, and audio the recording doesn't have is off.
+pub fn fit_project_to_recording(project: &mut Project, recording: &Recording) {
+    if project.clips.iter().all(Clip::is_media) {
+        project.clips.insert(
+            0,
+            Clip { id: "c1".into(), in_: 0.0, out: recording.source_duration, speed: 1.0, ..Clip::default() },
+        );
+    }
+    project.audio.desktop = project.audio.desktop && recording.has_desktop_audio;
+    project.audio.mic = project.audio.mic && recording.has_microphone_audio;
+}
+
+/// [`load_bundle`]; a project.json that needed migrating is written back only when
+/// `save_migration` (a read-only look, such as `omareel describe`, leaves the file alone).
+pub fn load_bundle_with(bundle_path: &str, probes: &Probes, save_migration: bool) -> Result<Bundle, String> {
     let bundle_path = qdir::absolute_path(bundle_path);
     let project_path = qdir::file_path(&bundle_path, "project.json");
     let video_path = qdir::file_path(&bundle_path, "screen.mp4");
@@ -321,16 +340,11 @@ pub fn load_bundle(bundle_path: &str, probes: &Probes) -> Result<Bundle, String>
             &camera_capture,
         )
     } else {
-        let (project, result) = Project::load(&project_path);
+        let (project, result) = Project::load_with(&project_path, save_migration);
         result?;
         project
     };
-    if project.clips.iter().all(Clip::is_media) {
-        project.clips.insert(
-            0,
-            Clip { id: "c1".into(), in_: 0.0, out: recording.source_duration, speed: 1.0, ..Clip::default() },
-        );
-    }
+    fit_project_to_recording(&mut project, &recording);
     // A missing inserted video keeps its clip; it shows as missing and blocks export.
     let mut inserts = HashMap::new();
     for clip in &project.clips {
@@ -339,8 +353,6 @@ pub fn load_bundle(bundle_path: &str, probes: &Probes) -> Result<Bundle, String>
             inserts.insert(clip.media.clone(), info);
         }
     }
-    project.audio.desktop = project.audio.desktop && recording.has_desktop_audio;
-    project.audio.mic = project.audio.mic && recording.has_microphone_audio;
     let input = InputLog::load_bundle(&bundle_path, recording.source_duration)?;
     if new {
         let clicks: Vec<f64> = input.click_downs(true).iter().map(|click| click.time).collect();
@@ -392,6 +404,17 @@ pub fn import_insert(source: &str, bundle_path: &str, probe_video: &dyn Fn(&str)
     if !result.info.is_valid() {
         return result;
     }
+    match copy_into_media(source, bundle_path, "clip") {
+        Ok(path) => result.path = path,
+        Err(error) => result.error = error,
+    }
+    result
+}
+
+/// Brings a file into the bundle's `media/` directory as [`import_insert`] does, naming it from
+/// its own name (`fallback` when nothing is left of that); returns its bundle-relative path. A
+/// file already in this bundle's `media/` is used where it is.
+pub fn copy_into_media(source: &str, bundle_path: &str, fallback: &str) -> Result<String, String> {
     let media = qdir::file_path(bundle_path, "media");
     let file = FileInfo::new(source);
     let media_exists = qdir::dir_exists(&media);
@@ -399,17 +422,15 @@ pub fn import_insert(source: &str, bundle_path: &str, probe_video: &dyn Fn(&str)
         && same_file_info(&file.canonical_path(), &FileInfo::new(media.as_str()).canonical_file_path())
         && !sanitized_media_path(&format!("media/{}", file.file_name())).is_empty()
     {
-        result.path = format!("media/{}", file.file_name());
-        return result;
+        return Ok(format!("media/{}", file.file_name()));
     }
     if !media_exists && !qdir::mkpath(&media) {
-        result.error = qstring::arg("Could not create %1", &media);
-        return result;
+        return Err(qstring::arg("Could not create %1", &media));
     }
     let mut base = replace_unsafe_name_characters(&file.complete_base_name());
     base = base.trim_start_matches('.').to_owned();
     if base.is_empty() {
-        base = "clip".into();
+        base = fallback.into();
     }
     let suffix = file.suffix();
     let suffix = if suffix.is_empty() { String::new() } else { format!(".{}", qstring::to_lower(&suffix)) };
@@ -421,16 +442,38 @@ pub fn import_insert(source: &str, bundle_path: &str, probe_video: &dyn Fn(&str)
         n = n.wrapping_add(1);
     }
     let partial = qdir::file_path(&media, &format!(".{name}.part"));
-    if let Err(error) = clone_or_copy(source, &partial) {
-        result.error = error;
-        return result;
-    }
+    clone_or_copy(source, &partial)?;
     if !rename_no_replace(&partial, &qdir::file_path(&media, &name)) {
         let _ = std::fs::remove_file(&partial);
-        result.error = qstring::arg("Could not add %1 to the recording", &name);
-        return result;
+        return Err(qstring::arg("Could not add %1 to the recording", &name));
     }
-    result.path = format!("media/{name}");
+    Ok(format!("media/{name}"))
+}
+
+/// What [`import_music`] brought into the bundle: the music's media path and the length of its
+/// sound, or why not.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ImportedMusic {
+    pub path: String,
+    pub duration: f64,
+    pub error: String,
+}
+
+/// Probes a file's sound (an audio file, or a video whose sound is used) and brings the file
+/// into the bundle's `media/` directory as [`import_insert`] does.
+pub fn import_music(source: &str, bundle_path: &str, probe_audio: &dyn Fn(&str) -> Result<f64, String>) -> ImportedMusic {
+    let mut result = ImportedMusic::default();
+    match probe_audio(source) {
+        Ok(duration) => result.duration = duration,
+        Err(error) => {
+            result.error = error;
+            return result;
+        }
+    }
+    match copy_into_media(source, bundle_path, "music") {
+        Ok(path) => result.path = path,
+        Err(error) => result.error = error,
+    }
     result
 }
 

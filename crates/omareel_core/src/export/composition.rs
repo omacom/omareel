@@ -9,6 +9,7 @@
 //! whether there is a camera.
 
 use crate::camera_timeline::map_camera_time;
+use crate::captions::{self, CaptionFrame, Cue};
 use crate::clip_timeline::ClipTimeline;
 use crate::keystroke_track::{KeystrokePill, KeystrokeTrack};
 use crate::layout_timeline::{self, sample_layout};
@@ -77,6 +78,8 @@ pub struct CompositionState {
     pub ripples: Vec<RippleSample>,
     /// Maps of `keys` (a string list), `text` and `opacity`.
     pub keystroke_pills: Vec<KeystrokePill>,
+    /// The caption on screen (no lines for none).
+    pub caption: CaptionFrame,
 }
 
 impl CompositionState {
@@ -107,6 +110,7 @@ impl CompositionState {
             },
             ripples: Vec::new(),
             keystroke_pills: Vec::new(),
+            caption: CaptionFrame::default(),
         }
     }
 
@@ -134,6 +138,7 @@ impl CompositionState {
             self.ripples.extend(sources.motion.ripples(source_time));
         }
         self.keystroke_pills = if insert { Vec::new() } else { sources.keystrokes.sample(source_time) };
+        self.caption = if insert { CaptionFrame::default() } else { captions::sample(sources.captions, output_time) };
         let layout = sample_layout(
             &project.clips,
             output_time,
@@ -160,6 +165,8 @@ pub struct Sources<'a> {
     pub project: &'a Project,
     pub motion: &'a MotionTrack,
     pub keystrokes: &'a KeystrokeTrack,
+    /// Captions on the output timeline; empty when they are off.
+    pub captions: &'a [Cue],
     /// The webcam video's width as probed, 0 without one.
     pub camera_width: i32,
     pub camera_duration: f64,
