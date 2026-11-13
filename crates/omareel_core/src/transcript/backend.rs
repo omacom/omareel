@@ -779,8 +779,7 @@ mod tests {
         assert!(started.elapsed() < Duration::from_secs(5), "{:?}", started.elapsed());
         let sleeper: i32 = std::fs::read_to_string(&pidfile).unwrap().trim().parse().unwrap();
         std::thread::sleep(Duration::from_millis(100));
-        // SAFETY: signal 0 only checks that the process exists.
-        assert_ne!(unsafe { libc::kill(sleeper, 0) }, 0, "the engine's child outlived it");
+        assert!(!crate::transcript::job::process_alive(sleeper), "the engine's child outlived it");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
