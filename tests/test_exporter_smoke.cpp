@@ -300,12 +300,15 @@ private slots:
         QVERIFY(temporary.isValid());
         const QString bundle = temporary.filePath(QStringLiteral("blur.omareel"));
         QVERIFY(QDir().mkpath(bundle));
-        // Black text on white, line after line, over the whole frame.
+        // Black text on white, line after line, over the whole frame. In the app's own font, so
+        // the text doesn't depend on the fonts installed (CI has none).
+        const QString font = temporary.filePath(QStringLiteral("Inter-Regular.ttf"));
+        QVERIFY(QFile::copy(QStringLiteral(":/omareel/assets/fonts/Inter-Regular.ttf"), font));
         QStringList lines;
         for (int i = 0; i < 20; ++i)
             for (int x : {6, 326})
-                lines << QStringLiteral("drawtext=text='Password hunter2 token %1 ABCDEFGH':"
-                                        "fontsize=15:fontcolor=black:x=%2:y=%3").arg(i).arg(x).arg(4 + i * 18);
+                lines << QStringLiteral("drawtext=fontfile='%4':text='Password hunter2 token %1 ABCDEFGH':"
+                                        "fontsize=15:fontcolor=black:x=%2:y=%3").arg(i).arg(x).arg(4 + i * 18).arg(font);
         QProcess makeVideo;
         makeVideo.start(QStringLiteral("ffmpeg"), {QStringLiteral("-y"), QStringLiteral("-v"), QStringLiteral("error"),
             QStringLiteral("-f"), QStringLiteral("lavfi"), QStringLiteral("-i"),
