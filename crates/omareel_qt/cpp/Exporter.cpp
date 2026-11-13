@@ -3,6 +3,8 @@
 #include "ExportRenderer.h"
 #include "omareel_qt/src/theme.cxxqt.h"
 
+#include <QCoreApplication>
+#include <QEventLoop>
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QImage>
@@ -43,7 +45,8 @@ QVariantMap projectMap(const omareel::exporter::ExportJob &job)
     ThemeFonts::setApplicationFont(ThemeFonts::interfaceFamily(), omareel::theme::bodyTextSize());
     map[QStringLiteral("renderTheme")] = QVariantMap{
         {QStringLiteral("background"), omareel::theme::renderBackground()},
-        {QStringLiteral("foreground"), omareel::theme::renderForeground()}};
+        {QStringLiteral("foreground"), omareel::theme::renderForeground()},
+        {QStringLiteral("accent"), omareel::theme::renderAccent()}};
     QVariantMap background = map.value(QStringLiteral("background")).toMap();
     const QString image = job.backgroundImage();
     background[QStringLiteral("resolvedImage")] = image.isEmpty() ? QString() : QUrl::fromLocalFile(image).toString();
@@ -92,6 +95,8 @@ void applyFrame(CompositionState &state, const omareel::exporter::ExportJob &job
     state.ripples = job.ripples();
     state.keystrokePills = job.keystrokePills();
     state.caption = job.captionMap();
+    state.transition = job.transitionMap();
+    state.visibleOverlays = job.visibleOverlays();
     state.layout = job.layoutMap();
     state.cameraVisible = composition.camera_visible;
     state.media = job.mediaMap();
@@ -154,8 +159,22 @@ bool Exporter::run(const ExportOptions &options, QString *error)
 {
     ::rust::Box<omareel::exporter::ExportJob> job = omareel::exporter::newExportJob();
     const omareel::exporter::ExportOptions jobOptions{options.bundlePath, options.outputPath, options.fps,
-        options.width, options.quality, options.gifFps, options.gifWidth, options.timing};
+        options.width, options.quality, options.gifFps, options.gifWidth, options.timing, options.preset,
+        options.aspect, options.reframe};
     if (!job->prepare(jobOptions, *m_cancel, *error)) return false;
+    // Loudness normalisation measures the sound first, a pass over all of it. Keep Cancel and the
+    // status responsive meanwhile.
+    if (job->startLoudnessMeasure(*error)) {
+        emit measuring(0.0);
+        while (!job->loudnessDone()) {
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+            job->waitLoudness(20);
+            emit measuring(job->loudnessProgress());
+        }
+        emit measuring(1.0);
+    } else if (!error->isEmpty()) {
+        return false;
+    }
     const int totalFrames = job->totalFrames();
 
     const bool softwareRendering = isSoftwareRendering();
@@ -229,7 +248,7 @@ bool Exporter::renderStills(const StillOptions &options, QList<Still> *stills, d
     job->setStills(::rust::Slice<const double>(options.times.constData(), size_t(options.times.size())), options.count);
     // The output's name only tells an export MP4 from GIF; stills are neither.
     const omareel::exporter::ExportOptions jobOptions{options.bundlePath, QStringLiteral("still.png"), options.fps,
-        options.width, QString(), 0, 0, false};
+        options.width, QString(), 0, 0, false, options.preset, options.aspect, options.reframe};
     if (!job->prepare(jobOptions, *m_cancel, *error)) return false;
     if (duration) *duration = job->outputDuration();
     const bool softwareRendering = isSoftwareRendering();

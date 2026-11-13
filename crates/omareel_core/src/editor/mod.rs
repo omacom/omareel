@@ -39,6 +39,7 @@
 //!   [`crate::media_probe::probe_frame_times`] for [`Document::set_screen_frame_times`].
 
 mod bundle;
+mod cleanup;
 mod clips;
 mod composition;
 mod document;
@@ -46,22 +47,28 @@ mod exporting;
 mod history;
 mod ids;
 mod music;
+mod overlays;
+mod markers;
 pub mod playback;
 mod presets;
 #[cfg(test)]
 mod tests;
 mod project_map;
 mod speech;
+mod speedup;
 mod thumbnails;
 mod zooms;
 
 pub use bundle::*;
+pub use cleanup::{CleanAudio, CleanAudioStatus};
 pub use clips::{ImportJob, OutputCut};
 pub use composition::*;
 pub use document::*;
 pub use exporting::*;
 pub use ids::random_uuid;
 pub use music::{MusicImportJob, MusicPlayback, ProbeAudio};
+pub use overlays::DEFAULT_OVERLAY_LENGTH;
+pub use markers::{apply_recording_marks, generate_visible_zooms, MarkerRow};
 pub use playback::{CameraSync, MediaSeek, NextClip, NextClipKind, Player, PlayerPosition, Transport};
 pub use presets::clean_preset_name;
 pub use thumbnails::*;
@@ -134,4 +141,16 @@ pub enum Effect {
     /// Run [`Document::music_import_job`] for this source off the GUI thread, then
     /// [`Document::finish_music_import`].
     StartMusicImport(String),
+
+    /// Play the screen player's sound from this file instead of the recording's own (empty:
+    /// the recording's), on the same timeline: the cleaned sound ([`Document::refresh_clean_audio`]).
+    SetScreenAudioSource(String),
+    /// The files the media player's sound comes from changed: play
+    /// [`Document::insert_audio_source`] of the inserted video it holds.
+    InsertAudioSourcesChanged,
+    /// Run [`Document::clean_audio_job`] off the GUI thread, then
+    /// [`Document::finish_clean_audio`] with its id and result.
+    StartCleanAudio,
+    /// `cleanAudioChanged`: [`Document::clean_audio_status`] or the bypass changed.
+    CleanAudioChanged,
 }

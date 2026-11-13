@@ -32,8 +32,11 @@ use std::thread::JoinHandle;
 use std::time::Instant;
 
 use crate::export::ffi::ExportOptions;
-use crate::export::{json_map, json_variant, map};
+use crate::export::{json_map, json_variant, map, zoom_map};
 use crate::theme::to_qt;
+
+#[path = "editor_overlays.rs"]
+mod overlays;
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -81,7 +84,16 @@ pub mod qobject {
         #[cxx_name = "zoomTarget"]
         fn zoom_target(target: &QVariant, x: &mut f64, y: &mut f64) -> bool;
         #[cxx_name = "exportSettings"]
-        fn export_settings(settings: &QMap_QString_QVariant, fps: &mut i32, height: &mut i32, quality: &mut QString);
+        fn export_settings(
+            settings: &QMap_QString_QVariant,
+            fps: &mut i32,
+            height: &mut i32,
+            quality: &mut QString,
+            aspect: &mut QString,
+            reframe: &mut QString,
+        );
+        #[cxx_name = "copyFileToClipboard"]
+        fn copy_file_to_clipboard(path: &QString);
         #[cxx_name = "softwareRendering"]
         fn software_rendering() -> bool;
         #[cxx_name = "copyToClipboard"]
@@ -107,6 +119,10 @@ pub mod qobject {
         #[qproperty(QMap_QString_QVariant, project, READ = project_map, NOTIFY = project_changed)]
         #[qproperty(QList_QVariant, clips, READ = clips, NOTIFY = project_changed)]
         #[qproperty(QList_QVariant, zooms, READ = zooms, NOTIFY = project_changed)]
+        #[qproperty(QList_QVariant, overlays, READ = overlays, NOTIFY = project_changed)]
+        #[qproperty(QString, selected_overlay_id, READ = selected_overlay_id, WRITE = set_selected_overlay_id, NOTIFY = selection_changed)]
+        #[qproperty(QList_QVariant, visible_overlays, READ = preview_overlays, NOTIFY = composition_changed)]
+        #[qproperty(QList_QVariant, markers, READ = markers, NOTIFY = project_changed)]
         #[qproperty(QString, bundle_path, READ = bundle_path, CONSTANT)]
         #[qproperty(QString, bundle_name, READ = bundle_name, NOTIFY = project_changed)]
         #[qproperty(f64, duration, READ = duration, NOTIFY = duration_changed)]
@@ -153,6 +169,13 @@ pub mod qobject {
         #[qproperty(QString, export_error, READ = export_error, NOTIFY = export_error_changed)]
         #[qproperty(f64, export_fps, READ = export_fps, NOTIFY = export_progress_changed)]
         #[qproperty(i32, export_eta_seconds, READ = export_eta_seconds, NOTIFY = export_progress_changed)]
+        // The export measures its sound's loudness before the frames (exportProgress is that pass's).
+        #[qproperty(bool, measuring_loudness, READ = measuring_loudness, NOTIFY = export_progress_changed)]
+        // The preview's cleaned sound: "off", "preparing", "ready" or "failed".
+        #[qproperty(QString, clean_audio_status, READ = clean_audio_status, NOTIFY = clean_audio_changed)]
+        #[qproperty(QString, clean_audio_error, READ = clean_audio_error, NOTIFY = clean_audio_changed)]
+        // The preview plays the recording's own sound for comparing (not saved).
+        #[qproperty(bool, clean_audio_bypass, READ = clean_audio_bypass, WRITE = set_clean_audio_bypass, NOTIFY = clean_audio_changed)]
         #[qproperty(QString, exported_path, READ = exported_path, NOTIFY = export_finished)]
         // Composition.qml contract; the editor is registered as both "editor" and "comp".
         #[qproperty(i32, output_width, READ = output_width, NOTIFY = output_size_changed)]
@@ -165,6 +188,8 @@ pub mod qobject {
         #[qproperty(QList_QVariant, ripples, READ = preview_ripples, NOTIFY = composition_changed)]
         #[qproperty(QList_QVariant, keystroke_pills, READ = preview_keystroke_pills, NOTIFY = composition_changed)]
         #[qproperty(QMap_QString_QVariant, caption, READ = preview_caption, NOTIFY = composition_changed)]
+        // The transition at a cut: `{scale}` (see omareel_core::transitions).
+        #[qproperty(QMap_QString_QVariant, transition, READ = preview_transition, NOTIFY = composition_changed)]
         #[qproperty(bool, software_rendering, READ = software_rendering, CONSTANT)]
         #[qproperty(bool, camera_available, READ = has_camera, CONSTANT)]
         #[qproperty(bool, camera_visible, READ = camera_visible, NOTIFY = composition_changed)]
@@ -180,6 +205,11 @@ pub mod qobject {
         #[qproperty(bool, pauses_ready, READ = pauses_ready, NOTIFY = speech_changed)]
         // The transcript's word times are measured, so filler words can be cut.
         #[qproperty(bool, can_remove_fillers, READ = can_remove_fillers, NOTIFY = speech_changed)]
+        // "Speed up quiet parts": how many, the output seconds they would save, and whether the
+        // screen check is done so the count is known.
+        #[qproperty(i32, quiet_count, READ = quiet_count, NOTIFY = speech_changed)]
+        #[qproperty(f64, quiet_saved, READ = quiet_saved, NOTIFY = speech_changed)]
+        #[qproperty(bool, quiet_ready, READ = quiet_ready, NOTIFY = speech_changed)]
         // "", "analyzing", "transcribing", "done", "unavailable", "failed".
         #[qproperty(QString, transcription_state, READ = transcription_state, NOTIFY = transcription_changed)]
         #[qproperty(QString, transcription_message, READ = transcription_message, NOTIFY = transcription_changed)]
@@ -229,6 +259,8 @@ pub mod qobject {
         #[qsignal]
         fn export_progress_changed(self: Pin<&mut Editor>);
         #[qsignal]
+        fn clean_audio_changed(self: Pin<&mut Editor>);
+        #[qsignal]
         fn exporting_changed(self: Pin<&mut Editor>);
         #[qsignal]
         fn export_error_changed(self: Pin<&mut Editor>);
@@ -254,6 +286,24 @@ pub mod qobject {
         fn project_map(self: &Editor) -> QMap_QString_QVariant;
         fn clips(self: &Editor) -> QList_QVariant;
         fn zooms(self: &Editor) -> QList_QVariant;
+        // Overlays (editor_overlays.rs): each item's project JSON with `outputStart`/`outputEnd`;
+        // the selection; and what the composition draws now.
+        fn overlays(self: &Editor) -> QList_QVariant;
+        fn selected_overlay_id(self: &Editor) -> QString;
+        fn set_selected_overlay_id(self: Pin<&mut Editor>, id: &QString);
+        fn preview_overlays(self: &Editor) -> QList_QVariant;
+        // An overlay of `kind` with its defaults at the output position, for `length` seconds.
+        #[qinvokable]
+        fn add_overlay_at(self: Pin<&mut Editor>, kind: &QString, output_time: f64, length: f64) -> QString;
+        // `props`: fields as project.json writes them (rect, anchor, text, ...); times in the
+        // item's time base (source for screen-anchored items, output for frame-anchored).
+        #[qinvokable]
+        fn add_overlay(self: Pin<&mut Editor>, kind: &QString, start: f64, end: f64, props: &QMap_QString_QVariant) -> QString;
+        #[qinvokable]
+        fn update_overlay(self: Pin<&mut Editor>, id: &QString, patch: &QMap_QString_QVariant, coalesce: bool) -> bool;
+        #[qinvokable]
+        fn remove_overlay(self: Pin<&mut Editor>, id: &QString) -> bool;
+        fn markers(self: &Editor) -> QList_QVariant;
         fn bundle_path(self: &Editor) -> QString;
         fn bundle_name(self: &Editor) -> QString;
         fn duration(self: &Editor) -> f64;
@@ -293,6 +343,11 @@ pub mod qobject {
         fn export_error(self: &Editor) -> QString;
         fn export_fps(self: &Editor) -> f64;
         fn export_eta_seconds(self: &Editor) -> i32;
+        fn measuring_loudness(self: &Editor) -> bool;
+        fn clean_audio_status(self: &Editor) -> QString;
+        fn clean_audio_error(self: &Editor) -> QString;
+        fn clean_audio_bypass(self: &Editor) -> bool;
+        fn set_clean_audio_bypass(self: Pin<&mut Editor>, bypass: bool);
         fn exported_path(self: &Editor) -> QString;
         fn output_width(self: &Editor) -> i32;
         fn output_height(self: &Editor) -> i32;
@@ -304,6 +359,10 @@ pub mod qobject {
         fn preview_ripples(self: &Editor) -> QList_QVariant;
         fn preview_keystroke_pills(self: &Editor) -> QList_QVariant;
         fn preview_caption(self: &Editor) -> QMap_QString_QVariant;
+        fn preview_transition(self: &Editor) -> QMap_QString_QVariant;
+        fn quiet_count(self: &Editor) -> i32;
+        fn quiet_saved(self: &Editor) -> f64;
+        fn quiet_ready(self: &Editor) -> bool;
         fn software_rendering(self: &Editor) -> bool;
         fn camera_source_width(self: &Editor) -> i32;
         fn camera_source_height(self: &Editor) -> i32;
@@ -449,6 +508,16 @@ pub mod qobject {
         fn set_zoom_target_from_preview(self: Pin<&mut Editor>, x: f64, y: f64) -> bool;
         #[qinvokable]
         fn remove_zoom(self: Pin<&mut Editor>, id: &QString) -> bool;
+        /// A marker at the recording time playing at `output_time`; its id, or "".
+        #[qinvokable]
+        fn add_marker_at(self: Pin<&mut Editor>, output_time: f64, label: &QString) -> QString;
+        #[qinvokable]
+        fn rename_marker(self: Pin<&mut Editor>, id: &QString, label: &QString) -> bool;
+        #[qinvokable]
+        fn remove_marker(self: Pin<&mut Editor>, id: &QString) -> bool;
+        /// Seeks to the next (`direction` 1) or previous (-1) marker; false without one.
+        #[qinvokable]
+        fn jump_to_marker(self: Pin<&mut Editor>, direction: i32) -> bool;
         #[qinvokable]
         fn select_zooms_in_output_range(self: Pin<&mut Editor>, output_start: f64, output_end: f64);
         #[qinvokable]
@@ -478,6 +547,17 @@ pub mod qobject {
         fn trim_pauses(self: Pin<&mut Editor>) -> i32;
         #[qinvokable]
         fn remove_filler_words(self: Pin<&mut Editor>) -> i32;
+        // Plays the quiet parts faster as one undo step; how many.
+        #[qinvokable]
+        fn speed_up_quiet_parts(self: Pin<&mut Editor>) -> i32;
+        // The project's transition at cuts ("none", "zoom-punch").
+        #[qinvokable]
+        fn set_transition_style(self: Pin<&mut Editor>, style: &QString) -> bool;
+        // The transition at the cut before a clip; "" follows the project's.
+        #[qinvokable]
+        fn set_cut_transition(self: Pin<&mut Editor>, id: &QString, style: &QString) -> bool;
+        #[qinvokable]
+        fn clip_starts_at_cut(self: &Editor, id: &QString) -> bool;
         // Writes the captions beside the default export ("srt" or "vtt"); the path, or empty.
         #[qinvokable]
         fn save_subtitles(self: &Editor, format: &QString) -> QString;
@@ -487,6 +567,22 @@ pub mod qobject {
         fn open_containing_folder(self: &Editor, path: &QString);
         #[qinvokable]
         fn copy_path(self: &Editor, path: &QString);
+        /// Puts the exported file on the clipboard (`text/uri-list` through wl-copy, or Qt's
+        /// clipboard without it), to paste into chat apps and file managers.
+        #[qinvokable]
+        fn copy_file(self: &Editor, path: &QString) -> bool;
+        /// The export presets: `{id, label, description, format, height, fps, quality, aspect,
+        /// reframe}` maps.
+        #[qinvokable]
+        fn export_presets(self: &Editor) -> QList_QVariant;
+        #[qinvokable]
+        fn preset_export_path(self: &Editor, id: &QString) -> QString;
+        /// Saves a preset's settings into the project, as one undo step.
+        #[qinvokable]
+        fn apply_export_preset(self: Pin<&mut Editor>, id: &QString) -> bool;
+        /// "follow" or "off".
+        #[qinvokable]
+        fn set_reframe(self: Pin<&mut Editor>, mode: &QString) -> bool;
         #[qinvokable]
         fn refresh_omarchy_theme(self: Pin<&mut Editor>);
         #[qinvokable]
@@ -514,6 +610,8 @@ pub mod qobject {
         fn timer_fired(self: Pin<&mut Editor>, timer: i32);
         #[cxx_override]
         fn called_later(self: Pin<&mut Editor>, call: i32);
+        #[cxx_override]
+        fn export_measured(self: Pin<&mut Editor>, fraction: f64);
         #[cxx_override]
         fn export_progressed(self: Pin<&mut Editor>, frame: i32, total: i32);
         #[cxx_override]
@@ -561,6 +659,10 @@ pub mod qobject {
             play: bool,
             volume: f64,
         );
+        #[inherit]
+        fn playback_set_screen_audio_source(self: Pin<&mut Editor>, path: &QString);
+        #[inherit]
+        fn playback_set_media_audio_source(self: Pin<&mut Editor>, path: &QString);
         #[inherit]
         fn playback_position(self: &Editor, player: i32) -> i64;
         #[inherit]
@@ -785,6 +887,7 @@ impl Drop for EditorRust {
             if document.dirty() && !document.disk_changed() {
                 document.save_now();
             }
+            document.cancel_clean_audio();
         }
         self.speech_control.stop();
         for worker in self.workers.get_mut().drain(..) {
@@ -831,6 +934,8 @@ impl qobject::Editor {
         let video_path = qstring(document.video_path());
         let camera_path = document.has_camera().then(|| qstring(document.camera_video_path()));
         self.as_mut().playback_load_screen(&video_path);
+        // Cleanup that is on plays its cleaned sound, once there is one.
+        self.as_mut().edit(Document::refresh_clean_audio);
         let stats = qenv::int_value_or_zero("OMAREEL_PREVIEW_STATS") == 1;
         self.as_mut().rust_mut().preview_stats_enabled = stats;
         if stats {
@@ -923,6 +1028,10 @@ impl qobject::Editor {
             Effect::StartImport(source) => self.start_import(&source),
             Effect::StartMusicImport(source) => self.start_music_import(&source),
             Effect::GenerateWallpaperThumbnail { path, thumbnail } => self.generate_wallpaper_thumbnail(path, thumbnail),
+            Effect::SetScreenAudioSource(path) => self.as_mut().playback_set_screen_audio_source(&qstring(&path)),
+            Effect::InsertAudioSourcesChanged => self.as_mut().update_insert_audio_source(),
+            Effect::StartCleanAudio => self.start_clean_audio(),
+            Effect::CleanAudioChanged => self.as_mut().clean_audio_changed(),
         }
     }
 
@@ -952,7 +1061,7 @@ impl qobject::Editor {
     /// it is stopped and its commands killed. `OMAREEL_NO_TRANSCRIBE=1` leaves the transcript
     /// alone unless asked.
     fn start_speech(mut self: Pin<&mut Self>, force: bool) {
-        use omareel_core::transcript::{audio, backend, stillness, vad};
+        use omareel_core::transcript::{audio, backend, cache, stillness, vad};
         if self.speech_running {
             return;
         }
@@ -962,7 +1071,7 @@ impl qobject::Editor {
         }
         let transcribe = force || (document.transcript().is_none() && qenv::int_value_or_zero("OMAREEL_NO_TRANSCRIBE") != 1);
         let measure = document.speech_regions().is_none();
-        let check_screen = document.still_windows().is_none() && !self.stillness_running;
+        let check_screen = document.moving_windows().is_none() && !self.stillness_running;
         if !transcribe && !measure && !check_screen {
             return;
         }
@@ -970,6 +1079,9 @@ impl qobject::Editor {
         let bundle = document.bundle_path().to_owned();
         let duration = document.recording().source_duration;
         let geometry = (document.source_width(), document.source_height(), document.capture_scale());
+        // Measurements from an earlier run are read from the cache (transcript::cache), off this
+        // thread: finding the entry reads the video's first MiB.
+        let cache_location = document.cache_location();
         // Silences already known (the speech was measured on an earlier run).
         let known_silences = document.silences_to_check();
         let export_busy = Arc::clone(&self.export_busy);
@@ -998,21 +1110,32 @@ impl qobject::Editor {
         let start_stillness = {
             let thread = thread.clone();
             let control = control.clone();
+            let cache_location = cache_location.clone();
             move |silences: Vec<(f64, f64)>| {
                 let spawned = std::thread::Builder::new().name("omareel-stillness".into()).spawn(move || {
-                    let still = match stillness::still_windows(&screen, &silences, duration, geometry, &control) {
-                        Ok(still) => Some(still),
-                        Err(_) if control.cancelled() => None,
-                        Err(error) => {
-                            eprintln!("omareel: could not check the screen for pauses: {error}");
-                            Some(Vec::new())
-                        }
+                    let entry = cache::Entry::new(&cache_location, &screen);
+                    let cached = entry.as_ref().and_then(|entry| entry.screen(&silences, geometry));
+                    let found = match cached {
+                        Some(found) => Some(found),
+                        None => match stillness::check_windows(&screen, &silences, duration, geometry, &control) {
+                            Ok(found) => {
+                                if let Some(Err(error)) = entry.as_ref().map(|entry| entry.store_screen(&silences, geometry, &found)) {
+                                    eprintln!("omareel: could not cache the screen check: {error}");
+                                }
+                                Some(found)
+                            }
+                            Err(_) if control.cancelled() => None,
+                            Err(error) => {
+                                eprintln!("omareel: could not check the screen for pauses: {error}");
+                                Some(stillness::ScreenCheck::default())
+                            }
+                        },
                     };
                     let _ = thread.queue(move |mut editor| {
                         editor.as_mut().rust_mut().stillness_running = false;
-                        match still {
-                            Some(still) => {
-                                editor.edit(|document| document.set_still_windows(still));
+                        match found {
+                            Some(found) => {
+                                editor.edit(|document| document.set_screen_check(found));
                             }
                             None => editor.as_mut().speech_changed(),
                         }
@@ -1055,6 +1178,22 @@ impl qobject::Editor {
                     }
                 });
             };
+            // The speech measured on an earlier run, unless the video changed since.
+            let entry = if measure { cache::Entry::new(&cache_location, &screen_for_audio) } else { None };
+            let measured = entry.as_ref().and_then(cache::Entry::speech);
+            let measure = measure && measured.is_none();
+            if let Some(regions) = measured {
+                if check_screen {
+                    check(stillness::silences_to_check(&regions, duration));
+                }
+                let _ = thread.queue(move |editor| {
+                    editor.edit(|document| document.set_speech_regions(regions));
+                });
+                if !transcribe {
+                    finish();
+                    return;
+                }
+            }
             let audio = match audio::extract_with(&screen_for_audio, &control) {
                 Ok(audio) => audio,
                 Err(error) => {
@@ -1070,6 +1209,9 @@ impl qobject::Editor {
             };
             if measure {
                 let regions = vad::speech_regions(&audio.samples, &vad::VadSettings::default());
+                if let Some(Err(error)) = entry.as_ref().map(|entry| entry.store_speech(&regions)) {
+                    eprintln!("omareel: could not cache the speech measurement: {error}");
+                }
                 if check_screen {
                     check(stillness::silences_to_check(&regions, duration));
                 }
@@ -1169,6 +1311,27 @@ impl qobject::Editor {
                 });
             });
         }
+    }
+
+    /// The media player plays the cleaned sound of the inserted video it holds, when there is one.
+    fn update_insert_audio_source(mut self: Pin<&mut Self>) {
+        let path = self.document.as_ref().map_or(String::new(), |document| {
+            document.insert_audio_source(&self.media_player_source).to_owned()
+        });
+        self.as_mut().playback_set_media_audio_source(&qstring(&path));
+    }
+
+    /// The cleaned preview sound [`Effect::StartCleanAudio`] asks for, made off the GUI thread
+    /// (ffmpeg at a low priority), then `finish_clean_audio`.
+    fn start_clean_audio(mut self: Pin<&mut Self>) {
+        let Some(job) = self.as_mut().rust_mut().document.as_mut().and_then(Document::clean_audio_job) else { return };
+        let thread = self.qt_thread();
+        self.spawn(move || {
+            let result = job.run();
+            let _ = thread.queue(move |editor| {
+                editor.edit(|document| document.finish_clean_audio(job.id, result));
+            });
+        });
     }
 
     /// The import [`Effect::StartImport`] asks for, then `finishImport()`.
@@ -1345,6 +1508,7 @@ impl qobject::Editor {
             QVariant::from(&map([
                 ("background", QVariant::from(&to_qt(&background))),
                 ("foreground", QVariant::from(&to_qt(&foreground))),
+                ("accent", QVariant::from(&to_qt(&omareel_core::theme::render_accent()))),
             ])),
         );
         *self.project_map.borrow_mut() = Some((revision, result.clone()));
@@ -1364,6 +1528,27 @@ impl qobject::Editor {
 
     fn zooms(&self) -> QList<QVariant> {
         self.project_list("zooms")
+    }
+
+    /// `{id, label, kind, number, sourceTime, time}` for each marker in recording order, `time`
+    /// the output time or -1 while cut away, `number` counting from 1.
+    fn markers(&self) -> QList<QVariant> {
+        let Some(document) = self.document.as_ref() else { return QList::default() };
+        document
+            .marker_rows()
+            .into_iter()
+            .enumerate()
+            .map(|(index, row)| {
+                QVariant::from(&map([
+                    ("id", QVariant::from(&qstring(&row.marker.id))),
+                    ("label", QVariant::from(&qstring(&row.marker.label))),
+                    ("kind", QVariant::from(&qstring(&row.marker.kind))),
+                    ("number", QVariant::from(&(index as i32 + 1))),
+                    ("sourceTime", QVariant::from(&row.marker.time)),
+                    ("time", QVariant::from(&row.output_time.unwrap_or(-1.0))),
+                ]))
+            })
+            .collect()
     }
 
     fn bundle_path(&self) -> QString {
@@ -1537,6 +1722,26 @@ impl qobject::Editor {
         }
     }
 
+    fn measuring_loudness(&self) -> bool {
+        self.document.as_ref().is_some_and(|document| document.export_state().measuring)
+    }
+
+    fn clean_audio_status(&self) -> QString {
+        qstring(self.document.as_ref().map_or("off", |document| document.clean_audio_status().name()))
+    }
+
+    fn clean_audio_error(&self) -> QString {
+        qstring(self.document.as_ref().map_or("", Document::clean_audio_error))
+    }
+
+    fn clean_audio_bypass(&self) -> bool {
+        self.document.as_ref().is_some_and(Document::clean_audio_bypass)
+    }
+
+    fn set_clean_audio_bypass(self: Pin<&mut Self>, bypass: bool) {
+        self.edit(|document| document.set_clean_audio_bypass(bypass));
+    }
+
     fn export_progress(&self) -> f64 {
         self.document.as_ref().map_or(0.0, |document| document.export_state().progress)
     }
@@ -1578,12 +1783,7 @@ impl qobject::Editor {
     fn preview_zoom(&self) -> QMap<QMapPair_QString_QVariant> {
         let Some(document) = self.document.as_ref() else { return QMap::default() };
         let zoom = document.preview_zoom();
-        map([
-            ("scale", QVariant::from(&zoom.scale)),
-            ("cx", QVariant::from(&zoom.cx)),
-            ("cy", QVariant::from(&zoom.cy)),
-            ("velocity", QVariant::from(&zoom.velocity)),
-        ])
+        zoom_map(zoom.scale, zoom.cx, zoom.cy, zoom.velocity, zoom.reframe)
     }
 
     fn preview_layout(&self) -> QMap<QMapPair_QString_QVariant> {
@@ -1636,6 +1836,11 @@ impl qobject::Editor {
     fn preview_caption(&self) -> QMap<QMapPair_QString_QVariant> {
         let Some(document) = self.document.as_ref() else { return QMap::default() };
         crate::export::caption_map(&document.preview_caption(), &document.captions())
+    }
+
+    fn preview_transition(&self) -> QMap<QMapPair_QString_QVariant> {
+        let frame = self.document.as_ref().map(Document::preview_transition).unwrap_or_default();
+        crate::export::transition_map(&frame)
     }
 
     fn preview_keystroke_pills(&self) -> QList<QVariant> {
@@ -1734,6 +1939,42 @@ impl qobject::Editor {
             document.remove_source_ranges(&ranges) as i32
         })
         .unwrap_or(0)
+    }
+
+    fn quiet_count(&self) -> i32 {
+        self.document.as_ref().map_or(0, |document| document.quiet_parts(&Default::default()).len() as i32)
+    }
+
+    fn quiet_saved(&self) -> f64 {
+        let Some(document) = self.document.as_ref() else { return 0.0 };
+        document.quiet_parts(&Default::default()).iter().map(|part| part.saved()).sum()
+    }
+
+    fn quiet_ready(&self) -> bool {
+        self.document.as_ref().is_some_and(Document::quiet_parts_ready)
+    }
+
+    fn speed_up_quiet_parts(self: Pin<&mut Self>) -> i32 {
+        self.edit(|document| {
+            let parts = document.quiet_parts(&Default::default());
+            document.speed_up_source_ranges(&parts) as i32
+        })
+        .unwrap_or(0)
+    }
+
+    fn set_transition_style(self: Pin<&mut Self>, style: &QString) -> bool {
+        let style = style.to_string();
+        self.edit(|document| document.set_transition(&style)).unwrap_or(false)
+    }
+
+    fn set_cut_transition(self: Pin<&mut Self>, id: &QString, style: &QString) -> bool {
+        let (id, style) = (id.to_string(), style.to_string());
+        let style = (!style.is_empty()).then_some(style.as_str());
+        self.edit(|document| document.set_cut_transition(&id, style)).unwrap_or(false)
+    }
+
+    fn clip_starts_at_cut(&self, id: &QString) -> bool {
+        self.document.as_ref().is_some_and(|document| document.clip_starts_at_cut(&id.to_string()))
     }
 
     fn remove_filler_words(self: Pin<&mut Self>) -> i32 {
@@ -2035,6 +2276,25 @@ impl qobject::Editor {
         self.edit(|document| document.remove_zoom(&id)).unwrap_or(false)
     }
 
+    fn add_marker_at(self: Pin<&mut Self>, output_time: f64, label: &QString) -> QString {
+        let label = label.to_string();
+        qstring(&self.edit(|document| document.add_marker_at_output(output_time, &label)).unwrap_or_default())
+    }
+
+    fn rename_marker(self: Pin<&mut Self>, id: &QString, label: &QString) -> bool {
+        let (id, label) = (id.to_string(), label.to_string());
+        self.edit(|document| document.rename_marker(&id, &label)).unwrap_or(false)
+    }
+
+    fn remove_marker(self: Pin<&mut Self>, id: &QString) -> bool {
+        let id = id.to_string();
+        self.edit(|document| document.remove_marker(&id)).unwrap_or(false)
+    }
+
+    fn jump_to_marker(self: Pin<&mut Self>, direction: i32) -> bool {
+        self.edit(|document| document.jump_to_marker(direction)).unwrap_or(false)
+    }
+
     fn select_zooms_in_output_range(self: Pin<&mut Self>, output_start: f64, output_end: f64) {
         self.edit(|document| document.select_zooms_in_output_range(output_start, output_end));
     }
@@ -2086,9 +2346,16 @@ impl qobject::Editor {
         // The export reads project.json, so this save must happen.
         self.as_mut().save_project(true);
         let path = qobject::text_url_path(path).to_string();
-        let (mut fps, mut height, mut quality) = (0, 0, QString::default());
-        qobject::export_settings(settings, &mut fps, &mut height, &mut quality);
-        let settings = ExportDialogSettings { fps, height, quality: quality.to_string() };
+        let (mut fps, mut height, mut quality, mut aspect, mut reframe) =
+            (0, 0, QString::default(), QString::default(), QString::default());
+        qobject::export_settings(settings, &mut fps, &mut height, &mut quality, &mut aspect, &mut reframe);
+        let settings = ExportDialogSettings {
+            fps,
+            height,
+            quality: quality.to_string(),
+            aspect: aspect.to_string(),
+            reframe: reframe.to_string(),
+        };
         let request = {
             let mut rust = self.as_mut().rust_mut();
             let Some(document) = rust.document.as_mut() else { return };
@@ -2108,6 +2375,9 @@ impl qobject::Editor {
                 gif_fps: request.gif_fps,
                 gif_width: request.gif_width,
                 timing: false,
+                preset: QString::default(),
+                aspect: qstring(&request.aspect),
+                reframe: qstring(&request.reframe),
             });
         }
     }
@@ -2131,11 +2401,62 @@ impl qobject::Editor {
         qobject::copy_to_clipboard(path);
     }
 
+    fn copy_file(&self, path: &QString) -> bool {
+        match editor::copy_file_to_clipboard(&path.to_string()) {
+            Ok(()) => true,
+            Err(error) => {
+                print_error(&format!("omareel: copying the file with wl-copy failed: {error}\n"));
+                qobject::copy_file_to_clipboard(path);
+                std::path::Path::new(&path.to_string()).is_file()
+            }
+        }
+    }
+
+    fn export_presets(&self) -> QList<QVariant> {
+        editor::export_presets()
+            .iter()
+            .map(|p| {
+                QVariant::from(&map([
+                    ("id", QVariant::from(&qstring(p.id))),
+                    ("label", QVariant::from(&qstring(p.label))),
+                    ("description", QVariant::from(&qstring(p.description))),
+                    ("format", QVariant::from(&qstring(p.format))),
+                    ("height", QVariant::from(&p.height)),
+                    ("fps", QVariant::from(&p.fps)),
+                    ("quality", QVariant::from(&qstring(p.quality))),
+                    ("aspect", QVariant::from(&qstring(p.aspect))),
+                    ("reframe", QVariant::from(&qstring(p.reframe))),
+                ]))
+            })
+            .collect()
+    }
+
+    fn preset_export_path(&self, id: &QString) -> QString {
+        let id = id.to_string();
+        self.document.as_ref().map_or_else(QString::default, |document| qstring(&document.preset_export_path(&id)))
+    }
+
+    fn apply_export_preset(self: Pin<&mut Self>, id: &QString) -> bool {
+        let id = id.to_string();
+        self.edit(|document| document.apply_export_preset(&id)).unwrap_or(false)
+    }
+
+    fn set_reframe(self: Pin<&mut Self>, mode: &QString) -> bool {
+        let mode = mode.to_string();
+        self.edit(|document| document.set_reframe(&mode)).unwrap_or(false)
+    }
+
     fn trace_input(&self, object_name: &QString, phase: &QString, x: f64, y: f64) {
         if std::env::var_os("OMAREEL_INPUT_TRACE").is_none_or(|value| value != "1") {
             return;
         }
         print_error(&trace_input_line(&object_name.to_string(), &phase.to_string(), x, y));
+    }
+
+    fn export_measured(mut self: Pin<&mut Self>, fraction: f64) {
+        // The frame rate and time left count from the frames, not from the measuring.
+        self.as_mut().rust_mut().export_timer = Some(Instant::now());
+        self.as_mut().edit(|document| document.export_measured(fraction));
     }
 
     fn export_progressed(mut self: Pin<&mut Self>, frame: i32, total: i32) {
@@ -2365,6 +2686,7 @@ impl qobject::Editor {
         self.as_mut().rust_mut().media_player_source = path.to_owned();
         let file = qstring(&qdir::file_path(&self.bundle_path, path));
         self.as_mut().playback_load_media(&file);
+        self.as_mut().update_insert_audio_source();
         self.composition_changed();
     }
 

@@ -8,6 +8,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QProcess>
+#include <QScopeGuard>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QNetworkAccessManager>
@@ -392,6 +393,79 @@ private slots:
         editor.setProperty("readOnly", false);
         QVERIFY(editor.splitAtPlayhead());
         QCOMPARE(editor.clips().size(), 2);
+    }
+
+    // Regression: picking a zoom target stored crop coordinates without reframing and recording
+    // coordinates with it. Targets are normalised to the whole recording either way, and the
+    // marker shows the target where it was picked.
+    void pickedZoomTargetsAreInRecordingCoordinates()
+    {
+        QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));
+        Editor editor(m_bundle);
+        QVERIFY(editor.isValid());
+        Theme theme;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("editor"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("comp"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import QtQuick
+            import QtQuick.Window
+            import Omareel
+            Window {
+                width: 900; height: 600; visible: true
+                PreviewPane { anchors.fill: parent; cropMode: false }
+            })", QUrl());
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        std::unique_ptr<QObject> object(component.create());
+        auto *window = qobject_cast<QQuickWindow *>(object.get());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        auto *composition = window->findChild<QQuickItem *>(QStringLiteral("previewComposition"));
+        auto *marker = window->findChild<QQuickItem *>(QStringLiteral("zoomTargetMarker"));
+        QVERIFY(composition && marker);
+
+        // The right half of the recording, and a zoom that isn't active at the playhead.
+        editor.setProjectValue(QStringLiteral("crop.w"), 0.5, false);
+        editor.setProjectValue(QStringLiteral("crop.x"), 0.5, false);
+        QCOMPARE(editor.projectMap().value(QStringLiteral("crop")).toMap().value(QStringLiteral("x")).toDouble(), 0.5);
+        const QString id = editor.addZoomAt(1.2, 0.5);
+        QVERIFY(!id.isEmpty());
+        editor.seek(0);
+        const auto pick = [&](double u, double v) {
+            editor.setSelectedZoomId(id);
+            editor.setPickingZoomTarget(true);
+            const double videoWidth = composition->property("videoWidth").toDouble();
+            const double videoHeight = composition->property("videoHeight").toDouble();
+            const QPointF local(composition->width() / 2 + (u - .5) * videoWidth,
+                                composition->height() / 2 + (v - .5) * videoHeight);
+            const QPoint point = composition->mapToScene(local).toPoint();
+            QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, point);
+            return point;
+        };
+        const auto target = [&] {
+            for (const QVariant &zoom : editor.zooms())
+                if (zoom.toMap().value(QStringLiteral("id")).toString() == id)
+                    return zoom.toMap().value(QStringLiteral("target")).toMap();
+            return QVariantMap();
+        };
+        const auto markerAt = [&](QPoint point) {
+            const QPointF centre = marker->mapToScene(QPointF(marker->width() / 2, marker->height() / 2));
+            return marker->isVisible() && std::abs(centre.x() - point.x()) <= 1.5 && std::abs(centre.y() - point.y()) <= 1.5;
+        };
+
+        // The middle of the cropped frame is three quarters across the recording.
+        QPoint point = pick(.5, .5);
+        QTRY_VERIFY(!editor.pickingZoomTarget());
+        QCOMPARE(qRound(target().value(QStringLiteral("x")).toDouble() * 100), 75);
+        QCOMPARE(qRound(target().value(QStringLiteral("y")).toDouble() * 100), 50);
+        QTRY_VERIFY(markerAt(point));
+        point = pick(.2, .3);
+        QTRY_VERIFY(!editor.pickingZoomTarget());
+        QCOMPARE(qRound(target().value(QStringLiteral("x")).toDouble() * 100), 60);
+        QCOMPARE(qRound(target().value(QStringLiteral("y")).toDouble() * 100), 30);
+        QTRY_VERIFY(markerAt(point));
     }
 
     void zoomTrackDragUsesTrackCoordinates()
@@ -1201,6 +1275,125 @@ private slots:
         QCOMPARE(editor.selectedClipId(), firstId);
         QVERIFY(trim->isVisible());
         QVERIFY(qAbs(editor.position() - .4) < .03);
+    }
+
+    // Annotations: B adds a blur region at the playhead and selects it (the Annotate panel
+    // opens), a drag on the preview moves it as one undo step, and Delete removes it.
+    void annotationsAddMoveAndDeleteOnThePreview()
+    {
+        QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));
+        Editor editor(m_bundle);
+        QVERIFY2(editor.isValid(), qPrintable(editor.errorString()));
+        Theme theme;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("editor"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("comp"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import Omareel
+            Main { width: 1200; height: 800; visible: true })", QUrl());
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        std::unique_ptr<QObject> object(component.create());
+        auto *window = qobject_cast<QQuickWindow *>(object.get());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        QTRY_VERIFY_WITH_TIMEOUT(!editor.loading(), 15000);
+        QVERIFY(editor.overlays().isEmpty());
+
+        QTest::keyClick(window, Qt::Key_B);
+        QTRY_COMPARE(editor.overlays().size(), 1);
+        const QVariantMap added = editor.overlays().first().toMap();
+        const QString id = added.value(QStringLiteral("id")).toString();
+        QCOMPARE(added.value(QStringLiteral("kind")).toString(), QStringLiteral("blur"));
+        QCOMPARE(added.value(QStringLiteral("anchor")).toString(), QStringLiteral("screen"));
+        QCOMPARE(editor.selectedOverlayId(), id);
+        QTRY_VERIFY(window->findChild<QQuickItem *>(QStringLiteral("overlayPanel")));
+        QTRY_VERIFY(window->findChild<QQuickItem *>(QStringLiteral("overlayTrack"))->isVisible());
+        QTRY_COMPARE(editor.property("visibleOverlays").toList().size(), 1);
+
+        auto *layer = window->findChild<QQuickItem *>(QStringLiteral("overlayEditLayer"));
+        QVERIFY(layer);
+        QVariant area;
+        QVERIFY(QMetaObject::invokeMethod(layer, "bounds", Q_RETURN_ARG(QVariant, area),
+                                          Q_ARG(QVariant, editor.property("visibleOverlays").toList().first())));
+        const QRectF bounds = area.toRectF();
+        QVERIFY(bounds.width() > 10);
+        const QPoint start = layer->mapToScene(bounds.center()).toPoint();
+        const double before = added.value(QStringLiteral("rect")).toMap().value(QStringLiteral("x")).toDouble();
+        QTest::mousePress(window, Qt::LeftButton, Qt::NoModifier, start);
+        QTest::mouseMove(window, start + QPoint(20, 0), 20);
+        QTest::mouseMove(window, start + QPoint(40, 0), 20);
+        QTest::mouseRelease(window, Qt::LeftButton, Qt::NoModifier, start + QPoint(40, 0), 20);
+        const auto rectX = [&] {
+            return editor.overlays().first().toMap().value(QStringLiteral("rect")).toMap().value(QStringLiteral("x")).toDouble();
+        };
+        QTRY_VERIFY(rectX() > before + 0.02);
+        // The drag was one step: one undo puts it back, a second removes the overlay.
+        editor.undo();
+        QCOMPARE(rectX(), before);
+        editor.undo();
+        QVERIFY(editor.overlays().isEmpty());
+        editor.redo();
+        editor.redo();
+        QVERIFY(rectX() > before + 0.02);
+
+        editor.setSelectedOverlayId(id);
+        QTRY_VERIFY(!window->property("singleKeyShortcutsBlocked").toBool());
+        QTest::keyClick(window, Qt::Key_Delete);
+        QTRY_VERIFY(editor.overlays().isEmpty());
+        QVERIFY(editor.selectedOverlayId().isEmpty());
+    }
+
+    // The Overlays lane: dragging a block moves a frame-anchored overlay along the output, its
+    // length kept, as one undo step.
+    void overlayLaneDragMovesInTime()
+    {
+        QFile::remove(QDir(m_bundle).filePath(QStringLiteral("project.json")));
+        Editor editor(m_bundle);
+        QVERIFY(editor.isValid());
+        const QString id = editor.addOverlay(QStringLiteral("text"), 0.2, 0.8, QVariantMap{{QStringLiteral("text"), QStringLiteral("Hi")}});
+        QVERIFY(!id.isEmpty());
+
+        Theme theme;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("editor"), &editor);
+        engine.rootContext()->setContextProperty(QStringLiteral("theme"), &theme);
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import QtQuick
+            import QtQuick.Window
+            import Omareel
+            Window {
+                width: 600; height: 80; visible: true
+                Item { id: focusItem; anchors.fill: parent }
+                OverlayTrack { anchors.fill: parent; pixelsPerSecond: 200; focusTarget: focusItem }
+            })", QUrl());
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        std::unique_ptr<QObject> object(component.create());
+        auto *window = qobject_cast<QQuickWindow *>(object.get());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        // Repeater delegates are visual children only.
+        std::function<QQuickItem *(QQuickItem *)> findBody = [&](QQuickItem *parent) -> QQuickItem * {
+            if (parent->objectName() == QStringLiteral("overlayBody-") + id) return parent;
+            for (QQuickItem *child : parent->childItems())
+                if (QQuickItem *match = findBody(child)) return match;
+            return nullptr;
+        };
+        QTRY_VERIFY(findBody(window->contentItem()));
+        auto *body = findBody(window->contentItem());
+        const QPoint start = body->mapToScene(QPointF(body->width() / 2, body->height() / 2)).toPoint();
+        QTest::mousePress(window, Qt::LeftButton, Qt::NoModifier, start);
+        QTest::mouseMove(window, start + QPoint(50, 0), 20);
+        QTest::mouseMove(window, start + QPoint(100, 0), 20);
+        QTest::mouseRelease(window, Qt::LeftButton, Qt::NoModifier, start + QPoint(100, 0), 20);
+        const auto field = [&](const char *key) { return editor.overlays().first().toMap().value(QLatin1String(key)).toDouble(); };
+        QTRY_VERIFY(qAbs(field("start") - 0.7) < 0.02);
+        QVERIFY(qAbs(field("end") - 1.3) < 0.02);
+        QCOMPARE(editor.selectedOverlayId(), id);
+        editor.undo();
+        QCOMPARE(field("start"), 0.2);
     }
 
     void zoomTrackRubberBandSelectsAndDeletesTwo()
@@ -2024,6 +2217,126 @@ private slots:
         QTRY_COMPARE_WITH_TIMEOUT(editor.playerPositionMsForTests(), qint64(533), 2000);
         editor.stepFrames(-1);
         QTRY_COMPARE_WITH_TIMEOUT(editor.playerPositionMsForTests(), qint64(500), 2000);
+    }
+
+    // With audio.cleanup on, the preview makes the cleaned sound in the background and plays it
+    // in place of the recording's, following the screen player; "Hear original" switches back.
+    void cleanedSoundFollowsTheScreen()
+    {
+        const QString bundle = m_temporary.filePath(QStringLiteral("cleaned-sound.omareel"));
+        QVERIFY(QDir().mkpath(bundle));
+        QFile::copy(QDir(m_bundle).filePath(QStringLiteral("input.jsonl")), QDir(bundle).filePath(QStringLiteral("input.jsonl")));
+        // A silent track: the test must not make a sound.
+        QProcess make;
+        make.start(QStringLiteral("ffmpeg"), {QStringLiteral("-y"), QStringLiteral("-v"), QStringLiteral("error"),
+            QStringLiteral("-f"), QStringLiteral("lavfi"), QStringLiteral("-i"), QStringLiteral("testsrc2=size=320x180:rate=30"),
+            QStringLiteral("-f"), QStringLiteral("lavfi"), QStringLiteral("-i"), QStringLiteral("anullsrc=r=48000:cl=stereo"),
+            QStringLiteral("-t"), QStringLiteral("3"), QStringLiteral("-c:v"), QStringLiteral("libx264"),
+            QStringLiteral("-c:a"), QStringLiteral("aac"), QDir(bundle).filePath(QStringLiteral("screen.mp4"))});
+        QVERIFY(make.waitForFinished(30000) && make.exitCode() == 0);
+        QFile capture(QDir(bundle).filePath(QStringLiteral("capture.json")));
+        QVERIFY(capture.open(QIODevice::WriteOnly));
+        capture.write(R"({"fps":30,"first_frame_us":1000000,"audio":{"desktop":false,"mic":true}})");
+        capture.close();
+        QJsonObject project = ProjectJson::defaults(QStringLiteral("Cleaned"), 3.0);
+        ProjectJson::set(project, {"audio", "cleanup"}, QJsonObject{{QStringLiteral("denoise"), true}});
+        QString error;
+        QVERIFY2(ProjectJson::save(project, QDir(bundle).filePath(QStringLiteral("project.json")), &error),
+                 qPrintable(error));
+        // The cleaned sound is cached under the cache location.
+        const QByteArray cacheHome = qgetenv("XDG_CACHE_HOME");
+        qputenv("XDG_CACHE_HOME", m_temporary.filePath(QStringLiteral("cache")).toUtf8());
+        const auto restore = qScopeGuard([&] { qputenv("XDG_CACHE_HOME", cacheHome); });
+
+        Editor editor(bundle);
+        QVERIFY2(editor.isValid(), qPrintable(editor.errorString()));
+        QVideoSink sink;
+        QObject holder;
+        holder.setProperty("videoSink", QVariant::fromValue(&sink));
+        editor.attachVideoOutput(&holder);
+        QTRY_VERIFY_WITH_TIMEOUT(editor.playerMediaStatusForTests() >= QMediaPlayer::LoadedMedia, 15000);
+        QTRY_COMPARE_WITH_TIMEOUT(editor.cleanAudioStatus(), QStringLiteral("ready"), 30000);
+        QTRY_VERIFY_WITH_TIMEOUT(editor.screenAudioSourceForTests().contains(QStringLiteral("audio-cleanup")), 10000);
+        QTRY_VERIFY_WITH_TIMEOUT(!editor.playing(), 5000);
+
+        editor.seek(0.5);
+        editor.play();
+        QTRY_COMPARE_WITH_TIMEOUT(editor.screenAudioStateForTests(), QMediaPlayer::PlayingState, 5000);
+        QTest::qWait(700);
+        QVERIFY(editor.playing());
+        const qint64 drift = editor.screenAudioPositionMsForTests() - editor.playerPositionMsForTests();
+        QVERIFY2(qAbs(drift) < 150, qPrintable(QString::number(drift)));
+        editor.pause();
+        QTRY_VERIFY_WITH_TIMEOUT(editor.screenAudioStateForTests() != QMediaPlayer::PlayingState, 2000);
+        // A seek moves the cleaned sound with the picture.
+        editor.seek(2.0);
+        QTRY_VERIFY_WITH_TIMEOUT(qAbs(editor.screenAudioPositionMsForTests() - 2000) < 100, 2000);
+
+        editor.setCleanAudioBypass(true);
+        QVERIFY(editor.screenAudioSourceForTests().isEmpty());
+        editor.setCleanAudioBypass(false);
+        QTRY_VERIFY_WITH_TIMEOUT(!editor.screenAudioSourceForTests().isEmpty(), 5000);
+        editor.setProjectValue(QStringLiteral("audio.cleanup.denoise"), false);
+        QCOMPARE(editor.cleanAudioStatus(), QStringLiteral("off"));
+        QVERIFY(editor.screenAudioSourceForTests().isEmpty());
+    }
+
+    // With loudness normalisation the inserted video's sound is made with the program's gain
+    // and played in place of its own, following the media player. Nothing plays here (seeks
+    // only, at volume 0): the test makes no sound.
+    void insertedVideosPlayTheirCleanedSound()
+    {
+        const QString bundle = m_temporary.filePath(QStringLiteral("cleaned-insert.omareel"));
+        QVERIFY(QDir(bundle).mkpath(QStringLiteral("media")));
+        QFile::copy(QDir(m_bundle).filePath(QStringLiteral("input.jsonl")), QDir(bundle).filePath(QStringLiteral("input.jsonl")));
+        const auto make = [](const QString &tone, const QString &path) {
+            QProcess process;
+            process.start(QStringLiteral("ffmpeg"), {QStringLiteral("-y"), QStringLiteral("-v"), QStringLiteral("error"),
+                QStringLiteral("-f"), QStringLiteral("lavfi"), QStringLiteral("-i"), QStringLiteral("testsrc2=size=320x180:rate=30"),
+                QStringLiteral("-f"), QStringLiteral("lavfi"), QStringLiteral("-i"), tone,
+                QStringLiteral("-t"), QStringLiteral("3"), QStringLiteral("-c:v"), QStringLiteral("libx264"),
+                QStringLiteral("-c:a"), QStringLiteral("aac"), path});
+            return process.waitForFinished(30000) && process.exitCode() == 0;
+        };
+        QVERIFY(make(QStringLiteral("sine=f=300:sample_rate=48000,volume=0.02"), QDir(bundle).filePath(QStringLiteral("screen.mp4"))));
+        QVERIFY(make(QStringLiteral("sine=f=500:sample_rate=48000,volume=0.05"), QDir(bundle).filePath(QStringLiteral("media/clip.mp4"))));
+        QFile capture(QDir(bundle).filePath(QStringLiteral("capture.json")));
+        QVERIFY(capture.open(QIODevice::WriteOnly));
+        capture.write(R"({"fps":30,"first_frame_us":1000000,"audio":{"desktop":true,"mic":false}})");
+        capture.close();
+        QJsonObject project = ProjectJson::defaults(QStringLiteral("Inserted"), 3.0);
+        QJsonObject insert = ProjectJson::clip(QStringLiteral("m1"), 0.0, 2.0);
+        insert.insert(QStringLiteral("media"), QStringLiteral("media/clip.mp4"));
+        project.insert(QStringLiteral("clips"), QJsonArray{ProjectJson::clip(QStringLiteral("c1"), 0.0, 3.0), insert});
+        ProjectJson::set(project, {"audio", "volume"}, 0.0);
+        ProjectJson::set(project, {"audio", "cleanup"}, QJsonObject{{QStringLiteral("loudness"), QStringLiteral("-16")}});
+        QString error;
+        QVERIFY2(ProjectJson::save(project, QDir(bundle).filePath(QStringLiteral("project.json")), &error),
+                 qPrintable(error));
+        const QByteArray cacheHome = qgetenv("XDG_CACHE_HOME");
+        qputenv("XDG_CACHE_HOME", m_temporary.filePath(QStringLiteral("cache")).toUtf8());
+        const auto restore = qScopeGuard([&] { qputenv("XDG_CACHE_HOME", cacheHome); });
+
+        Editor editor(bundle);
+        QVERIFY2(editor.isValid(), qPrintable(editor.errorString()));
+        QVideoSink sink;
+        QObject holder;
+        holder.setProperty("videoSink", QVariant::fromValue(&sink));
+        editor.attachVideoOutput(&holder);
+        QTRY_VERIFY_WITH_TIMEOUT(editor.playerMediaStatusForTests() >= QMediaPlayer::LoadedMedia, 15000);
+        QTRY_COMPARE_WITH_TIMEOUT(editor.cleanAudioStatus(), QStringLiteral("ready"), 30000);
+        QTRY_VERIFY_WITH_TIMEOUT(editor.screenAudioSourceForTests().contains(QStringLiteral("audio-cleanup")), 10000);
+        // Into the inserted clip: its cleaned sound loads and goes where its picture is.
+        editor.seek(4.0);
+        QTRY_VERIFY_WITH_TIMEOUT(editor.mediaAudioSourceForTests().contains(QStringLiteral("audio-cleanup")), 10000);
+        editor.seek(4.5);
+        QTRY_VERIFY2_WITH_TIMEOUT(qAbs(editor.mediaAudioPositionMsForTests() - 1500) < 100,
+                                  qPrintable(QString::number(editor.mediaAudioPositionMsForTests())), 5000);
+        QVERIFY(!editor.playing());
+        editor.setCleanAudioBypass(true);
+        QTRY_VERIFY_WITH_TIMEOUT(editor.mediaAudioSourceForTests().isEmpty(), 2000);
+        editor.setCleanAudioBypass(false);
+        QTRY_VERIFY_WITH_TIMEOUT(!editor.mediaAudioSourceForTests().isEmpty(), 5000);
     }
 
 private:

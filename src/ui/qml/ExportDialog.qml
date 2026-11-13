@@ -21,6 +21,18 @@ Dialog {
     property string qualityValue: "social"
     property string outputPath: editor.defaultExportPath(format)
     property string successPath: ""
+    // A platform preset (crates/omareel_core/src/export/presets.rs) sets this export's settings,
+    // aspect and reframing without touching the project's; "" edits the project's own.
+    property string presetId: ""
+    readonly property var presets: editor.exportPresets()
+    readonly property var preset: {
+        for (let i = 0; i < presets.length; ++i)
+            if (presets[i].id === presetId) return presets[i]
+        return null
+    }
+    property string aspectValue: ""
+    property string reframeValue: ""
+    property bool copied: false
     property var previewGrab: null
     property url previewUrl: ""
     readonly property var heights: format === "mp4"
@@ -45,6 +57,47 @@ Dialog {
         onChanged: value => segment.chosen(value)
     }
 
+    function selectPreset(id) {
+        presetId = id
+        if (!preset) {
+            aspectValue = ""
+            reframeValue = ""
+            selectFormat(editor.project.export.format || "mp4")
+            return
+        }
+        format = preset.format
+        heightValue = preset.height
+        fpsValue = preset.fps
+        qualityValue = preset.quality
+        aspectValue = preset.aspect
+        reframeValue = preset.reframe === "" ? "off" : preset.reframe
+        outputPath = editor.presetExportPath(id)
+    }
+    // Saves the preset into the project (one undo step), so the editor previews it, and goes on
+    // with the project's settings, which are now the preset's.
+    function savePreset() {
+        const id = presetId
+        editor.applyExportPreset(id)
+        selectPreset("")
+        outputPath = editor.presetExportPath(id)
+    }
+    // Width over height of what this export makes.
+    function canvasAspect() {
+        const parts = aspectValue.split(":")
+        if (parts.length === 2) return Number(parts[0]) / Math.max(1, Number(parts[1]))
+        if (aspectValue === "auto")
+            return editor.sourceWidth * editor.project.crop.w / Math.max(1, editor.sourceHeight * editor.project.crop.h)
+        return editor.outputWidth / Math.max(1, editor.outputHeight)
+    }
+    function sizeLabel() {
+        const width = Math.round(heightValue * canvasAspect() / 2) * 2
+        return width + "×" + heightValue
+    }
+    function presetSummary() {
+        if (!preset) return ""
+        const shape = preset.aspect === "auto" ? "" : " · " + preset.aspect + (preset.reframe !== "" ? " reframed" : "")
+        return sizeLabel() + " · " + fpsValue + " fps" + shape
+    }
     function selectFormat(value) {
         format = value
         if (value === "mp4") {
@@ -65,7 +118,8 @@ Dialog {
         return ""
     }
     function estimatedMegabytes() {
-        const scale = heightValue / 1080
+        // The same pixels as a 16:9 frame this many 1080p's high.
+        const scale = Math.sqrt(canvasAspect() * 9 / 16) * heightValue / 1080
         const qualityBase = qualityValue === "studio" ? 18 : qualityValue === "social" ? 10 : 5
         const bitrate = format === "gif" ? qualityBase * 1.8 * scale : qualityBase * scale * scale
         return Math.max(.1, bitrate * editor.duration / 8)
@@ -76,7 +130,8 @@ Dialog {
     }
     onOpened: {
         successPath = ""
-        selectFormat(editor.project.export.format || "mp4")
+        copied = false
+        selectPreset(presetId)
     }
 
     background: OmPopupCard { padding: 0 }
@@ -202,7 +257,8 @@ Dialog {
                     id: specLabel
                     anchors.centerIn: parent
                     textFormat: Text.PlainText
-                    text: root.format.toUpperCase() + "  " + (root.heightValue === 2160 ? "4K" : root.heightValue + "p") + "  " + root.fpsValue + " fps"
+                    text: root.format.toUpperCase() + "  " + (root.preset ? root.sizeLabel()
+                        : root.heightValue === 2160 ? "4K" : root.heightValue + "p") + "  " + root.fpsValue + " fps"
                     color: theme.textStrong
                     font.family: theme.monoFamily
                     font.pixelSize: theme.type.caption
@@ -218,6 +274,44 @@ Dialog {
             spacing: 10
             Behavior on opacity { NumberAnimation { duration: 200 } }
             OmSettingRow {
+                label: "Preset"
+                description: root.preset ? root.preset.description : "Your project's settings."
+                OmDropdown {
+                    id: presetBox
+                    objectName: "exportPresetMenu"
+                    Layout.preferredWidth: 216
+                    model: [{label: "Custom", id: ""}].concat(root.presets)
+                    textRole: "label"
+                    currentIndex: {
+                        for (let i = 0; i < root.presets.length; ++i)
+                            if (root.presets[i].id === root.presetId) return i + 1
+                        return 0
+                    }
+                    onActivated: index => root.selectPreset(model[index].id)
+                }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                visible: root.preset !== null
+                spacing: 8
+                Label {
+                    Layout.fillWidth: true
+                    text: root.presetSummary()
+                    elide: Text.ElideRight
+                    color: theme.textMuted
+                    font.family: theme.monoFamily
+                    font.pixelSize: theme.type.caption
+                }
+                OmButton {
+                    objectName: "savePresetButton"
+                    text: "Save to project"
+                    font.pixelSize: theme.type.small
+                    tooltipText: "Use these settings, aspect and reframing in the project too"
+                    onClicked: root.savePreset()
+                }
+            }
+            OmSettingRow {
+                visible: root.preset === null
                 label: "Format"
                 SegmentRow {
                     Layout.preferredWidth: 216
@@ -227,6 +321,7 @@ Dialog {
                 }
             }
             OmSettingRow {
+                visible: root.preset === null
                 label: "Resolution"
                 SegmentRow {
                     Layout.preferredWidth: 216
@@ -238,6 +333,7 @@ Dialog {
                 }
             }
             OmSettingRow {
+                visible: root.preset === null
                 label: "Frame rate"
                 SegmentRow {
                     Layout.preferredWidth: 216
@@ -249,6 +345,7 @@ Dialog {
                 }
             }
             OmSettingRow {
+                visible: root.preset === null
                 label: "Quality"
                 description: root.qualityCaption()
                 SegmentRow {
@@ -309,13 +406,14 @@ Dialog {
                 Label {
                     objectName: "exportStatusLabel"
                     textFormat: Text.PlainText
-                    text: editor.exportProgress >= 1 ? "Finishing encoding…" : "Rendering…"
+                    text: editor.measuringLoudness ? "Measuring loudness…"
+                        : editor.exportProgress >= 1 ? "Finishing encoding…" : "Rendering…"
                     color: theme.foreground
                     font.pixelSize: theme.type.small
                 }
                 Item { Layout.fillWidth: true }
                 Label {
-                    visible: editor.exportProgress < 1
+                    visible: editor.exportProgress < 1 && !editor.measuringLoudness
                     textFormat: Text.PlainText
                     text: editor.exportFps.toFixed(0) + " fps  ·  " + root.formatEta(editor.exportEtaSeconds) + " left"
                     color: theme.textMuted
@@ -363,7 +461,22 @@ Dialog {
                 icon.source: "qrc:/omareel/assets/icons/lucide/folder-open.svg"
                 onClicked: editor.openContainingFolder(root.successPath)
             }
-            OmButton { visible: root.done; text: "Copy path"; onClicked: editor.copyPath(root.successPath) }
+            OmButton {
+                objectName: "copyFileButton"
+                visible: root.done
+                bordered: true
+                text: root.copied ? "Copied" : "Copy"
+                icon.source: root.copied ? "qrc:/omareel/assets/icons/lucide/check.svg"
+                                         : "qrc:/omareel/assets/icons/lucide/copy.svg"
+                tooltipText: "Copy the file, to paste into a chat or a folder"
+                onClicked: root.copied = editor.copyFile(root.successPath)
+            }
+            OmButton {
+                visible: root.done
+                text: "Copy path"
+                font.pixelSize: theme.type.small
+                onClicked: editor.copyPath(root.successPath)
+            }
             Item { Layout.fillWidth: true }
             OmButton {
                 visible: editor.exporting
@@ -378,7 +491,8 @@ Dialog {
                 text: "Export"
                 icon.source: "qrc:/omareel/assets/icons/lucide/download.svg"
                 onClicked: editor.exportTo(root.outputPath, {
-                    fps: root.fpsValue, height: root.heightValue, quality: root.qualityValue
+                    fps: root.fpsValue, height: root.heightValue, quality: root.qualityValue,
+                    aspect: root.aspectValue, reframe: root.reframeValue
                 })
             }
             OmButton {
@@ -393,7 +507,7 @@ Dialog {
 
     Connections {
         target: editor
-        function onExportFinished(path) { root.successPath = path }
+        function onExportFinished(path) { root.successPath = path; root.copied = false }
     }
     FileDialog {
         id: outputDialog

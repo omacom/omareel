@@ -420,3 +420,70 @@ fn captions_are_written_only_once_set() {
     assert_eq!(written.value("captions").to_object().value("size").to_double(0.0), 2.0);
     assert_eq!(Project::from_json(&written), read);
 }
+
+#[test]
+fn transitions_and_typing_are_written_only_once_set() {
+    let project = Project::defaults("Polish", 3.0);
+    let bytes = project.to_json().to_json(Format::Indented);
+    assert!(!bytes.contains("transition") && !bytes.contains("hideWhileTyping"));
+    let read = Project::from_json(&qjson::object_from_json(bytes.as_bytes()).unwrap());
+    assert_eq!((read.transition.as_str(), read.clips[0].transition.clone(), read.cursor.hide_while_typing), ("none", None, false));
+    assert_eq!(read.to_json().to_json(Format::Indented), bytes);
+
+    let mut json = project.to_json();
+    json.insert("transition", "zoom-punch");
+    let mut cursor = json.value("cursor").to_object();
+    cursor.insert("hideWhileTyping", true);
+    json.insert("cursor", cursor);
+    let mut clip = json.value("clips").to_array()[0].to_object();
+    clip.insert("transition", "none");
+    json.insert("clips", Value::array(vec![clip.into()]));
+    let read = Project::from_json(&json);
+    assert_eq!(read.transition, "zoom-punch");
+    assert_eq!(read.clips[0].transition.as_deref(), Some("none"));
+    assert!(read.cursor.hide_while_typing);
+    assert_eq!(read.to_json(), json);
+
+    // Unknown styles are dropped.
+    json.insert("transition", "wipe");
+    let mut clip = json.value("clips").to_array()[0].to_object();
+    clip.insert("transition", "spin");
+    json.insert("clips", Value::array(vec![clip.into()]));
+    let read = Project::from_json(&json);
+    assert_eq!((read.transition.as_str(), read.clips[0].transition.clone()), ("none", None));
+}
+
+#[test]
+fn audio_cleanup_is_written_only_when_switched_on() {
+    let plain = Project::defaults("Demo", 4.0);
+    let audio = plain.to_json().value("audio").to_object();
+    assert!(!audio.contains("cleanup"));
+    assert_eq!(audio.keys().collect::<Vec<_>>(), ["desktop", "mic", "volume"]);
+
+    let mut cleaned = plain.clone();
+    cleaned.audio.cleanup = AudioCleanup { denoise: true, strength: 0.6, loudness: "-14".into() };
+    let json = cleaned.to_json();
+    assert_eq!(
+        json.value("audio").to_json(Format::Compact),
+        r#"{"cleanup":{"denoise":true,"loudness":"-14","strength":0.6},"desktop":true,"mic":true,"volume":1}"#
+    );
+    assert_eq!(Project::from_json(&json), cleaned);
+    assert!(cleaned.audio.cleanup.active());
+    assert_eq!(cleaned.audio.cleanup.loudness_lufs(), Some(-14.0));
+    assert!(!AudioCleanup::default().active());
+}
+
+#[test]
+fn audio_cleanup_reads_leniently() {
+    let read = |cleanup: &str| {
+        Project::from_json(&object(&format!(r#"{{"audio":{{"cleanup":{cleanup}}}}}"#))).audio.cleanup
+    };
+    assert_eq!(read(r#"{"denoise":true}"#), AudioCleanup { denoise: true, ..AudioCleanup::default() });
+    assert_eq!(read(r#"{"loudness":-16}"#).loudness, "-16");
+    assert_eq!(read(r#"{"loudness":"-23"}"#).loudness, "off");
+    assert_eq!(read(r#"{"strength":7}"#).strength, 1.0);
+    assert_eq!(read(r#"{"strength":0}"#).strength, 0.1);
+    // Everything at its default reads back as no cleanup at all.
+    let json = Project::from_json(&object(r#"{"audio":{"cleanup":{"denoise":false}}}"#)).to_json();
+    assert!(!json.value("audio").to_object().contains("cleanup"));
+}

@@ -30,6 +30,25 @@
 //! | `remove-fillers` | (needs a transcript with measured word times) |
 //! | `set` | `path` (dotted, as in describe's `settings`), `value` |
 //! | `set-chapters` | any of `chapters` (`[{"at", "title"}, ...]`, replacing the list), `title`, `description` |
+//! | `add-overlay` | `kind` (text, box, arrow, badge, blur, card), `from`, `to`, optional `anchor` (`screen` or `frame`), `rect` `{x, y, w, h}`, and the kind's fields (below); returns its `id` |
+//! | `edit-overlay` | `id`, any of `from`, `to`, `anchor`, and the kind's fields (`rect` may give only some of x/y/w/h) |
+//! | `remove-overlay` | `id` |
+//! | `blur` | `from`, `to`, `rect`, optional `style` (`pixelate` or `blur`), `amount` (0–1): `add-overlay` of a blur |
+//! | `add-marker` | `at`, optional `label`; returns its `id` |
+//! | `rename-marker` | `id`, `label` |
+//! | `remove-marker` | `id` |
+//! | `transition` | `style` (`none` or `zoom-punch`): at every cut |
+//! | `cut-transition` | `clip` or `at` (the clip after the cut), `style` (`none`, `zoom-punch`, or `null` to follow the project) |
+//! | `speed-up-quiet` | optional `target` (seconds each part plays in, default 2), `min` (shortest part, default 3) |
+//! | `reframe` | `mode`: `follow` or `off` |
+//! | `audio-cleanup` | any of `denoise` (boolean), `strength` (0.1–1), `loudness` (`off`, -16, -14) |
+//!
+//! Overlay fields by kind: text `text`, `size`, `color`, `background` (`pill`/`none`); box
+//! `color`, `width`, `radius`, `spotlight`; arrow `tail`, `head` (`{x, y}`), `color`, `width`;
+//! badge `number`, `color`; blur `style`, `amount`; card `title`, `subtitle`; all but blur
+//! `fadeIn`, `fadeOut`. A `screen` overlay's `rect` (and an arrow's ends) are 0–1 of the
+//! recording's full frame, before the crop; a `frame` overlay's are 0–1 of the canvas. Blur is
+//! always `screen`, a card always `frame` (the whole canvas). See [`super::polish_ops`].
 //!
 //! `set-chapters` writes the bundle's chapters.json ([`crate::chapters`]), at source times
 //! whatever timeline its `at`s use, and only once the whole list succeeded.
@@ -42,10 +61,10 @@ use crate::chapters::{Chapter, Chapters};
 use crate::editor::{Document, Effect, ImportedInsert, ImportedMusic, ZoomTarget};
 use crate::project::{allowed_clip_speeds, Project};
 use crate::transcript::trim::PauseSettings;
-use crate::transcript::{audio, job::Control, stillness, vad};
+use crate::transcript::{audio, cache, job::Control, stillness, vad};
 
 /// One operation's failure, before the operation's number is added.
-type OpResult = Result<Object, String>;
+pub(super) type OpResult = Result<Object, String>;
 
 /// The operations in `json`: an array, `{"ops": [...]}`, or one operation.
 pub fn parse_ops(json: &[u8]) -> Result<Vec<Object>, String> {
@@ -65,7 +84,7 @@ pub fn parse_ops(json: &[u8]) -> Result<Vec<Object>, String> {
         .collect()
 }
 
-fn number(op: &Object, key: &str) -> Result<f64, String> {
+pub(super) fn number(op: &Object, key: &str) -> Result<f64, String> {
     match op.value(key) {
         value if value.is_double() => {
             let n = value.to_double(f64::NAN);
@@ -76,15 +95,15 @@ fn number(op: &Object, key: &str) -> Result<f64, String> {
     }
 }
 
-fn optional_number(op: &Object, key: &str) -> Result<Option<f64>, String> {
+pub(super) fn optional_number(op: &Object, key: &str) -> Result<Option<f64>, String> {
     if op.value(key).is_undefined() { Ok(None) } else { number(op, key).map(Some) }
 }
 
-fn text(op: &Object, key: &str) -> Result<String, String> {
+pub(super) fn text(op: &Object, key: &str) -> Result<String, String> {
     op.value(key).as_str().map(str::to_owned).ok_or_else(|| format!("\"{key}\" must be a string"))
 }
 
-fn source_timeline(op: &Object) -> Result<bool, String> {
+pub(super) fn source_timeline(op: &Object) -> Result<bool, String> {
     match op.value("timeline").as_str() {
         None if op.value("timeline").is_undefined() => Ok(false),
         Some("output") => Ok(false),
@@ -94,7 +113,7 @@ fn source_timeline(op: &Object) -> Result<bool, String> {
 }
 
 /// An output time from `key`, converting a source time (the first place it plays).
-fn output_time(document: &Document, op: &Object, key: &str) -> Result<f64, String> {
+pub(super) fn output_time(document: &Document, op: &Object, key: &str) -> Result<f64, String> {
     let t = number(op, key)?;
     if !source_timeline(op)? {
         if t < 0.0 || t > document.duration() + 1e-6 {
@@ -129,7 +148,7 @@ fn output_spans(document: &Document, op: &Object) -> Result<Vec<(f64, f64)>, Str
 }
 
 /// The clip an operation names with `clip` (an id) or `at` (the clip playing then).
-fn clip_id(document: &Document, op: &Object) -> Result<String, String> {
+pub(super) fn clip_id(document: &Document, op: &Object) -> Result<String, String> {
     if let Some(id) = op.value("clip").as_str() {
         if document.clip_index(id) < 0 {
             return Err(format!("no clip with id {id:?}"));
@@ -210,33 +229,56 @@ fn ranges(op: &Object) -> Result<Vec<(f64, f64)>, String> {
         .collect()
 }
 
-/// What "Trim pauses" needs and the editor measures in the background: where the recording's
-/// sound has speech, and which silences the screen stays still through. Measured here, once.
-fn measure_pauses(document: &mut Document) -> Result<(), String> {
+/// What "Trim pauses" and "Speed up quiet parts" need and the editor measures in the
+/// background: where the recording's sound has speech, and what the screen does through the
+/// silences. Measured here once, through the editor's measurement cache
+/// (`transcript::cache`, outside the bundle), so a recording the editor (or an earlier apply)
+/// measured is not measured again.
+/// `moving`: the windows the screen moves in are needed too (quiet parts), not only the still
+/// ones (pauses).
+/// `store` false (a dry run) measures without writing the cache.
+pub(super) fn measure_speech_and_screen(document: &mut Document, moving: bool, store: bool) -> Result<(), String> {
     let control = Control::default();
+    let entry = document.measurement_cache();
+    let store_to = entry.as_ref().filter(|_| store);
     if document.speech_regions().is_none() {
-        let speech = if document.recording().has_audio {
-            let sound = audio::extract_with(document.video_path(), &control)?;
-            vad::speech_regions(&sound.samples, &vad::VadSettings::default())
-        } else {
-            Vec::new()
+        let speech = match entry.as_ref().and_then(cache::Entry::speech) {
+            Some(speech) => speech,
+            None if document.recording().has_audio => {
+                let sound = audio::extract_with(document.video_path(), &control)?;
+                let speech = vad::speech_regions(&sound.samples, &vad::VadSettings::default());
+                if let Some(entry) = store_to {
+                    let _ = entry.store_speech(&speech);
+                }
+                speech
+            }
+            None => Vec::new(),
         };
         document.set_speech_regions(speech);
     }
-    if document.still_windows().is_none() {
+    if document.still_windows().is_none() || (moving && document.moving_windows().is_none()) {
         let silences = document.silences_to_check().unwrap_or_default();
         let geometry = (document.source_width(), document.source_height(), document.capture_scale());
-        let still = stillness::still_windows(document.video_path(), &silences, document.source_duration(), geometry, &control)?;
-        document.set_still_windows(still);
+        let check = match entry.as_ref().and_then(|entry| entry.screen(&silences, geometry)) {
+            Some(check) => check,
+            None => {
+                let check = stillness::check_windows(document.video_path(), &silences, document.source_duration(), geometry, &control)?;
+                if let Some(entry) = store_to {
+                    let _ = entry.store_screen(&silences, geometry, &check);
+                }
+                check
+            }
+        };
+        document.set_screen_check(check);
     }
     Ok(())
 }
 
-fn ok() -> OpResult {
+pub(super) fn ok() -> OpResult {
     Ok(Object::new())
 }
 
-fn with(key: &str, value: impl Into<Value>) -> OpResult {
+pub(super) fn with(key: &str, value: impl Into<Value>) -> OpResult {
     Ok(Object::from_iter([(key, value.into())]))
 }
 
@@ -330,6 +372,9 @@ fn set_chapters(document: &Document, op: &Object, current: Option<Chapters>) -> 
 
 /// The edits of [`Document`] the operations use, refusing what the editor would refuse.
 fn run_op(document: &mut Document, op: &Object, run: &mut Run) -> OpResult {
+    if let Some(result) = super::polish_ops::run(document, op, &mut run.warnings, run.dry_run) {
+        return result;
+    }
     let warnings = &mut run.warnings;
     let name = op.value("op").to_string_or("");
     match name.as_str() {
@@ -622,7 +667,7 @@ fn run_op(document: &mut Document, op: &Object, run: &mut Run) -> OpResult {
                 min_pause: optional_number(op, "min")?.unwrap_or(PauseSettings::default().min_pause).max(0.2),
                 keep: optional_number(op, "keep")?.unwrap_or(PauseSettings::default().keep).max(0.0),
             };
-            measure_pauses(document)?;
+            measure_speech_and_screen(document, false, !run.dry_run)?;
             let pauses = document.pause_ranges(&settings);
             let before = document.duration();
             let cut = if pauses.is_empty() { 0 } else { document.remove_source_ranges(&pauses) };
@@ -650,8 +695,8 @@ fn run_op(document: &mut Document, op: &Object, run: &mut Run) -> OpResult {
         }
         "set" => {
             let path = text(op, "path")?;
-            if path.split('.').next().is_some_and(|root| matches!(root, "clips" | "zooms")) {
-                return Err("clips and zooms change through their own operations".into());
+            if path.split('.').next().is_some_and(|root| matches!(root, "clips" | "zooms" | "overlays" | "markers")) {
+                return Err("clips, zooms, overlays and markers change through their own operations".into());
             }
             let value = op.value("value").clone();
             if value.is_undefined() {
@@ -712,6 +757,12 @@ pub fn apply_scoped(document: &mut Document, ops: &[Object], dry_run: bool, scop
     if scope.is_some() {
         file_strings(&Value::Object(document.project().to_json()), document.bundle_path(), &mut before);
     }
+    // Footage the person cut while recording (a retake, a pause) that the edits bring back.
+    let recording_cuts = super::recording_cuts(document.bundle_path(), document.source_duration());
+    let shown = |document: &Document, start: f64, end: f64| {
+        !source_span_outputs(&document.project().clips, start + 0.05, end - 0.05).is_empty()
+    };
+    let hidden_before: Vec<bool> = recording_cuts.iter().map(|&(_, start, end)| !shown(document, start, end)).collect();
     let mut run = Run { dry_run, scope, ..Run::default() };
     let mut results = Vec::new();
     for (index, op) in ops.iter().enumerate() {
@@ -741,6 +792,15 @@ pub fn apply_scoped(document: &mut Document, ops: &[Object], dry_run: bool, scop
                 }
                 return Err(error);
             }
+        }
+    }
+    for (&(kind, start, end), hidden) in recording_cuts.iter().zip(hidden_before) {
+        if hidden && shown(document, start, end) {
+            run.warnings.push(format!(
+                "source {}–{} was cut while recording (a {kind}) and now plays again; the person chose to leave it out",
+                ms(start),
+                ms(end)
+            ));
         }
     }
     Ok(Applied { results, warnings: run.warnings, chapters: run.chapters })
@@ -825,6 +885,8 @@ pub fn run_in(
         ("output_duration", ms(document.duration()).into()),
         ("clips", (project.clips.len() as i64).into()),
         ("zooms", (project.zooms.len() as i64).into()),
+        ("overlays", (project.overlays.len() as i64).into()),
+        ("markers", (project.markers.len() as i64).into()),
     ]);
     if describe_after {
         report.insert("describe", super::describe::describe(&document));

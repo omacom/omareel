@@ -1,6 +1,7 @@
 //! Reading, migrating and writing `project.json` (`Project.cpp`).
 
 use super::model::*;
+use super::overlays::{overlays_from_json, overlays_to_json};
 use super::styles::*;
 use crate::compat::cpp;
 use crate::compat::geometry::{PointF, RectF};
@@ -95,6 +96,53 @@ pub fn music_to_json(music: &Music) -> Value {
 
 pub fn allowed_aspects() -> [&'static str; 7] {
     ["auto", "16:9", "1:1", "4:3", "9:16", "3:4", "4:5"]
+}
+
+pub fn allowed_marker_kinds() -> [&'static str; 2] {
+    ["marker", "retake"]
+}
+
+/// The `markers` array: `{"id", "time", "label"}`, with `"kind": "retake"` for a retake's marker.
+pub fn markers_to_json(markers: &[Marker]) -> Vec<Value> {
+    markers
+        .iter()
+        .map(|m| {
+            let mut marker = Object::from_iter([
+                ("id", Value::from(m.id.as_str())),
+                ("time", m.time.into()),
+                ("label", m.label.as_str().into()),
+            ]);
+            if m.kind != "marker" {
+                marker.insert("kind", m.kind.as_str());
+            }
+            marker.into()
+        })
+        .collect()
+}
+
+/// Reads `markers`, dropping entries without an id or a finite, non-negative time; an unknown
+/// kind reads as "marker". Kept in time order.
+pub fn markers_from_json(value: &Value) -> Vec<Marker> {
+    let mut markers: Vec<Marker> = value
+        .to_array()
+        .iter()
+        .filter_map(|value| {
+            let o = value.as_object()?;
+            let marker = Marker {
+                id: o.value("id").to_string_or(""),
+                time: o.value("time").to_double(f64::NAN),
+                label: o.value("label").to_string_or(""),
+                kind: o.value("kind").to_string_or("marker"),
+            };
+            if marker.id.is_empty() || !marker.time.is_finite() || marker.time < 0.0 {
+                return None;
+            }
+            let kind = if allowed_marker_kinds().contains(&marker.kind.as_str()) { marker.kind } else { "marker".into() };
+            Some(Marker { kind, ..marker })
+        })
+        .collect();
+    markers.sort_by(|a, b| a.time.total_cmp(&b.time));
+    markers
 }
 
 impl Project {
@@ -226,6 +274,10 @@ impl Project {
         if allowed_aspects().contains(&aspect.as_str()) {
             p.aspect = aspect;
         }
+        let reframe = source.value("reframe").to_string_or("");
+        if crate::reframe::MODES.contains(&reframe.as_str()) {
+            p.reframe = reframe;
+        }
         let crop = source.value("crop").to_object();
         p.crop = RectF::new(
             crop.value("x").to_double(0.0),
@@ -260,6 +312,10 @@ impl Project {
                     clip.fit = fit;
                 }
             }
+            let transition = o.value("transition").to_string_or("");
+            if crate::transitions::STYLES.contains(&transition.as_str()) {
+                clip.transition = Some(transition);
+            }
             p.clips.push(clip);
         }
         p.zooms.clear();
@@ -279,6 +335,8 @@ impl Project {
             }
             p.zooms.push(z);
         }
+        p.overlays = overlays_from_json(source.value("overlays"));
+        p.markers = markers_from_json(source.value("markers"));
         let zs = source.value("zoomStyle").to_object();
         p.zoom_style.spring = spring_from_json(&zs.value("spring").to_object(), &p.zoom_style.spring);
         p.zoom_style.snap_to_edges_ratio = zs.value("snapToEdgesRatio").to_double(0.25);
@@ -340,6 +398,7 @@ impl Project {
         if p.cursor.click_sound != "soft" {
             p.cursor.click_sound = "none".into();
         }
+        p.cursor.hide_while_typing = c.value("hideWhileTyping").to_bool(false);
 
         let keystrokes = source.value("keystrokes").to_object();
         p.keystrokes.enabled = keystrokes.value("enabled").to_bool(false);
@@ -363,11 +422,30 @@ impl Project {
             }
         });
 
+        let transition = source.value("transition").to_string_or("none");
+        if crate::transitions::STYLES.contains(&transition.as_str()) {
+            p.transition = transition;
+        }
+
         let a = source.value("audio").to_object();
         p.audio.desktop = a.value("desktop").to_bool(true);
         p.audio.mic = a.value("mic").to_bool(true);
         p.audio.volume = a.value("volume").to_double(1.0);
         p.music = music_from_json(source.value("music"));
+        let cleanup = a.value("cleanup").to_object();
+        let defaults = AudioCleanup::default();
+        p.audio.cleanup.denoise = cleanup.value("denoise").to_bool(false);
+        p.audio.cleanup.strength = cpp::clamp(cleanup.value("strength").to_double(defaults.strength), 0.1, 1.0);
+        // A number (-16) reads as its text.
+        let loudness_value = cleanup.value("loudness");
+        let loudness = if loudness_value.is_double() {
+            crate::compat::qnumber::number_f64(loudness_value.to_double(0.0), 'g', 6)
+        } else {
+            loudness_value.to_string_or("off")
+        };
+        if AudioCleanup::LOUDNESS_TARGETS.contains(&loudness.as_str()) {
+            p.audio.cleanup.loudness = loudness;
+        }
         let camera = source.value("camera").to_object();
         p.camera.enabled = camera.value("enabled").to_bool(false);
         p.camera.position = camera.value("position").to_string_or("bottom-right");
@@ -444,6 +522,9 @@ impl Project {
                     clip.insert("media", c.media.as_str());
                     clip.insert("fit", c.fit.as_str());
                 }
+                if let Some(transition) = &c.transition {
+                    clip.insert("transition", transition.as_str());
+                }
                 clip.into()
             })
             .collect();
@@ -462,6 +543,7 @@ impl Project {
                 ])
             })
             .collect();
+        let markers = markers_to_json(&self.markers);
         let stops: Vec<Value> = self
             .background
             .gradient
@@ -514,12 +596,25 @@ impl Project {
             ("style", c.style.as_str().into()),
             ("ringColor", c.ring_color.name().into()),
             ("clickSound", c.click_sound.as_str().into()),
+            ("hideWhileTyping", if c.hide_while_typing { Value::Bool(true) } else { Value::Undefined }),
         ]);
         let k = &self.keystrokes;
         let a = &self.audio;
         let captions = self.captions.as_ref().map_or(Value::Undefined, |c| {
             obj([("enabled", c.enabled.into()), ("position", c.position.as_str().into()), ("size", c.size.into())])
         });
+        let mut audio = Object::from_iter([("desktop", Value::from(a.desktop)), ("mic", a.mic.into()), ("volume", a.volume.into())]);
+        // Left out at its default, so projects from before it stay as they were.
+        if a.cleanup != AudioCleanup::default() {
+            audio.insert(
+                "cleanup",
+                obj([
+                    ("denoise", a.cleanup.denoise.into()),
+                    ("strength", a.cleanup.strength.into()),
+                    ("loudness", a.cleanup.loudness.as_str().into()),
+                ]),
+            );
+        }
         let cam = &self.camera;
         let e = &self.export_settings;
         let mut root = Object::from_iter([
@@ -559,9 +654,10 @@ impl Project {
                     ("holdMs", k.hold_ms.into()),
                 ]),
             ),
-            ("audio", obj([("desktop", a.desktop.into()), ("mic", a.mic.into()), ("volume", a.volume.into())])),
+            ("audio", Value::Object(audio)),
             // Absent until the user changes captions (inserting Undefined leaves it out).
             ("captions", captions),
+            ("transition", if self.transition == "none" { Value::Undefined } else { self.transition.as_str().into() }),
             (
                 "camera",
                 obj([
@@ -601,6 +697,17 @@ impl Project {
         // Written only when set, so projects without music stay as they were.
         if let Some(music) = &self.music {
             root.insert("music", music_to_json(music));
+        }
+        if !self.overlays.is_empty() {
+            root.insert("overlays", overlays_to_json(&self.overlays));
+        }
+        // Projects without markers keep the bytes they had before markers existed.
+        if !markers.is_empty() {
+            root.insert("markers", markers);
+        }
+        // Written only when set, so projects that don't reframe stay as they were.
+        if !self.reframe.is_empty() {
+            root.insert("reframe", self.reframe.as_str());
         }
         root
     }

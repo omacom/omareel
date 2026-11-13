@@ -23,10 +23,15 @@ Rectangle {
         {key:"Space", action:"Play / pause"}, {key:"← →", action:"Step one frame"},
         {key:"Shift ← →", action:"Jump one second"}, {key:"S", action:"Split at playhead"},
         {key:"Z", action:"Add zoom"}, {key:"I", action:"Insert a video"},
+        {key:"T R A N", action:"Add text, box, arrow, step"},
+        {key:"B", action:"Add a blur region"}, {key:"Shift T", action:"Add a title card"},
+        {key:"M", action:"Next marker"}, {key:"Shift M", action:"Previous marker"},
+        {key:"Ctrl M", action:"Add marker"},
         {key:"Delete", action:"Remove selection"},
         {key:"Backspace", action:"Remove range"},
         {key:"Ctrl Z", action:"Undo"}, {key:"Ctrl Shift Z", action:"Redo"},
         {key:"Ctrl S", action:"Save"}, {key:"Ctrl E", action:"Export"},
+        {key:"Ctrl Shift P", action:"Polish with AI"},
         {key:"Scroll", action:"Zoom timeline at pointer"},
         {key:"Right drag", action:"Pan timeline"},
         {key:"Esc", action:"Cancel point picking"}, {key:"?", action:"Show shortcuts"}
@@ -38,6 +43,16 @@ Rectangle {
         return 0
     }
     function shortAspect(value) { return value === "auto" ? "Auto" : value }
+    // Reframing needs a canvas of another shape than the (cropped) recording, such as 9:16 or
+    // 1:1. As reframe::active: the window would be within 2% of the whole crop otherwise, and a
+    // project set to reframe such a canvas draws exactly as one that isn't.
+    readonly property bool reframeUseful: {
+        const source = editor.sourceWidth * editor.project.crop.w / Math.max(1, editor.sourceHeight * editor.project.crop.h)
+        const canvas = editor.outputWidth / Math.max(1, editor.outputHeight)
+        return Math.min(canvas / Math.max(.0001, source), source / Math.max(.0001, canvas)) < 1 - .02
+    }
+    readonly property bool reframing: editor.project.reframe === "follow"
+    function toggleReframe() { editor.setReframe(root.reframing ? "off" : "follow") }
     function openAspectMenu() {
         if (root.narrow) overflowMenu.open()
         else aspectBox.popup.open()
@@ -65,7 +80,7 @@ Rectangle {
 
         Item {
             Layout.fillWidth: true
-            Layout.minimumWidth: root.narrow ? 36 : root.compact ? 196 : 228
+            Layout.minimumWidth: root.narrow ? 36 : root.compact ? 240 : 336
             Layout.fillHeight: true
             RowLayout {
                 anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
@@ -97,6 +112,22 @@ Rectangle {
                     enabled: !editor.readOnly
                     tooltipText: root.cropMode ? "" : "Crop the recording"
                     onToggled: root.cropMode = checked
+                }
+                OmButton {
+                    objectName: "reframeButton"
+                    visible: !root.narrow
+                    Layout.preferredWidth: implicitWidth
+                    text: root.compact ? "" : "Reframe"
+                    icon.source: "qrc:/omareel/assets/icons/lucide/scan.svg"
+                    icon.color: root.reframing ? theme.accent : contentColor
+                    checkable: true; checked: root.reframing; selected: checked
+                    enabled: root.reframing || root.reframeUseful
+                    tooltipText: root.reframing && !root.reframeUseful ? "Nothing to reframe: the canvas has the recording's shape"
+                        : root.reframing ? "The canvas follows the cursor and zooms"
+                        : root.reframeUseful ? "Fill the canvas and follow the action"
+                        : "Pick a vertical or square canvas to reframe"
+                    Accessible.name: "Auto-reframe"
+                    onToggled: root.toggleReframe()
                 }
                 OmIconButton {
                     id: overflowButton
@@ -178,7 +209,7 @@ Rectangle {
 
         Item {
             Layout.fillWidth: true
-            Layout.minimumWidth: root.compact ? 232 : 372
+            Layout.minimumWidth: root.compact ? 268 : 482
             Layout.fillHeight: true
             RowLayout {
                 anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
@@ -203,6 +234,16 @@ Rectangle {
                     tooltipText: "Split at playhead"
                     tooltipShortcut: "S"
                     onClicked: editor.splitAtPlayhead()
+                }
+                OmButton {
+                    objectName: "annotateToolButton"
+                    Layout.preferredWidth: root.compact ? 32 : implicitWidth
+                    text: root.compact ? "" : "Annotate"
+                    icon.source: "qrc:/omareel/assets/icons/lucide/pen-line.svg"
+                    Accessible.name: "Annotate"
+                    tooltipText: "Text, boxes, arrows, steps, blur, and cards"
+                    tooltipShortcut: "T"
+                    onClicked: annotateMenu.visible ? annotateMenu.close() : annotateMenu.open()
                 }
                 Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 18; Layout.leftMargin: 6; Layout.rightMargin: 6; color: theme.separator }
                 OmIconButton {
@@ -256,6 +297,47 @@ Rectangle {
     }
 
     OmPopup {
+        id: annotateMenu
+        parent: root
+        fromBelow: false
+        x: root.width - width - 12; y: -height - 8
+        width: 224
+        padding: 8
+        property bool wanted: false
+        onAboutToShow: wanted = true
+        contentItem: Loader {
+            active: annotateMenu.wanted
+            sourceComponent: ColumnLayout {
+                spacing: 2
+                PanelHeading { text: "Add at the playhead"; Layout.leftMargin: 8; Layout.topMargin: 4; Layout.bottomMargin: 4 }
+                Repeater {
+                    model: [
+                        {kind: "text", label: "Text", icon: "type.svg", key: "T"},
+                        {kind: "box", label: "Box or spotlight", icon: "square-dashed.svg", key: "R"},
+                        {kind: "arrow", label: "Arrow", icon: "arrow-up-right.svg", key: "A"},
+                        {kind: "badge", label: "Step number", icon: "hash.svg", key: "N"},
+                        {kind: "blur", label: "Blur region", icon: "eye-off.svg", key: "B"},
+                        {kind: "card", label: "Title card", icon: "presentation.svg", key: "Shift T"}
+                    ]
+                    delegate: OmButton {
+                        required property var modelData
+                        objectName: "annotateMenu-" + modelData.kind
+                        Layout.fillWidth: true
+                        text: modelData.label
+                        icon.source: "qrc:/omareel/assets/icons/lucide/" + modelData.icon
+                        tooltipText: modelData.label
+                        tooltipShortcut: modelData.key
+                        onClicked: {
+                            editor.addOverlayAt(modelData.kind, editor.position, 3)
+                            annotateMenu.close()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    OmPopup {
         id: overflowMenu
         parent: root
         fromBelow: false
@@ -295,6 +377,15 @@ Rectangle {
                 text: root.cropMode ? "Finish crop" : "Crop"
                 icon.source: "qrc:/omareel/assets/icons/lucide/crop.svg"
                 onClicked: { root.cropMode = !root.cropMode; overflowMenu.close() }
+            }
+            OmButton {
+                Layout.fillWidth: true
+                bordered: true
+                selected: root.reframing
+                enabled: root.reframing || root.reframeUseful
+                text: root.reframing ? "Stop reframing" : "Reframe"
+                icon.source: "qrc:/omareel/assets/icons/lucide/scan.svg"
+                onClicked: { root.toggleReframe(); overflowMenu.close() }
             }
         }
     }

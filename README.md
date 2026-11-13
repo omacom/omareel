@@ -13,17 +13,27 @@ cursor-following zooms. Finished projects export to MP4 or GIF.
 - Optional desktop and microphone audio in a single compatible audio track.
 - Background music under the whole video, with volume, fades, looping, and automatic ducking
   under your voice.
+- One-switch audio cleanup: RNNoise noise suppression for the microphone and two-pass loudness
+  normalisation to −16 or −14 LUFS, previewed before export.
 - Non-destructive clip trimming, splitting, speed changes, and timeline zoom editing.
 - Rubber-band multi-selection for zoom blocks, with grouped movement and deletion.
+- Annotations: text labels, boxes with an optional spotlight, arrows, numbered steps, blur or
+  pixelate regions baked into the export, and title cards, edited on the preview and timeline.
 - Omarchy wallpaper and live accent-color integration.
-- Synthetic cursor smoothing, click rings, idle hiding, and cursor-following auto zooms.
+- Synthetic cursor smoothing, click rings in theme colours, hiding when idle or while typing, and
+  cursor-following auto zooms.
+- Optional zoom-punch transitions that hide the jump at each cut, with the sound faded across it.
 - Aspect presets, padding, rounded corners, inset borders, and configurable shadows.
+- Auto-reframe for vertical and square canvases: the screen fills the frame and follows the
+  cursor and zooms, identically in the preview and the export.
 - Camera rotation, horizontal flip, independent shadow/border styling, and 720p/1080p capture.
-- Hardware-accelerated MP4 export with CPU fallback, plus GIF export.
+- Hardware-accelerated MP4 export with CPU fallback, plus GIF export, with presets for YouTube,
+  Shorts, X, GitHub GIFs, and Slack, and copy-to-clipboard of the finished file.
 - `omareel frame` renders any moment of the finished video, or a labelled contact sheet, as an
   image without exporting: a quick check of an edit for people and AI agents.
 - Speech to text with the dictation engine chosen in Omarchy: captions, SRT/WebVTT subtitles,
-  and one-click trimming of pauses and filler words. Everything stays on this computer.
+  one-click trimming of pauses and filler words, and speeding up quiet stretches where the screen
+  keeps changing (installs, builds, scrolling). Everything stays on this computer.
 - Self-contained `.omareel` project bundles that preserve the source and editor state.
 - Scriptable editing for AI agents and scripts: `omareel describe` prints the edited timeline
   as JSON, `omareel apply` runs checked edit operations, and an open editor follows along.
@@ -95,6 +105,7 @@ omareel frame Recording.omareel --at 12.5 -o frame.png
 omareel frame Recording.omareel --count 12 --sheet -o sheet.jpg
 omareel transcribe Recording.omareel
 omareel export Recording.omareel -o recording.srt
+omareel export Recording.omareel --preset shorts   # 1080×1920, reframed
 omareel probe Recording.omareel
 omareel describe Recording.omareel
 omareel apply Recording.omareel edits.json
@@ -116,6 +127,29 @@ While recording, use any of these stop paths:
   keybind.
 - Run `omareel record --cancel` to stop and permanently discard the recording bundle.
 
+### Markers, retakes and pauses
+
+While recording, three more commands (and the bar's flag, undo and pause buttons) make the
+recording easier to edit. Bind them next to the toggle:
+
+```lua
+o.bind("SUPER + ALT + M", "Omareel marker", "omareel record --marker")
+o.bind("SUPER + ALT + BACKSPACE", "Omareel retake", "omareel record --retake")
+o.bind("SUPER + ALT + P", "Omareel pause", "omareel record --pause")
+```
+
+- `--marker [LABEL]` drops a marker ("good take", "cut here") that the editor shows on its
+  timeline; `M` and `Shift+M` jump between markers there.
+- `--retake [SECONDS]` means "that didn't go well": the editor's new project starts with
+  everything since the last marker (or the last 5 seconds, or `SECONDS`) already cut. Nothing
+  is deleted; trim the clips to bring it back.
+- `--pause` pauses and resumes. Nothing on screen is recorded while paused, and the paused
+  time is cut from the new project. Audio and the camera keep recording while paused and stay
+  in the bundle, so don't pause to keep something private.
+
+The Super keybind or bar click that made a mark is left out of the recorded input, so it never
+shows as a keystroke, a click or a zoom. See [docs/USAGE.md](docs/USAGE.md#markers-retakes-and-pauses).
+
 The recording bar appears at the top center of the recorded monitor. Turning on the webcam in
 the launcher opens a floating camera self-view right away; drag it where you want it and it
 stays there through the recording, using the same warm camera. Native capture keeps both the
@@ -132,10 +166,18 @@ want the bar to appear.
 | `Shift+Left` / `Shift+Right` | Seek one second |
 | `S` | Split the selected clip at the playhead |
 | `Z` | Add a zoom at the playhead |
-| `Delete` | Delete the selected time range, zoom, or clip |
+| `I` | Insert a video at the playhead |
+| `T` / `R` / `A` / `N` / `B` | Add text, a box, an arrow, a step number, or a blur region |
+| `Shift+T` | Add a title card |
+| `M` / `Shift+M` | Jump to the next / previous marker |
+| `Ctrl+M` | Add a marker at the playhead |
+| `Delete` | Delete the selected time range, annotation, zoom, or clip |
+| `Backspace` | Delete the selected time range |
 | `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / redo |
 | `Ctrl+S` | Save now |
 | `Ctrl+E` | Open export |
+| `Ctrl+Shift+P` | Polish with your coding agent |
+| `?` | Show the shortcuts |
 
 ## Bundle format
 
@@ -155,7 +197,11 @@ Superwhisper; `omarchy install dictation voxtype` sets one up). With voxtype on 
 and `whisper-cpp` installed, the same model runs through `whisper-cli`, which times every word.
 The Speech section of the editor turns captions on, saves subtitles, and trims pauses (silences
 over a second while nothing changes on screen and the pointer stays put) and filler words (with
-whisper-cpp's measured word times), each as one undo step. Pause trimming needs no engine. See `docs/USAGE.md` for details.
+whisper-cpp's measured word times), each as one undo step. Pause trimming needs no engine.
+"Speed up quiet parts" plays the silent stretches the screen does not stay still through faster
+instead of cutting them. The speech and screen measurements are cached under
+`~/.cache/omareel/omareel/speech-v1/`, keyed by `screen.mp4`, so a recording opens without
+measuring again. See `docs/USAGE.md` for details.
 
 ## Troubleshooting
 
@@ -202,6 +248,9 @@ The frozen engineering contract is in [docs/SPEC.md](docs/SPEC.md).
 
 Interface icons are from Lucide, used under the ISC license. See
 [`LICENSES/lucide.txt`](LICENSES/lucide.txt).
+
+Noise suppression uses the RNNoise model "somnolent-hogwash" from GregorR/rnnoise-models,
+built into the binary. See [`LICENSES/rnnoise-models.txt`](LICENSES/rnnoise-models.txt).
 
 The interface is set in Inter, bundled under the SIL Open Font License 1.1. See
 [`LICENSES/inter.txt`](LICENSES/inter.txt). Numbers, timecodes, and keys use your Omarchy

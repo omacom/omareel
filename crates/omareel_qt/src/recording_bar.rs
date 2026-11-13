@@ -21,7 +21,7 @@ use omareel_core::compat::qfile;
 use omareel_core::compat::qjson::Object;
 use omareel_core::recording_preferences::RecordingPreferences;
 use omareel_record::cursor_sampler;
-use omareel_record::recorder::{self, state};
+use omareel_record::recorder::{self, marks, state};
 use omareel_record::recording_bar::{
     self, CameraShape, Point, SelfViewGeometry, Size, clamped_self_view_drag_position, self_view_host_should_exit,
     self_view_pixels,
@@ -74,6 +74,7 @@ pub mod qobject {
         #[base = RecordingBarBase]
         #[qproperty(bool, bubble_mapped, READ = bubble_mapped, NOTIFY = self_view_visibility_changed)]
         #[qproperty(QString, elapsed, READ = elapsed, NOTIFY = elapsed_changed)]
+        #[qproperty(bool, paused, READ = paused, NOTIFY = paused_changed)]
         #[qproperty(QString, recorded_monitor, READ = recorded_monitor, NOTIFY = capture_started_changed)]
         #[qproperty(bool, webcam, READ = webcam, CONSTANT)]
         #[qproperty(bool, hidden, READ = hidden, NOTIFY = capture_started_changed)]
@@ -98,6 +99,12 @@ pub mod qobject {
         #[qsignal]
         fn elapsed_changed(self: Pin<&mut RecordingBar>);
         #[qsignal]
+        fn paused_changed(self: Pin<&mut RecordingBar>);
+        /// A marker or retake was added (from the bar, a command or a keybind): `kind` is
+        /// "marker" or "retake".
+        #[qsignal]
+        fn mark_added(self: Pin<&mut RecordingBar>, kind: QString);
+        #[qsignal]
         fn camera_settings_changed(self: Pin<&mut RecordingBar>);
         #[qsignal]
         fn camera_error_changed(self: Pin<&mut RecordingBar>);
@@ -118,6 +125,7 @@ pub mod qobject {
 
         fn bubble_mapped(self: &RecordingBar) -> bool;
         fn elapsed(self: &RecordingBar) -> QString;
+        fn paused(self: &RecordingBar) -> bool;
         fn recorded_monitor(self: &RecordingBar) -> QString;
         fn webcam(self: &RecordingBar) -> bool;
         fn hidden(self: &RecordingBar) -> bool;
@@ -164,6 +172,14 @@ pub mod qobject {
         fn stop(self: Pin<&mut RecordingBar>);
         #[qinvokable]
         fn cancel(self: Pin<&mut RecordingBar>);
+        /// The marker, retake and pause buttons: `omareel record --marker`, `--retake` and
+        /// `--pause`, marked as the bar's own so the click on them stays out of the recording.
+        #[qinvokable]
+        fn add_marker(self: Pin<&mut RecordingBar>);
+        #[qinvokable]
+        fn retake(self: Pin<&mut RecordingBar>);
+        #[qinvokable]
+        fn toggle_pause(self: Pin<&mut RecordingBar>);
 
         /// The logical size of the screen the self-view is on, which keeps the bubble on it.
         fn set_self_view_screen_size(self: Pin<&mut RecordingBar>, size: &QSize);
@@ -300,6 +316,9 @@ pub struct RecordingBarRust {
     /// The standby host's lock is held (RecordingBarBase holds it).
     host_locked: bool,
     elapsed: String,
+    /// The recorder's `paused`, and the `marks_sequence` last seen.
+    paused: bool,
+    marks_sequence: i64,
     recorded_monitor: String,
     webcam: bool,
     hidden: bool,
@@ -362,6 +381,8 @@ impl cxx_qt::Constructor<(bool, bool, i64)> for qobject::RecordingBar {
             host_sequence: 0,
             host_locked: false,
             elapsed: "00:00".into(),
+            paused: false,
+            marks_sequence: 0,
             recorded_monitor,
             webcam: state::recording_has_webcam(),
             hidden,
@@ -461,6 +482,10 @@ impl qobject::RecordingBar {
 
     fn recorded_monitor(&self) -> QString {
         qstring(&self.recorded_monitor)
+    }
+
+    fn paused(&self) -> bool {
+        self.paused
     }
 
     fn webcam(&self) -> bool {
@@ -761,10 +786,21 @@ impl qobject::RecordingBar {
             self.as_mut().rust_mut().camera_stop_requested = true;
             self.as_mut().stop_camera();
         }
+        let marks_sequence = state.value("marks_sequence").to_variant_long_long();
+        if marks_sequence != self.marks_sequence {
+            self.as_mut().rust_mut().marks_sequence = marks_sequence;
+            self.as_mut().mark_added(qstring(&state.value("last_mark").to_string_or("marker")));
+        }
+        let paused = state.value("paused").to_bool(false);
+        if paused != self.paused {
+            self.as_mut().rust_mut().paused = paused;
+            self.as_mut().paused_changed();
+        }
         if self.stopping {
             return;
         }
-        let elapsed = recording_bar::elapsed_text(recorder::monotonic_us(), state::recording_started_us());
+        // Paused time is left out, so the timer stands still while paused.
+        let elapsed = recording_bar::elapsed_text(marks::recorded_us(&state, recorder::monotonic_us()), 0);
         if elapsed != self.elapsed {
             self.as_mut().rust_mut().elapsed = elapsed;
             self.elapsed_changed();
@@ -935,6 +971,24 @@ impl qobject::RecordingBar {
 
     fn cancel(self: Pin<&mut Self>) {
         let _ = state::signal_existing(true);
+    }
+
+    fn add_marker(self: Pin<&mut Self>) {
+        if let Err(error) = marks::add_marker("", "bar") {
+            qobject::log_info(&qstring(&format!("omareel: {error}")));
+        }
+    }
+
+    fn retake(self: Pin<&mut Self>) {
+        if let Err(error) = marks::add_retake(None, "bar") {
+            qobject::log_info(&qstring(&format!("omareel: {error}")));
+        }
+    }
+
+    fn toggle_pause(self: Pin<&mut Self>) {
+        if let Err(error) = marks::toggle_pause("bar") {
+            qobject::log_info(&qstring(&format!("omareel: {error}")));
+        }
     }
 
     /// `publishGeometry`: the bubble into the recording's state and the host file.

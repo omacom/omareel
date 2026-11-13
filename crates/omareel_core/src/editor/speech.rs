@@ -158,6 +158,9 @@ impl Document {
         let ranges = merge_ranges(ranges);
         let mut timeline = ClipTimeline::new(self.project.clips.clone());
         let mut removed = 0;
+        // The output spans cut, each in the output times before it (latest first, so also in the
+        // original timeline's).
+        let mut output_cuts: Vec<(f64, f64)> = Vec::new();
         // Latest first: recording clips keep recording order, so earlier output times hold.
         for &(start, end) in ranges.iter().rev() {
             let mut cuts: Vec<(f64, f64)> = Vec::new();
@@ -184,6 +187,7 @@ impl Document {
                 if trial.delete_range(from, to, &remainder_id) && !trial.clips().iter().all(Clip::is_media) {
                     timeline = trial;
                     cut_any = true;
+                    output_cuts.push((from, to));
                 }
             }
             if cut_any {
@@ -198,6 +202,12 @@ impl Document {
         let in_insert = self.clip_is_media(self.clip_for_output(self.output_position).0);
         self.snapshot("");
         let clips = timeline.clips().to_vec();
+        // Frame overlays move back over each cut, latest first; screen overlays as zooms.
+        output_cuts.sort_by(|a, b| b.0.total_cmp(&a.0));
+        for &(from, to) in &output_cuts {
+            self.cut_frame_overlays(from, to);
+        }
+        self.cut_screen_overlays(&clips);
         let zooms_changed = self.fit_zooms_to(&clips);
         self.project.clips = clips;
         if self.clip_index(&self.selected_clip_id) < 0 {

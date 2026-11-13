@@ -102,6 +102,9 @@ pub struct Cursor {
     pub style: String,
     pub ring_color: QColor,
     pub click_sound: String,
+    /// Fade the cursor out from a key press until the pointer moves again (see
+    /// `motion_track`); false is left out of the JSON.
+    pub hide_while_typing: bool,
 }
 
 impl Default for Cursor {
@@ -118,6 +121,7 @@ impl Default for Cursor {
             style: "light-arrow".into(),
             ring_color: QColor::parse("#7aa2f7"),
             click_sound: "none".into(),
+            hide_while_typing: false,
         }
     }
 }
@@ -173,8 +177,15 @@ pub struct Project {
     pub name: String,
     pub aspect: String,
     pub crop: RectF,
+    /// "follow" fills the canvas with a crop window of the screen that follows the action
+    /// (crate::reframe); empty fits the whole recording into the canvas.
+    pub reframe: String,
     pub clips: Vec<Clip>,
     pub zooms: Vec<ZoomSegment>,
+    /// Annotations over the recording (`overlays`, written only when there are any).
+    pub overlays: Vec<super::overlays::Overlay>,
+    /// Left out of `project.json` while empty.
+    pub markers: Vec<Marker>,
     pub zoom_style: ZoomStyle,
     pub background: Background,
     pub frame: Frame,
@@ -188,6 +199,9 @@ pub struct Project {
     /// Captions from the transcript; `None` until the user first changes them, so projects
     /// that never did keep their bytes.
     pub captions: Option<Captions>,
+    /// The transition at every cut between recording clips (`crate::transitions::STYLES`);
+    /// "none" is left out of the JSON.
+    pub transition: String,
 }
 
 impl Project {
@@ -202,8 +216,11 @@ impl Default for Project {
             name: "Untitled Recording".into(),
             aspect: "auto".into(),
             crop: RectF::new(0.0, 0.0, 1.0, 1.0),
+            reframe: String::new(),
             clips: Vec::new(),
             zooms: Vec::new(),
+            overlays: Vec::new(),
+            markers: Vec::new(),
             zoom_style: ZoomStyle::default(),
             background: Background::default(),
             frame: Frame::default(),
@@ -214,6 +231,7 @@ impl Default for Project {
             camera: Camera::default(),
             export_settings: ExportSettings::default(),
             captions: None,
+            transition: "none".into(),
         }
     }
 }

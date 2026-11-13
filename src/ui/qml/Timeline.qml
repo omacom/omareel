@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Shapes
 import QtQuick.Controls.impl
+import QtQuick.Layouts
 import Omareel.Ui
 
 FocusScope {
@@ -139,7 +140,10 @@ FocusScope {
         target: editor
         function onDurationChanged() { root.clearRange() }
     }
-    implicitHeight: (editor.hasCamera ? 204 : 148) + (hasMusic ? musicLaneHeight + 8 : 0)
+    // The Overlays lane shows once there is an annotation; the camera lane goes below it.
+    readonly property bool hasOverlays: editor.overlays.length > 0
+    readonly property real cameraLaneY: hasOverlays ? 200 : 144
+    implicitHeight: 148 + (editor.hasCamera ? 56 : 0) + (hasOverlays ? 56 : 0) + (hasMusic ? musicLaneHeight + 8 : 0)
     property real labelWidth: 72
     readonly property real timelinePadding: 40
     property real basePixels: Math.max(1, width - labelWidth - timelinePadding)
@@ -162,7 +166,7 @@ FocusScope {
         const precision = tickStepSeconds >= .1 ? 1 : tickStepSeconds >= .01 ? 2 : 3
         return time + "." + ("00" + (milliseconds % 1000)).slice(-3).slice(0, precision)
     }
-    readonly property int trackCount: editor.hasCamera ? 3 : 2
+    readonly property int trackCount: 2 + (editor.hasCamera ? 1 : 0) + (hasOverlays ? 1 : 0)
     // The background music's thin lane, under the other tracks while there is music.
     readonly property bool hasMusic: editor.music.present === true
     readonly property real musicLaneY: 32 + trackCount * 56
@@ -186,9 +190,9 @@ FocusScope {
         width: root.labelWidth
         height: parent.height
         Repeater {
-            model: editor.hasCamera
-                ? [{name: "Clip", icon: "film.svg"}, {name: "Zoom", icon: "zoom-in.svg"}, {name: "Camera", icon: "camera.svg"}]
-                : [{name: "Clip", icon: "film.svg"}, {name: "Zoom", icon: "zoom-in.svg"}]
+            model: [{name: "Clip", icon: "film.svg"}, {name: "Zoom", icon: "zoom-in.svg"}]
+                .concat(root.hasOverlays ? [{name: "Overlay", icon: "pen-line.svg"}] : [])
+                .concat(editor.hasCamera ? [{name: "Camera", icon: "camera.svg"}] : [])
             delegate: Row {
                 required property var modelData
                 required property int index
@@ -470,10 +474,29 @@ FocusScope {
                 focusTarget: root
             }
             Rectangle {
+                visible: root.hasOverlays
+                x: 0
+                y: 144
+                width: Math.max(parent.width, editor.duration * root.pixelsPerSecond)
+                height: 48
+                radius: theme.controlRadius
+                color: Qt.alpha(theme.foreground, theme.dark ? .025 : .035)
+            }
+            OverlayTrack {
+                objectName: "overlayTrack"
+                visible: root.hasOverlays
+                x: 0
+                y: 148
+                width: parent.width
+                height: 40
+                pixelsPerSecond: root.pixelsPerSecond
+                focusTarget: root
+            }
+            Rectangle {
                 id: cameraTrack
                 visible: editor.hasCamera
                 x: 0
-                y: 144
+                y: root.cameraLaneY
                 width: parent.width
                 height: 48
                 radius: theme.controlRadius
@@ -483,7 +506,7 @@ FocusScope {
                 id: cameraBlock
                 visible: editor.hasCamera
                 x: 0
-                y: cameraHover.hovered ? 147 : 148
+                y: root.cameraLaneY + (cameraHover.hovered ? 3 : 4)
                 width: Math.max(20, editor.duration * root.pixelsPerSecond)
                 height: 40
                 radius: theme.controlRadius
@@ -577,6 +600,106 @@ FocusScope {
                     target: cameraBlock
                     shown: cameraHover.hovered
                     text: "Camera settings"
+                }
+            }
+
+            // Markers: a tag on the ruler and a faint line through the tracks. Click to go there,
+            // double-click (or right-click) to rename or delete.
+            Repeater {
+                model: editor.markers
+                delegate: Item {
+                    id: markerItem
+                    required property var modelData
+                    readonly property bool retake: modelData.kind === "retake"
+                    readonly property color tint: retake ? theme.textMuted : theme.accent
+                    readonly property string title: modelData.label !== "" ? modelData.label
+                        : retake ? "Retake" : "Marker " + modelData.number
+                    objectName: "marker-" + modelData.id
+                    visible: modelData.time >= 0
+                    x: Math.max(0, modelData.time) * root.pixelsPerSecond
+                    y: 0
+                    width: 1
+                    height: root.tracksBottom
+                    z: 15
+                    Rectangle {
+                        x: 0; y: 30
+                        width: 1
+                        height: parent.height - 30
+                        color: Qt.alpha(markerItem.tint, markerHover.hovered ? .7 : .35)
+                    }
+                    Rectangle {
+                        id: markerTag
+                        x: -5; y: 17
+                        width: 10; height: 13
+                        radius: theme.rounded ? 2 : 0
+                        color: markerItem.tint
+                        scale: markerHover.hovered ? 1.15 : 1
+                        transformOrigin: Item.Bottom
+                        Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+                        HoverHandler { id: markerHover; cursorShape: Qt.PointingHandCursor }
+                        MouseArea {
+                            anchors.fill: parent
+                            anchors.margins: -3
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton
+                            onPressed: root.forceActiveFocus()
+                            onClicked: mouse => {
+                                if (mouse.button === Qt.RightButton) markerEditor.openFor(markerItem)
+                                else editor.seek(markerItem.modelData.time)
+                            }
+                            onDoubleClicked: markerEditor.openFor(markerItem)
+                        }
+                        OmLazyToolTip {
+                            target: markerTag
+                            shown: markerHover.hovered && !markerEditor.opened
+                            text: markerItem.title
+                        }
+                    }
+                }
+            }
+            OmPopup {
+                id: markerEditor
+                objectName: "markerEditor"
+                property string markerId: ""
+                property bool retake: false
+                width: 248
+                padding: 10
+                focus: true
+                function openFor(item) {
+                    markerId = item.modelData.id
+                    retake = item.retake
+                    markerLabel.text = item.modelData.label
+                    x = Math.max(0, Math.min(content.width - width, item.x - width / 2))
+                    y = 34
+                    open()
+                    markerLabel.forceActiveFocus()
+                    markerLabel.selectAll()
+                }
+                // Closing keeps what was typed (Enter, Escape or a click elsewhere).
+                function commit() { close() }
+                onClosed: {
+                    if (markerId !== "") editor.renameMarker(markerId, markerLabel.text)
+                    markerId = ""
+                    root.forceActiveFocus()
+                }
+                contentItem: RowLayout {
+                    spacing: 6
+                    OmTextField {
+                        id: markerLabel
+                        objectName: "markerLabel"
+                        Layout.fillWidth: true
+                        placeholderText: markerEditor.retake ? "Retake" : "Marker name"
+                        onAccepted: markerEditor.commit()
+                    }
+                    OmIconButton {
+                        objectName: "markerDelete"
+                        icon.source: "qrc:/omareel/assets/icons/lucide/trash-2.svg"
+                        Accessible.name: "Delete marker"
+                        onClicked: {
+                            editor.removeMarker(markerEditor.markerId)
+                            markerEditor.markerId = ""
+                            markerEditor.close()
+                        }
+                    }
                 }
             }
 

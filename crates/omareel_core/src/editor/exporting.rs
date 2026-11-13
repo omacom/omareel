@@ -1,23 +1,29 @@
 //! Exporting from the editor (`exportTo` and its progress, `defaultExportPath`) and the
 //! editor's other text (`formatTime`, `cameraStatus`, the trace and preview-stats lines).
 
-use super::bundle::aspect_ratio;
 use super::{Document, Effect};
 use crate::compat::cpp;
 use crate::compat::qdir::{self, FileInfo};
 use crate::compat::qnumber;
 use crate::compat::qround::{q_fuzzy_compare, q_round};
 use crate::compat::qstring;
+use crate::export::plan::output_aspect;
+use crate::export::presets::{self, ExportPreset};
 use crate::omarchy_paths;
+use crate::reframe;
 
 /// What `exportTo`'s `QVariantMap settings` hold, read as the C++ read them:
 /// `settings.value("fps", 0).toInt()`, `settings.value("height", 0).toInt()` and
-/// `settings.value("quality").toString()` (`QVariant::toInt` rounds a double).
+/// `settings.value("quality").toString()` (`QVariant::toInt` rounds a double). `aspect` and
+/// `reframe` ("follow" or "off"), when set, stand in for the project's for this export only, as
+/// an export preset chosen in the dialog sets them.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ExportDialogSettings {
     pub fps: i32,
     pub height: i32,
     pub quality: String,
+    pub aspect: String,
+    pub reframe: String,
 }
 
 /// The `ExportOptions` `exportTo` gives the exporter (`timing` stays false).
@@ -30,6 +36,8 @@ pub struct ExportRequest {
     pub quality: String,
     pub gif_fps: i32,
     pub gif_width: i32,
+    pub aspect: String,
+    pub reframe: String,
 }
 
 /// The export properties (`exporting`, `exportProgress`, `exportFps`, `exportEtaSeconds`,
@@ -37,6 +45,8 @@ pub struct ExportRequest {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ExportState {
     pub exporting: bool,
+    /// Measuring the sound's loudness before the frames (`progress` is that pass's then).
+    pub measuring: bool,
     pub progress: f64,
     pub fps: f64,
     pub eta_seconds: i32,
@@ -111,12 +121,99 @@ pub fn containing_folder(path: &str) -> Option<String> {
     (!directory.is_empty()).then_some(directory)
 }
 
+/// The export presets, for the dialog's Preset row.
+pub fn export_presets() -> &'static [ExportPreset] {
+    &presets::PRESETS
+}
+
+/// `path` as a `text/uri-list` of one `file://` URI (RFC 8089; bytes outside the unreserved set
+/// and `/` percent-encoded), which file managers and chat apps paste as the file.
+pub fn file_uri_list(path: &str) -> String {
+    let mut uri = String::from("file://");
+    for byte in path.bytes() {
+        if byte.is_ascii_alphanumeric() || b"-._~/".contains(&byte) {
+            uri.push(char::from(byte));
+        } else {
+            uri.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    uri.push_str("\r\n");
+    uri
+}
+
+/// Puts the file at `path` on the Wayland clipboard as `text/uri-list` with `wl-copy`, which
+/// keeps offering it after the editor quits. `Err` says why not (no `wl-copy`, no file).
+pub fn copy_file_to_clipboard(path: &str) -> Result<(), String> {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+    let absolute = FileInfo::new(path).absolute_file_path();
+    if !FileInfo::new(&absolute).is_file() {
+        return Err(format!("{absolute} is not a file"));
+    }
+    let mut child = Command::new("wl-copy")
+        .args(["--type", "text/uri-list"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|error| format!("wl-copy: {error}"))?;
+    let written = child.stdin.take().map(|mut stdin| stdin.write_all(file_uri_list(&absolute).as_bytes()));
+    // wl-copy forks to serve the clipboard and its first process exits once it has the data.
+    let status = child.wait().map_err(|error| format!("wl-copy: {error}"))?;
+    match written {
+        Some(Ok(())) if status.success() => Ok(()),
+        Some(Err(error)) => Err(format!("wl-copy: {error}")),
+        _ => Err(format!("wl-copy failed ({status})")),
+    }
+}
+
 impl Document {
     /// `defaultExportPath(format)`: the project's name in the recordings directory, `.gif` for
     /// "gif" and `.mp4` otherwise.
     pub fn default_export_path(&self, format: &str) -> String {
         let suffix = if format == "gif" { ".gif" } else { ".mp4" };
         qdir::file_path(&omarchy_paths::recordings_directory(), &format!("{}{suffix}", self.project.name))
+    }
+
+    /// The export dialog's path for an export preset: its file name for this project in the
+    /// recordings directory; empty for an unknown id.
+    pub fn preset_export_path(&self, id: &str) -> String {
+        presets::find(id).map_or_else(String::new, |preset| {
+            qdir::file_path(&omarchy_paths::recordings_directory(), &preset.file_name(&self.project.name))
+        })
+    }
+
+    /// Saves an export preset's settings (aspect, reframing, and the format, size, rate and
+    /// quality of its format) into the project, as one undo step. False for an unknown id or
+    /// when the project already has them.
+    pub fn apply_export_preset(&mut self, id: &str) -> bool {
+        let Some(preset) = presets::find(id) else { return false };
+        self.apply_project_change(|project| preset.apply(project))
+    }
+
+    /// Turns auto-reframe on ("follow") or off ("off" or ""), as one undo step. False for an
+    /// unknown mode or no change.
+    pub fn set_reframe(&mut self, mode: &str) -> bool {
+        let mode = if mode == "off" { "" } else { mode };
+        if !mode.is_empty() && !reframe::MODES.contains(&mode) {
+            return false;
+        }
+        self.apply_project_change(|project| project.reframe = mode.into())
+    }
+
+    /// One undoable change made to a copy of the project, kept when the saved JSON differs.
+    fn apply_project_change(&mut self, change: impl FnOnce(&mut crate::project::Project)) -> bool {
+        let old = self.project.to_json();
+        let mut next = self.project.clone();
+        change(&mut next);
+        let parsed = crate::project::Project::from_json(&next.to_json());
+        if parsed.to_json() == old {
+            return false;
+        }
+        self.snapshot("");
+        self.project = parsed;
+        self.changed(true);
+        true
     }
 
     /// `cameraStatus`: the webcam's size, rate and offset, as the camera panel shows them.
@@ -162,12 +259,15 @@ impl Document {
             output_path: FileInfo::new(path).absolute_file_path(),
             fps: settings.fps,
             quality: settings.quality.clone(),
+            aspect: settings.aspect.clone(),
+            reframe: settings.reframe.clone(),
             ..ExportRequest::default()
         };
         if settings.height > 0 {
+            let aspect = if settings.aspect.is_empty() { &self.project.aspect } else { &settings.aspect };
             request.width = q_round(
                 f64::from(settings.height)
-                    * aspect_ratio(&self.project, self.recording.source_width, self.recording.source_height),
+                    * output_aspect(aspect, self.recording.source_width, self.recording.source_height, &self.project.crop),
             );
         }
         if path.len() >= 4 && path.is_char_boundary(path.len() - 4) && path[path.len() - 4..].eq_ignore_ascii_case(".gif") {
@@ -183,9 +283,19 @@ impl Document {
         Some(request)
     }
 
+    /// `Exporter::measuring(fraction)`: the loudness pass before the frames.
+    pub fn export_measured(&mut self, fraction: f64) {
+        self.export.measuring = true;
+        self.export.progress = fraction.clamp(0.0, 1.0);
+        self.export.fps = 0.0;
+        self.export.eta_seconds = 0;
+        self.emit(Effect::ExportProgressChanged);
+    }
+
     /// `Exporter::progress(frame, total)`, with the milliseconds since [`Document::begin_export`].
     pub fn export_progressed(&mut self, frame: i32, total: i32, elapsed_ms: i64) {
         let (progress, fps, eta) = export_progress(frame, total, elapsed_ms);
+        self.export.measuring = false;
         self.export.progress = progress;
         self.export.fps = fps;
         self.export.eta_seconds = eta;
@@ -195,6 +305,7 @@ impl Document {
     /// `Exporter::finished(path)`.
     pub fn export_finished(&mut self, path: &str) {
         self.export.exporting = false;
+        self.export.measuring = false;
         self.export.progress = 1.0;
         self.export.eta_seconds = 0;
         self.export.exported_path = path.to_owned();
@@ -206,6 +317,7 @@ impl Document {
     /// `Exporter::failed(error)`.
     pub fn export_failed(&mut self, error: &str) {
         self.export.exporting = false;
+        self.export.measuring = false;
         self.export.error = error.to_owned();
         self.export.eta_seconds = 0;
         self.emit(Effect::ExportingChanged);
@@ -228,6 +340,32 @@ mod tests {
         assert_eq!(export_progress(0, 0, 0), (0.0, 0.0, 0));
         assert_eq!(export_progress(30, 120, 2000), (0.25, 15.0, 6));
         assert_eq!(export_progress(130, 120, 1000), (130.0 / 120.0, 130.0, 0));
+    }
+
+    #[test]
+    fn file_uris() {
+        assert_eq!(file_uri_list("/home/me/Videos/Demo.mp4"), "file:///home/me/Videos/Demo.mp4\r\n");
+        assert_eq!(file_uri_list("/tmp/a b/ü#?.gif"), "file:///tmp/a%20b/%C3%BC%23%3F.gif\r\n");
+        assert!(copy_file_to_clipboard("/nonexistent/omareel.mp4").is_err());
+    }
+
+    // Uses the session's real clipboard, so it runs only when asked (in a nested compositor):
+    // OMAREEL_TEST_WL_COPY=1 cargo test -p omareel_core copies_the_file_with_wl_copy
+    #[test]
+    fn copies_the_file_with_wl_copy() {
+        if std::env::var_os("OMAREEL_TEST_WL_COPY").is_none() {
+            return;
+        }
+        let dir = crate::compat::qdir::tests::TempDir::new("editor-copy");
+        let path = dir.join("a clip.mp4");
+        std::fs::write(&path, b"x").unwrap();
+        copy_file_to_clipboard(&path).unwrap();
+        let types = std::process::Command::new("wl-paste").arg("--list-types").output().unwrap();
+        // wl-copy offers the plain-text types too, for text fields.
+        assert_eq!(String::from_utf8_lossy(&types.stdout).lines().next(), Some("text/uri-list"));
+        let pasted = std::process::Command::new("wl-paste").args(["--no-newline", "--type", "text/uri-list"]).output().unwrap();
+        assert_eq!(String::from_utf8_lossy(&pasted.stdout), file_uri_list(&path));
+        assert!(file_uri_list(&path).contains("/a%20clip.mp4\r\n"));
     }
 
     #[test]

@@ -22,6 +22,9 @@ struct ExportOptions {
     int gifFps = 0;
     int gifWidth = 0;
     bool timing = false;
+    QString preset;   // an export preset's id (crates/omareel_core/src/export/presets.rs)
+    QString aspect;   // the project's aspect for this export only
+    QString reframe;  // "follow" or "off" for this export only
 };
 
 // What `omareel frame` renders: stills at output times, or `count` spread over the output.
@@ -32,6 +35,10 @@ struct StillOptions {
     int count = 0;
     int width = 0;
     int fps = 0;
+    // As `omareel export --preset/--aspect/--reframe`, for these stills only.
+    QString preset;
+    QString aspect;
+    QString reframe;
     // Takes each still as it is rendered (its index, the still), instead of the list holding
     // them all; false stops with the error it set. Without it the stills are listed.
     std::function<bool(int, const struct Still &, QString *)> take;
@@ -68,6 +75,9 @@ public slots:
     void cancel();
 
 signals:
+    // Before the frames, when the project normalises loudness: how much of the sound has been
+    // measured, 0 to 1.
+    void measuring(double fraction);
     void progress(int frame, int total);
     void finished(const QString &path);
     void failed(const QString &message);

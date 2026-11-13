@@ -21,7 +21,7 @@ FocusScope {
     Rectangle { anchors.fill: parent; color: theme.canvas }
     MouseArea {
         anchors.fill: parent
-        onPressed: root.forceActiveFocus()
+        onPressed: { root.forceActiveFocus(); editor.selectedOverlayId = "" }
     }
 
     Item {
@@ -72,26 +72,30 @@ FocusScope {
                     if (editor.zooms[i].id === editor.selectedZoomId) return editor.zooms[i]
                 return null
             }
-            readonly property bool noBackground: editor.project.background.type === "none"
-            readonly property real pad: noBackground ? 0 : Math.min(width, height) * editor.project.frame.padding
-            readonly property real sourceAspect: (editor.sourceWidth * editor.project.crop.w)
-                / Math.max(1, editor.sourceHeight * editor.project.crop.h)
-            readonly property real videoWidth: noBackground ? width
-                : Math.min(width - 2 * pad, (height - 2 * pad) * sourceAspect)
-            readonly property real videoHeight: noBackground ? height : videoWidth / sourceAspect
-            readonly property real frameX: (width - videoWidth) / 2
-            readonly property real frameY: (height - videoHeight) / 2
-            readonly property real zoomOriginX: frameX + editor.zoom.cx * videoWidth
-            readonly property real zoomOriginY: frameY + editor.zoom.cy * videoHeight
+            // Zoom targets are normalised to the whole recording, like the cursor and
+            // input.jsonl, with or without a crop or reframing; the frame shows the part of it
+            // in composition.viewCrop, scaled by composition.zoomScale about zoomOrigin.
+            readonly property real frameX: (width - composition.videoWidth) / 2
+            readonly property real frameY: (height - composition.videoHeight) / 2
+            readonly property real zoomOriginX: frameX + composition.zoomOrigin.x * composition.videoWidth
+            readonly property real zoomOriginY: frameY + composition.zoomOrigin.y * composition.videoHeight
             function targetFromScene(px, py) {
-                const scale = Math.max(.0001, editor.zoom.scale)
-                const baseX = zoomOriginX + (px - zoomOriginX) / scale
-                const baseY = zoomOriginY + (py - zoomOriginY) / scale
-                return { x: Math.max(0, Math.min(1, (baseX - frameX) / videoWidth)),
-                         y: Math.max(0, Math.min(1, (baseY - frameY) / videoHeight)) }
+                const scale = Math.max(.0001, composition.zoomScale)
+                const c = composition.viewCrop
+                const u = Math.max(0, Math.min(1, (zoomOriginX + (px - zoomOriginX) / scale - frameX) / composition.videoWidth))
+                const v = Math.max(0, Math.min(1, (zoomOriginY + (py - zoomOriginY) / scale - frameY) / composition.videoHeight))
+                return { x: c.x + u * c.w, y: c.y + v * c.h }
+            }
+            function sceneFromTarget(x, y) {
+                const c = composition.viewCrop
+                const fx = frameX + (x - c.x) / Math.max(.0001, c.w) * composition.videoWidth
+                const fy = frameY + (y - c.y) / Math.max(.0001, c.h) * composition.videoHeight
+                return Qt.point(zoomOriginX + composition.zoomScale * (fx - zoomOriginX),
+                                zoomOriginY + composition.zoomScale * (fy - zoomOriginY))
             }
             Composition {
                 id: composition
+                objectName: "previewComposition"
                 anchors.fill: parent
                 nativePreview: true
                 Component.onCompleted: {
@@ -99,6 +103,14 @@ FocusScope {
                     editor.attachCameraVideoOutput(cameraVideoOutput)
                     editor.attachMediaVideoOutput(mediaVideoOutput)
                 }
+            }
+            OverlayEditLayer {
+                objectName: "overlayEditLayer"
+                anchors.fill: parent
+                composition: composition
+                viewScale: scaled.scale
+                focusTarget: root
+                visible: !editor.pickingZoomTarget && !root.cropMode
             }
             MouseArea {
                 anchors.fill: parent
@@ -112,11 +124,13 @@ FocusScope {
             }
             Rectangle {
                 id: manualTargetMarker
+                objectName: "zoomTargetMarker"
                 visible: scaled.selectedZoom && typeof scaled.selectedZoom.target === "object"
                 readonly property real targetX: visible ? Number(scaled.selectedZoom.target.x) : .5
                 readonly property real targetY: visible ? Number(scaled.selectedZoom.target.y) : .5
-                x: scaled.zoomOriginX + editor.zoom.scale * (scaled.frameX + targetX * scaled.videoWidth - scaled.zoomOriginX) - width / 2
-                y: scaled.zoomOriginY + editor.zoom.scale * (scaled.frameY + targetY * scaled.videoHeight - scaled.zoomOriginY) - height / 2
+                readonly property point scenePoint: scaled.sceneFromTarget(targetX, targetY)
+                x: scenePoint.x - width / 2
+                y: scenePoint.y - height / 2
                 width: 18 / scaled.scale
                 height: width
                 radius: width / 2

@@ -61,15 +61,61 @@ fn snap_edges(target: PointF, level: f64, ratio: f64) -> PointF {
 /// The zoom at `time`: the latest-starting segment covering it, aimed at a fixed target or
 /// at the group of cursor positions the view can hold.
 pub fn target_at(segments: &[ZoomSegment], samples: &[CursorSample], time: f64, style: &ZoomStyle) -> ZoomFrame {
+    target_and_interest_at(segments, samples, time, style).0
+}
+
+/// What an active zoom is about before [`target_at`] keeps a full-screen zoom inside the frame:
+/// the point itself, which a narrower view (auto-reframe's window, [`crate::reframe`]) can centre
+/// on even near an edge. Normalised to the recording, like the cursor and zoom targets.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ZoomInterest {
+    /// A fixed target as set, or the middle of the cursor positions an automatic zoom holds.
+    pub center: PointF,
+    /// Whether the zoom aims at the cursor (an automatic target), whose group of positions may be
+    /// wider than a narrow view, so the view should keep the cursor in it.
+    pub automatic: bool,
+}
+
+enum Aim {
+    Fixed(PointF),
+    Group(PointF),
+    Middle,
+}
+
+/// [`target_at`], and the zoom's [`ZoomInterest`] while one is active.
+pub fn target_and_interest_at(
+    segments: &[ZoomSegment],
+    samples: &[CursorSample],
+    time: f64,
+    style: &ZoomStyle,
+) -> (ZoomFrame, Option<ZoomInterest>) {
+    let Some((active, aim)) = aim_at(segments, samples, time) else { return (ZoomFrame::default(), None) };
+    match aim {
+        Aim::Fixed(target) => (
+            ZoomFrame { scale: active.level, center: clamp_center(target, active.level) },
+            Some(ZoomInterest { center: target, automatic: false }),
+        ),
+        Aim::Group(center) => (
+            ZoomFrame { scale: active.level, center: snap_edges(center, active.level, style.snap_to_edges_ratio) },
+            Some(ZoomInterest { center, automatic: true }),
+        ),
+        Aim::Middle => {
+            let center = PointF::new(0.5, 0.5);
+            (ZoomFrame { scale: active.level, center }, Some(ZoomInterest { center, automatic: true }))
+        }
+    }
+}
+
+fn aim_at<'a>(segments: &'a [ZoomSegment], samples: &[CursorSample], time: f64) -> Option<(&'a ZoomSegment, Aim)> {
     let mut active: Option<&ZoomSegment> = None;
     for segment in segments {
         if time >= segment.start && time <= segment.end && active.is_none_or(|a| segment.start > a.start) {
             active = Some(segment);
         }
     }
-    let Some(active) = active else { return ZoomFrame::default() };
+    let active = active?;
     if !active.automatic_target {
-        return ZoomFrame { scale: active.level, center: clamp_center(active.target, active.level) };
+        return Some((active, Aim::Fixed(active.target)));
     }
 
     let mut relevant: Vec<CursorSample> =
@@ -88,7 +134,7 @@ pub fn target_at(segments: &[ZoomSegment], samples: &[CursorSample], time: f64, 
         }
     }
     let Some(first) = relevant.first() else {
-        return ZoomFrame { scale: active.level, center: PointF::new(0.5, 0.5) };
+        return Some((active, Aim::Middle));
     };
 
     let max_width = 0.5 / active.level;
@@ -120,10 +166,9 @@ pub fn target_at(segments: &[ZoomSegment], samples: &[CursorSample], time: f64, 
         }
     }
     let Some(group) = active_group else {
-        return ZoomFrame { scale: active.level, center: PointF::new(0.5, 0.5) };
+        return Some((active, Aim::Middle));
     };
-    let center = (group.minimum + group.maximum) / 2.0;
-    ZoomFrame { scale: active.level, center: snap_edges(center, active.level, style.snap_to_edges_ratio) }
+    Some((active, Aim::Group((group.minimum + group.maximum) / 2.0)))
 }
 
 /// `"auto"`, or the fixed target as `{"x", "y"}`.

@@ -72,8 +72,24 @@ mod tests {
     #[test]
     fn the_skill_names_itself_and_its_commands() {
         assert!(SKILL.starts_with("---\nname: omareel\ndescription: |\n"));
-        for command in ["omareel describe", "omareel apply", "omareel frame", "omareel export"] {
+        for command in ["omareel describe", "omareel apply", "omareel frame", "omareel export", "--preset", "omareel transcribe"] {
             assert!(SKILL.contains(command), "{command}");
+        }
+        // Every operation `apply` takes is in the skill's table.
+        for op in [
+            "split", "delete", "trim", "remove-clip", "merge", "move-clip", "reset-trims", "speed", "layout", "fit",
+            "insert", "zoom", "edit-zoom", "remove-zoom", "clear-zooms", "regenerate-zooms", "music", "remove-music",
+            "trim-pauses", "remove-fillers", "set", "set-chapters", "add-overlay", "edit-overlay", "remove-overlay",
+            "blur", "add-marker", "rename-marker", "remove-marker", "transition", "cut-transition", "speed-up-quiet",
+            "reframe", "audio-cleanup",
+        ] {
+            assert!(SKILL.contains(&format!("| `{op}`")) || SKILL.contains(&format!("`{op}` /")) || SKILL.contains(&format!("/ `{op}`")), "{op}");
+        }
+        for section in [
+            "## Annotating", "## Redacting secrets", "## Markers", "## Transitions and quiet parts",
+            "## Exporting for platforms", "## Audio cleanup", "## In-editor runs",
+        ] {
+            assert!(SKILL.contains(section), "{section}");
         }
     }
 

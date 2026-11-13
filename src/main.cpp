@@ -126,7 +126,8 @@ static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplicat
         {QStringLiteral("background"), 0}, {QStringLiteral("shape"), 1},
         {QStringLiteral("cursor"), 2}, {QStringLiteral("zoom"), 3},
         {QStringLiteral("clip"), 4}, {QStringLiteral("camera"), 5},
-        {QStringLiteral("keystrokes"), 6}, {QStringLiteral("audio"), 7}, {QStringLiteral("speech"), 8}
+        {QStringLiteral("keystrokes"), 6}, {QStringLiteral("audio"), 7}, {QStringLiteral("speech"), 8},
+        {QStringLiteral("annotate"), 9}
     };
     const QString panel = qEnvironmentVariable("OMAREEL_SCREENSHOT_PANEL").toLower();
     if (panels.contains(panel)) {
@@ -137,6 +138,10 @@ static void configureDebugScreenshot(QQmlApplicationEngine &engine, QGuiApplicat
                 const QVariantList zooms = editorObject->property("zooms").toList();
                 if (!zooms.isEmpty())
                     editorObject->setProperty("selectedZoomId", zooms.first().toMap().value(QStringLiteral("id")));
+            } else if (panel == QLatin1String("annotate")) {
+                const QVariantList overlays = editorObject->property("overlays").toList();
+                if (!overlays.isEmpty())
+                    editorObject->setProperty("selectedOverlayId", overlays.first().toMap().value(QStringLiteral("id")));
             } else if (panel == QLatin1String("clip")) {
                 const QVariantList clips = editorObject->property("clips").toList();
                 if (!clips.isEmpty())
@@ -252,10 +257,15 @@ static int exportCommand(const QStringList &arguments)
         const QString arg = arguments[i];
         if (arg == QLatin1String("-o") || arg == QLatin1String("--fps")
             || arg == QLatin1String("--width") || arg == QLatin1String("--quality")
-            || arg == QLatin1String("--gif-fps") || arg == QLatin1String("--gif-width")) {
+            || arg == QLatin1String("--gif-fps") || arg == QLatin1String("--gif-width")
+            || arg == QLatin1String("--preset") || arg == QLatin1String("--aspect")
+            || arg == QLatin1String("--reframe")) {
             if (++i >= arguments.size()) return usage(QStringLiteral("%1 requires a value").arg(arg));
             const QString value = arguments[i];
             if (arg == QLatin1String("-o")) options.outputPath = QFileInfo(value).absoluteFilePath();
+            else if (arg == QLatin1String("--preset")) options.preset = value;
+            else if (arg == QLatin1String("--aspect")) options.aspect = value;
+            else if (arg == QLatin1String("--reframe")) options.reframe = value;
             else if (arg == QLatin1String("--fps")) options.fps = value.toInt();
             else if (arg == QLatin1String("--width")) options.width = value.toInt();
             else if (arg == QLatin1String("--quality")) options.quality = value;
@@ -264,7 +274,23 @@ static int exportCommand(const QStringList &arguments)
         } else if (arg == QLatin1String("--timing")) options.timing = true;
         else return usage(QStringLiteral("unknown export option %1").arg(arg));
     }
+    // A preset names the file itself (in the recordings directory) and says its format.
+    if (!options.preset.isEmpty()) {
+        const QString format = omareel::exporter::presetFormat(options.preset);
+        if (format.isEmpty())
+            return usage(QStringLiteral("unknown export preset %1 (try %2)")
+                             .arg(options.preset, omareel::exporter::presetIds()));
+        if (options.outputPath.isEmpty()) {
+            options.outputPath = omareel::exporter::presetOutputPath(options.bundlePath, options.preset);
+            QDir().mkpath(QFileInfo(options.outputPath).absolutePath());
+        }
+        if (!options.outputPath.endsWith(QLatin1Char('.') + format, Qt::CaseInsensitive))
+            return usage(QStringLiteral("the %1 preset writes .%2 files").arg(options.preset, format));
+    }
     if (options.outputPath.isEmpty()) return usage(QStringLiteral("export requires -o <file>"));
+    if (!options.reframe.isEmpty() && options.reframe != QLatin1String("follow")
+        && options.reframe != QLatin1String("off"))
+        return usage(QStringLiteral("--reframe takes follow or off"));
     if (options.outputPath.endsWith(QStringLiteral(".srt"), Qt::CaseInsensitive)
         || options.outputPath.endsWith(QStringLiteral(".vtt"), Qt::CaseInsensitive))
         return omareel::cli::exportSubtitles(options.bundlePath.toStdString(), options.outputPath.toStdString());
@@ -282,6 +308,10 @@ static int exportCommand(const QStringList &arguments)
     Exporter exporter;
     bool success = false;
     QString failure;
+    QObject::connect(&exporter, &Exporter::measuring, [](double fraction) {
+        QTextStream(stderr) << '\r' << "Measuring loudness " << qRound(fraction * 100) << '%' << Qt::flush;
+        if (fraction >= 1.0) QTextStream(stderr) << '\n' << Qt::flush;
+    });
     QObject::connect(&exporter, &Exporter::progress, [](int frame, int total) {
         if (frame == total || frame == 1 || frame % 10 == 0)
             QTextStream(stderr) << '\r' << "Exporting " << frame << '/' << total << Qt::flush;
@@ -312,6 +342,9 @@ static int frameCommand(const QStringList &arguments)
     for (const double time : request.times) options.times.append(time);
     options.count = request.count;
     options.fps = request.fps;
+    options.preset = request.preset;
+    options.aspect = request.aspect;
+    options.reframe = request.reframe;
     const int stills = request.count > 0 ? request.count : int(request.times.size());
     const omareel::exporter::SheetGrid grid = omareel::exporter::sheetGrid(stills, request.width);
     // A sheet's --width is the sheet's; each tile renders at its share.

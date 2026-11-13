@@ -7,7 +7,8 @@ use super::*;
 use crate::compat::qdir::tests::TempDir;
 use crate::compat::qjson::{Object, Value};
 use crate::compat::qround::q_fuzzy_compare;
-use crate::project::{Clip, Music, Project};
+use crate::audio_cleanup::{CleanAudioResult, LoudnessMeasurement};
+use crate::project::{AudioCleanup, Clip, Music, Project};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -681,7 +682,7 @@ fn export_through_editor_api() {
     let bundle = world.bundle("editor.omareel");
     let mut qt = world.open(&bundle);
     let output = world.path("out/editor-api.mp4");
-    let settings = ExportDialogSettings { fps: 10, height: 180, quality: "web-low".into() };
+    let settings = ExportDialogSettings { fps: 10, height: 180, quality: "web-low".into(), ..ExportDialogSettings::default() };
     let request = qt.run(|d| d.begin_export(&output, &settings)).unwrap();
     assert_eq!(
         request,
@@ -693,6 +694,8 @@ fn export_through_editor_api() {
             quality: "web-low".into(),
             gif_fps: 0,
             gif_width: 0,
+            aspect: String::new(),
+            reframe: String::new(),
         }
     );
     // The project was saved first, and the output directory made.
@@ -2012,4 +2015,517 @@ fn pause_ranges_need_speech_and_skip_activity() {
     assert!((ranges[0].0 - 0.5).abs() < 1e-9 && (ranges[0].1 - 1.3).abs() < 1e-9, "{ranges:?}");
     assert_eq!(qt.run(|d| d.remove_source_ranges(&ranges)), 1);
     assert!(qt.document.pause_ranges(&settings).is_empty());
+}
+
+#[test]
+fn quiet_parts_play_faster_in_one_undo_step() {
+    use crate::transcript::speedup::{QuietPart, SpeedUpSettings};
+    use crate::transcript::stillness::ScreenCheck;
+    let world = World::new("editor-speed-up");
+    let mut qt = world.open(&world.bundle("quiet.omareel"));
+    let settings = SpeedUpSettings { min_length: 0.5, margin: 0.1, target: 0.3 };
+    // Nothing before the speech is measured and the screen checked.
+    assert!(!qt.document.quiet_parts_ready());
+    assert!(qt.document.quiet_parts(&settings).is_empty());
+    qt.run(|d| d.set_speech_regions(vec![(0.0, 0.3), (1.7, 2.0)]));
+    assert!(qt.document.quiet_parts(&settings).is_empty());
+    // The screen moves through the silence: an installer running.
+    qt.run(|d| d.set_screen_check(ScreenCheck { still: Vec::new(), moving: vec![(0.3, 1.7)] }));
+    assert!(qt.document.quiet_parts_ready() && qt.document.pauses_ready());
+    let parts = qt.document.quiet_parts(&settings);
+    assert_eq!(parts.len(), 1);
+    assert!((parts[0].start - 0.4).abs() < 1e-9 && (parts[0].end - 1.6).abs() < 1e-9, "{parts:?}");
+    // 1.2 s at 4x plays in the 0.3 s asked for, saving 0.9 s.
+    assert_eq!(parts[0].speed, 4.0);
+    assert!((parts[0].saved() - 0.9).abs() < 1e-9);
+    // Pause trimming leaves a moving screen alone.
+    assert!(qt.document.pause_ranges(&Default::default()).is_empty());
+
+    qt.seek(1.8);
+    let steps = qt.undo_steps();
+    let first = qt.clip_id(0);
+    qt.effects.clear();
+    assert_eq!(qt.run(|d| d.speed_up_source_ranges(&parts)), 1);
+    assert_eq!(qt.effects[..2], [Effect::Pause, Effect::HistoryChanged]);
+    assert_eq!(qt.undo_steps(), steps + 1);
+    assert_eq!(clip_spans(&qt), [(0.0, 0.4, 1.0), (0.4, 1.6, 4.0), (1.6, 2.0, 1.0)]);
+    assert_eq!(qt.clip_id(0), first);
+    assert!((qt.document.duration() - 1.1).abs() < 1e-9);
+    // The playhead stays on the same moment of the recording.
+    assert!((qt.document.source_position() - 1.8).abs() < 1e-9);
+    // Once sped up there is nothing left to speed up.
+    assert!(qt.document.quiet_parts(&settings).is_empty());
+    qt.run(Document::undo);
+    assert_eq!(clip_spans(&qt), [(0.0, 2.0, 1.0)]);
+
+    // Speeds outside the offered ones, overlaps and empty ranges change nothing.
+    let steps = qt.undo_steps();
+    assert_eq!(qt.run(|d| d.speed_up_source_ranges(&[QuietPart { start: 0.4, end: 1.6, speed: 5.0 }])), 0);
+    assert_eq!(qt.run(|d| d.speed_up_source_ranges(&[QuietPart { start: 1.0, end: 1.0, speed: 2.0 }])), 0);
+    assert_eq!(qt.undo_steps(), steps);
+    // A leftover under 0.1 s joins the part; the second of two overlapping parts is skipped.
+    let overlapping = [QuietPart { start: 0.05, end: 1.0, speed: 2.0 }, QuietPart { start: 0.9, end: 1.5, speed: 8.0 }];
+    assert_eq!(qt.run(|d| d.speed_up_source_ranges(&overlapping)), 1);
+    assert_eq!(clip_spans(&qt), [(0.0, 1.0, 2.0), (1.0, 2.0, 1.0)]);
+    // Clips already at another speed are left alone.
+    let second = qt.clip_id(1);
+    assert!(qt.run(|d| d.set_clip_speed(&second, 0.5)));
+    assert!(qt.document.quiet_parts(&settings).is_empty());
+
+    // A split inside the quiet stretch (no cut) leaves it one stretch.
+    let mut qt = world.open(&world.bundle("quiet-split.omareel"));
+    qt.run(|d| d.set_speech_regions(vec![(0.0, 0.3), (1.7, 2.0)]));
+    qt.run(|d| d.set_screen_check(ScreenCheck { still: Vec::new(), moving: vec![(0.3, 1.7)] }));
+    qt.seek(0.7);
+    assert!(qt.run(Document::split_at_playhead));
+    let parts = qt.document.quiet_parts(&settings);
+    assert_eq!(parts.len(), 1, "{parts:?}");
+    assert!((parts[0].start - 0.4).abs() < 1e-9 && (parts[0].end - 1.6).abs() < 1e-9 && parts[0].speed == 4.0);
+    assert_eq!(qt.run(|d| d.speed_up_source_ranges(&parts)), 1);
+    assert_eq!(clip_spans(&qt), [(0.0, 0.4, 1.0), (0.4, 0.7, 4.0), (0.7, 1.6, 4.0), (1.6, 2.0, 1.0)]);
+}
+
+#[test]
+fn transitions_at_cuts_follow_the_project_and_the_clip() {
+    use crate::transitions::{Style, PUNCH_SCALE};
+    let world = World::new("editor-transitions");
+    let mut qt = world.open(&world.bundle("cuts.omareel"));
+    // A split is no cut; a deleted range is.
+    qt.seek(0.5);
+    assert!(qt.run(Document::split_at_playhead));
+    assert!(qt.document.transition_cuts().is_empty());
+    assert!(qt.run(|d| d.delete_output_range(0.8, 1.2)));
+    assert_eq!(clip_spans(&qt), [(0.0, 0.5, 1.0), (0.5, 0.8, 1.0), (1.2, 2.0, 1.0)]);
+    let cuts = qt.document.transition_cuts();
+    assert_eq!(cuts.len(), 1);
+    assert_eq!((cuts[0].clip, cuts[0].style), (2, Style::None));
+    assert!((cuts[0].time - 0.8).abs() < 1e-9);
+    let after = qt.clip_id(2);
+    assert!(qt.document.clip_starts_at_cut(&after));
+    assert!(!qt.document.clip_starts_at_cut(&qt.clip_id(1)));
+    // None: nothing moves, and the project keeps its bytes.
+    qt.seek(0.8);
+    assert_eq!(qt.document.preview_transition().scale, 1.0);
+    assert!(!qt.document.project().to_json().contains("transition"));
+
+    let steps = qt.undo_steps();
+    assert!(!qt.run(|d| d.set_transition("wipe")));
+    assert!(qt.run(|d| d.set_transition("zoom-punch")));
+    assert!(!qt.run(|d| d.set_transition("zoom-punch")));
+    assert_eq!(qt.undo_steps(), steps + 1);
+    assert_eq!(qt.document.project().to_json().value("transition").to_string_or(""), "zoom-punch");
+    qt.seek(0.8);
+    assert!((qt.document.preview_transition().scale - (1.0 + PUNCH_SCALE)).abs() < 1e-9);
+    qt.seek(1.5);
+    assert_eq!(qt.document.preview_transition().scale, 1.0);
+
+    // This cut alone goes back to none, written on its clip only.
+    assert!(!qt.run(|d| d.set_cut_transition("missing", Some("none"))));
+    assert!(!qt.run(|d| d.set_cut_transition(&after, Some("wipe"))));
+    assert!(qt.run(|d| d.set_cut_transition(&after, Some("none"))));
+    qt.seek(0.8);
+    assert_eq!(qt.document.preview_transition().scale, 1.0);
+    let json = qt.document.project().to_json();
+    let clips = json.value("clips").to_array();
+    assert_eq!(clips[2].to_object().value("transition").to_string_or(""), "none");
+    assert!(!clips[1].to_object().contains("transition"));
+    assert!(qt.run(|d| d.set_cut_transition(&after, None)));
+    qt.seek(0.8);
+    assert!(qt.document.preview_transition().scale > 1.0);
+    qt.run(Document::undo);
+    qt.run(Document::undo);
+    qt.run(Document::undo);
+    assert_eq!(qt.document.project().transition, "none");
+}
+
+#[path = "overlay_tests.rs"]
+mod overlay_tests;
+
+// Markers: a recording's marks shape its new project; markers are added, renamed, removed and
+// jumped between, each edit one undo step, and project.json keeps them.
+#[test]
+fn recording_marks_make_the_new_project_and_markers_edit() {
+    let world = World::new("marks");
+    let bundle = world.bundle("marks.omareel");
+    // capture.json's first frame is at 1 s; the probe says the screen lasts 2 s.
+    std::fs::write(
+        format!("{bundle}/markers.jsonl"),
+        concat!(
+            "{\"k\":\"marker\",\"label\":\"intro\",\"t\":1200000}\n",
+            "{\"from\":1500000,\"k\":\"retake\",\"t\":1800000}\n",
+            "{\"k\":\"pause\",\"t\":2400000}\n",
+        ),
+    )
+    .unwrap();
+    let mut qt = world.open(&bundle);
+    let spans: Vec<(f64, f64)> = qt.document.project().clips.iter().map(|clip| (clip.in_, clip.out)).collect();
+    assert_eq!(spans, [(0.0, 0.5), (0.8, 1.4)]);
+    assert!(q_fuzzy_compare(qt.document.duration(), 1.1));
+    let rows = qt.document.marker_rows();
+    let shown: Vec<(&str, &str, &str, Option<f64>)> = rows
+        .iter()
+        .map(|row| (row.marker.id.as_str(), row.marker.label.as_str(), row.marker.kind.as_str(), row.output_time))
+        .collect();
+    assert_eq!(shown[0].0, "m1");
+    assert_eq!((shown[0].1, shown[0].2), ("intro", "marker"));
+    assert!(q_fuzzy_compare(shown[0].3.unwrap(), 0.2));
+    assert_eq!((shown[1].0, shown[1].2), ("m2", "retake"));
+    assert!(q_fuzzy_compare(shown[1].3.unwrap(), 0.5), "the retake marker sits where the cut joins");
+
+    // M and Shift+M.
+    assert!(qt.run(|d| d.jump_to_marker(1)));
+    assert!(q_fuzzy_compare(qt.document.output_position(), 0.2));
+    assert!(qt.run(|d| d.jump_to_marker(1)));
+    assert!(q_fuzzy_compare(qt.document.output_position(), 0.5));
+    assert!(!qt.run(|d| d.jump_to_marker(1)));
+    assert!(qt.run(|d| d.jump_to_marker(-1)));
+    assert!(q_fuzzy_compare(qt.document.output_position(), 0.2));
+
+    // Added at output 0.6, which plays recording 0.9.
+    let id = qt.run(|d| d.add_marker_at_output(0.6, "  check this "));
+    assert_eq!(id, "m-id1");
+    let added = &qt.document.markers()[2];
+    assert!(q_fuzzy_compare(added.time, 0.9));
+    assert_eq!((added.label.as_str(), added.kind.as_str()), ("check this", "marker"));
+    assert!(qt.run(|d| d.rename_marker("m1", "the intro")));
+    assert!(!qt.run(|d| d.rename_marker("m1", "the intro")), "the same label is no edit");
+    assert!(!qt.run(|d| d.rename_marker("nope", "x")));
+    assert!(qt.run(|d| d.remove_marker("m2")));
+    assert!(!qt.run(|d| d.remove_marker("m2")));
+    let labels: Vec<&str> = qt.document.markers().iter().map(|m| m.label.as_str()).collect();
+    assert_eq!(labels, ["the intro", "check this"]);
+    qt.run(|d| d.undo());
+    assert_eq!(qt.document.markers().len(), 3, "one undo brings the removed marker back");
+    qt.run(|d| d.undo());
+    assert_eq!(qt.document.markers()[0].label, "intro");
+
+    // Cut away, a marker stays in the project but has no output time.
+    assert_eq!(qt.run(|d| d.add_marker(1.7, "")), "m-id2");
+    assert_eq!(qt.document.marker_rows().last().unwrap().output_time, None);
+
+    // project.json holds them, and reads back to the same bytes.
+    assert!(qt.run(|d| d.save_now()));
+    let project_path = format!("{bundle}/project.json");
+    let saved = std::fs::read(&project_path).unwrap();
+    let json = crate::compat::qjson::object_from_json(&saved).unwrap();
+    let markers = json.value("markers").to_array();
+    assert_eq!(markers.len(), 4);
+    assert_eq!(markers[1].to_object().value("kind").to_string_or(""), "retake");
+    assert!(!markers[0].to_object().contains("kind"));
+    let reopened = world.open(&bundle);
+    assert_eq!(reopened.document.markers(), qt.document.markers());
+    assert_eq!(reopened.document.project().clips, qt.document.project().clips, "marks apply to new projects only");
+    let (project, result) = Project::load(&project_path);
+    result.unwrap();
+    project.save(&project_path).unwrap();
+    assert_eq!(std::fs::read(&project_path).unwrap(), saved);
+}
+
+// A bundle without markers.jsonl opens as it always did, and its project has no markers key.
+#[test]
+fn bundles_without_marks_are_unchanged() {
+    let world = World::new("nomarks");
+    let bundle = world.bundle("plain.omareel");
+    let mut qt = world.open(&bundle);
+    assert_eq!(qt.document.project().clips.len(), 1);
+    assert!(qt.document.markers().is_empty());
+    assert!(!qt.run(|d| d.jump_to_marker(1)));
+    assert!(qt.run(|d| d.save_now()));
+    let json = crate::compat::qjson::object_from_json(&std::fs::read(format!("{bundle}/project.json")).unwrap()).unwrap();
+    assert!(!json.contains("markers"));
+}
+
+// Auto-reframe and export presets through the Document API.
+#[test]
+fn reframe_and_export_presets() {
+    let world = World::new("editor-reframe");
+    let bundle = world.bundle("reframe.omareel");
+    let mut qt = world.open(&bundle);
+    qt.run(|d| d.save_now());
+    let project_path = format!("{bundle}/project.json");
+    let original = std::fs::read(&project_path).unwrap();
+    assert!(!String::from_utf8_lossy(&original).contains("\"reframe\":"));
+
+    // Unknown modes are refused; "follow" is one undo step and is written to project.json.
+    assert!(!qt.run(|d| d.set_reframe("sideways")));
+    assert!(qt.run(|d| d.set_reframe("follow")));
+    assert!(!qt.run(|d| d.set_reframe("follow")));
+    assert_eq!(qt.document.project().reframe, "follow");
+    qt.run(|d| d.save_now());
+    assert!(String::from_utf8_lossy(&std::fs::read(&project_path).unwrap()).contains("\"reframe\": \"follow\""));
+    // The canvas has the recording's shape: nothing to reframe, so no window, built or not.
+    assert_eq!(qt.document.preview_zoom().reframe, None);
+    let job = qt.document.motion_job().unwrap();
+    qt.run(|d| d.apply_motion(job.run()));
+    assert_eq!(qt.document.preview_zoom().reframe, None);
+    // A vertical canvas reframes. Before the motion track is rebuilt (regression: the old
+    // track's window was drawn stretched into the new frame) the window already has the new
+    // shape: made up around the cursor while the track has none, refitted after a later change.
+    let (width, height) = (f64::from(qt.document.source_width()), f64::from(qt.document.source_height()));
+    let shape = |w: crate::reframe::ReframeWindow| w.w * width / (w.h * height);
+    qt.run(|d| d.set_project_value("aspect", "9:16".into(), false));
+    let window = qt.document.preview_zoom().reframe.expect("a provisional window");
+    assert!((shape(window) - 9.0 / 16.0).abs() < 1e-9, "{window:?}");
+    let job = qt.document.motion_job().unwrap();
+    qt.run(|d| d.apply_motion(job.run()));
+    let window = qt.document.preview_zoom().reframe.expect("a reframe window");
+    assert!((shape(window) - 9.0 / 16.0).abs() < 1e-9, "{window:?}");
+    qt.run(|d| d.set_project_value("aspect", "1:1".into(), false));
+    let window = qt.document.preview_zoom().reframe.expect("a refitted window");
+    assert!((shape(window) - 1.0).abs() < 1e-9 && window.h == 1.0, "{window:?}");
+    let job = qt.document.motion_job().unwrap();
+    qt.run(|d| d.apply_motion(job.run()));
+    let window = qt.document.preview_zoom().reframe.expect("a rebuilt window");
+    assert!((shape(window) - 1.0).abs() < 1e-9 && window.h == 1.0, "{window:?}");
+    // Back to the recording's shape: the window goes at once.
+    qt.run(|d| d.set_project_value("aspect", Value::Null, false));
+    assert_eq!(qt.document.preview_zoom().reframe, None);
+    qt.run(|d| d.undo());
+    qt.run(|d| d.undo());
+    qt.run(|d| d.undo());
+    qt.run(|d| d.undo());
+    assert_eq!(qt.document.project().reframe, "");
+    qt.run(|d| d.save_now());
+    assert_eq!(std::fs::read(&project_path).unwrap(), original);
+
+    // A preset only changes the export it's used for...
+    let shorts = crate::export::presets::find("shorts").unwrap();
+    assert!(qt.document.preset_export_path("shorts").ends_with("-shorts.mp4"));
+    assert_eq!(qt.document.preset_export_path("nope"), "");
+    let settings = ExportDialogSettings {
+        fps: shorts.fps,
+        height: shorts.height,
+        quality: shorts.quality.into(),
+        aspect: shorts.aspect.into(),
+        reframe: shorts.reframe.into(),
+    };
+    let request = qt.run(|d| d.begin_export(&world.path("out/s.mp4"), &settings)).unwrap();
+    assert_eq!((request.width, request.aspect.as_str(), request.reframe.as_str()), (1080, "9:16", "follow"));
+    qt.run(|d| d.export_failed(""));
+    assert_eq!(std::fs::read(&project_path).unwrap(), original);
+    // ...unless it is saved into the project, as one undo step.
+    assert!(qt.run(|d| d.apply_export_preset("shorts")));
+    assert!(!qt.run(|d| d.apply_export_preset("shorts")));
+    assert!(!qt.run(|d| d.apply_export_preset("nope")));
+    let project = qt.document.project();
+    assert_eq!((project.aspect.as_str(), project.reframe.as_str(), project.export_settings.height), ("9:16", "follow", 1920));
+    qt.run(|d| d.undo());
+    qt.run(|d| d.save_now());
+    assert_eq!(std::fs::read(&project_path).unwrap(), original);
+}
+
+// -------------------------------------------------------------------------------------------
+// Audio cleanup.
+
+/// A bundle whose recording has sound, from the microphone when `mic`, opened with a probe that
+/// says so.
+fn sound_bundle(world: &World, name: &str, mic: bool) -> Qt {
+    let bundle = world.bundle(name);
+    std::fs::write(
+        format!("{bundle}/capture.json"),
+        format!(r#"{{"fps":30,"first_frame_us":1000000,"audio":{{"desktop":true,"mic":{mic}}}}}"#),
+    )
+    .unwrap();
+    let probes = Probes {
+        media: Arc::new(|path: &str| media_probe(path).map(|info| MediaInfo { audio: true, ..info })),
+        video: Arc::new(video_probe),
+    };
+    let locations = Locations { config: Some(world.path("config")), cache: Some(world.path("cache")) };
+    let document = Document::open_with(&bundle, &probes, locations).unwrap();
+    let mut qt = Qt { document, effects: Vec::new() };
+    qt.drain();
+    qt
+}
+
+/// Performs `f` and returns the effects it queued.
+fn act(qt: &mut Qt, f: impl FnOnce(&mut Document)) -> Vec<Effect> {
+    f(&mut qt.document);
+    qt.drain()
+}
+
+fn sources(effects: &[Effect]) -> Vec<String> {
+    effects
+        .iter()
+        .filter_map(|effect| match effect {
+            Effect::SetScreenAudioSource(path) => Some(path.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn audio_cleanup_is_one_undo_step_and_prepares_the_preview() {
+    let world = World::new("audio-cleanup");
+    let mut qt = sound_bundle(&world, "Voice.omareel", true);
+    assert!(qt.document.denoise_available());
+    // Nothing happens to the sound of a project without cleanup.
+    let effects = act(&mut qt, |d| d.refresh_clean_audio());
+    assert!(no_cleanup_effects(&effects));
+    assert_eq!(qt.document.clean_audio_status(), CleanAudioStatus::Off);
+
+    let on = AudioCleanup { denoise: true, ..AudioCleanup::default() };
+    qt.document.set_audio_cleanup(on.clone());
+    let effects = qt.drain();
+    assert_eq!(qt.undo_steps(), 1);
+    assert!(effects.contains(&Effect::StartCleanAudio));
+    assert!(effects.contains(&Effect::CleanAudioChanged));
+    assert!(sources(&effects).is_empty(), "the recording's sound plays until the cleaned one is ready");
+    assert_eq!(qt.document.clean_audio_status(), CleanAudioStatus::Preparing);
+    // Setting the same again is no edit.
+    act(&mut qt, |d| d.set_audio_cleanup(on.clone()));
+    assert_eq!(qt.undo_steps(), 1);
+
+    let job = qt.document.clean_audio_job().expect("a job");
+    assert_eq!(job.settings.denoise, Some(0.85));
+    assert_eq!(job.settings.loudness, None);
+    assert_eq!(job.cache_directory, world.path("cache/audio-cleanup"));
+    assert!(qt.document.clean_audio_job().is_none(), "one job at a time");
+    // The job's file is made; the screen player switches to it.
+    let file = world.path("cache/audio-cleanup/denoised.m4a");
+    qt.document.finish_clean_audio(job.id, Ok(CleanAudioResult { recording: file.clone(), ..Default::default() }));
+    let effects = qt.drain();
+    assert_eq!(sources(&effects), [file.clone()]);
+    assert_eq!(qt.document.clean_audio_status(), CleanAudioStatus::Ready);
+
+    // Comparing with the original is no edit.
+    assert_eq!(sources(&act(&mut qt, |d| d.set_clean_audio_bypass(true))), [String::new()]);
+    assert_eq!(sources(&act(&mut qt, |d| d.set_clean_audio_bypass(false))), [file.clone()]);
+    assert_eq!(qt.undo_steps(), 1);
+
+    // New settings: the old file keeps playing while the new one is made, and a failure says why.
+    let effects = act(&mut qt, |d| d.set_project_value("audio.cleanup.loudness", "-16".into(), false));
+    assert!(effects.contains(&Effect::StartCleanAudio));
+    assert!(sources(&effects).is_empty());
+    assert_eq!(qt.document.screen_audio_source(), file);
+    let louder = qt.document.clean_audio_job().expect("a job for the new settings");
+    assert_eq!(louder.settings.loudness, Some(-16.0));
+    assert_ne!(louder.id, job.id);
+    qt.document.finish_clean_audio(louder.id, Err("ffmpeg failed".into()));
+    qt.drain();
+    assert_eq!(qt.document.clean_audio_status(), CleanAudioStatus::Failed);
+    assert_eq!(qt.document.clean_audio_error(), "ffmpeg failed");
+
+    // Undo goes back to the file there is.
+    act(&mut qt, |d| d.undo());
+    assert_eq!(qt.document.clean_audio_status(), CleanAudioStatus::Ready);
+    assert_eq!(qt.document.screen_audio_source(), file);
+    // Off: the recording's own sound.
+    assert_eq!(sources(&act(&mut qt, |d| d.set_audio_cleanup(AudioCleanup::default()))), [String::new()]);
+    assert_eq!(qt.document.clean_audio_status(), CleanAudioStatus::Off);
+    assert!(qt.document.save_now());
+    let saved = std::fs::read_to_string(qt.document.project_path()).unwrap();
+    assert!(!saved.contains("cleanup"));
+}
+
+// Settings W1, then W2, then W1 again cancelled the first job and started a third for the same
+// file; the first job's late "cancelled" (matched by its file) then disowned the third, which
+// nothing could stop any more, and closing the editor waited for it.
+#[test]
+fn a_cancelled_job_never_disowns_the_one_that_replaced_it() {
+    let world = World::new("audio-cleanup-w1w2w1");
+    let mut qt = sound_bundle(&world, "Voice.omareel", true);
+    let w1 = AudioCleanup { denoise: true, ..AudioCleanup::default() };
+    let w2 = AudioCleanup { denoise: true, strength: 0.5, ..AudioCleanup::default() };
+    act(&mut qt, |d| d.set_audio_cleanup(w1.clone()));
+    let first = qt.document.clean_audio_job().expect("W1");
+    assert!(act(&mut qt, |d| d.set_audio_cleanup(w2.clone())).contains(&Effect::StartCleanAudio));
+    let second = qt.document.clean_audio_job().expect("W2");
+    assert!(first.cancelled.load(Ordering::SeqCst), "W1 is not wanted any more");
+    assert!(act(&mut qt, |d| d.set_audio_cleanup(w1.clone())).contains(&Effect::StartCleanAudio));
+    let third = qt.document.clean_audio_job().expect("W1 again");
+    assert!(second.cancelled.load(Ordering::SeqCst));
+    assert!(!third.cancelled.load(Ordering::SeqCst));
+    assert_eq!(third.settings, first.settings);
+    assert!(first.id != third.id && second.id != third.id);
+    assert!(qt.document.clean_audio_job().is_none(), "one job for W1 at a time");
+
+    // The cancelled ones finish late, one of them even with a file: neither touches the third.
+    let effects = act(&mut qt, |d| d.finish_clean_audio(first.id, Err("cancelled".into())));
+    assert!(!effects.contains(&Effect::StartCleanAudio));
+    let stale = CleanAudioResult { recording: world.path("cache/audio-cleanup/stale.m4a"), ..Default::default() };
+    let effects = act(&mut qt, |d| d.finish_clean_audio(second.id, Ok(stale)));
+    assert!(sources(&effects).is_empty() && !effects.contains(&Effect::StartCleanAudio));
+    assert_eq!(qt.document.clean_audio_status(), CleanAudioStatus::Preparing);
+    assert!(qt.document.clean_audio_job().is_none(), "the third still runs");
+    // Closing the editor stops it.
+    qt.document.cancel_clean_audio();
+    assert!(third.cancelled.load(Ordering::SeqCst));
+}
+
+/// A recording with sound from the microphone, normalised to -16 LUFS.
+fn loud_bundle(world: &World) -> Qt {
+    let mut qt = sound_bundle(world, "Loud.omareel", true);
+    act(&mut qt, |d| d.set_audio_cleanup(AudioCleanup { loudness: "-16".into(), ..AudioCleanup::default() }));
+    qt
+}
+
+// Normalising measures the edited program, as export does: an edit asks for a new measurement,
+// after the job running for the same settings, which is not cancelled, and the preview plays
+// that job's sound meanwhile.
+#[test]
+fn edits_measure_the_program_again_after_the_running_job() {
+    let world = World::new("audio-cleanup-edits");
+    let mut qt = loud_bundle(&world);
+    let job = qt.document.clean_audio_job().expect("a loudness job");
+    assert_eq!(job.program.clips, qt.document.project().clips);
+    assert!(job.program.use_source_audio);
+    let id = qt.document.project().clips[0].id.clone();
+    let effects = act(&mut qt, |d| {
+        d.set_clip_speed(&id, 2.0);
+    });
+    assert!(!effects.contains(&Effect::StartCleanAudio), "it waits for the running job");
+    assert!(!job.cancelled.load(Ordering::SeqCst));
+    assert!(qt.document.clean_audio_job().is_none());
+    let file = world.path("cache/audio-cleanup/at-1x.m4a");
+    let measured = LoudnessMeasurement { integrated: -30.0, true_peak: -12.0, range: 3.0, threshold: -40.0, offset: 0.0 };
+    let result = CleanAudioResult { recording: file.clone(), inserts: Vec::new(), applied: Some(measured) };
+    let effects = act(&mut qt, |d| d.finish_clean_audio(job.id, Ok(result)));
+    assert!(effects.contains(&Effect::StartCleanAudio), "now the edit's");
+    assert_eq!(sources(&effects), [file.clone()], "the last sound plays meanwhile");
+    assert_eq!(qt.document.clean_audio_status(), CleanAudioStatus::Preparing);
+    let next = qt.document.clean_audio_job().expect("the edit's job");
+    assert_eq!(next.program.clips[0].speed, 2.0);
+    assert_eq!(next.previous, Some(measured), "a close measurement keeps the playing files");
+    // Its result adds an inserted video's sound.
+    let result = CleanAudioResult {
+        recording: file.clone(),
+        inserts: vec![("media/clip.mp4".into(), world.path("cache/audio-cleanup/clip.m4a"))],
+        applied: Some(measured),
+    };
+    let effects = act(&mut qt, |d| d.finish_clean_audio(next.id, Ok(result)));
+    assert!(effects.contains(&Effect::InsertAudioSourcesChanged));
+    assert_eq!(qt.document.insert_audio_source("media/clip.mp4"), world.path("cache/audio-cleanup/clip.m4a"));
+    assert_eq!(qt.document.insert_audio_source("media/other.mp4"), "");
+    assert_eq!(qt.document.clean_audio_status(), CleanAudioStatus::Ready);
+    // Bypassed, the inserted video plays its own sound too.
+    assert!(act(&mut qt, |d| d.set_clean_audio_bypass(true)).contains(&Effect::InsertAudioSourcesChanged));
+    assert_eq!(qt.document.insert_audio_source("media/clip.mp4"), "");
+    // Edits that leave the sound alone ask for nothing.
+    act(&mut qt, |d| d.set_clean_audio_bypass(false));
+    let effects = act(&mut qt, |d| d.set_project_value("frame.padding", 0.2.into(), false));
+    assert!(!effects.contains(&Effect::StartCleanAudio));
+    assert_eq!(qt.document.clean_audio_status(), CleanAudioStatus::Ready);
+}
+
+/// No effect at all about cleaned sound.
+fn no_cleanup_effects(effects: &[Effect]) -> bool {
+    !effects.iter().any(|effect| {
+        matches!(effect, Effect::SetScreenAudioSource(_) | Effect::StartCleanAudio | Effect::CleanAudioChanged)
+    })
+}
+
+#[test]
+fn denoising_needs_the_microphone() {
+    let world = World::new("audio-cleanup-desktop");
+    let mut qt = sound_bundle(&world, "Desktop.omareel", false);
+    assert!(!qt.document.denoise_available());
+    let effects = act(&mut qt, |d| d.set_audio_cleanup(AudioCleanup { denoise: true, ..AudioCleanup::default() }));
+    // Saved, but there is nothing to clean: the desktop sound is left alone.
+    assert_eq!(qt.undo_steps(), 1);
+    assert!(no_cleanup_effects(&effects));
+    assert!(qt.document.clean_audio_job().is_none());
+    // Loudness still applies.
+    act(&mut qt, |d| d.set_project_value("audio.cleanup.loudness", "-14".into(), false));
+    let job = qt.document.clean_audio_job().expect("a loudness job");
+    assert_eq!((job.settings.denoise, job.settings.loudness), (None, Some(-14.0)));
 }

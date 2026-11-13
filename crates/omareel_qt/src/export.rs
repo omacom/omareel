@@ -79,6 +79,9 @@ pub mod ffi {
         gif_fps: i32,
         gif_width: i32,
         timing: bool,
+        preset: QString,
+        aspect: QString,
+        reframe: QString,
     }
 
     /// `omareel frame`'s arguments (`export::still::FrameRequest`), or `error` when they are
@@ -93,6 +96,9 @@ pub mod ffi {
         sheet: bool,
         width: i32,
         fps: i32,
+        preset: QString,
+        aspect: QString,
+        reframe: QString,
     }
 
     /// A contact sheet's grid (`export::still::SheetGrid`).
@@ -142,6 +148,18 @@ pub mod ffi {
         /// The sheet's grid for `count` tiles on a sheet `width` wide (0: the default width).
         #[cxx_name = "sheetGrid"]
         fn sheet_grid(count: i32, width: i32) -> SheetGrid;
+
+        /// An export preset's format ("mp4" or "gif"); empty for an unknown preset.
+        #[cxx_name = "presetFormat"]
+        fn preset_format(preset: &QString) -> QString;
+
+        /// Where an export with this preset goes without `-o`; empty for an unknown preset.
+        #[cxx_name = "presetOutputPath"]
+        fn preset_output_path(bundle_path: &QString, preset: &QString) -> QString;
+
+        /// The preset ids, comma separated, for messages.
+        #[cxx_name = "presetIds"]
+        fn preset_ids() -> QString;
 
         /// The exporter's cancel flag. `cancel` may be called from any thread at any time.
         type CancelFlag;
@@ -206,10 +224,27 @@ pub mod ffi {
         /// `{lines, opacity, position, size}`; no lines when no caption shows.
         #[cxx_name = "captionMap"]
         fn caption_map(self: &ExportJob) -> QMap_QString_QVariant;
+        /// `{scale}`: the transition at a cut.
+        #[cxx_name = "transitionMap"]
+        fn transition_map(self: &ExportJob) -> QMap_QString_QVariant;
+        /// The overlays showing: each one's project JSON with its `opacity`.
+        #[cxx_name = "visibleOverlays"]
+        fn visible_overlays(self: &ExportJob) -> QList_QVariant;
         /// Before `start`: the recording's frames as YUV (see `DecodedImage`) when the
         /// renderer converts them on the GPU.
         #[cxx_name = "setYuvScreen"]
         fn set_yuv_screen(self: &mut ExportJob, yuv: bool);
+        /// Starts measuring the loudness of the export's sound on a thread, when the project
+        /// normalises it: true then. False with `error` set when it could not start.
+        #[cxx_name = "startLoudnessMeasure"]
+        fn start_loudness_measure(self: &mut ExportJob, error: &mut QString) -> bool;
+        /// The fraction of the loudness measurement done.
+        #[cxx_name = "loudnessProgress"]
+        fn loudness_progress(self: &ExportJob) -> f64;
+        #[cxx_name = "loudnessDone"]
+        fn loudness_done(self: &ExportJob) -> bool;
+        #[cxx_name = "waitLoudness"]
+        fn wait_loudness(self: &ExportJob, timeout_ms: u64);
         /// Once the renderer is ready: temporary files, the encoder and the decoder.
         fn start(self: &mut ExportJob, software_rendering: bool, error: &mut QString) -> bool;
         /// Waits for frame `frame` and updates the composition; false with `error` set to end.
@@ -294,6 +329,9 @@ fn parse_frame_args(arguments: &QStringList) -> FrameRequest {
             sheet: request.sheet,
             width: request.width,
             fps: request.fps,
+            preset: qstring(&request.preset),
+            aspect: qstring(&request.aspect),
+            reframe: qstring(&request.reframe),
         },
         Err(message) => FrameRequest {
             error: qstring(&message),
@@ -304,6 +342,9 @@ fn parse_frame_args(arguments: &QStringList) -> FrameRequest {
             sheet: false,
             width: 0,
             fps: 0,
+            preset: QString::default(),
+            aspect: QString::default(),
+            reframe: QString::default(),
         },
     }
 }
@@ -323,6 +364,20 @@ fn sheet_grid(count: i32, width: i32) -> SheetGrid {
 }
 
 pub struct CancelFlag(Arc<AtomicBool>);
+
+fn preset_format(preset: &QString) -> QString {
+    export::presets::find(&preset.to_string()).map_or_else(QString::default, |preset| qstring(preset.format))
+}
+
+fn preset_output_path(bundle_path: &QString, preset: &QString) -> QString {
+    export::presets::find(&preset.to_string()).map_or_else(QString::default, |preset| {
+        qstring(&export::presets::default_output_path(&bundle_path.to_string(), preset))
+    })
+}
+
+fn preset_ids() -> QString {
+    qstring(&export::presets::ids())
+}
 
 fn new_cancel_flag() -> Box<CancelFlag> {
     Box::new(CancelFlag(Arc::new(AtomicBool::new(false))))
@@ -411,6 +466,11 @@ pub(crate) fn caption_map(
     ])
 }
 
+/// The transition map Composition.qml scales the screen by.
+pub(crate) fn transition_map(frame: &omareel_core::transitions::TransitionFrame) -> QMap<QMapPair_QString_QVariant> {
+    map([("scale", QVariant::from(&frame.scale))])
+}
+
 fn qstring(text: &str) -> QString {
     QString::from(text)
 }
@@ -438,6 +498,31 @@ pub(crate) fn map<const N: usize>(entries: [(&str, QVariant); N]) -> QMap<QMapPa
     entries.into_iter().map(|(key, value)| (qstring(key), value)).collect()
 }
 
+/// Composition.qml's `zoom` map, the editor's and the exporter's: `scale`, `cx`, `cy`,
+/// `velocity`, and for a reframing project `reframe: true` with the window `rx`, `ry`, `rw`, `rh`.
+pub(crate) fn zoom_map(
+    scale: f64,
+    cx: f64,
+    cy: f64,
+    velocity: f64,
+    reframe: Option<omareel_core::reframe::ReframeWindow>,
+) -> QMap<QMapPair_QString_QVariant> {
+    let mut zoom = map([
+        ("scale", QVariant::from(&scale)),
+        ("cx", QVariant::from(&cx)),
+        ("cy", QVariant::from(&cy)),
+        ("velocity", QVariant::from(&velocity)),
+    ]);
+    if let Some(window) = reframe {
+        zoom.insert(qstring("reframe"), QVariant::from(&true));
+        zoom.insert(qstring("rx"), QVariant::from(&window.x));
+        zoom.insert(qstring("ry"), QVariant::from(&window.y));
+        zoom.insert(qstring("rw"), QVariant::from(&window.w));
+        zoom.insert(qstring("rh"), QVariant::from(&window.h));
+    }
+    zoom
+}
+
 impl ExportJob {
     fn state(&self) -> Option<&export::composition::CompositionState> {
         self.job.as_ref().map(export::ExportJob::state)
@@ -455,6 +540,9 @@ impl ExportJob {
             timing: options.timing,
             still_times: std::mem::take(&mut self.still_times),
             still_count: self.still_count,
+            preset: options.preset.to_string(),
+            aspect: options.aspect.to_string(),
+            reframe: options.reframe.to_string(),
         };
         match export::ExportJob::prepare(&options, Arc::clone(&cancel.0)) {
             Ok(job) => {
@@ -525,12 +613,7 @@ impl ExportJob {
     fn zoom_map(&self) -> QMap<QMapPair_QString_QVariant> {
         let Some(s) = self.state() else { return QMap::default() };
         let z = &s.zoom;
-        map([
-            ("scale", QVariant::from(&z.scale)),
-            ("cx", QVariant::from(&z.cx)),
-            ("cy", QVariant::from(&z.cy)),
-            ("velocity", QVariant::from(&z.velocity)),
-        ])
+        zoom_map(z.scale, z.cx, z.cy, z.velocity, z.reframe)
     }
 
     fn layout_map(&self) -> QMap<QMapPair_QString_QVariant> {
@@ -577,6 +660,11 @@ impl ExportJob {
             .collect()
     }
 
+    fn visible_overlays(&self) -> QList<QVariant> {
+        let Some(s) = self.state() else { return QList::default() };
+        s.overlays.iter().map(|overlay| json_variant(&Value::Object(overlay.clone()))).collect()
+    }
+
     fn keystroke_pills(&self) -> QList<QVariant> {
         let Some(s) = self.state() else { return QList::default() };
         s.keystroke_pills
@@ -598,9 +686,38 @@ impl ExportJob {
         caption_map(&s.caption, &settings)
     }
 
+    fn transition_map(&self) -> QMap<QMapPair_QString_QVariant> {
+        transition_map(&self.state().map(|s| s.transition).unwrap_or_default())
+    }
+
     fn set_yuv_screen(&mut self, yuv: bool) {
         if let Some(job) = self.job.as_mut() {
             job.set_yuv_screen(yuv);
+        }
+    }
+
+    fn start_loudness_measure(&mut self, error: &mut QString) -> bool {
+        let Some(job) = self.job.as_mut() else { return false };
+        match job.start_loudness_measure() {
+            Ok(started) => started,
+            Err(message) => {
+                *error = qstring(&message);
+                false
+            }
+        }
+    }
+
+    fn loudness_progress(&self) -> f64 {
+        self.job.as_ref().map_or(0.0, export::ExportJob::loudness_progress)
+    }
+
+    fn loudness_done(&self) -> bool {
+        self.job.as_ref().is_none_or(export::ExportJob::loudness_done)
+    }
+
+    fn wait_loudness(&self, timeout_ms: u64) {
+        if let Some(job) = self.job.as_ref() {
+            job.wait_loudness(timeout_ms);
         }
     }
 

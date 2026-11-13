@@ -520,3 +520,211 @@ fn a_read_only_editor_refuses_edits_but_takes_in_the_agents() {
     editor.undo();
     assert_eq!(editor.project().clips.len(), 1);
 }
+
+fn round(t: f64) -> f64 {
+    (t * 1000.0).round() / 1000.0
+}
+
+#[test]
+fn overlays_markers_transitions_reframe_and_cleanup_apply_like_the_editor() {
+    let dir = TempDir::new("agent-polish-ops");
+    let bundle = bundle(&dir);
+    let mut document = open(&bundle, &dir);
+    let (results, warnings) = apply_ops(&mut document, &ops(r#"[
+            {"op": "split", "at": 3},
+            {"op": "delete", "from": 4, "to": 6},
+            {"op": "add-overlay", "kind": "text", "from": 1, "to": 2, "text": "Hello", "rect": {"x": 0.1, "y": 0.1, "w": 0.5, "h": 0.1}},
+            {"op": "blur", "from": 5, "to": 7, "rect": {"x": 0.6, "y": 0.0, "w": 0.4, "h": 0.1}, "style": "blur", "amount": 0.8},
+            {"op": "add-overlay", "kind": "arrow", "from": 0.5, "to": 2.5, "tail": {"x": 0.1, "y": 0.9}, "head": {"x": 0.3, "y": 0.7}},
+            {"op": "add-marker", "at": 5, "label": "the result"},
+            {"op": "add-marker", "at": 1.5, "timeline": "source"},
+            {"op": "transition", "style": "zoom-punch"},
+            {"op": "cut-transition", "at": 4.5, "style": "none"},
+            {"op": "reframe", "mode": "follow"},
+            {"op": "audio-cleanup", "loudness": -16, "denoise": true, "strength": 0.6}
+        ]"#), false)
+    .unwrap();
+    assert_eq!(spans(&document), vec![(0.0, 3.0, 1.0), (3.0, 4.0, 1.0), (6.0, 10.0, 1.0)]);
+    let project = document.project();
+    assert_eq!(project.overlays.len(), 3);
+    // The text label is on the canvas at output times.
+    let label = &project.overlays[0];
+    assert_eq!((label.anchor.as_str(), label.start, label.end, label.text.as_str()), ("frame", 1.0, 2.0, "Hello"));
+    // The blur covers what output 5–7 shows of the recording: source 7–9.
+    let blur = &project.overlays[1];
+    assert_eq!((blur.kind.as_str(), blur.anchor.as_str(), blur.style.as_str(), blur.amount), ("blur", "screen", "blur", 0.8));
+    assert_eq!((round(blur.start), round(blur.end)), (7.0, 9.0));
+    assert_eq!((blur.rect.x, blur.rect.width), (0.6, 0.4));
+    // The arrow is a screen item; its ends are tail and head.
+    let arrow = &project.overlays[2];
+    assert_eq!((arrow.anchor.as_str(), arrow.from.x, arrow.to.y), ("screen", 0.1, 0.7));
+    assert_eq!(results[3].to_object().value("id").to_string_or(""), blur.id);
+    // Markers at the recording's moments, in recording order.
+    let markers: Vec<(f64, &str)> = project.markers.iter().map(|m| (round(m.time), m.label.as_str())).collect();
+    assert_eq!(markers, vec![(1.5, ""), (7.0, "the result")]);
+    assert_eq!(project.transition, "zoom-punch");
+    assert_eq!(project.clips[2].transition.as_deref(), Some("none"));
+    assert_eq!(project.reframe, "follow");
+    assert_eq!((project.audio.cleanup.denoise, project.audio.cleanup.strength, project.audio.cleanup.loudness.as_str()), (true, 0.6, "-16"));
+    // The canvas has the recording's shape, and the recording has no microphone.
+    assert!(warnings.iter().any(|w| w.starts_with("reframe: the canvas has the recording's shape")), "{warnings:?}");
+    assert!(warnings.iter().any(|w| w.contains("no microphone sound")), "{warnings:?}");
+
+    let summary = describe(&document);
+    let overlays = summary.value("overlays").to_array();
+    let blur = overlays[1].to_object();
+    assert_eq!(blur.value("source").to_object().value("start").to_double(0.0), 7.0);
+    assert_eq!(blur.value("output").to_array()[0].to_object().value("end").to_double(0.0), 7.0);
+    assert!(overlays[2].to_object().contains("tail") && !overlays[2].to_object().contains("from"));
+    let markers = summary.value("markers").to_array();
+    assert_eq!(markers[1].to_object().value("output").to_array()[0].to_double(0.0), 5.0);
+    let transitions = summary.value("transitions").to_object();
+    assert_eq!(transitions.value("style").to_string_or(""), "zoom-punch");
+    let cuts = transitions.value("cuts").to_array();
+    assert_eq!(cuts.len(), 1);
+    assert_eq!((cuts[0].to_object().value("output").to_double(0.0), cuts[0].to_object().value("style").to_string_or("")), (4.0, "none".into()));
+    assert_eq!(summary.value("reframe").to_object().value("active"), &Value::Bool(false));
+    assert_eq!(summary.value("audio_cleanup").to_object().value("loudness").to_string_or(""), "-16");
+    let presets = summary.value("allowed").to_object().value("presets").to_array();
+    assert!(presets.iter().any(|p| p.to_object().value("id").to_string_or("") == "shorts"));
+    // Overlays and markers are listed apart, not among the settings `set` takes.
+    assert!(!summary.value("settings").to_object().contains("overlays"));
+
+    // Edits: the blur moves by source times and grows; the label moves to the screen.
+    let blur_id = document.project().overlays[1].id.clone();
+    let label_id = document.project().overlays[0].id.clone();
+    let (first_marker, second_marker) = (document.project().markers[0].id.clone(), document.project().markers[1].id.clone());
+    apply_ops(&mut document, &ops(&format!(r#"[
+            {{"op": "edit-overlay", "id": "{blur_id}", "from": 6.5, "to": 9.5, "timeline": "source", "rect": {{"h": 0.2}}}},
+            {{"op": "edit-overlay", "id": "{label_id}", "anchor": "screen"}},
+            {{"op": "rename-marker", "id": "{first_marker}", "label": "start"}}
+        ]"#)), false)
+    .unwrap();
+    let project = document.project();
+    let blur = &project.overlays[1];
+    assert_eq!((blur.start, blur.end, blur.rect.height, blur.rect.x), (6.5, 9.5, 0.2, 0.6));
+    assert_eq!(project.overlays[0].anchor, "screen");
+    assert_eq!(project.markers[0].label, "start");
+    apply_ops(&mut document, &ops(&format!(r#"[{{"op": "remove-overlay", "id": "{label_id}"}}, {{"op": "remove-marker", "id": "{second_marker}"}}]"#)), false).unwrap();
+    assert_eq!((document.project().overlays.len(), document.project().markers.len()), (2, 1));
+}
+
+#[test]
+fn overlay_operations_refuse_what_the_editor_would_not_draw() {
+    let dir = TempDir::new("agent-overlay-errors");
+    let bundle = bundle(&dir);
+    let mut document = open(&bundle, &dir);
+    let before = document.project().to_json();
+    for (ops_json, expected) in [
+        (r#"{"op": "blur", "from": 1, "to": 2}"#, "a blur needs a \"rect\""),
+        (r#"{"op": "blur", "from": 1, "to": 2, "rect": {"x": 0.8, "y": 0, "w": 0.4, "h": 0.1}}"#, "\"rect\" must be"),
+        (r#"{"op": "add-overlay", "kind": "text", "from": 1, "to": 2, "amount": 1}"#, "a text overlay has no \"amount\""),
+        (r#"{"op": "add-overlay", "kind": "card", "from": 1, "to": 2, "anchor": "screen"}"#, "a card is always on the frame"),
+        (r#"{"op": "add-overlay", "kind": "blur", "from": 1, "to": 2, "anchor": "frame", "rect": {"x": 0, "y": 0, "w": 0.1, "h": 0.1}}"#, "blur is always on the screen"),
+        (r#"{"op": "add-overlay", "kind": "sticker", "from": 1, "to": 2}"#, "\"kind\" must be one of"),
+        (r#"{"op": "add-overlay", "kind": "text", "from": 1, "to": 20}"#, "outside the video"),
+        (r#"{"op": "add-overlay", "kind": "box", "from": 1, "to": 2, "color": "reddish"}"#, "\"color\" must be"),
+        (r#"{"op": "edit-overlay", "id": "nope", "from": 1}"#, "no overlay with id"),
+        (r#"{"op": "cut-transition", "at": 1, "style": "zoom-punch"}"#, "doesn't start at a cut"),
+        (r#"{"op": "transition", "style": "wipe"}"#, "\"style\" must be one of"),
+        (r#"{"op": "reframe", "mode": "center"}"#, "\"mode\" must be"),
+        (r#"{"op": "audio-cleanup", "loudness": -20}"#, "\"loudness\" must be"),
+        (r#"{"op": "speed-up-quiet", "target": 0.1}"#, "\"target\""),
+        (r#"{"op": "set", "path": "overlays", "value": []}"#, "their own operations"),
+    ] {
+        let error = apply_ops(&mut document, &ops(ops_json), false).unwrap_err();
+        assert!(error.contains(expected), "{ops_json}: {error}");
+    }
+    assert_eq!(document.project().to_json(), before);
+}
+
+#[test]
+fn bringing_back_footage_cut_while_recording_warns() {
+    let dir = TempDir::new("agent-recording-cuts");
+    let bundle = bundle(&dir);
+    // A retake 2 s after recording started reached back to its start: source 0–2 is cut.
+    std::fs::write(format!("{bundle}/markers.jsonl"), "{\"from\":1000000,\"k\":\"retake\",\"t\":3000000}\n").unwrap();
+    let mut document = open(&bundle, &dir);
+    assert_eq!(spans(&document), vec![(2.0, 10.0, 1.0)]);
+    let summary = describe(&document);
+    let cuts = summary.value("recording_cuts").to_array();
+    assert_eq!(cuts.len(), 1);
+    assert_eq!(cuts[0].to_object().value("kind").to_string_or(""), "retake");
+    assert!(cuts[0].to_object().value("output").to_array().is_empty());
+    let markers = summary.value("markers").to_array();
+    assert_eq!(markers[0].to_object().value("kind").to_string_or(""), "retake");
+    let clip = document.project().clips[0].id.clone();
+    let (_, warnings) = apply_ops(&mut document, &ops(&format!(r#"{{"op": "trim", "clip": "{clip}", "in": 0}}"#)), false).unwrap();
+    assert!(warnings.iter().any(|w| w.contains("was cut while recording (a retake)")), "{warnings:?}");
+}
+
+#[test]
+fn quiet_parts_play_faster_where_the_screen_moves() {
+    use crate::transcript::stillness::ScreenCheck;
+    let dir = TempDir::new("agent-speed-up");
+    let bundle = bundle(&dir);
+    let mut document = open(&bundle, &dir);
+    // Speech at 0–1 and 7–10; the screen moves through the silence (an installer running).
+    document.set_speech_regions(vec![(0.0, 1.0), (7.0, 10.0)]);
+    document.set_screen_check(ScreenCheck { still: Vec::new(), moving: vec![(1.0, 7.0)] });
+    let (results, _) = apply_ops(&mut document, &ops(r#"{"op": "speed-up-quiet", "target": 1.5}"#), false).unwrap();
+    assert_eq!(results[0].get("parts").to_int(0), 1);
+    // 1.3–6.7 (0.3 s kept next to speech) at 4x plays in 1.35 s.
+    let sped: Vec<(f64, f64, f64)> = spans(&document).into_iter().map(|(a, b, s)| (round(a), round(b), s)).collect();
+    assert_eq!(sped, vec![(0.0, 1.3, 1.0), (1.3, 6.7, 4.0), (6.7, 10.0, 1.0)]);
+    assert!((results[0].get("saved_seconds").to_double(0.0) - 4.05).abs() < 1e-3);
+}
+
+#[test]
+fn editing_one_end_of_a_blur_never_uncovers_cut_footage() {
+    let dir = TempDir::new("agent-blur-edit");
+    let bundle = bundle(&dir);
+    let mut document = open(&bundle, &dir);
+    apply_ops(&mut document, &ops(r#"[
+            {"op": "blur", "from": 2, "to": 6, "timeline": "source", "rect": {"x": 0, "y": 0, "w": 0.5, "h": 0.2}},
+            {"op": "delete", "from": 1, "to": 3, "timeline": "source"}
+        ]"#), false)
+    .unwrap();
+    let id = document.project().overlays[0].id.clone();
+    // Only `to` given, on the output timeline: the start stays at source 2, though 2–3 is cut.
+    let edit = format!(r#"{{"op": "edit-overlay", "id": "{id}", "to": 4.5}}"#);
+    apply_ops(&mut document, &ops(&edit), false).unwrap();
+    let blur = document.overlay(&id).unwrap();
+    assert_eq!(round(blur.start), 2.0, "the cut footage under the blur stays covered");
+    assert_eq!(round(blur.end), 6.5);
+    // Restoring the cut brings 2–3 back covered.
+    apply_ops(&mut document, &ops(r#"{"op": "reset-trims", "at": 0.5}"#), false).ok();
+    let blur = document.overlay(&id).unwrap();
+    assert!(blur.start <= 2.0 + 1e-9);
+}
+
+#[test]
+fn speeding_up_retimes_frame_overlays() {
+    use crate::transcript::stillness::ScreenCheck;
+    let dir = TempDir::new("agent-speedup-overlays");
+    let bundle = bundle(&dir);
+    let mut document = open(&bundle, &dir);
+    apply_ops(&mut document, &ops(r#"[
+            {"op": "add-overlay", "kind": "text", "from": 8, "to": 9, "text": "After", "rect": {"x": 0.1, "y": 0.1, "w": 0.5, "h": 0.1}},
+            {"op": "add-overlay", "kind": "text", "from": 4, "to": 6, "text": "Inside", "rect": {"x": 0.1, "y": 0.1, "w": 0.5, "h": 0.1}},
+            {"op": "add-marker", "at": 8}
+        ]"#), false)
+    .unwrap();
+    // Silent 2–8 with the screen moving: one quiet part, played faster.
+    document.set_speech_regions(vec![(0.0, 2.0), (8.0, 10.0)]);
+    document.set_screen_check(ScreenCheck { still: Vec::new(), moving: vec![(2.0, 8.0)] });
+    let (results, _) = apply_ops(&mut document, &ops(r#"{"op": "speed-up-quiet", "target": 2, "min": 1}"#), true).unwrap();
+    assert_eq!(results[0].get("parts").to_int(0), 1, "{results:?}");
+    let sped: Vec<_> = document.project().clips.iter().filter(|clip| clip.speed != 1.0).cloned().collect();
+    assert_eq!(sped.len(), 1);
+    let (from, to, speed) = (sped[0].in_, sped[0].out, sped[0].speed);
+    let saved = (to - from) * (1.0 - 1.0 / speed);
+    let overlays = &document.project().overlays;
+    // After the part: moved back by what it saved, with the marker (source time) at the same moment.
+    assert!((overlays[0].start - (8.0 - saved)).abs() < 1e-6, "{:?}", overlays[0]);
+    assert!((overlays[0].end - (9.0 - saved)).abs() < 1e-6);
+    let marker_output = document.marker_rows()[0].output_time.unwrap();
+    assert!((marker_output - overlays[0].start).abs() < 1e-6, "{marker_output}");
+    // Inside the part: scaled with it.
+    assert!((overlays[1].start - (from + (4.0 - from) / speed)).abs() < 1e-6, "{:?}", overlays[1]);
+}

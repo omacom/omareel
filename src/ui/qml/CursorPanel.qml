@@ -141,7 +141,33 @@ ColumnLayout {
     }
     OmSettingRow {
         label: "Ring color"
-        OmColorWell { swatch: root.cursor.ringColor; onClicked: ringDialog.open() }
+        RowLayout {
+            spacing: 6
+            // The theme's colours, one click each; the colour is kept, so the export matches.
+            Repeater {
+                model: [theme.accent, theme.zoomAccent, theme.record, theme.foreground]
+                delegate: Rectangle {
+                    id: themeSwatch
+                    required property color modelData
+                    readonly property bool chosen: Qt.colorEqual(root.cursor.ringColor, modelData)
+                    implicitWidth: 22
+                    implicitHeight: 22
+                    radius: 11
+                    color: modelData
+                    border.width: chosen ? 2 : 1
+                    border.color: chosen ? theme.foreground : theme.stroke
+                    MouseArea {
+                        id: swatchMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: editor.setProjectValue("cursor.ringColor", themeSwatch.modelData)
+                    }
+                    OmLazyToolTip { target: themeSwatch; shown: swatchMouse.containsMouse; text: "Theme colour" }
+                }
+            }
+            OmColorWell { swatch: root.cursor.ringColor; onClicked: ringDialog.open() }
+        }
     }
     OmSeparator { Layout.fillWidth: true; Layout.topMargin: 2 }
     EditorSwitch {
@@ -152,6 +178,13 @@ ColumnLayout {
         onToggled: editor.setProjectValue("cursor.hideWhenIdleMs", checked ? 1500 : null)
     }
     PanelSlider { visible: idleSwitch.checked; Layout.fillWidth: true; label: "Idle delay"; path: "cursor.hideWhenIdleMs"; from: 250; to: 5000; value: root.cursor.hideWhenIdleMs || 1500; stepSize: 250; suffix: " ms" }
+    EditorSwitch {
+        objectName: "hideWhileTypingSwitch"
+        text: "Hide while typing"
+        description: "Fade the cursor out after a key press until the pointer moves"
+        checked: root.cursor.hideWhileTyping === true
+        onToggled: editor.setProjectValue("cursor.hideWhileTyping", checked)
+    }
     OmSeparator { Layout.fillWidth: true; Layout.topMargin: 2 }
     PanelHeading { text: "Spring" }
     PanelSlider { Layout.fillWidth: true; label: "Mass"; path: "cursor.spring.mass"; from: 0.2; to: 6; value: root.cursor.spring.mass; stepSize: 0.05; decimals: 2 }
