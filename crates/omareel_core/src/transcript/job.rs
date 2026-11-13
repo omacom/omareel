@@ -236,6 +236,17 @@ pub fn run(command: Command, timeout: Option<Duration>, control: &Control) -> Re
     run_streaming(command, timeout, control, |_| true)
 }
 
+/// Whether process `pid` still runs. A zombie doesn't: in a container whose first process
+/// reaps nothing (CI), a killed orphan stays a zombie, and `kill(pid, 0)` still finds it.
+#[cfg(test)]
+pub(crate) fn process_alive(pid: i32) -> bool {
+    match std::fs::read_to_string(format!("/proc/{pid}/stat")) {
+        // The state follows the name, which is in parentheses and may hold anything.
+        Ok(stat) => stat.rsplit_once(')').and_then(|(_, rest)| rest.trim_start().chars().next()).is_some_and(|state| state != 'Z' && state != 'X'),
+        Err(_) => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -247,8 +258,7 @@ mod tests {
     }
 
     fn alive(pid: i32) -> bool {
-        // SAFETY: signal 0 only checks that the process exists.
-        unsafe { libc::kill(pid, 0) == 0 }
+        process_alive(pid)
     }
 
     /// A command that leaves a sleeper holding its pipes ends with its own end, and the sleeper
