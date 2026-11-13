@@ -17,6 +17,9 @@ ColumnLayout {
         return -1
     }
     readonly property bool insert: root.selected !== null && root.selected.kind === "media"
+    // The selected clip starts where the recording jumps, so it can have a transition of its own.
+    readonly property bool atCut: root.selected !== null && editor.clipStartsAtCut(root.selected.id)
+    readonly property var transitionStyles: [{value:"none", label:"None"}, {value:"zoom-punch", label:"Zoom punch"}]
     readonly property int recordingClips: {
         let count = 0
         for (let i = 0; i < editor.clips.length; ++i)
@@ -122,6 +125,24 @@ ColumnLayout {
                 onActivated: editor.setClipSpeed(editor.selectedClipId, model[currentIndex])
             }
         }
+        OmSettingRow {
+            visible: root.atCut
+            label: "Cut before"
+            description: "The transition into this clip"
+            EditorComboBox {
+                objectName: "cutTransitionCombo"
+                Layout.preferredWidth: 140
+                model: [{value:"", label:"As all cuts"}].concat(root.transitionStyles)
+                textRole: "label"
+                currentIndex: {
+                    const own = root.selected && root.selected.transition !== undefined ? root.selected.transition : ""
+                    for (let i = 0; i < model.length; ++i)
+                        if (model[i].value === own) return i
+                    return 0
+                }
+                onActivated: editor.setCutTransition(editor.selectedClipId, model[currentIndex].value)
+            }
+        }
         OmSeparator { Layout.fillWidth: true }
         RowLayout {
             Layout.fillWidth: true
@@ -137,6 +158,27 @@ ColumnLayout {
                 onClicked: editor.removeClip(editor.selectedClipId)
             }
         }
+    }
+    OmSeparator { Layout.fillWidth: true; Layout.topMargin: 2 }
+    OmSettingRow {
+        label: "Cuts"
+        description: "Where the recording jumps between clips"
+        OmButtonGroup {
+            objectName: "transitionGroup"
+            Layout.preferredWidth: 176
+            options: root.transitionStyles
+            value: editor.project.transition || "none"
+            onChanged: value => editor.setTransitionStyle(value)
+        }
+    }
+    Label {
+        Layout.fillWidth: true
+        text: (editor.project.transition || "none") === "zoom-punch"
+            ? "A quick, subtle zoom hides each jump, and the sound fades across it."
+            : "Clips meet with a plain jump cut."
+        color: theme.textMuted
+        font.pixelSize: theme.type.small
+        wrapMode: Text.WordWrap
     }
     OmSeparator { Layout.fillWidth: true; Layout.topMargin: 2 }
     EditorButton {

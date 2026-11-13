@@ -116,7 +116,7 @@ fn is_modifier_name(name: &str) -> bool {
 
 /// Whether a key down is a modifier key's: by its label when it has one (the layout may have
 /// moved modifiers to other keys), else by its name.
-fn is_modifier(event: &InputEvent) -> bool {
+pub(crate) fn is_modifier(event: &InputEvent) -> bool {
     if event.key_label.is_empty() {
         is_modifier_name(&event.key_name)
     } else {

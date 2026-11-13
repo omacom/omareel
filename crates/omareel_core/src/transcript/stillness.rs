@@ -85,6 +85,15 @@ pub fn silences_to_check(speech: &[(f64, f64)], duration: f64) -> Vec<(f64, f64)
     silences(speech, duration, &settings).into_iter().map(|silence| (silence.start, silence.end)).collect()
 }
 
+/// What [`check_windows`] found: the windows the screen stays still through, and the ones it
+/// moves in (pause trimming cuts the first, "speed up quiet parts" speeds up the second). A
+/// window too short to look at is in neither.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ScreenCheck {
+    pub still: Vec<(f64, f64)>,
+    pub moving: Vec<(f64, f64)>,
+}
+
 /// Of `windows` (source seconds of `video`, a `width` x `height` recording at `scale`), the ones
 /// the screen stays still through, ends next to speech aside; `duration` is the recording's.
 /// Stops when `control` is cancelled, and waits while it holds (a recording or an export),
@@ -93,15 +102,26 @@ pub fn still_windows(
     video: &str,
     windows: &[(f64, f64)],
     duration: f64,
-    (width, height, scale): (i32, i32, f64),
+    geometry: (i32, i32, f64),
     control: &Control,
 ) -> Result<Vec<(f64, f64)>, String> {
+    check_windows(video, windows, duration, geometry, control).map(|check| check.still)
+}
+
+/// [`still_windows`], with the windows the screen moves in as well.
+pub fn check_windows(
+    video: &str,
+    windows: &[(f64, f64)],
+    duration: f64,
+    (width, height, scale): (i32, i32, f64),
+    control: &Control,
+) -> Result<ScreenCheck, String> {
     let ffmpeg = qstandardpaths::find_executable("ffmpeg");
     if ffmpeg.is_empty() {
         return Err("ffmpeg is not installed".into());
     }
     let (columns, rows) = grid(width, height, scale);
-    let mut still = Vec::new();
+    let mut found = ScreenCheck::default();
     for &(start, end) in windows {
         let from = if start > 1e-6 { start + EDGE } else { start };
         let to = if end < duration - 1e-6 { end - EDGE } else { end };
@@ -148,7 +168,9 @@ pub fn still_windows(
                         return Err(format!("could not read the recording's video: {}", reason.trim()));
                     }
                     if check.still() {
-                        still.push((start, end));
+                        found.still.push((start, end));
+                    } else {
+                        found.moving.push((start, end));
                     }
                     break;
                 }
@@ -159,7 +181,7 @@ pub fn still_windows(
             }
         }
     }
-    Ok(still)
+    Ok(found)
 }
 
 #[cfg(test)]
@@ -232,8 +254,9 @@ mod tests {
             "-bf", "0", "-pix_fmt", "yuv420p", &video,
         ]);
         let windows = [(0.0, 1.5), (1.8, 3.5), (4.0, 6.0)];
-        let still = still_windows(&video, &windows, 6.0, (320, 180, 1.0), &Control::default()).unwrap();
+        let check = check_windows(&video, &windows, 6.0, (320, 180, 1.0), &Control::default()).unwrap();
         let _ = std::fs::remove_dir_all(&dir);
-        assert_eq!(still, vec![(0.0, 1.5), (4.0, 6.0)]);
+        assert_eq!(check.still, vec![(0.0, 1.5), (4.0, 6.0)]);
+        assert_eq!(check.moving, vec![(1.8, 3.5)]);
     }
 }

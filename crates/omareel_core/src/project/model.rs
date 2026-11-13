@@ -74,6 +74,8 @@ impl Default for Captions {
 /// `media`: path of an inserted video, relative to the bundle and inside its media/ directory.
 /// `fit`: how an inserted video meets the canvas: "fit" (whole, over a blurred copy), "fill"
 /// (covering the canvas), "framed" (in the frame, over the background, like the screen).
+/// `transition`: the transition at the cut before this clip (see `crate::transitions`), when it
+/// differs from the project's; `None` follows the project, and leaves the clip's JSON as it was.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Clip {
     pub id: String,
@@ -83,6 +85,7 @@ pub struct Clip {
     pub layout: String,
     pub media: String,
     pub fit: String,
+    pub transition: Option<String>,
 }
 
 impl Default for Clip {
@@ -95,6 +98,7 @@ impl Default for Clip {
             layout: "default".into(),
             media: String::new(),
             fit: "fit".into(),
+            transition: None,
         }
     }
 }

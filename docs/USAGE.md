@@ -209,6 +209,26 @@ clips look: **Fill frame** covers the whole canvas with the uncropped webcam, an
 keeps a centred square over a blurred copy of the camera. Camera clips show the webcam even with
 the bubble switched off.
 
+## Transitions
+
+Where the recording jumps from one moment to another (two recording clips whose source times do
+not meet: a deleted range, a trimmed pause), the Clip panel's **Cuts** setting picks what plays:
+
+- **None** (the default): a plain jump cut.
+- **Zoom punch**: the screen and its cursor grow 6% over the 0.08 s before the cut and settle
+  back over the 0.32 s after it, so the eye follows the movement instead of the jump. The sound
+  fades out and in over 0.02 s on each side of the cut, so the join does not click.
+
+Selecting the clip after a cut shows **Cut before**, which overrides the setting for that cut
+alone. A split (clips that meet) and an inserted video are not cuts. The preview and the export
+draw the same transition, in GPU and software rendering. The preview's sound is not faded.
+
+A crossfade is not offered yet: it needs both clips' frames at once, while the preview plays the
+recording with one player and the export decodes one clip at a time. It would take a second
+screen layer in the composition, fed by a second preview player seeking ahead to the next clip
+and, in the export, the next clip's decoder (already started ahead) handing over its first
+frames during the overlap, plus an `acrossfade` of the two segments in the audio mix.
+
 ## Inserted videos
 
 Press `I`, click the film button beside the scissors, or use **Insert video at playhead** in the
@@ -254,6 +274,18 @@ after its video (the recorder places the sound by its first sample).
 projects keep their bytes: `{ "enabled": false, "position": "bottom", "size": 1 }` (`position`
 `bottom` or `top`, `size` 0.5 to 2).
 
+Other fields written only once set, so older projects keep their bytes:
+
+- `"transition": "zoom-punch"` at the top level: the transition at every cut (`none` or
+  `zoom-punch`; `none` is left out).
+- `"transition": "none"` on a clip: the transition at the cut before that clip, overriding the
+  project's (`none` or `zoom-punch`; absent follows the project).
+- `"hideWhileTyping": true` in `cursor`: the cursor fades out after a key press (Enter, Backspace,
+  arrows, shortcuts: the keys `input.jsonl` has, since plain typing is never recorded) once the
+  pointer has been still for half a second, and is back just before it moves or clicks again.
+
+Speeding up quiet parts writes nothing new: it splits clips and sets their `speed`.
+
 ## Speech in the editor
 
 When a recording with sound opens, the editor measures where it speaks, checks the screen
@@ -276,7 +308,19 @@ why there is no transcript, and offers:
   word times (whisper-cli, from the `whisper-cpp` package): estimated times can miss a short
   "um" and cut the words beside it.
 
-Both trims are one undo step. Engines differ in whether they write fillers out.
+- Speed up quiet parts: the silences pause trimming keeps because the screen changes during
+  them (an installer running, a build, scrolling, typing) play faster instead. Stretches of at
+  least 3 s, less 0.3 s next to speech, are split into clips of their own at 2×, 3×, 4×, 8×,
+  16× or 24×, whichever plays each closest to 2 s. Clips already at another speed are left
+  alone. The button shows how many and the seconds saved.
+
+Each is one undo step. Engines differ in whether they write fillers out.
+
+The speech measurement and the screen check read the whole recording, minutes for a long 4K
+one, so their results are cached in `${XDG_CACHE_HOME}/omareel/omareel/speech-v1/` (never in the
+bundle), one `<key>.speech.json` and one `<key>.screen.json` per recording. The key is a hash of
+`screen.mp4`'s size, modification time and first MiB: any change to the file is a miss, and the
+next measurement replaces the stale entry. Deleting the directory is always safe.
 
 ## Environment
 
@@ -338,6 +382,8 @@ omareel edit Recording.omareel
 - `${XDG_RUNTIME_DIR}/omareel/recording.json` stores active recording state.
 - `${XDG_CONFIG_HOME}/omareel/settings.json` stores launcher recording preferences.
 - `${XDG_VIDEOS_DIR}/omareel/` is the default bundle location.
+- `${XDG_CACHE_HOME}/omareel/omareel/` holds filmstrips and the speech measurements
+  (`speech-v1/`); all of it can be deleted.
 - `/tmp/omareel.log` is the opt-in recorder diagnostic log.
 
 ## Exit status

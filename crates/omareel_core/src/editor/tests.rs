@@ -1821,3 +1821,124 @@ fn pause_ranges_need_speech_and_skip_activity() {
     assert_eq!(qt.run(|d| d.remove_source_ranges(&ranges)), 1);
     assert!(qt.document.pause_ranges(&settings).is_empty());
 }
+
+#[test]
+fn quiet_parts_play_faster_in_one_undo_step() {
+    use crate::transcript::speedup::{QuietPart, SpeedUpSettings};
+    use crate::transcript::stillness::ScreenCheck;
+    let world = World::new("editor-speed-up");
+    let mut qt = world.open(&world.bundle("quiet.omareel"));
+    let settings = SpeedUpSettings { min_length: 0.5, margin: 0.1, target: 0.3 };
+    // Nothing before the speech is measured and the screen checked.
+    assert!(!qt.document.quiet_parts_ready());
+    assert!(qt.document.quiet_parts(&settings).is_empty());
+    qt.run(|d| d.set_speech_regions(vec![(0.0, 0.3), (1.7, 2.0)]));
+    assert!(qt.document.quiet_parts(&settings).is_empty());
+    // The screen moves through the silence: an installer running.
+    qt.run(|d| d.set_screen_check(ScreenCheck { still: Vec::new(), moving: vec![(0.3, 1.7)] }));
+    assert!(qt.document.quiet_parts_ready() && qt.document.pauses_ready());
+    let parts = qt.document.quiet_parts(&settings);
+    assert_eq!(parts.len(), 1);
+    assert!((parts[0].start - 0.4).abs() < 1e-9 && (parts[0].end - 1.6).abs() < 1e-9, "{parts:?}");
+    // 1.2 s at 4x plays in the 0.3 s asked for, saving 0.9 s.
+    assert_eq!(parts[0].speed, 4.0);
+    assert!((parts[0].saved() - 0.9).abs() < 1e-9);
+    // Pause trimming leaves a moving screen alone.
+    assert!(qt.document.pause_ranges(&Default::default()).is_empty());
+
+    qt.seek(1.8);
+    let steps = qt.undo_steps();
+    let first = qt.clip_id(0);
+    qt.effects.clear();
+    assert_eq!(qt.run(|d| d.speed_up_source_ranges(&parts)), 1);
+    assert_eq!(qt.effects[..2], [Effect::Pause, Effect::HistoryChanged]);
+    assert_eq!(qt.undo_steps(), steps + 1);
+    assert_eq!(clip_spans(&qt), [(0.0, 0.4, 1.0), (0.4, 1.6, 4.0), (1.6, 2.0, 1.0)]);
+    assert_eq!(qt.clip_id(0), first);
+    assert!((qt.document.duration() - 1.1).abs() < 1e-9);
+    // The playhead stays on the same moment of the recording.
+    assert!((qt.document.source_position() - 1.8).abs() < 1e-9);
+    // Once sped up there is nothing left to speed up.
+    assert!(qt.document.quiet_parts(&settings).is_empty());
+    qt.run(Document::undo);
+    assert_eq!(clip_spans(&qt), [(0.0, 2.0, 1.0)]);
+
+    // Speeds outside the offered ones, overlaps and empty ranges change nothing.
+    let steps = qt.undo_steps();
+    assert_eq!(qt.run(|d| d.speed_up_source_ranges(&[QuietPart { start: 0.4, end: 1.6, speed: 5.0 }])), 0);
+    assert_eq!(qt.run(|d| d.speed_up_source_ranges(&[QuietPart { start: 1.0, end: 1.0, speed: 2.0 }])), 0);
+    assert_eq!(qt.undo_steps(), steps);
+    // A leftover under 0.1 s joins the part; the second of two overlapping parts is skipped.
+    let overlapping = [QuietPart { start: 0.05, end: 1.0, speed: 2.0 }, QuietPart { start: 0.9, end: 1.5, speed: 8.0 }];
+    assert_eq!(qt.run(|d| d.speed_up_source_ranges(&overlapping)), 1);
+    assert_eq!(clip_spans(&qt), [(0.0, 1.0, 2.0), (1.0, 2.0, 1.0)]);
+    // Clips already at another speed are left alone.
+    let second = qt.clip_id(1);
+    assert!(qt.run(|d| d.set_clip_speed(&second, 0.5)));
+    assert!(qt.document.quiet_parts(&settings).is_empty());
+
+    // A split inside the quiet stretch (no cut) leaves it one stretch.
+    let mut qt = world.open(&world.bundle("quiet-split.omareel"));
+    qt.run(|d| d.set_speech_regions(vec![(0.0, 0.3), (1.7, 2.0)]));
+    qt.run(|d| d.set_screen_check(ScreenCheck { still: Vec::new(), moving: vec![(0.3, 1.7)] }));
+    qt.seek(0.7);
+    assert!(qt.run(Document::split_at_playhead));
+    let parts = qt.document.quiet_parts(&settings);
+    assert_eq!(parts.len(), 1, "{parts:?}");
+    assert!((parts[0].start - 0.4).abs() < 1e-9 && (parts[0].end - 1.6).abs() < 1e-9 && parts[0].speed == 4.0);
+    assert_eq!(qt.run(|d| d.speed_up_source_ranges(&parts)), 1);
+    assert_eq!(clip_spans(&qt), [(0.0, 0.4, 1.0), (0.4, 0.7, 4.0), (0.7, 1.6, 4.0), (1.6, 2.0, 1.0)]);
+}
+
+#[test]
+fn transitions_at_cuts_follow_the_project_and_the_clip() {
+    use crate::transitions::{Style, PUNCH_SCALE};
+    let world = World::new("editor-transitions");
+    let mut qt = world.open(&world.bundle("cuts.omareel"));
+    // A split is no cut; a deleted range is.
+    qt.seek(0.5);
+    assert!(qt.run(Document::split_at_playhead));
+    assert!(qt.document.transition_cuts().is_empty());
+    assert!(qt.run(|d| d.delete_output_range(0.8, 1.2)));
+    assert_eq!(clip_spans(&qt), [(0.0, 0.5, 1.0), (0.5, 0.8, 1.0), (1.2, 2.0, 1.0)]);
+    let cuts = qt.document.transition_cuts();
+    assert_eq!(cuts.len(), 1);
+    assert_eq!((cuts[0].clip, cuts[0].style), (2, Style::None));
+    assert!((cuts[0].time - 0.8).abs() < 1e-9);
+    let after = qt.clip_id(2);
+    assert!(qt.document.clip_starts_at_cut(&after));
+    assert!(!qt.document.clip_starts_at_cut(&qt.clip_id(1)));
+    // None: nothing moves, and the project keeps its bytes.
+    qt.seek(0.8);
+    assert_eq!(qt.document.preview_transition().scale, 1.0);
+    assert!(!qt.document.project().to_json().contains("transition"));
+
+    let steps = qt.undo_steps();
+    assert!(!qt.run(|d| d.set_transition("wipe")));
+    assert!(qt.run(|d| d.set_transition("zoom-punch")));
+    assert!(!qt.run(|d| d.set_transition("zoom-punch")));
+    assert_eq!(qt.undo_steps(), steps + 1);
+    assert_eq!(qt.document.project().to_json().value("transition").to_string_or(""), "zoom-punch");
+    qt.seek(0.8);
+    assert!((qt.document.preview_transition().scale - (1.0 + PUNCH_SCALE)).abs() < 1e-9);
+    qt.seek(1.5);
+    assert_eq!(qt.document.preview_transition().scale, 1.0);
+
+    // This cut alone goes back to none, written on its clip only.
+    assert!(!qt.run(|d| d.set_cut_transition("missing", Some("none"))));
+    assert!(!qt.run(|d| d.set_cut_transition(&after, Some("wipe"))));
+    assert!(qt.run(|d| d.set_cut_transition(&after, Some("none"))));
+    qt.seek(0.8);
+    assert_eq!(qt.document.preview_transition().scale, 1.0);
+    let json = qt.document.project().to_json();
+    let clips = json.value("clips").to_array();
+    assert_eq!(clips[2].to_object().value("transition").to_string_or(""), "none");
+    assert!(!clips[1].to_object().contains("transition"));
+    assert!(qt.run(|d| d.set_cut_transition(&after, None)));
+    qt.seek(0.8);
+    assert!(qt.document.preview_transition().scale > 1.0);
+    qt.run(Document::undo);
+    qt.run(Document::undo);
+    qt.run(Document::undo);
+    assert_eq!(qt.document.project().transition, "none");
+}
