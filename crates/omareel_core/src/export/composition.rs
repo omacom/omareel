@@ -13,7 +13,9 @@ use crate::clip_timeline::ClipTimeline;
 use crate::keystroke_track::{KeystrokePill, KeystrokeTrack};
 use crate::layout_timeline::{self, sample_layout};
 use crate::media_probe::VideoInfo;
+use crate::compat::qjson::Object;
 use crate::motion_track::{MotionSample, MotionTrack, RippleSample};
+use crate::overlay_track;
 use crate::project::{Clip, Project};
 use std::collections::HashMap;
 
@@ -77,6 +79,10 @@ pub struct CompositionState {
     pub ripples: Vec<RippleSample>,
     /// Maps of `keys` (a string list), `text` and `opacity`.
     pub keystroke_pills: Vec<KeystrokePill>,
+    /// The overlays showing: each one's project JSON with its `opacity`
+    /// ([`overlay_track::sample_json`]). Blur regions are in the list too, but the exporter has
+    /// already baked them into the recording's pixels.
+    pub overlays: Vec<Object>,
 }
 
 impl CompositionState {
@@ -107,6 +113,7 @@ impl CompositionState {
             },
             ripples: Vec::new(),
             keystroke_pills: Vec::new(),
+            overlays: Vec::new(),
         }
     }
 
@@ -134,6 +141,7 @@ impl CompositionState {
             self.ripples.extend(sources.motion.ripples(source_time));
         }
         self.keystroke_pills = if insert { Vec::new() } else { sources.keystrokes.sample(source_time) };
+        self.overlays = overlay_track::sample_json(&project.overlays, source_time, output_time, !insert, 0.0);
         let layout = sample_layout(
             &project.clips,
             output_time,

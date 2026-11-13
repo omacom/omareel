@@ -21,7 +21,7 @@ FocusScope {
     Rectangle { anchors.fill: parent; color: theme.canvas }
     MouseArea {
         anchors.fill: parent
-        onPressed: root.forceActiveFocus()
+        onPressed: { root.forceActiveFocus(); editor.selectedOverlayId = "" }
     }
 
     Item {
@@ -99,6 +99,14 @@ FocusScope {
                     editor.attachCameraVideoOutput(cameraVideoOutput)
                     editor.attachMediaVideoOutput(mediaVideoOutput)
                 }
+            }
+            OverlayEditLayer {
+                objectName: "overlayEditLayer"
+                anchors.fill: parent
+                composition: composition
+                viewScale: scaled.scale
+                focusTarget: root
+                visible: !editor.pickingZoomTarget && !root.cropMode
             }
             MouseArea {
                 anchors.fill: parent

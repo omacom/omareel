@@ -39,6 +39,11 @@ Item {
     readonly property bool screenCovered: cameraFull >= 1 || mediaActive
     readonly property bool backgroundCovered: cameraFull >= 1
         || (mediaActive && comp.media.ready && comp.media.fit !== "framed")
+    // Annotations showing now: screen-anchored ones ride the zoomed stage, frame-anchored ones
+    // sit on the canvas above everything.
+    readonly property var visibleOverlays: comp.visibleOverlays || []
+    readonly property var screenOverlays: visibleOverlays.filter(item => item.anchor === "screen")
+    readonly property var frameOverlays: visibleOverlays.filter(item => item.anchor !== "screen")
     clip: true
 
     Background {
@@ -78,6 +83,20 @@ Item {
             ref: composition.ref
             unframed: composition.noBackground
             nativePreview: composition.nativePreview
+        }
+        OverlayLayer {
+            x: frame.x
+            y: frame.y
+            width: frame.width
+            height: frame.height
+            visible: composition.screenOverlays.length > 0
+            items: composition.screenOverlays
+            space: comp.project.crop
+            ref: composition.ref
+            colors: comp.project.renderTheme
+            softwareRendering: comp.softwareRendering
+            blurSource: frame.content
+            redactionBaked: comp.redactionBaked === true
         }
         CursorOverlay {
             x: frame.x
@@ -127,5 +146,15 @@ Item {
         settings: comp.project.keystrokes
         colors: comp.project.renderTheme
         ref: composition.ref
+    }
+    OverlayLayer {
+        anchors.fill: parent
+        visible: composition.frameOverlays.length > 0
+        items: composition.frameOverlays
+        ref: composition.ref
+        colors: comp.project.renderTheme
+        backgroundSettings: comp.project.background
+        softwareRendering: comp.softwareRendering
+        nativePreview: composition.nativePreview
     }
 }

@@ -23,6 +23,8 @@ Rectangle {
         {key:"Space", action:"Play / pause"}, {key:"← →", action:"Step one frame"},
         {key:"Shift ← →", action:"Jump one second"}, {key:"S", action:"Split at playhead"},
         {key:"Z", action:"Add zoom"}, {key:"I", action:"Insert a video"},
+        {key:"T R A N", action:"Add text, box, arrow, step"},
+        {key:"B", action:"Add a blur region"}, {key:"Shift T", action:"Add a title card"},
         {key:"Delete", action:"Remove selection"},
         {key:"Backspace", action:"Remove range"},
         {key:"Ctrl Z", action:"Undo"}, {key:"Ctrl Shift Z", action:"Redo"},
@@ -174,7 +176,7 @@ Rectangle {
 
         Item {
             Layout.fillWidth: true
-            Layout.minimumWidth: root.compact ? 232 : 372
+            Layout.minimumWidth: root.compact ? 268 : 482
             Layout.fillHeight: true
             RowLayout {
                 anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
@@ -198,6 +200,16 @@ Rectangle {
                     tooltipText: "Split at playhead"
                     tooltipShortcut: "S"
                     onClicked: editor.splitAtPlayhead()
+                }
+                OmButton {
+                    objectName: "annotateToolButton"
+                    Layout.preferredWidth: root.compact ? 32 : implicitWidth
+                    text: root.compact ? "" : "Annotate"
+                    icon.source: "qrc:/omareel/assets/icons/lucide/pen-line.svg"
+                    Accessible.name: "Annotate"
+                    tooltipText: "Text, boxes, arrows, steps, blur, and cards"
+                    tooltipShortcut: "T"
+                    onClicked: annotateMenu.visible ? annotateMenu.close() : annotateMenu.open()
                 }
                 Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 18; Layout.leftMargin: 6; Layout.rightMargin: 6; color: theme.separator }
                 OmIconButton {
@@ -245,6 +257,47 @@ Rectangle {
                         }
                     }
                     OmLazyToolTip { target: shortcutsButton; shown: shortcutsButton.hovered && !shortcutsSheet.visible; text: "Keyboard shortcuts" }
+                }
+            }
+        }
+    }
+
+    OmPopup {
+        id: annotateMenu
+        parent: root
+        fromBelow: false
+        x: root.width - width - 12; y: -height - 8
+        width: 224
+        padding: 8
+        property bool wanted: false
+        onAboutToShow: wanted = true
+        contentItem: Loader {
+            active: annotateMenu.wanted
+            sourceComponent: ColumnLayout {
+                spacing: 2
+                PanelHeading { text: "Add at the playhead"; Layout.leftMargin: 8; Layout.topMargin: 4; Layout.bottomMargin: 4 }
+                Repeater {
+                    model: [
+                        {kind: "text", label: "Text", icon: "type.svg", key: "T"},
+                        {kind: "box", label: "Box or spotlight", icon: "square-dashed.svg", key: "R"},
+                        {kind: "arrow", label: "Arrow", icon: "arrow-up-right.svg", key: "A"},
+                        {kind: "badge", label: "Step number", icon: "hash.svg", key: "N"},
+                        {kind: "blur", label: "Blur region", icon: "eye-off.svg", key: "B"},
+                        {kind: "card", label: "Title card", icon: "presentation.svg", key: "Shift T"}
+                    ]
+                    delegate: OmButton {
+                        required property var modelData
+                        objectName: "annotateMenu-" + modelData.kind
+                        Layout.fillWidth: true
+                        text: modelData.label
+                        icon.source: "qrc:/omareel/assets/icons/lucide/" + modelData.icon
+                        tooltipText: modelData.label
+                        tooltipShortcut: modelData.key
+                        onClicked: {
+                            editor.addOverlayAt(modelData.kind, editor.position, 3)
+                            annotateMenu.close()
+                        }
+                    }
                 }
             }
         }
