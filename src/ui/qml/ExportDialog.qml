@@ -1,9 +1,9 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.impl
-import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtQuick.Shapes
+import Omareel
 import Omareel.Ui
 
 Dialog {
@@ -21,6 +21,7 @@ Dialog {
     property string qualityValue: "social"
     property string outputPath: editor.defaultExportPath(format)
     property string successPath: ""
+    property string pickerError: ""
     property var previewGrab: null
     property url previewUrl: ""
     readonly property var heights: format === "mp4"
@@ -57,6 +58,7 @@ Dialog {
             qualityValue = editor.project.export.gif.quality
         }
         outputPath = editor.defaultExportPath(format)
+        pickerError = ""
         editor.setProjectValue("export.format", value)
     }
     function qualityCaption() {
@@ -76,6 +78,7 @@ Dialog {
     }
     onOpened: {
         successPath = ""
+        pickerError = ""
         selectFormat(editor.project.export.format || "mp4")
     }
 
@@ -275,7 +278,7 @@ Dialog {
                     font.family: theme.monoFamily
                     font.pixelSize: theme.type.caption
                 }
-                OmButton { text: "Change…"; font.pixelSize: theme.type.small; onClicked: outputDialog.open() }
+                OmButton { text: "Change…"; font.pixelSize: theme.type.small; onClicked: { root.pickerError = ""; outputDialog.open() } }
             }
         }
 
@@ -320,8 +323,8 @@ Dialog {
         }
         Label {
             Layout.fillWidth: true
-            visible: editor.exportError.length > 0 && !editor.exporting
-            text: editor.exportError
+            visible: (editor.exportError.length > 0 || root.pickerError.length > 0) && !editor.exporting
+            text: editor.exportError.length > 0 ? editor.exportError : root.pickerError
             color: theme.record
             wrapMode: Text.WordWrap
             font.pixelSize: theme.type.small
@@ -368,9 +371,12 @@ Dialog {
                 primary: true
                 text: "Export"
                 icon.source: "qrc:/omareel/assets/icons/lucide/download.svg"
-                onClicked: editor.exportTo(root.outputPath, {
-                    fps: root.fpsValue, height: root.heightValue, quality: root.qualityValue
-                })
+                onClicked: {
+                    root.pickerError = ""
+                    editor.exportTo(root.outputPath, {
+                        fps: root.fpsValue, height: root.heightValue, quality: root.qualityValue
+                    })
+                }
             }
             OmButton {
                 visible: root.done
@@ -386,13 +392,19 @@ Dialog {
         target: editor
         function onExportFinished(path) { root.successPath = path }
     }
-    FileDialog {
+    PortalFilePicker {
         id: outputDialog
+        objectName: "exportOutputPicker"
+        mode: PortalFilePicker.SaveFile
         title: "Export to"
-        fileMode: FileDialog.SaveFile
         defaultSuffix: root.format
-        selectedFile: "file://" + root.outputPath
+        suggestedPath: root.outputPath
         nameFilters: root.format === "gif" ? ["GIF image (*.gif)"] : ["MP4 video (*.mp4)"]
-        onAccepted: root.outputPath = selectedFile.toString().replace(/^file:\/\//, "")
+        onAccepted: {
+            root.pickerError = ""
+            root.outputPath = selectedPath
+        }
+        onCancelled: root.pickerError = ""
+        onFailed: message => root.pickerError = message
     }
 }

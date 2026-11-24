@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
+import Omareel
 import Omareel.Ui
 
 ColumnLayout {
@@ -282,11 +283,13 @@ ColumnLayout {
         stepSize: 1
     }
 
-    FileDialog {
+    PortalFilePicker {
         id: imageDialog
+        objectName: "backgroundImagePicker"
         title: "Choose a background image"
         nameFilters: ["Images (*.png *.jpg *.jpeg *.webp)"]
-        onAccepted: root.choose("image", "background.image", selectedFile)
+        onAccepted: url => root.choose("image", "background.image", url)
+        onFailed: message => console.warn("omareel:", message)
     }
     ColorDialog {
         id: colourDialog
