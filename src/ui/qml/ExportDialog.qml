@@ -402,6 +402,11 @@ Dialog {
         suggestedPath: root.outputPath
         nameFilters: root.format === "gif" ? ["GIF image (*.gif)"] : ["MP4 video (*.mp4)"]
         onAccepted: {
+            const suffix = "." + root.format
+            if (!selectedPath.toLowerCase().endsWith(suffix)) {
+                root.pickerError = "Export file must end in " + suffix
+                return
+            }
             root.pickerError = ""
             root.outputPath = selectedPath
         }

@@ -623,8 +623,17 @@ private slots:
             QTRY_COMPARE(dialog->property("outputPath").toString(), chosenMp4);
             QVERIFY(optionsLayout->property("enabled").toBool());
 
-            // Switching format to gif updates filters.
+            // A save path missing the selected format's extension is rejected without overwriting outputPath.
+            chooser.lastMethod.clear();
+            picker->open();
+            QTRY_COMPARE(chooser.lastMethod, QStringLiteral("SaveFile"));
+            chooser.respond(0, {{QStringLiteral("uris"), QStringList{QUrl::fromLocalFile(dir.filePath(QStringLiteral("noext"))).toString()}}});
+            QTRY_COMPARE(dialog->property("pickerError").toString(), QStringLiteral("Export file must end in .mp4"));
+            QCOMPARE(dialog->property("outputPath").toString(), chosenMp4);
+
+            // Switching format to gif updates filters and rejects a mismatched .mp4 path.
             QVERIFY(QMetaObject::invokeMethod(dialog, "selectFormat", Q_ARG(QVariant, QStringLiteral("gif"))));
+            const QString defaultGif = dialog->property("outputPath").toString();
             chooser.lastMethod.clear();
             picker->open();
             QTRY_COMPARE(chooser.lastMethod, QStringLiteral("SaveFile"));
@@ -632,6 +641,13 @@ private slots:
             QCOMPARE(gifFilters.size(), 1);
             QCOMPARE(gifFilters[0].name, QStringLiteral("GIF image"));
             QCOMPARE(gifFilters[0].rules, (QList<QPair<uint, QString>>{{0u, QStringLiteral("*.gif")}}));
+            chooser.respond(0, {{QStringLiteral("uris"), QStringList{QUrl::fromLocalFile(chosenMp4).toString()}}});
+            QTRY_COMPARE(dialog->property("pickerError").toString(), QStringLiteral("Export file must end in .gif"));
+            QCOMPARE(dialog->property("outputPath").toString(), defaultGif);
+
+            chooser.lastMethod.clear();
+            picker->open();
+            QTRY_COMPARE(chooser.lastMethod, QStringLiteral("SaveFile"));
             chooser.respond(2);
             QTRY_VERIFY(!dialog->property("pickerError").toString().isEmpty());
         }
