@@ -104,11 +104,6 @@ QByteArray portalPathBytes(const QString &path)
     return bytes;
 }
 
-QString stripLeadingDot(const QString &suffix)
-{
-    return suffix.startsWith(QLatin1Char('.')) ? suffix.mid(1) : suffix;
-}
-
 // Parses Qt-style name filters such as "Videos (*.mp4 *.mov)" into portal filters.
 PortalFileFilters parseNameFilters(const QStringList &nameFilters)
 {
@@ -198,14 +193,6 @@ void PortalFilePicker::setSuggestedPath(const QString &suggestedPath)
     emit suggestedPathChanged();
 }
 
-void PortalFilePicker::setDefaultSuffix(const QString &defaultSuffix)
-{
-    if (m_defaultSuffix == defaultSuffix)
-        return;
-    m_defaultSuffix = defaultSuffix;
-    emit defaultSuffixChanged();
-}
-
 void PortalFilePicker::setNameFilters(const QStringList &nameFilters)
 {
     if (m_nameFilters == nameFilters)
@@ -233,10 +220,8 @@ void PortalFilePicker::open()
             folder = target.absolutePath();
             fileName = target.fileName();
         }
-        if (fileName.isEmpty()) {
-            const QString suffix = stripLeadingDot(m_defaultSuffix);
-            fileName = suffix.isEmpty() ? tr("Untitled") : tr("Untitled") + QLatin1Char('.') + suffix;
-        }
+        if (fileName.isEmpty())
+            fileName = tr("Untitled");
         options.insert(QStringLiteral("accept_label"), tr("Save"));
         options.insert(QStringLiteral("current_folder"),
                        portalPathBytes(existingFolderOrHome(folder)));
@@ -248,7 +233,7 @@ void PortalFilePicker::open()
         }
         requestFile(QStringLiteral("SaveFile"),
                     m_title.isEmpty() ? tr("Save File") : m_title,
-                    options, Mode::SaveFile, m_defaultSuffix);
+                    options, Mode::SaveFile);
         return;
     }
 
@@ -261,7 +246,7 @@ void PortalFilePicker::open()
         options.insert(QStringLiteral("directory"), true);
         requestFile(QStringLiteral("OpenFile"),
                     m_title.isEmpty() ? tr("Open Folder") : m_title,
-                    options, Mode::OpenFolder, {});
+                    options, Mode::OpenFolder);
         return;
     }
 
@@ -272,7 +257,7 @@ void PortalFilePicker::open()
     }
     requestFile(QStringLiteral("OpenFile"),
                 m_title.isEmpty() ? tr("Open File") : m_title,
-                options, Mode::OpenFile, {});
+                options, Mode::OpenFile);
 }
 
 QDBusConnection PortalFilePicker::activeBus() const
@@ -297,11 +282,11 @@ void PortalFilePicker::closePendingRequest()
 }
 
 void PortalFilePicker::requestFile(const QString &method, const QString &title,
-                                   QVariantMap options, Mode mode, const QString &defaultSuffix)
+                                   QVariantMap options, Mode mode)
 {
     // Replace any pending request (another dialog still up, or a portal that
     // crashed before answering) by closing it best-effort first.
-    if (m_pending) {
+    if (m_pendingBus) {
         closePendingRequest();
         clearPending();
     }
@@ -324,14 +309,14 @@ void PortalFilePicker::requestFile(const QString &method, const QString &title,
         QStringLiteral("/org/freedesktop/portal/desktop/request/%1/%2").arg(sender, token);
 
     m_pendingBus = bus;
-    m_pending = true;
     m_pendingMode = mode;
-    m_pendingDefaultSuffix = defaultSuffix;
     if (!connectToRequestPath(predictedPath)) {
-        clearPending();
+        m_pendingPath.clear();
+        m_pendingBus.reset();
         emit failed(tr("Could not listen for the file chooser's answer."));
         return;
     }
+    emit busyChanged();
 
     const int generation = ++m_pendingGeneration;
     m_ownerWatcher = new QDBusServiceWatcher(
@@ -339,7 +324,7 @@ void PortalFilePicker::requestFile(const QString &method, const QString &title,
     connect(m_ownerWatcher, &QDBusServiceWatcher::serviceOwnerChanged, this,
             [this, generation](const QString &, const QString &oldOwner, const QString &) {
                 // Ignore empty oldOwner so D-Bus auto-activation isn't treated as a crash.
-                if (generation != m_pendingGeneration || !m_pending || oldOwner.isEmpty())
+                if (generation != m_pendingGeneration || !m_pendingBus || oldOwner.isEmpty())
                     return;
                 clearPending();
                 emit failed(tr("The desktop's file chooser (xdg-desktop-portal) is not available."));
@@ -350,15 +335,26 @@ void PortalFilePicker::requestFile(const QString &method, const QString &title,
     auto *watcher = new QDBusPendingCallWatcher(bus.asyncCall(call), this);
     m_pendingWatcher = watcher;
 
-    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, watcher, generation]() {
+    connect(watcher, &QDBusPendingCallWatcher::finished, this,
+            [this, watcher, generation, bus, predictedPath]() {
         QDBusPendingReply<QDBusObjectPath> reply = *watcher;
         watcher->deleteLater();
         if (m_pendingWatcher == watcher)
             m_pendingWatcher = nullptr;
 
         // Superseded by a newer request, or already answered while in flight.
-        if (generation != m_pendingGeneration || !m_pending)
+        // If a legacy portal returned a non-predicted path for a superseded request,
+        // send a non-blocking Close there so it does not stay open.
+        if (generation != m_pendingGeneration || !m_pendingBus) {
+            if (!reply.isError()) {
+                const QString actualPath = reply.value().path();
+                if (!actualPath.isEmpty() && actualPath != predictedPath) {
+                    QDBusConnection closeBus = bus;
+                    closeBus.send(portalCall(actualPath, RequestInterface, QStringLiteral("Close")));
+                }
+            }
             return;
+        }
 
         if (reply.isError()) {
             clearPending();
@@ -396,11 +392,10 @@ void PortalFilePicker::requestFile(const QString &method, const QString &title,
 void PortalFilePicker::handleResponse(uint response, const QVariantMap &results,
                                       const QDBusMessage &message)
 {
-    if (!m_pending || message.path() != m_pendingPath)
+    if (!m_pendingBus || message.path() != m_pendingPath)
         return;
 
     const Mode activeMode = m_pendingMode;
-    const QString activeDefaultSuffix = m_pendingDefaultSuffix;
     clearPending();
 
     if (response == 1) {
@@ -416,23 +411,12 @@ void PortalFilePicker::handleResponse(uint response, const QVariantMap &results,
         return;
     }
 
-    QUrl url(uris.first());
+    const QUrl url(uris.first());
     if (!url.isValid() || url.isEmpty()) {
         emit failed(activeMode == Mode::OpenFolder
                         ? tr("The file chooser did not return a folder.")
                         : tr("The file chooser did not return a file."));
         return;
-    }
-
-    if (activeMode == Mode::SaveFile && url.isLocalFile() && !activeDefaultSuffix.isEmpty()) {
-        const QString suffix = stripLeadingDot(activeDefaultSuffix);
-        QString localPath = url.toLocalFile();
-        if (!suffix.isEmpty() && QFileInfo(localPath).suffix().isEmpty()) {
-            localPath += localPath.endsWith(QLatin1Char('.'))
-                             ? suffix
-                             : QLatin1Char('.') + suffix;
-            url = QUrl::fromLocalFile(localPath);
-        }
     }
 
     const QString path = url.isLocalFile() ? url.toLocalFile() : url.toString();
@@ -446,12 +430,9 @@ void PortalFilePicker::handleResponse(uint response, const QVariantMap &results,
 
 void PortalFilePicker::clearPending()
 {
+    const bool wasBusy = m_pendingBus.has_value();
     ++m_pendingGeneration;
-    if (m_pendingWatcher) {
-        m_pendingWatcher->disconnect(this);
-        m_pendingWatcher->deleteLater();
-        m_pendingWatcher = nullptr;
-    }
+    m_pendingWatcher = nullptr;
     if (m_ownerWatcher) {
         m_ownerWatcher->disconnect(this);
         m_ownerWatcher->deleteLater();
@@ -464,9 +445,9 @@ void PortalFilePicker::clearPending()
             this, SLOT(handleResponse(uint,QVariantMap,QDBusMessage)));
     }
     m_pendingPath.clear();
-    m_pendingDefaultSuffix.clear();
     m_pendingBus.reset();
-    m_pending = false;
+    if (wasBusy)
+        emit busyChanged();
 }
 
 } // namespace Omareel

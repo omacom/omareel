@@ -14,7 +14,7 @@ Dialog {
     modal: true
     padding: 20
     standardButtons: Dialog.NoButton
-    closePolicy: editor.exporting ? Popup.NoAutoClose : Popup.CloseOnEscape
+    closePolicy: editor.exporting || outputDialog.busy ? Popup.NoAutoClose : Popup.CloseOnEscape
     property string format: "mp4"
     property int heightValue: 1080
     property int fpsValue: 60
@@ -106,7 +106,7 @@ Dialog {
             }
             Item { Layout.fillWidth: true }
             OmIconButton {
-                enabled: !editor.exporting
+                enabled: !editor.exporting && !outputDialog.busy
                 icon.source: "qrc:/omareel/assets/icons/lucide/x.svg"
                 Accessible.name: "Close export"
                 onClicked: root.close()
@@ -211,9 +211,10 @@ Dialog {
         }
 
         ColumnLayout {
+            objectName: "exportOptionsLayout"
             Layout.fillWidth: true
             visible: !root.done
-            enabled: !editor.exporting
+            enabled: !editor.exporting && !outputDialog.busy
             opacity: enabled ? 1 : .5
             spacing: 10
             Behavior on opacity { NumberAnimation { duration: 200 } }
@@ -324,7 +325,7 @@ Dialog {
         Label {
             Layout.fillWidth: true
             visible: (editor.exportError.length > 0 || root.pickerError.length > 0) && !editor.exporting
-            text: editor.exportError.length > 0 ? editor.exportError : root.pickerError
+            text: root.pickerError.length > 0 ? root.pickerError : editor.exportError
             color: theme.record
             wrapMode: Text.WordWrap
             font.pixelSize: theme.type.small
@@ -367,6 +368,7 @@ Dialog {
             }
             OmButton {
                 visible: !editor.exporting && !root.done
+                enabled: !outputDialog.busy
                 Layout.preferredWidth: 120
                 primary: true
                 text: "Export"
@@ -397,7 +399,6 @@ Dialog {
         objectName: "exportOutputPicker"
         mode: PortalFilePicker.SaveFile
         title: "Export to"
-        defaultSuffix: root.format
         suggestedPath: root.outputPath
         nameFilters: root.format === "gif" ? ["GIF image (*.gif)"] : ["MP4 video (*.mp4)"]
         onAccepted: {

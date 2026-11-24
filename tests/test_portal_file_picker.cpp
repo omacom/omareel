@@ -3,6 +3,7 @@
 
 #include <QDBusArgument>
 #include <QDBusConnection>
+#include <QDBusConnectionInterface>
 #include <QDBusMessage>
 #include <QDBusObjectPath>
 #include <QDir>
@@ -92,7 +93,9 @@ public:
     QString lastTitle;
     QVariantMap lastOptions;
     QString lastRequestPath;
-    QString overrideRequestPath;
+    QStringList overrideRequestPaths;
+    QString immediateResponseUri;
+    QHash<QString, FakePortalRequest *> extraRequests;
 
     void respondAt(const QString &path, uint code, const QVariantMap &results = {})
     {
@@ -126,11 +129,11 @@ private:
         lastParentWindow = parentWindow;
         lastTitle = title;
         lastOptions = options;
-        if (!lastRequestPath.isEmpty())
-            m_bus.unregisterObject(lastRequestPath);
-        if (!overrideRequestPath.isEmpty()) {
-            lastRequestPath = overrideRequestPath;
+        if (!overrideRequestPaths.isEmpty()) {
+            lastRequestPath = overrideRequestPaths.takeFirst();
         } else {
+            if (!lastRequestPath.isEmpty() && !extraRequests.contains(lastRequestPath))
+                m_bus.unregisterObject(lastRequestPath);
             QString sender = m_clientService.startsWith(QLatin1Char(':'))
                                  ? m_clientService.mid(1)
                                  : m_clientService;
@@ -138,7 +141,12 @@ private:
             lastRequestPath = QStringLiteral("/org/freedesktop/portal/desktop/request/%1/%2")
                                   .arg(sender, options.value(QStringLiteral("handle_token")).toString());
         }
-        m_bus.registerObject(lastRequestPath, m_request, QDBusConnection::ExportAllSlots);
+        FakePortalRequest *target = extraRequests.value(lastRequestPath, m_request);
+        m_bus.registerObject(lastRequestPath, target, QDBusConnection::ExportAllSlots);
+        if (!immediateResponseUri.isEmpty()) {
+            respond(0, {{QStringLiteral("uris"), QStringList{immediateResponseUri}}});
+            immediateResponseUri.clear();
+        }
         return QDBusObjectPath(lastRequestPath);
     }
 
@@ -301,6 +309,7 @@ class PortalFilePickerTest : public QObject
 private:
     struct PrivateBus {
         QProcess daemon;
+        QString address;
         QString serviceName;
         QString clientName;
         QDBusConnection serviceBus{QString()};
@@ -318,7 +327,7 @@ private:
                           QStringLiteral("--nofork")});
             if (!daemon.waitForReadyRead(5000))
                 return;
-            const QString address = QString::fromUtf8(daemon.readLine()).trimmed();
+            address = QString::fromUtf8(daemon.readLine()).trimmed();
             serviceBus = QDBusConnection::connectToBus(address, serviceName);
             clientBus = QDBusConnection::connectToBus(address, clientName);
             valid = serviceBus.isConnected() && clientBus.isConnected();
@@ -422,24 +431,26 @@ private slots:
             chooser.respond(2);
             QTRY_COMPARE(failSpy.count(), 2);
 
-            // SaveFile: missing folder falls back to $HOME, current_name preserved, defaultSuffix applied.
+            // SaveFile: missing folder falls back to $HOME, current_name preserved, returned path untouched.
             chooser.lastMethod.clear();
             picker.setMode(PortalFilePicker::Mode::SaveFile);
             picker.setTitle(QStringLiteral("Export to"));
             picker.setSuggestedPath(dir.filePath(QStringLiteral("missing/clip.gif")));
-            picker.setDefaultSuffix(QStringLiteral("gif"));
             picker.setNameFilters({QStringLiteral("GIF image (*.gif)")});
+            QVERIFY(!picker.busy());
             picker.open();
+            QVERIFY(picker.busy());
             QTRY_COMPARE(chooser.lastMethod, QStringLiteral("SaveFile"));
             QCOMPARE(chooser.lastTitle, QStringLiteral("Export to"));
             QCOMPARE(chooser.lastOptions.value(QStringLiteral("accept_label")).toString(), QStringLiteral("Save"));
             QCOMPARE(chooser.lastOptions.value(QStringLiteral("current_folder")).toByteArray(), expectedHome);
             QCOMPARE(chooser.lastOptions.value(QStringLiteral("current_name")).toString(), QStringLiteral("clip.gif"));
-            const QString withoutExt = dir.filePath(QStringLiteral("rendered demo"));
-            chooser.respond(0, {{QStringLiteral("uris"), QStringList{QUrl::fromLocalFile(withoutExt).toString()}}});
+            const QString chosenGif = dir.filePath(QStringLiteral("rendered demo.gif"));
+            chooser.respond(0, {{QStringLiteral("uris"), QStringList{QUrl::fromLocalFile(chosenGif).toString()}}});
             QTRY_COMPARE(acceptSpy.count(), 2);
-            QCOMPARE(picker.selectedPath(), withoutExt + QStringLiteral(".gif"));
-            QCOMPARE(picker.selectedFile(), QUrl::fromLocalFile(withoutExt + QStringLiteral(".gif")));
+            QVERIFY(!picker.busy());
+            QCOMPARE(picker.selectedPath(), chosenGif);
+            QCOMPARE(picker.selectedFile(), QUrl::fromLocalFile(chosenGif));
 
             // OpenFolder passes directory: true and omits filters.
             chooser.lastMethod.clear();
@@ -456,15 +467,36 @@ private slots:
 
             // Non-predicted request path returned by an older portal moves the subscription.
             chooser.lastMethod.clear();
-            chooser.overrideRequestPath = QStringLiteral("/org/freedesktop/portal/desktop/request/legacy/42");
+            const QString legacyPath = QStringLiteral("/org/freedesktop/portal/desktop/request/legacy/42");
+            chooser.overrideRequestPaths = {legacyPath};
             picker.setMode(PortalFilePicker::Mode::OpenFile);
             picker.open();
-            QTRY_COMPARE(chooser.lastMethod, QStringLiteral("OpenFile"));
-            // Wait one event-loop turn so the asyncCall reply moves the match rule.
-            QTest::qWait(50);
+            QTRY_COMPARE(picker.pendingRequestPath(), legacyPath);
             chooser.respond(0, {{QStringLiteral("uris"), QStringList{QUrl::fromLocalFile(chosenVideo).toString()}}});
             QTRY_COMPARE(acceptSpy.count(), 4);
-            chooser.overrideRequestPath.clear();
+
+            // Response emitted before OpenFile returns still succeeds via handle_token pre-subscription.
+            chooser.lastMethod.clear();
+            request.closed = false;
+            chooser.immediateResponseUri = QUrl::fromLocalFile(chosenVideo).toString();
+            picker.open();
+            QTRY_COMPARE(acceptSpy.count(), 5);
+            QVERIFY(!request.closed);
+
+            // Replacing a pending legacy-path request before its reply still closes the first returned path.
+            FakePortalRequest firstLegacyRequest;
+            const QString firstLegacyPath = QStringLiteral("/org/freedesktop/portal/desktop/request/legacy/99");
+            const QString secondLegacyPath = QStringLiteral("/org/freedesktop/portal/desktop/request/legacy/100");
+            chooser.extraRequests.insert(firstLegacyPath, &firstLegacyRequest);
+            chooser.overrideRequestPaths = {firstLegacyPath, secondLegacyPath};
+            picker.open();
+            picker.open();
+            QTRY_VERIFY(firstLegacyRequest.closed);
+            QTRY_COMPARE(picker.pendingRequestPath(), secondLegacyPath);
+            chooser.respond(1);
+            QTRY_COMPARE(cancelSpy.count(), 2);
+            bus.serviceBus.unregisterObject(firstLegacyPath);
+            chooser.extraRequests.clear();
 
             // Replacing a pending request sends Request.Close to the previous one.
             chooser.lastMethod.clear();
@@ -479,6 +511,29 @@ private slots:
             // Portal crash mid-dialog (service disappears) fails cleanly instead of wedging.
             QVERIFY(bus.serviceBus.unregisterService(QStringLiteral("org.freedesktop.portal.Desktop")));
             QTRY_COMPARE(failSpy.count(), 3);
+
+            // Direct owner replacement (oldOwner -> newOwner without intermediate unregistration) fails cleanly.
+            QCOMPARE(bus.serviceBus.interface()->registerService(
+                         QStringLiteral("org.freedesktop.portal.Desktop"),
+                         QDBusConnectionInterface::DontQueueService,
+                         QDBusConnectionInterface::AllowReplacement).value(),
+                     QDBusConnectionInterface::ServiceRegistered);
+            chooser.lastMethod.clear();
+            picker.open();
+            QTRY_COMPARE(chooser.lastMethod, QStringLiteral("OpenFile"));
+            QDBusConnection replacementBus =
+                QDBusConnection::connectToBus(bus.address, QStringLiteral("omareel-portal-replacement"));
+            const auto disconnectReplacement = qScopeGuard([&] {
+                QDBusConnection::disconnectFromBus(QStringLiteral("omareel-portal-replacement"));
+            });
+            QVERIFY(replacementBus.isConnected());
+            QCOMPARE(replacementBus.interface()->registerService(
+                         QStringLiteral("org.freedesktop.portal.Desktop"),
+                         QDBusConnectionInterface::ReplaceExistingService,
+                         QDBusConnectionInterface::AllowReplacement).value(),
+                     QDBusConnectionInterface::ServiceRegistered);
+            QTRY_COMPARE(failSpy.count(), 4);
+            QVERIFY(replacementBus.unregisterService(QStringLiteral("org.freedesktop.portal.Desktop")));
 
             // Re-registering portal allows a new request to succeed; destruction closes a pending request.
             QVERIFY(bus.serviceBus.registerService(QStringLiteral("org.freedesktop.portal.Desktop")));
@@ -543,12 +598,15 @@ private slots:
             std::unique_ptr<QObject> root(component.create());
             QVERIFY(root);
             auto *dialog = root->findChild<QObject *>(QStringLiteral("dlg"));
+            auto *optionsLayout = root->findChild<QObject *>(QStringLiteral("exportOptionsLayout"));
             auto *picker = root->findChild<PortalFilePicker *>(QStringLiteral("exportOutputPicker"));
-            QVERIFY(dialog && picker);
+            QVERIFY(dialog && optionsLayout && picker);
             picker->setConnection(bus.clientBus);
 
+            QVERIFY(optionsLayout->property("enabled").toBool());
             chooser.lastMethod.clear();
             picker->open();
+            QVERIFY(!optionsLayout->property("enabled").toBool());
             QTRY_COMPARE(chooser.lastMethod, QStringLiteral("SaveFile"));
             QCOMPARE(chooser.lastTitle, QStringLiteral("Export to"));
             QCOMPARE(chooser.lastOptions.value(QStringLiteral("current_folder")).toByteArray(),
@@ -560,11 +618,12 @@ private slots:
             QCOMPARE(mp4Filters[0].name, QStringLiteral("MP4 video"));
             QCOMPARE(mp4Filters[0].rules, (QList<QPair<uint, QString>>{{0u, QStringLiteral("*.mp4")}}));
 
-            const QString chosenMp4 = dir.filePath(QStringLiteral("final cut"));
+            const QString chosenMp4 = dir.filePath(QStringLiteral("final cut.mp4"));
             chooser.respond(0, {{QStringLiteral("uris"), QStringList{QUrl::fromLocalFile(chosenMp4).toString()}}});
-            QTRY_COMPARE(dialog->property("outputPath").toString(), chosenMp4 + QStringLiteral(".mp4"));
+            QTRY_COMPARE(dialog->property("outputPath").toString(), chosenMp4);
+            QVERIFY(optionsLayout->property("enabled").toBool());
 
-            // Switching format to gif updates filters and defaultSuffix.
+            // Switching format to gif updates filters.
             QVERIFY(QMetaObject::invokeMethod(dialog, "selectFormat", Q_ARG(QVariant, QStringLiteral("gif"))));
             chooser.lastMethod.clear();
             picker->open();

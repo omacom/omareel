@@ -226,7 +226,7 @@ qt_add_resources(omareel_render "omareel_assets"
         assets/fonts/Inter-SemiBold.ttf assets/fonts/Inter-Bold.ttf
         assets/sounds/click.wav
 )
-target_include_directories(omareel_render PUBLIC src src/render src/ui)
+target_include_directories(omareel_render PUBLIC src src/render PRIVATE src/ui)
 target_link_libraries(omareel_render PUBLIC omareel_qt omareel_ui Qt6::Concurrent Qt6::DBus Qt6::Quick Qt6::QuickControls2 Qt6::Multimedia Qt6::OpenGL Qt6::Svg
     PRIVATE Qt6::GuiPrivate)
 
@@ -251,7 +251,7 @@ if(BUILD_TESTING)
     target_link_libraries(test_editor PRIVATE omareel_render Qt6::Test)
     add_test(NAME editor COMMAND test_editor)
     qt_add_executable(test_portal_file_picker tests/test_portal_file_picker.cpp)
-    target_link_libraries(test_portal_file_picker PRIVATE omareel_render Qt6::DBus Qt6::Test)
+    target_link_libraries(test_portal_file_picker PRIVATE omareel_render Qt6::Test)
     add_test(NAME portal_file_picker COMMAND test_portal_file_picker)
     # The Rust crates' own tests. omareel_qt is left out: it only links inside a Qt binary.
     set(OMAREEL_CARGO_TEST ${CMAKE_COMMAND} -E env CARGO_TARGET_DIR=${CMAKE_BINARY_DIR}/cargo/test

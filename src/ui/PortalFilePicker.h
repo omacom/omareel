@@ -28,10 +28,10 @@ class PortalFilePicker : public QObject
     Q_PROPERTY(QString title READ title WRITE setTitle NOTIFY titleChanged)
     Q_PROPERTY(QString currentFolder READ currentFolder WRITE setCurrentFolder NOTIFY currentFolderChanged)
     Q_PROPERTY(QString suggestedPath READ suggestedPath WRITE setSuggestedPath NOTIFY suggestedPathChanged)
-    Q_PROPERTY(QString defaultSuffix READ defaultSuffix WRITE setDefaultSuffix NOTIFY defaultSuffixChanged)
     Q_PROPERTY(QStringList nameFilters READ nameFilters WRITE setNameFilters NOTIFY nameFiltersChanged)
     Q_PROPERTY(QUrl selectedFile READ selectedFile NOTIFY selectedFileChanged)
     Q_PROPERTY(QString selectedPath READ selectedPath NOTIFY selectedFileChanged)
+    Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
 
 public:
     enum class Mode {
@@ -47,6 +47,7 @@ public:
 
     // Tests inject a private D-Bus connection without touching the session bus.
     void setConnection(const QDBusConnection &bus);
+    QString pendingRequestPath() const { return m_pendingPath; }
 
     Mode mode() const { return m_mode; }
     void setMode(Mode mode);
@@ -60,14 +61,12 @@ public:
     QString suggestedPath() const { return m_suggestedPath; }
     void setSuggestedPath(const QString &suggestedPath);
 
-    QString defaultSuffix() const { return m_defaultSuffix; }
-    void setDefaultSuffix(const QString &defaultSuffix);
-
     QStringList nameFilters() const { return m_nameFilters; }
     void setNameFilters(const QStringList &nameFilters);
 
     QUrl selectedFile() const { return m_selectedFile; }
     QString selectedPath() const { return m_selectedPath; }
+    bool busy() const { return m_pendingBus.has_value(); }
 
     Q_INVOKABLE void open();
 
@@ -76,9 +75,9 @@ signals:
     void titleChanged();
     void currentFolderChanged();
     void suggestedPathChanged();
-    void defaultSuffixChanged();
     void nameFiltersChanged();
     void selectedFileChanged();
+    void busyChanged();
     void accepted(const QUrl &url);
     void cancelled();
     void failed(const QString &message);
@@ -88,8 +87,7 @@ private slots:
 
 private:
     QDBusConnection activeBus() const;
-    void requestFile(const QString &method, const QString &title, QVariantMap options,
-                     Mode mode, const QString &defaultSuffix);
+    void requestFile(const QString &method, const QString &title, QVariantMap options, Mode mode);
     bool connectToRequestPath(const QString &path);
     void clearPending();
     void closePendingRequest();
@@ -101,14 +99,11 @@ private:
     QString m_title;
     QString m_currentFolder;
     QString m_suggestedPath;
-    QString m_defaultSuffix;
     QStringList m_nameFilters;
     QUrl m_selectedFile;
     QString m_selectedPath;
 
-    bool m_pending = false;
     Mode m_pendingMode = Mode::OpenFile;
-    QString m_pendingDefaultSuffix;
     QString m_pendingPath;
     // Bumped per request and on clear so late replies/owner changes are ignored.
     int m_pendingGeneration = 0;
