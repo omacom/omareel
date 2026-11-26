@@ -328,6 +328,7 @@ impl Project {
                 enabled: captions.value("enabled").to_bool(d.enabled),
                 position: if position == "top" { position } else { d.position },
                 size: cpp::clamp(captions.value("size").to_double(d.size), 0.5, 2.0),
+                style: crate::captions::CaptionStyle::from_name(&captions.value("style").to_string_or("")).unwrap_or(d.style),
             }
         });
 
@@ -485,7 +486,12 @@ impl Project {
         let k = &self.keystrokes;
         let a = &self.audio;
         let captions = self.captions.as_ref().map_or(Value::Undefined, |c| {
-            obj([("enabled", c.enabled.into()), ("position", c.position.as_str().into()), ("size", c.size.into())])
+            obj([
+                ("enabled", c.enabled.into()),
+                ("position", c.position.as_str().into()),
+                ("size", c.size.into()),
+                ("style", c.style.name().into()),
+            ])
         });
         let cam = &self.camera;
         let e = &self.export_settings;

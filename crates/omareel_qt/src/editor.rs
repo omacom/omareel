@@ -449,7 +449,7 @@ pub mod qobject {
         fn trim_pauses(self: Pin<&mut Editor>) -> i32;
         #[qinvokable]
         fn remove_filler_words(self: Pin<&mut Editor>) -> i32;
-        // Writes the captions beside the default export ("srt" or "vtt"); the path, or empty.
+        // Writes the captions beside the default export ("srt", "vtt" or "ass"); the path, or empty.
         #[qinvokable]
         fn save_subtitles(self: &Editor, format: &QString) -> QString;
         #[qinvokable]
@@ -1181,6 +1181,7 @@ impl qobject::Editor {
             QVariant::from(&map([
                 ("background", QVariant::from(&to_qt(&background))),
                 ("foreground", QVariant::from(&to_qt(&foreground))),
+                ("accent", QVariant::from(&to_qt(&omareel_core::theme::render_accent()))),
             ])),
         );
         *self.project_map.borrow_mut() = Some((revision, result.clone()));
@@ -1579,10 +1580,12 @@ impl qobject::Editor {
     fn save_subtitles(&self, format: &QString) -> QString {
         let Some(document) = self.document.as_ref() else { return QString::default() };
         let format = format.to_string();
-        let text = match format.as_str() {
-            "srt" => omareel_core::captions::to_srt(document.caption_cues()),
-            "vtt" => omareel_core::captions::to_vtt(document.caption_cues()),
-            _ => return QString::default(),
+        let look = omareel_core::captions::AssLook::themed(
+            f64::from(document.output_width()) / f64::from(document.output_height()),
+            &document.captions(),
+        );
+        let Some(text) = omareel_core::captions::subtitle_file(&format, document.caption_cues(), &look) else {
+            return QString::default();
         };
         let video = document.default_export_path("mp4");
         let path = match video.rsplit_once('.') {

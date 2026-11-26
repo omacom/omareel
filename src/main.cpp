@@ -263,11 +263,12 @@ static int exportCommand(const QStringList &arguments)
     }
     if (options.outputPath.isEmpty()) return usage(QStringLiteral("export requires -o <file>"));
     if (options.outputPath.endsWith(QStringLiteral(".srt"), Qt::CaseInsensitive)
-        || options.outputPath.endsWith(QStringLiteral(".vtt"), Qt::CaseInsensitive))
+        || options.outputPath.endsWith(QStringLiteral(".vtt"), Qt::CaseInsensitive)
+        || options.outputPath.endsWith(QStringLiteral(".ass"), Qt::CaseInsensitive))
         return omareel::cli::exportSubtitles(options.bundlePath.toStdString(), options.outputPath.toStdString());
     if (!options.outputPath.endsWith(QStringLiteral(".mp4"), Qt::CaseInsensitive)
         && !options.outputPath.endsWith(QStringLiteral(".gif"), Qt::CaseInsensitive))
-        return usage(QStringLiteral("export output must end in .mp4, .gif, .srt or .vtt"));
+        return usage(QStringLiteral("export output must end in .mp4, .gif, .srt, .vtt or .ass"));
     if (options.fps < 0 || options.width < 0 || options.gifFps < 0 || options.gifWidth < 0)
         return usage(QStringLiteral("frame rate and size options must be positive"));
     const QStringList qualities{QStringLiteral("low"), QStringLiteral("medium"), QStringLiteral("high"),

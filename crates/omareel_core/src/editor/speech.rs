@@ -74,7 +74,7 @@ impl Document {
 
     pub(crate) fn rebuild_captions(&mut self) {
         self.caption_cues = match &self.transcript {
-            Some(transcript) => captions::build_cues(transcript, &self.project.clips),
+            Some(transcript) => captions::build_cues(transcript, &self.project.clips, self.captions().style),
             None => Vec::new(),
         };
     }

@@ -1789,6 +1789,18 @@ fn captions_follow_the_clips_and_stay_out_of_old_projects() {
     assert!(qt.document.filler_ranges().is_empty());
     qt.run(Document::undo);
     assert_eq!(qt.document.caption_cues()[0].lines, ["Hello um world."]);
+
+    // The style changes the cues at once, and the preview lights the spoken word.
+    use crate::captions::CaptionStyle;
+    qt.run(|d| d.set_project_value("captions.style", "highlight".into(), false));
+    assert_eq!(qt.document.captions().style, CaptionStyle::Highlight);
+    qt.seek(0.6);
+    let frame = qt.document.preview_caption();
+    assert_eq!((frame.style, frame.active), (CaptionStyle::Highlight, Some(1)));
+    qt.run(|d| d.set_project_value("captions.style", "short".into(), false));
+    assert!(qt.document.caption_cues().iter().all(|cue| cue.style == CaptionStyle::Short));
+    qt.run(Document::undo);
+    assert_eq!(qt.document.captions().style, CaptionStyle::Highlight);
 }
 
 #[test]

@@ -10,7 +10,7 @@
 omareel
 omareel record [--region|--fullscreen|--window] [options]
 omareel edit BUNDLE.omareel
-omareel export BUNDLE.omareel -o OUTPUT.mp4|OUTPUT.gif|OUTPUT.srt|OUTPUT.vtt [options]
+omareel export BUNDLE.omareel -o OUTPUT.mp4|OUTPUT.gif|OUTPUT.srt|OUTPUT.vtt|OUTPUT.ass [options]
 omareel transcribe BUNDLE.omareel [--backend NAME] [--force]
 omareel probe BUNDLE.omareel
 omareel help
@@ -131,9 +131,12 @@ GIF-specific overrides are `--gif-fps N` and `--gif-width W`.
 Add `--timing` to print average decode wait, upload, render, readback, encoder-write, and
 end-to-end throughput measurements.
 
-An output ending in `.srt` (SubRip) or `.vtt` (WebVTT) writes the recording's captions instead,
-on the edited timeline: cut parts are left out and sped-up clips shorten their captions. It needs
-`transcript.json` (see `transcribe`). MP4 and GIF exports draw the captions into the video when
+An output ending in `.srt` (SubRip), `.vtt` (WebVTT) or `.ass` (Advanced SubStation Alpha) writes
+the recording's captions instead, on the edited timeline and in the project's caption style: cut
+parts are left out and sped-up clips shorten their captions. `.ass` also keeps the look: the
+theme's colours, the size and position, and for the Highlight and Short styles the spoken word lit
+in the accent colour, one word after another (mpv, VLC, ffmpeg's `subtitles` filter and most
+editors play it). It needs `transcript.json` (see `transcribe`). MP4 and GIF exports draw the captions into the video when
 they are turned on in the editor.
 
 ### `transcribe BUNDLE`
@@ -262,9 +265,14 @@ blocks editing; while a recording or an export runs it stops what it is running 
 afterwards, and closing the editor stops it at once. The Speech section shows its progress, or
 why there is no transcript, and offers:
 
-- Show captions, with position and size: drawn in the preview and the export, at most two lines
-  of about 42 characters, in the keystroke pills' style.
-- Save .srt / .vtt beside the default export.
+- Show captions, with style, position and size: drawn in the preview and the export, in the
+  keystroke pills' style. Styles:
+  - Phrase: up to two lines of about 42 characters at a time.
+  - Highlight: the same, with the word being spoken in the theme's accent colour.
+  - Short: one to three large words at a time, the spoken one lit, for vertical videos.
+  Highlight and Short follow each word, so they need measured word times (whisper-cpp); with
+  estimated times captions show as phrases.
+- Save .srt / .vtt / .ass beside the default export.
 - Trim pauses: each silence over a second shrinks to 0.4 s, and the silence before the first
   and after the last words shrinks to 0.2 s. A silence is kept when anything changes on screen
   during it (typing, a video, scrolling output; a blinking text cursor does not count) or it

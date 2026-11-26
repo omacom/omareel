@@ -361,10 +361,17 @@ pub fn parse_voxtype_output(stdout: &str) -> String {
 /// Words with times from whisper-cli's `-ojf` JSON: tokens that begin with a space begin a
 /// word, the others (word pieces, punctuation) join the word before. Special tokens (`[_BEG_]`,
 /// `[_TT_…]`) and bracketed tags are dropped. Times are seconds from the file's start.
+///
+/// With `-dtw`, each token also has `t_dtw`, from aligning the audio to the text: it marks where
+/// the token ends, far more exactly than its `offsets` (a median of 20 ms off against 110 to 390,
+/// and 50 to 100 ms at worst against 0.4 to 1.2 s, on medium.en). A word then ends at its last
+/// token's `t_dtw` and starts at its `offsets` start, but not before the word before it ends.
 pub fn parse_whisper_json(json: &[u8]) -> Result<(Vec<Segment>, String), String> {
     let object = qjson::object_from_json(json).ok_or("whisper-cli wrote no JSON")?;
     let language = object.value("result").to_object().value("language").to_string_or("");
     let mut segments = Vec::new();
+    // Where the word before ended, by DTW, across segments.
+    let mut aligned_end: Option<f64> = None;
     for value in object.value("transcription").to_array() {
         let o = value.to_object();
         let offsets = o.value("offsets").to_object();
@@ -375,6 +382,8 @@ pub fn parse_whisper_json(json: &[u8]) -> Result<(Vec<Segment>, String), String>
             words: Vec::new(),
         };
         let mut words: Vec<Word> = Vec::new();
+        // Each word's last token's DTW time, when it has one.
+        let mut dtw_ends: Vec<Option<f64>> = Vec::new();
         let mut bracket = 0;
         for token in o.value("tokens").to_array() {
             let t = token.to_object();
@@ -384,6 +393,8 @@ pub fn parse_whisper_json(json: &[u8]) -> Result<(Vec<Segment>, String), String>
             }
             let offsets = t.value("offsets").to_object();
             let (from, to) = (offsets.value("from").to_double(0.0) / 1000.0, offsets.value("to").to_double(0.0) / 1000.0);
+            // Centiseconds; -1 without -dtw.
+            let dtw = Some(t.value("t_dtw").to_double(-1.0)).filter(|&t| t >= 0.0).map(|t| t / 100.0);
             let trimmed = text.trim();
             if trimmed.starts_with('[') || trimmed.starts_with('(') {
                 bracket += 1;
@@ -402,10 +413,31 @@ pub fn parse_whisper_json(json: &[u8]) -> Result<(Vec<Segment>, String), String>
                     // Punctuation is timed at the next pause; a piece of the word extends it.
                     if trimmed.chars().any(char::is_alphanumeric) {
                         word.end = word.end.max(to);
+                        if let Some(last) = dtw_ends.last_mut() {
+                            *last = dtw.or(*last);
+                        }
                     }
                 }
-                _ => words.push(Word { start: from, end: to.max(from), text: trimmed.to_owned() }),
+                _ => {
+                    words.push(Word { start: from, end: to.max(from), text: trimmed.to_owned() });
+                    dtw_ends.push(dtw);
+                }
             }
+        }
+        for (word, dtw_end) in words.iter_mut().zip(&dtw_ends) {
+            let Some(end) = *dtw_end else {
+                aligned_end = None;
+                continue;
+            };
+            let after = aligned_end.unwrap_or(0.0);
+            let mut start = word.start.max(after);
+            if start > end - 0.04 {
+                // Its offsets start late: give it a plausible length after the word before.
+                start = after.max(end - 0.3);
+            }
+            word.start = start.min(end);
+            word.end = end;
+            aligned_end = Some(end);
         }
         if segment.text.is_empty() && words.is_empty() {
             continue;
@@ -456,10 +488,49 @@ fn transcribe_text(engine: &Engine, wav: &Path, control: &Control) -> Result<Str
     }
 }
 
-/// whisper-cli over several pieces at once (the model loads once); one result per piece.
+/// whisper.cpp's alignment-heads preset for a ggml model file (`ggml-base.en.bin`,
+/// `ggml-large-v3-turbo-q5_0.bin`), which `-dtw` needs to time tokens; `None` for a model it has
+/// none for (a fine-tune, a distilled model).
+pub fn dtw_preset(model_path: &str) -> Option<String> {
+    const PRESETS: [&str; 12] = [
+        "tiny", "tiny.en", "base", "base.en", "small", "small.en", "medium", "medium.en", "large.v1", "large.v2", "large.v3",
+        "large.v3.turbo",
+    ];
+    let name = Path::new(model_path).file_name()?.to_str()?;
+    let name = name.strip_prefix("ggml-")?.strip_suffix(".bin")?;
+    // A quantised model has the same heads: drop "-q5_0" and the like.
+    let name = match name.rsplit_once('-') {
+        Some((base, quant)) if quant.starts_with('q') && quant[1..].starts_with(|c: char| c.is_ascii_digit()) => base,
+        _ => name,
+    };
+    let preset = name.replace('-', ".");
+    PRESETS.contains(&preset.as_str()).then_some(preset)
+}
+
+/// whisper-cli over several pieces at once (the model loads once); one result per piece. Word
+/// times come from DTW alignment when the model has a preset for it (see `parse_whisper_json`);
+/// a whisper-cli that refuses the option runs again without it.
 fn transcribe_whisper(engine: &Engine, wavs: &[PathBuf], seconds: f64, control: &Control) -> Result<Vec<Heard>, Failure> {
+    let preset = dtw_preset(&engine.model_path);
+    match transcribe_whisper_with(engine, wavs, seconds, preset.as_deref(), control) {
+        Err(Failure::Error(_)) if preset.is_some() => transcribe_whisper_with(engine, wavs, seconds, None, control),
+        result => result,
+    }
+}
+
+fn transcribe_whisper_with(
+    engine: &Engine,
+    wavs: &[PathBuf],
+    seconds: f64,
+    dtw: Option<&str>,
+    control: &Control,
+) -> Result<Vec<Heard>, Failure> {
     let threads = std::thread::available_parallelism().map_or(4, |n| (n.get() / 2).clamp(1, 8));
     let mut args: Vec<String> = vec!["-m".into(), engine.model_path.clone(), "-ojf".into(), "-np".into()];
+    if let Some(preset) = dtw {
+        // DTW needs flash attention off (whisper.cpp 1.8 turned it on by default).
+        args.extend(["-dtw".into(), preset.to_owned(), "-nfa".into()]);
+    }
     args.extend(["-t".into(), threads.to_string()]);
     if !engine.language.is_empty() {
         args.extend(["-l".into(), engine.language.clone()]);
@@ -688,6 +759,40 @@ mod tests {
     #[test]
     fn clean_text_drops_tags() {
         assert_eq!(clean_text(" (music)  Hello  [BLANK_AUDIO] world "), "Hello world");
+    }
+
+    #[test]
+    fn dtw_presets_from_model_files() {
+        assert_eq!(dtw_preset("/m/ggml-base.en.bin").as_deref(), Some("base.en"));
+        assert_eq!(dtw_preset("ggml-medium.en-q5_0.bin").as_deref(), Some("medium.en"));
+        assert_eq!(dtw_preset("/x/ggml-large-v3-turbo.bin").as_deref(), Some("large.v3.turbo"));
+        assert_eq!(dtw_preset("/x/ggml-large-v3-q8_0.bin").as_deref(), Some("large.v3"));
+        assert_eq!(dtw_preset("/x/ggml-distil-large-v3.bin"), None);
+        assert_eq!(dtw_preset("/x/model.bin"), None);
+    }
+
+    /// With -dtw a word ends at its last token's t_dtw and starts no earlier than the word
+    /// before ends; a word without one keeps its offsets.
+    #[test]
+    fn dtw_times_refine_words() {
+        let json = br#"{"result":{"language":"en"},"transcription":[{"offsets":{"from":0,"to":3000},
+            "text":" Show the editor","tokens":[
+            {"text":"[_BEG_]","offsets":{"from":0,"to":0},"t_dtw":-1},
+            {"text":" Show","offsets":{"from":100,"to":900},"t_dtw":52},
+            {"text":" the","offsets":{"from":400,"to":1000},"t_dtw":70},
+            {"text":" ed","offsets":{"from":2200,"to":2300},"t_dtw":101},
+            {"text":"itor","offsets":{"from":2300,"to":2600},"t_dtw":125},
+            {"text":" now","offsets":{"from":2600,"to":2900},"t_dtw":-1}]}]}"#;
+        let (segments, _) = parse_whisper_json(json).unwrap();
+        let words: Vec<(f64, f64, &str)> = segments[0].words.iter().map(|w| (w.start, w.end, w.text.as_str())).collect();
+        let close = |a: f64, b: f64| (a - b).abs() < 1e-9;
+        assert_eq!(words.iter().map(|w| w.2).collect::<Vec<_>>(), vec!["Show", "the", "editor", "now"]);
+        assert!(close(words[0].0, 0.1) && close(words[0].1, 0.52), "{words:?}");
+        // "the" starts where "Show" ended, not at its offsets' 0.4.
+        assert!(close(words[1].0, 0.52) && close(words[1].1, 0.70), "{words:?}");
+        // "editor"'s offsets start after its DTW end: 0.3 s before that end, after "the".
+        assert!(close(words[2].0, 0.95) && close(words[2].1, 1.25), "{words:?}");
+        assert!(close(words[3].0, 2.6) && close(words[3].1, 2.9), "{words:?}");
     }
 
     #[test]

@@ -176,6 +176,12 @@ pub fn render_colors() -> (crate::compat::qcolor::QColor, crate::compat::qcolor:
     (color(".background", "#1a1b26"), color(".foreground", "#a9b1d6"))
 }
 
+/// colors.toml's accent, which captions light the spoken word in.
+pub fn render_accent() -> crate::compat::qcolor::QColor {
+    let colors = toml::read(&crate::compat::qdir::file_path(&omarchy_paths::state_root(), "theme/colors.toml"));
+    crate::compat::qcolor::QColor::parse(colors.get(".accent").map_or("#7aa2f7", String::as_str))
+}
+
 /// shell.toml's `[font] base-size` (`^\s*base-size\s*=\s*(\d+)` inside `[font]`), at least
 /// 1, or 12 when there is none.
 pub fn shell_font_base_size() -> i32 {

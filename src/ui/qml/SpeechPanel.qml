@@ -8,7 +8,13 @@ import Omareel.Ui
 ColumnLayout {
     id: root
     spacing: theme.space.panelGap
-    readonly property var settings: editor.project.captions || ({enabled: false, position: "bottom", size: 1})
+    readonly property var settings: editor.project.captions || ({enabled: false, position: "bottom", size: 1, style: "phrase"})
+    readonly property string captionStyle: settings.style || "phrase"
+    readonly property var styles: [
+        {label: "Phrase", value: "phrase"},
+        {label: "Highlight", value: "highlight"},
+        {label: "Short", value: "short"}
+    ]
     readonly property string phase: editor.transcriptionState
     readonly property var positions: [{label: "Bottom", value: "bottom"}, {label: "Top", value: "top"}]
     property string savedPath: ""
@@ -71,6 +77,39 @@ ColumnLayout {
         opacity: enabled ? 1 : .42
         Behavior on opacity { NumberAnimation { duration: 160 } }
         OmSettingRow {
+            label: "Style"
+            EditorComboBox {
+                objectName: "captionStyleBox"
+                Layout.preferredWidth: 150
+                model: root.styles
+                textRole: "label"
+                currentIndex: Math.max(0, root.styles.findIndex(style => style.value === root.captionStyle))
+                onActivated: editor.setProjectValue("captions.style", model[currentIndex].value)
+            }
+        }
+        Text {
+            Layout.fillWidth: true
+            wrapMode: Text.Wrap
+            textFormat: Text.PlainText
+            color: theme.textMuted
+            font.family: theme.fontFamily
+            font.pixelSize: theme.type.small
+            text: root.captionStyle === "highlight" ? "The word being spoken lights up in the theme's accent."
+                : root.captionStyle === "short" ? "A few large words at a time, the spoken one lit. Made for vertical videos."
+                : "Up to two lines at a time."
+        }
+        Text {
+            objectName: "captionTimingNote"
+            visible: editor.hasTranscript && root.captionStyle !== "phrase" && !editor.canRemoveFillers
+            Layout.fillWidth: true
+            wrapMode: Text.Wrap
+            textFormat: Text.PlainText
+            color: theme.textMuted
+            font.family: theme.fontFamily
+            font.pixelSize: theme.type.small
+            text: "Showing phrases: lighting words needs measured word timing. Install whisper-cpp, then Redo."
+        }
+        OmSettingRow {
             label: "Position"
             EditorComboBox {
                 Layout.preferredWidth: 150
@@ -93,6 +132,11 @@ ColumnLayout {
         EditorButton {
             text: "Save .vtt"
             onClicked: root.savedPath = editor.saveSubtitles("vtt")
+        }
+        EditorButton {
+            objectName: "saveAssButton"
+            text: "Save .ass"
+            onClicked: root.savedPath = editor.saveSubtitles("ass")
         }
         Item { Layout.fillWidth: true }
     }
