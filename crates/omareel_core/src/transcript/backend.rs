@@ -911,13 +911,22 @@ mod tests {
         let engine = fake_voxtype(&dir, &format!("sleep 500 &\necho $! > {}\nexec sleep 400", pidfile.display()));
         let control = Control::default();
         let stopper = control.clone();
+        let watched = pidfile.clone();
+        // Stopped once the engine runs (its child wrote its pid), not after a fixed time: under
+        // a loaded test run the audio may not even be extracted by then.
+        let stopped_at = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let stopped = std::sync::Arc::clone(&stopped_at);
         std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(500));
+            let give_up = std::time::Instant::now() + Duration::from_secs(30);
+            while !watched.exists() && std::time::Instant::now() < give_up {
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            *stopped.lock().unwrap() = Some(std::time::Instant::now());
             stopper.stop();
         });
-        let started = std::time::Instant::now();
         assert!(transcribe_audio(&speech_audio(), &[engine], &control).is_err());
-        assert!(started.elapsed() < Duration::from_secs(5), "{:?}", started.elapsed());
+        let since_stop = stopped_at.lock().unwrap().expect("stopped").elapsed();
+        assert!(since_stop < Duration::from_secs(3), "{since_stop:?}");
         let sleeper: i32 = std::fs::read_to_string(&pidfile).unwrap().trim().parse().unwrap();
         std::thread::sleep(Duration::from_millis(100));
         assert!(!crate::transcript::job::process_alive(sleeper), "the engine's child outlived it");
