@@ -171,11 +171,13 @@ int omr_audio_duration(const char *path, double *duration, char *error, size_t e
         av_packet_unref(packet);
     }
     av_packet_free(&packet);
-    // A read cut short by the deadline fails rather than give part of the length as all of it.
-    if (code != AVERROR_EOF && deadline_passed(&deadline)) {
-        set_error(error, error_size, path, AVERROR_EXIT);
+    // A read cut short (the deadline, or a read error) fails rather than give part of the
+    // length as all of it. Damaged data ends the sound where ffmpeg's playback ends it too.
+    if (code != AVERROR_EOF && code != AVERROR_INVALIDDATA) {
+        const int failure = deadline_passed(&deadline) ? AVERROR_EXIT : code;
+        set_error(error, error_size, path, failure);
         avformat_close_input(&format);
-        return AVERROR_EXIT;
+        return failure;
     }
     *duration = first < end ? (double)(end - first) * av_q2d(stream->time_base) : -1.0;
     avformat_close_input(&format);
