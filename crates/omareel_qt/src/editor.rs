@@ -237,6 +237,9 @@ pub mod qobject {
         /// project.json changed on disk but can't be read; autosave stops until it can.
         #[qsignal]
         fn project_unreadable(self: Pin<&mut Editor>);
+        /// project.json reads again after `projectUnreadable`, saying what the editor holds.
+        #[qsignal]
+        fn project_readable(self: Pin<&mut Editor>);
         #[qsignal]
         fn error_occurred(self: Pin<&mut Editor>, message: QString);
         #[qsignal]
@@ -851,6 +854,8 @@ impl qobject::Editor {
         match change {
             DiskChange::Reloaded => self.as_mut().project_reloaded(),
             DiskChange::Unreadable if !reported => self.as_mut().project_unreadable(),
+            // Put back as the editor has it: nothing to take in, but the warning goes.
+            DiskChange::Unchanged if reported => self.as_mut().project_readable(),
             _ => {}
         }
         change

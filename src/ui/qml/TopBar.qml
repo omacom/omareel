@@ -291,6 +291,7 @@ Rectangle {
         function onAutosaved(path) { root.savedTime = Qt.formatTime(new Date(), "HH:mm"); root.projectUnreadable = false }
         function onProjectReloaded() { root.projectUnreadable = false; root.updatedExternally = true; externalUpdateTimer.restart() }
         function onProjectUnreadable() { root.projectUnreadable = true }
+        function onProjectReadable() { root.projectUnreadable = false }
     }
 
     Timer {
