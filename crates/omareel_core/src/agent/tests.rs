@@ -105,6 +105,39 @@ fn a_failing_operation_says_which_and_why() {
     let error = apply_ops(&mut document, &ops(r#"{"op": "split", "at": 99}"#), false).unwrap_err();
     assert!(error.contains("outside the video"), "{error}");
     assert!(parse_ops(b"[1]").is_err());
+    // "ops" that isn't a list is an error, not an empty batch that reports success.
+    assert!(parse_ops(br#"{"ops": {"op": "split", "at": 2}}"#).unwrap_err().contains("must be an array"));
+    // A path set_project_value would read as clips or zooms is refused like them.
+    for path in [".clips", "zooms.", "..clips.0"] {
+        let json = format!(r#"{{"op": "set", "path": "{path}", "value": []}}"#);
+        let error = apply_ops(&mut document, &ops(&json), true).unwrap_err();
+        assert!(error.contains("their own operations"), "{path}: {error}");
+    }
+    let error = apply_ops(&mut document, &ops(r#"{"op": "set", "path": "version", "value": 9}"#), true).unwrap_err();
+    assert!(error.contains("not a setting"), "{error}");
+    assert!(apply_ops(&mut document, &ops(r#"{"op": "set", "path": ".", "value": 1}"#), true).is_err());
+}
+
+/// A save in between (the editor's autosave) is never overwritten: apply reports it and saves
+/// nothing.
+#[test]
+fn run_refuses_to_overwrite_a_save_made_meanwhile() {
+    let dir = TempDir::new("agent-race");
+    let bundle = bundle(&dir);
+    let project = format!("{bundle}/project.json");
+    let (report, ok) = super::apply::run_on(
+        || {
+            let document = open(&bundle, &dir);
+            // The editor saves after apply read the project.
+            std::fs::write(&project, b"{\"saved\": \"by the editor\"}").unwrap();
+            Ok(document)
+        },
+        br#"[{"op": "split", "at": 2}]"#,
+        false,
+        false,
+    );
+    assert!(!ok && report.contains("changed while the operations ran"), "{report}");
+    assert_eq!(std::fs::read_to_string(&project).unwrap(), "{\"saved\": \"by the editor\"}");
 }
 
 #[test]
@@ -285,6 +318,11 @@ fn speech_operations_cut_by_the_transcript() {
     apply_ops(&mut document, &ops(r#"{"op": "delete", "ranges": [[2, 3], [6, 7]]}"#), false).unwrap();
     assert_eq!(spans(&document), vec![(0.0, 2.0, 1.0), (3.0, 6.0, 1.0), (7.0, 10.0, 1.0)]);
     assert!(apply_ops(&mut document, &ops(r#"{"op": "delete", "ranges": [[3, 2]]}"#), false).is_err());
+    // Overlapping output ranges cut their union once: 1 to 4, three seconds, not four.
+    let mut document = open(&bundle, &dir);
+    let (results, _) = apply_ops(&mut document, &ops(r#"{"op": "delete", "ranges": [[1, 3], [2, 4]]}"#), false).unwrap();
+    assert_eq!(results[0].get("removed_seconds").to_double(0.0), 3.0);
+    assert_eq!(spans(&document), vec![(0.0, 1.0, 1.0), (4.0, 10.0, 1.0)]);
 }
 
 #[test]

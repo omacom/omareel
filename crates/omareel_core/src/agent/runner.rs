@@ -1068,7 +1068,7 @@ impl Runner {
         };
         // The agent's own words, kept for looking into a run afterwards.
         let mut transcript = std::fs::File::create(task.scratch.join("stream.jsonl")).ok();
-        let result = job::run_streaming(command(adapter, program, task), Some(self.timeout), &self.control, |chunk| {
+        let result = job::run_streaming(command(adapter, program, task), Some(self.timeout), &self.control, false, |chunk| {
             if let Some(file) = transcript.as_mut() {
                 let _ = std::io::Write::write_all(file, chunk);
             }

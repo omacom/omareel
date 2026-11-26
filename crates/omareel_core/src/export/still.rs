@@ -26,8 +26,14 @@ pub struct ClipSeek {
 /// The output frame on screen at `time` seconds: the last frame that starts at or before it,
 /// in `[0, total_frames)`.
 pub fn output_frame(time: f64, fps: i32, total_frames: i32) -> i32 {
-    let frame = if time.is_finite() { cpp::int_cast((time * f64::from(fps) + 1e-6).floor()) } else { 0 };
-    cpp::clamp(frame, 0, cpp::max(0, total_frames - 1))
+    // Clamped as a double first: an out-of-range cast is i32::MIN on x86 (the first frame for
+    // a huge time), where aarch64 saturates.
+    let last = cpp::max(0, total_frames - 1);
+    if !time.is_finite() {
+        return 0;
+    }
+    let frame = (time * f64::from(fps) + 1e-6).floor().clamp(0.0, f64::from(last));
+    cpp::int_cast(frame)
 }
 
 /// When output frame `frame` starts, as the export computes it.
@@ -287,6 +293,10 @@ mod tests {
         assert_eq!(output_frame(-3.0, 60, 600), 0);
         assert_eq!(output_frame(10.0, 60, 600), 599);
         assert_eq!(output_frame(99.0, 60, 600), 599);
+        // Past i32 once multiplied by the frame rate: still the last frame, on every CPU.
+        assert_eq!(output_frame(999_999_999.0, 60, 600), 599);
+        assert_eq!(output_frame(1e300, 60, 600), 599);
+        assert_eq!(output_frame(-1e300, 60, 600), 0);
         assert_eq!(output_frame(f64::NAN, 60, 600), 0);
     }
 

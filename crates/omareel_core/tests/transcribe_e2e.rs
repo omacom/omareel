@@ -68,3 +68,39 @@ fn transcribes_speech_with_installed_engines() {
         assert!(hello.start < gap_start, "{hello:?}");
     }
 }
+
+/// One sentence in a long, otherwise quiet recording (a silent demo with one comment) is still
+/// found and transcribed: the speech fills under 5% of it.
+#[test]
+fn transcribes_one_sentence_in_a_long_recording() {
+    if !have("espeak-ng") || !have("ffmpeg") {
+        eprintln!("skipped: espeak-ng or ffmpeg missing");
+        return;
+    }
+    let Some(engine) = [BackendKind::WhisperCpp, BackendKind::Voxtype].into_iter().find_map(engine) else {
+        eprintln!("skipped: no whisper-cli (with a model) or voxtype");
+        return;
+    };
+    let dir = std::env::temp_dir().join(format!("omareel-e2e-sparse-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let sentence = speech("Here is the settings page.", &dir, "s.wav");
+    let _ = std::fs::remove_dir_all(&dir);
+    // 90 s of faint room noise with the sentence at 20 s.
+    let mut seed: u32 = 7;
+    let mut samples: Vec<i16> = (0..90 * 16_000)
+        .map(|_| {
+            seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12345);
+            (((seed >> 16) as f64 / 65536.0 - 0.5) * 80.0) as i16
+        })
+        .collect();
+    let at = 20 * 16_000;
+    for (i, &s) in sentence.samples.iter().enumerate() {
+        samples[at + i] = samples[at + i].saturating_add(s);
+    }
+    let audio = Audio { samples };
+    let regions = speech_regions(&audio.samples, &VadSettings::default());
+    assert_eq!(regions.len(), 1, "{regions:?}");
+    let transcript = transcribe_audio(&audio, &[engine.clone()], &Control::default()).unwrap();
+    eprintln!("{} ({}): {:?}", transcript.backend, transcript.model, transcript.text());
+    assert!(transcript.text().to_lowercase().contains("settings"), "{:?}", transcript.text());
+}
