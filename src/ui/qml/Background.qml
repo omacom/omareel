@@ -44,7 +44,11 @@ Item {
         }
 
         function rebuild() {
-            const old = fill.stops
+            // A copy: `fill.stops` is a live view of the list, so after the reassignment below
+            // it would hold the new stops, and those would be destroyed instead of the old.
+            const old = []
+            for (let k = 0; k < fill.stops.length; ++k)
+                old.push(fill.stops[k])
             const stops = root.settings.gradient ? root.settings.gradient.stops || [] : []
             const made = []
             for (let i = 0; i < stops.length; ++i)
