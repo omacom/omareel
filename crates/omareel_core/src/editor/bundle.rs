@@ -404,6 +404,11 @@ pub fn import_insert(source: &str, bundle_path: &str, probe_video: &dyn Fn(&str)
 /// file already in this bundle's `media/` is used where it is.
 pub fn copy_into_media(source: &str, bundle_path: &str, fallback: &str) -> Result<String, String> {
     let media = qdir::file_path(bundle_path, "media");
+    // A media/ that is a link leads out of the bundle: writing through it would put the copy
+    // (and its partial file) somewhere else entirely.
+    if std::fs::symlink_metadata(&media).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
+        return Err(qstring::arg("%1 is a link; not copying into it", &media));
+    }
     let file = FileInfo::new(source);
     let media_exists = qdir::dir_exists(&media);
     if media_exists
@@ -705,6 +710,22 @@ mod tests {
 
     fn video() -> VideoInfo {
         VideoInfo { width: 320, height: 240, duration: 0.7, fps: 30.0, audio: false }
+    }
+
+    #[test]
+    fn a_linked_media_directory_is_not_written_through() {
+        let dir = TempDir::new("editor-import-link");
+        let bundle = dir.join("b.omareel");
+        let elsewhere = dir.join("elsewhere");
+        std::fs::create_dir_all(&bundle).unwrap();
+        std::fs::create_dir_all(&elsewhere).unwrap();
+        std::os::unix::fs::symlink(&elsewhere, format!("{bundle}/media")).unwrap();
+        let song = dir.join("song.mp3");
+        std::fs::write(&song, b"music").unwrap();
+        let imported = import_music(&song, &bundle, &|_: &str| Ok(3.0));
+        assert!(imported.error.contains("is a link"), "{imported:?}");
+        assert_eq!(std::fs::read_dir(&elsewhere).unwrap().count(), 0);
+        assert!(!import_insert(&song, &bundle, &fixed_probe(video())).error.is_empty());
     }
 
     #[test]
