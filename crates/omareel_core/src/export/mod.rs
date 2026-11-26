@@ -1657,7 +1657,8 @@ fn start_still(work: &DecodePlan, frame: i32) -> StillDecoders {
 /// Frame `index` of a decoder's grid, `decoder` having been started at it (`started` says
 /// whether that worked). When it gives nothing, the frame is past the video's end and the
 /// export showed the last frame it got: `restart` starts the decoder at earlier grid frames
-/// ([`still::fallback_starts`]) and the last frame read up to `index` is the one.
+/// ([`still::fallback_starts`]) and the last frame read up to `index` is the one. With it, the
+/// grid frame it really is.
 fn read_still(
     decoder: &mut FfmpegDecoder,
     started: bool,
@@ -1665,15 +1666,15 @@ fn read_still(
     back: i32,
     restart: &mut dyn FnMut(&mut FfmpegDecoder, i32, &mut String) -> bool,
     error: &mut String,
-) -> Option<Vec<u8>> {
+) -> Option<(Vec<u8>, i32)> {
     for (attempt, start) in still::fallback_starts(index, back).into_iter().enumerate() {
         if if attempt == 0 { !started } else { !restart(decoder, start, error) } {
             continue;
         }
         let mut last = None;
-        for _ in start..=index {
+        for grid in start..=index {
             match decoder.read_frame(error) {
-                Some(frame) => last = Some(frame),
+                Some(frame) => last = Some((frame, grid)),
                 None => break,
             }
         }
@@ -1711,7 +1712,7 @@ fn still_decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &Ato
             &mut error,
         );
         decoders.decoder.cancel();
-        let Some(picture) = picture else {
+        let Some((picture, picture_index)) = picture else {
             push_error(shared, if error.is_empty() { "Decoder ended before the first frame".into() } else { error });
             break;
         };
@@ -1731,7 +1732,7 @@ fn still_decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &Ato
                 &mut camera_error,
             );
             camera_decoder.cancel();
-            let Some(camera_picture) = camera_picture else {
+            let Some((camera_picture, _)) = camera_picture else {
                 push_error(
                     shared,
                     if camera_error.is_empty() { "Camera decoder ended before the first frame".into() } else { camera_error },
@@ -1749,10 +1750,18 @@ fn still_decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &Ato
             break;
         }
         let insert = clip.is_media();
-        // Blur regions are baked into a still's recording frame as into the export's.
+        // Blur regions are baked into a still's recording frame as into the export's: at the
+        // time the still stands for and, when the decoder ran out and an earlier frame stands
+        // in, at that frame's own time, so a blur over the frame shown is never missed.
         let source_time = work.timeline.source_time(still::frame_time(decoders.frame, work.fps));
+        let shown_frame = decoders.frame - (decoders.seek.index - picture_index);
+        let shown_time = work.timeline.source_time(still::frame_time(shown_frame.max(0), work.fps));
         queue.packets.push_back(DecodedPacket {
-            image: if insert { None } else { redacted(picture.as_ref(), work, &[(source_time, clip.speed)]) },
+            image: if insert {
+                None
+            } else {
+                redacted(picture.as_ref(), work, &[(source_time, clip.speed), (shown_time, clip.speed)])
+            },
             camera_image,
             error: String::new(),
             clip: decoders.clip_index,
