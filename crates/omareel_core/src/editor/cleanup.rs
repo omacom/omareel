@@ -234,6 +234,11 @@ impl Document {
             self.clean_audio.error.clear();
         }
         self.clean_audio.wanted = wanted.clone();
+        // Cleanup turned off (or nothing to clean): a job still making files for the last
+        // request stops instead of running on to the end.
+        if wanted.is_none() {
+            self.cancel_running_clean_audio();
+        }
         let done = match (&wanted, &self.clean_audio.done) {
             (Some(request), Some((key, _, result))) if *key == request.key => Some(result.clone()),
             _ => None,
