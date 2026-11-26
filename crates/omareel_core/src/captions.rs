@@ -131,6 +131,20 @@ pub fn output_words(transcript: &Transcript, clips: &[Clip]) -> Vec<OutputWord> 
     words
 }
 
+/// The output spans of the inserted videos.
+fn insert_spans(clips: &[Clip]) -> Vec<(f64, f64)> {
+    let mut cursor = 0.0;
+    let mut spans = Vec::new();
+    for clip in clips {
+        let length = (clip.out - clip.in_) / cpp::max(0.000001, clip.speed);
+        if clip.is_media() {
+            spans.push((cursor, cursor + length));
+        }
+        cursor += length;
+    }
+    spans
+}
+
 /// Words wrapped into lines of at most `width` characters (a longer word gets a line of its
 /// own), filled greedily.
 pub fn wrap(words: &[&str], width: usize) -> Vec<String> {
@@ -175,9 +189,13 @@ fn ends_clause(word: &str) -> bool {
 pub fn build_cues(transcript: &Transcript, clips: &[Clip], style: CaptionStyle) -> Vec<Cue> {
     let style = effective_style(style, transcript);
     let words = output_words(transcript, clips);
+    // Where inserted videos play: a caption never runs across one (subtitle files would show it
+    // over the insert, and the overlay hides captions there).
+    let inserts = insert_spans(clips);
+    let across_insert = |from: f64, to: f64| inserts.iter().any(|&(start, _)| start >= from - 1e-9 && start < to);
     let total: f64 = clips.iter().map(|clip| (clip.out - clip.in_) / cpp::max(0.000001, clip.speed)).sum();
     if style == CaptionStyle::Short {
-        return short_cues(&words, total);
+        return short_cues(&words, total, &inserts);
     }
     let mut groups: Vec<Vec<&OutputWord>> = Vec::new();
     for word in &words {
@@ -191,6 +209,7 @@ pub fn build_cues(transcript: &Transcript, clips: &[Clip], style: CaptionStyle) 
                 // leave the first no time to show, and its words would be lost.
                 word.start > group[0].start
                     && (word.start - last.end > BREAK_GAP
+                    || across_insert(last.end, word.start)
                     || wrap(&texts, LINE_CHARS).len() > MAX_LINES
                     // A new phrase, or a new sentence once there is a line's worth, starts fresh.
                     || (word.segment != last.segment && chars >= 12)
@@ -217,6 +236,8 @@ pub fn build_cues(transcript: &Transcript, clips: &[Clip], style: CaptionStyle) 
     // or past the end.
     for i in 0..cues.len() {
         let next = cues.get(i + 1).map_or(total, |cue| cue.start);
+        // Nor does it linger into an insert.
+        let next = inserts.iter().map(|&(start, _)| start).filter(|&start| start >= cues[i].end - 1e-9).fold(next, f64::min);
         let cue = &mut cues[i];
         let wanted = (cue.end + LINGER).max(cue.start + MIN_SHOW);
         cue.end = wanted.min(next).max(cue.end.min(next));
@@ -228,7 +249,7 @@ pub fn build_cues(transcript: &Transcript, clips: &[Clip], style: CaptionStyle) 
 /// The short style's cues: up to three words and [`SHORT_CHARS`] a line, a new cue at each
 /// pause, clause end or phrase. Each shows until the next starts, or briefly after its last word
 /// before a pause, so the words keep pace with the voice.
-fn short_cues(words: &[OutputWord], total: f64) -> Vec<Cue> {
+fn short_cues(words: &[OutputWord], total: f64, inserts: &[(f64, f64)]) -> Vec<Cue> {
     let mut groups: Vec<Vec<&OutputWord>> = Vec::new();
     for word in words {
         let starts_new = match groups.last() {
@@ -238,6 +259,7 @@ fn short_cues(words: &[OutputWord], total: f64) -> Vec<Cue> {
                 let chars: usize = group.iter().map(|w| w.text.chars().count() + 1).sum::<usize>() + word.text.chars().count();
                 word.start > group[0].start
                     && (group.len() >= SHORT_WORDS
+                        || inserts.iter().any(|&(start, _)| start >= last.end - 1e-9 && start < word.start)
                         || chars > SHORT_CHARS
                         || word.start - last.end > SHORT_GAP
                         || word.segment != last.segment
@@ -262,6 +284,7 @@ fn short_cues(words: &[OutputWord], total: f64) -> Vec<Cue> {
         .collect();
     for i in 0..cues.len() {
         let next = cues.get(i + 1).map_or(total, |cue| cue.start);
+        let next = inserts.iter().map(|&(start, _)| start).filter(|&start| start >= cues[i].end - 1e-9).fold(next, f64::min);
         let cue = &mut cues[i];
         // Back to back while speech runs on; a short hold before a pause.
         let wanted = if next - cue.end <= SHORT_GAP + SHORT_LINGER { next } else { cue.end + SHORT_LINGER };
@@ -699,6 +722,22 @@ mod tests {
             assert_eq!(shown, 4, "{style:?}: {cues:?}");
             assert!(cues.iter().all(|c| c.end > c.start), "{style:?}: {cues:?}");
         }
+    }
+
+    /// A caption never runs across an inserted video, nor lingers into it.
+    #[test]
+    fn captions_stop_at_an_insert() {
+        let t = transcript(&[(0.0, 0.3, "Before"), (0.4, 0.8, "the"), (1.0, 1.3, "insert")]);
+        let insert = Clip { media: "media/a.mp4".into(), ..clip("m", 0.0, 2.0, 1.0) };
+        // Recording 0..0.9, the insert at 0.9..2.9, then recording 0.9..5.
+        let clips = [clip("a", 0.0, 0.9, 1.0), insert, clip("b", 0.9, 5.0, 1.0)];
+        let cues = build_cues(&t, &clips, CaptionStyle::Phrase);
+        assert_eq!(cues.len(), 2, "{cues:?}");
+        let short = build_cues(&measured(&[(0.0, 0.3, "Before"), (0.4, 0.8, "the"), (1.0, 1.3, "insert")]), &clips, CaptionStyle::Short);
+        assert!(short.iter().all(|cue| cue.end <= 0.9 + 1e-9 || cue.start >= 2.9 - 1e-9), "{short:?}");
+        assert_eq!(cues[0].lines, vec!["Before the"]);
+        assert!(cues[0].end <= 0.9 + 1e-9, "{cues:?}");
+        assert!(cues[1].start >= 2.9 - 1e-9, "{cues:?}");
     }
 
 }

@@ -27,22 +27,21 @@ Item {
     // inside the pill rather than spilling out of it.
     readonly property real textWidth: Math.max(0, width - 80 * ref - 2 * padX)
     // A word too wide for the frame on its own (a long word, large, in portrait) can't wrap:
-    // the text shrinks until the longest one fits.
-    readonly property string longestWord: {
-        let longest = ""
-        for (const line of cueLines)
-            for (const word of line.split(" "))
-                if (word.length > longest.length) longest = word
-        return longest
-    }
-    TextMetrics {
-        id: longestMetrics
-        text: root.longestWord
+    // the text shrinks until the widest one fits. Measured, not counted: "mmm" is wider than
+    // "illicit".
+    FontMetrics {
+        id: wordMetrics
         font.pixelSize: root.fontPx
         font.weight: root.isShort ? Font.Black : Font.DemiBold
     }
-    readonly property real fitScale: longestMetrics.advanceWidth > textWidth && longestMetrics.advanceWidth > 0
-        ? textWidth / longestMetrics.advanceWidth : 1
+    readonly property real widestWord: {
+        let widest = 0
+        for (const line of cueLines)
+            for (const word of line.split(" "))
+                widest = Math.max(widest, wordMetrics.advanceWidth(word))
+        return widest
+    }
+    readonly property real fitScale: widestWord > textWidth && widestWord > 0 ? textWidth / widestWord : 1
     anchors.fill: parent
 
     function escaped(text) {
