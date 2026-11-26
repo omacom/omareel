@@ -102,6 +102,9 @@ pub struct Cursor {
     pub style: String,
     pub ring_color: QColor,
     pub click_sound: String,
+    /// Fade the cursor out from a key press until the pointer moves again (see
+    /// `motion_track`); false is left out of the JSON.
+    pub hide_while_typing: bool,
 }
 
 impl Default for Cursor {
@@ -118,6 +121,7 @@ impl Default for Cursor {
             style: "light-arrow".into(),
             ring_color: QColor::parse("#7aa2f7"),
             click_sound: "none".into(),
+            hide_while_typing: false,
         }
     }
 }
@@ -186,6 +190,9 @@ pub struct Project {
     /// Captions from the transcript; `None` until the user first changes them, so projects
     /// that never did keep their bytes.
     pub captions: Option<Captions>,
+    /// The transition at every cut between recording clips (`crate::transitions::STYLES`);
+    /// "none" is left out of the JSON.
+    pub transition: String,
 }
 
 impl Project {
@@ -211,6 +218,7 @@ impl Default for Project {
             camera: Camera::default(),
             export_settings: ExportSettings::default(),
             captions: None,
+            transition: "none".into(),
         }
     }
 }

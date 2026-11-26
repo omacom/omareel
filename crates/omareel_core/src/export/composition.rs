@@ -16,6 +16,7 @@ use crate::layout_timeline::{self, sample_layout};
 use crate::media_probe::VideoInfo;
 use crate::motion_track::{MotionSample, MotionTrack, RippleSample};
 use crate::project::{Clip, Project};
+use crate::transitions::{self, Cut, TransitionFrame};
 use std::collections::HashMap;
 
 /// The `zoom` map: scale and centre of the zoom, and how fast the centre moves.
@@ -80,6 +81,8 @@ pub struct CompositionState {
     pub keystroke_pills: Vec<KeystrokePill>,
     /// The caption on screen (no lines for none).
     pub caption: CaptionFrame,
+    /// The transition at a cut: the `transition` map, `{scale}`.
+    pub transition: TransitionFrame,
 }
 
 impl CompositionState {
@@ -111,6 +114,7 @@ impl CompositionState {
             ripples: Vec::new(),
             keystroke_pills: Vec::new(),
             caption: CaptionFrame::default(),
+            transition: TransitionFrame::default(),
         }
     }
 
@@ -139,6 +143,7 @@ impl CompositionState {
         }
         self.keystroke_pills = if insert { Vec::new() } else { sources.keystrokes.sample(source_time) };
         self.caption = if insert { CaptionFrame::default() } else { captions::sample(sources.captions, output_time) };
+        self.transition = transitions::sample(sources.cuts, output_time);
         let layout = sample_layout(
             &project.clips,
             output_time,
@@ -167,6 +172,8 @@ pub struct Sources<'a> {
     pub keystrokes: &'a KeystrokeTrack,
     /// Captions on the output timeline; empty when they are off.
     pub captions: &'a [Cue],
+    /// The cuts between recording clips (`transitions::cuts`).
+    pub cuts: &'a [Cut],
     /// The webcam video's width as probed, 0 without one.
     pub camera_width: i32,
     pub camera_duration: f64,

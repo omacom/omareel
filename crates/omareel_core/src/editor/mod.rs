@@ -51,6 +51,7 @@ mod presets;
 mod tests;
 mod project_map;
 mod speech;
+mod speedup;
 mod thumbnails;
 mod zooms;
 

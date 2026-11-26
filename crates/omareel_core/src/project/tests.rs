@@ -369,3 +369,35 @@ fn captions_are_written_only_once_set() {
     assert_eq!(written.value("captions").to_object().value("size").to_double(0.0), 2.0);
     assert_eq!(Project::from_json(&written), read);
 }
+
+#[test]
+fn transitions_and_typing_are_written_only_once_set() {
+    let project = Project::defaults("Polish", 3.0);
+    let bytes = project.to_json().to_json(Format::Indented);
+    assert!(!bytes.contains("transition") && !bytes.contains("hideWhileTyping"));
+    let read = Project::from_json(&qjson::object_from_json(bytes.as_bytes()).unwrap());
+    assert_eq!((read.transition.as_str(), read.clips[0].transition.clone(), read.cursor.hide_while_typing), ("none", None, false));
+    assert_eq!(read.to_json().to_json(Format::Indented), bytes);
+
+    let mut json = project.to_json();
+    json.insert("transition", "zoom-punch");
+    let mut cursor = json.value("cursor").to_object();
+    cursor.insert("hideWhileTyping", true);
+    json.insert("cursor", cursor);
+    let mut clip = json.value("clips").to_array()[0].to_object();
+    clip.insert("transition", "none");
+    json.insert("clips", Value::array(vec![clip.into()]));
+    let read = Project::from_json(&json);
+    assert_eq!(read.transition, "zoom-punch");
+    assert_eq!(read.clips[0].transition.as_deref(), Some("none"));
+    assert!(read.cursor.hide_while_typing);
+    assert_eq!(read.to_json(), json);
+
+    // Unknown styles are dropped.
+    json.insert("transition", "wipe");
+    let mut clip = json.value("clips").to_array()[0].to_object();
+    clip.insert("transition", "spin");
+    json.insert("clips", Value::array(vec![clip.into()]));
+    let read = Project::from_json(&json);
+    assert_eq!((read.transition.as_str(), read.clips[0].transition.clone()), ("none", None));
+}

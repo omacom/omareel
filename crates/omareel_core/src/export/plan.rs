@@ -198,6 +198,25 @@ pub fn source_audio(input: i32, in_: f64, out: f64) -> String {
     )
 }
 
+/// Fades for a segment of `length` seconds that meets a cut with a transition: in at its start
+/// and out at its end, as `(fade_in, fade_out)` asks (`transitions::audio_fades`); nothing for
+/// neither, so cuts without a transition keep their filter as it was.
+pub fn declick((fade_in, fade_out): (bool, bool), length: f64) -> String {
+    let duration = crate::transitions::DECLICK.min(length / 2.0);
+    let mut filter = String::new();
+    if fade_in {
+        filter += &format!(",afade=t=in:st=0:d={}", number_f64(duration, 'f', 6));
+    }
+    if fade_out {
+        filter += &format!(
+            ",afade=t=out:st={}:d={}",
+            number_f64((length - duration).max(0.0), 'f', 6),
+            number_f64(duration, 'f', 6)
+        );
+    }
+    filter
+}
+
 pub fn silent_segment(length: f64) -> String {
     format!(
         "anullsrc=r=48000:cl=stereo,atrim=duration={},aformat=sample_fmts=fltp:channel_layouts=stereo",
@@ -524,6 +543,14 @@ mod tests {
             "[1:a]atrim=duration=0.03,asetpts=PTS-STARTPTS,volume=0.25,adelay=2000:all=1[click0];\
              [click0]amix=inputs=1:normalize=0:duration=longest,apad=pad_dur=3.000000,atrim=duration=3.000000[aout]"
         );
+    }
+
+    #[test]
+    fn cuts_with_a_transition_fade_their_sound() {
+        assert_eq!(declick((false, false), 2.0), "");
+        assert_eq!(declick((true, false), 2.0), ",afade=t=in:st=0:d=0.020000");
+        assert_eq!(declick((true, true), 2.0), ",afade=t=in:st=0:d=0.020000,afade=t=out:st=1.980000:d=0.020000");
+        assert_eq!(declick((false, true), 0.03), ",afade=t=out:st=0.015000:d=0.015000");
     }
 
     #[test]

@@ -37,6 +37,7 @@ Item {
     readonly property bool mediaActive: comp.media.active
     // Once the camera or an inserted video covers the canvas, nothing beneath needs drawing.
     readonly property bool screenCovered: cameraFull >= 1 || mediaActive
+    readonly property real cutScale: comp.transition && comp.transition.scale > 0 ? comp.transition.scale : 1
     readonly property bool backgroundCovered: cameraFull >= 1
         || (mediaActive && comp.media.ready && comp.media.fit !== "framed")
     clip: true
@@ -60,12 +61,21 @@ Item {
             blurMax: 32
             blur: Math.min(1, comp.zoom.velocity * .32) * comp.project.zoomStyle.motionBlur
         }
-        transform: Scale {
-            origin.x: frame.x + comp.zoom.cx * frame.width
-            origin.y: frame.y + comp.zoom.cy * frame.height
-            xScale: comp.zoom.scale
-            yScale: comp.zoom.scale
-        }
+        transform: [
+            Scale {
+                origin.x: frame.x + comp.zoom.cx * frame.width
+                origin.y: frame.y + comp.zoom.cy * frame.height
+                xScale: comp.zoom.scale
+                yScale: comp.zoom.scale
+            },
+            // A transition's punch at a cut grows the whole shot from the canvas centre.
+            Scale {
+                origin.x: composition.width / 2
+                origin.y: composition.height / 2
+                xScale: composition.cutScale
+                yScale: composition.cutScale
+            }
+        ]
         RoundedFrame {
             id: frame
             x: (composition.width - width) / 2

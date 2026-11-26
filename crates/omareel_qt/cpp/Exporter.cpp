@@ -90,6 +90,7 @@ void applyFrame(CompositionState &state, const omareel::exporter::ExportJob &job
     state.ripples = job.ripples();
     state.keystrokePills = job.keystrokePills();
     state.caption = job.captionMap();
+    state.transition = job.transitionMap();
     state.layout = job.layoutMap();
     state.cameraVisible = composition.camera_visible;
     state.media = job.mediaMap();

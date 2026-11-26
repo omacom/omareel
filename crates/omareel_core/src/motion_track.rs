@@ -56,6 +56,47 @@ struct Click {
     position: PointF,
 }
 
+/// "Hide while typing": plain typing is not in input.jsonl, but the keys that type nothing
+/// (Enter, Backspace, arrows, Tab) and shortcuts are, and typing leaves the pointer alone. So a
+/// key press after the pointer last moved or clicked hides the cursor once the pointer has been
+/// still for [`Typing::STILL`], until just before it moves or clicks again.
+struct Typing {
+    keys: Vec<f64>,
+    /// Pointer movements and clicks.
+    touches: Vec<f64>,
+}
+
+impl Typing {
+    /// How long the pointer must have been still.
+    const STILL: f64 = 0.5;
+    /// How long before the pointer moves again the cursor is back (as for "hide when idle").
+    const LEAD: f64 = 0.25;
+
+    fn new(events: &[InputEvent], raw: &[CursorSample], clicks: &[Click]) -> Typing {
+        let mut keys: Vec<f64> = events
+            .iter()
+            .filter(|event| event.kind == InputKind::KeyDown && !crate::keystroke_track::is_modifier(event))
+            .map(|event| event.time)
+            .collect();
+        keys.sort_by(f64::total_cmp);
+        // Moving, clicking and scrolling all use the pointer; each shows the cursor again.
+        let scrolls = events.iter().filter(|event| event.kind == InputKind::Scroll).map(|event| event.time);
+        let mut touches: Vec<f64> =
+            raw.iter().map(|sample| sample.time).chain(clicks.iter().map(|click| click.down)).chain(scrolls).collect();
+        touches.sort_by(f64::total_cmp);
+        Typing { keys, touches }
+    }
+
+    fn hides(&self, time: f64) -> bool {
+        let keys_before = self.keys.partition_point(|&key| key <= time);
+        let Some(&key) = keys_before.checked_sub(1).map(|i| &self.keys[i]) else { return false };
+        let touches_before = self.touches.partition_point(|&touch| touch <= time);
+        let last_touch = touches_before.checked_sub(1).map_or(f64::NEG_INFINITY, |i| self.touches[i]);
+        let next_touch = self.touches.get(touches_before).copied().unwrap_or(f64::INFINITY);
+        key > last_touch && time - last_touch >= Typing::STILL && time < next_touch - Typing::LEAD
+    }
+}
+
 /// Built once per project change (the editor does it on a worker thread, so it is `Send`), then
 /// sampled every frame.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -137,6 +178,7 @@ impl MotionTrack {
         // int(ceil(...)) + 1 in the C++: out of int range (a duration over about 103 days) x86-64
         // gives INT_MIN + 1 and aarch64 INT_MAX + 1, which wraps; either way the count is 1, as
         // the saturating cast and wrapping add give here.
+        let typing = project.cursor.hide_while_typing.then(|| Typing::new(events, &raw, &track.clicks));
         let count = cpp::max(1, ((track.duration * MotionTrack::SAMPLE_RATE).ceil() as i32).wrapping_add(1));
         track.samples.reserve(usize::try_from(count).unwrap_or(1));
         let initial_cursor = cursor_path::position_at(&raw, 0.0);
@@ -170,6 +212,9 @@ impl MotionTrack {
                     }
                 }
                 hidden = time - previous > f64::from(project.cursor.hide_when_idle_ms) / 1000.0 && time < next - 0.25;
+            }
+            if !hidden && !pressed {
+                hidden = typing.as_ref().is_some_and(|typing| typing.hides(time));
             }
             let scale_target = if pressed {
                 project.cursor.click_shrink
@@ -349,5 +394,47 @@ mod tests {
         assert!(track.ripples(0.96).is_empty());
         assert_eq!(MotionTrack::default().sample(1.0), MotionSample::default());
         assert_eq!(MotionTrack::build(f64::INFINITY, 100, 100, &[], &project, 60.0).size(), 1);
+    }
+
+    #[test]
+    fn typing_hides_the_still_pointer_until_it_moves() {
+        let mut project = Project::defaults("typing", 6.0);
+        project.zooms.clear();
+        let key = |time: f64, name: &str| InputEvent {
+            kind: InputKind::KeyDown,
+            time,
+            key_name: name.into(),
+            ..InputEvent::default()
+        };
+        let events = [
+            moves_to(0.0, 10.0, 10.0),
+            moves_to(0.5, 50.0, 50.0),
+            // Enter while the pointer rests, then Shift alone (not typing) later.
+            key(1.0, "KEY_ENTER"),
+            moves_to(3.0, 60.0, 60.0),
+            key(4.0, "KEY_LEFTSHIFT"),
+        ];
+        let opacity = |project: &Project, time: f64| {
+            MotionTrack::build(6.0, 100, 100, &events, project, 60.0).sample(time).cursor_opacity
+        };
+        // Off: always shown.
+        assert!(opacity(&project, 2.5) > 0.99);
+        project.cursor.hide_while_typing = true;
+        assert!(opacity(&project, 0.9) > 0.99, "shown before the key");
+        assert!(opacity(&project, 2.5) < 0.01, "hidden while typing");
+        // Back just before the pointer moves (0.25 s ahead), and a modifier alone hides nothing.
+        assert!(opacity(&project, 3.2) > 0.9);
+        assert!(opacity(&project, 5.5) > 0.99);
+        // The pointer moving again right after a key keeps the cursor shown.
+        let moving = [moves_to(0.0, 0.0, 0.0), key(1.0, "KEY_BACKSPACE"), moves_to(1.1, 30.0, 30.0)];
+        let track = MotionTrack::build(3.0, 100, 100, &moving, &project, 60.0);
+        assert!(track.sample(2.5).cursor_opacity > 0.99, "the pointer moved after the key");
+        assert!(track.sample(1.0).cursor_opacity > 0.9);
+        // Scrolling with the pointer still is using it: the cursor shows.
+        let scroll = |time: f64| InputEvent { time, kind: InputKind::Scroll, dy: 1.0, ..InputEvent::default() };
+        let scrolling = [moves_to(0.0, 10.0, 10.0), key(1.0, "KEY_ENTER"), scroll(2.0), scroll(2.3), scroll(2.6)];
+        let track = MotionTrack::build(4.0, 100, 100, &scrolling, &project, 60.0);
+        assert!(track.sample(1.7).cursor_opacity < 0.01, "hidden after the key");
+        assert!(track.sample(2.5).cursor_opacity > 0.9, "shown while scrolling");
     }
 }

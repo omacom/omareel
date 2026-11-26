@@ -228,6 +228,10 @@ impl Project {
                     clip.fit = fit;
                 }
             }
+            let transition = o.value("transition").to_string_or("");
+            if crate::transitions::STYLES.contains(&transition.as_str()) {
+                clip.transition = Some(transition);
+            }
             p.clips.push(clip);
         }
         p.zooms.clear();
@@ -308,6 +312,7 @@ impl Project {
         if p.cursor.click_sound != "soft" {
             p.cursor.click_sound = "none".into();
         }
+        p.cursor.hide_while_typing = c.value("hideWhileTyping").to_bool(false);
 
         let keystrokes = source.value("keystrokes").to_object();
         p.keystrokes.enabled = keystrokes.value("enabled").to_bool(false);
@@ -330,6 +335,11 @@ impl Project {
                 size: cpp::clamp(captions.value("size").to_double(d.size), 0.5, 2.0),
             }
         });
+
+        let transition = source.value("transition").to_string_or("none");
+        if crate::transitions::STYLES.contains(&transition.as_str()) {
+            p.transition = transition;
+        }
 
         let a = source.value("audio").to_object();
         p.audio.desktop = a.value("desktop").to_bool(true);
@@ -411,6 +421,9 @@ impl Project {
                     clip.insert("media", c.media.as_str());
                     clip.insert("fit", c.fit.as_str());
                 }
+                if let Some(transition) = &c.transition {
+                    clip.insert("transition", transition.as_str());
+                }
                 clip.into()
             })
             .collect();
@@ -481,6 +494,7 @@ impl Project {
             ("style", c.style.as_str().into()),
             ("ringColor", c.ring_color.name().into()),
             ("clickSound", c.click_sound.as_str().into()),
+            ("hideWhileTyping", if c.hide_while_typing { Value::Bool(true) } else { Value::Undefined }),
         ]);
         let k = &self.keystrokes;
         let a = &self.audio;
@@ -529,6 +543,7 @@ impl Project {
             ("audio", obj([("desktop", a.desktop.into()), ("mic", a.mic.into()), ("volume", a.volume.into())])),
             // Absent until the user changes captions (inserting Undefined leaves it out).
             ("captions", captions),
+            ("transition", if self.transition == "none" { Value::Undefined } else { self.transition.as_str().into() }),
             (
                 "camera",
                 obj([

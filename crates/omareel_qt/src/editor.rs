@@ -156,6 +156,8 @@ pub mod qobject {
         #[qproperty(QList_QVariant, ripples, READ = preview_ripples, NOTIFY = composition_changed)]
         #[qproperty(QList_QVariant, keystroke_pills, READ = preview_keystroke_pills, NOTIFY = composition_changed)]
         #[qproperty(QMap_QString_QVariant, caption, READ = preview_caption, NOTIFY = composition_changed)]
+        // The transition at a cut: `{scale}` (see omareel_core::transitions).
+        #[qproperty(QMap_QString_QVariant, transition, READ = preview_transition, NOTIFY = composition_changed)]
         #[qproperty(bool, software_rendering, READ = software_rendering, CONSTANT)]
         #[qproperty(bool, camera_available, READ = has_camera, CONSTANT)]
         #[qproperty(bool, camera_visible, READ = camera_visible, NOTIFY = composition_changed)]
@@ -171,6 +173,11 @@ pub mod qobject {
         #[qproperty(bool, pauses_ready, READ = pauses_ready, NOTIFY = speech_changed)]
         // The transcript's word times are measured, so filler words can be cut.
         #[qproperty(bool, can_remove_fillers, READ = can_remove_fillers, NOTIFY = speech_changed)]
+        // "Speed up quiet parts": how many, the output seconds they would save, and whether the
+        // screen check is done so the count is known.
+        #[qproperty(i32, quiet_count, READ = quiet_count, NOTIFY = speech_changed)]
+        #[qproperty(f64, quiet_saved, READ = quiet_saved, NOTIFY = speech_changed)]
+        #[qproperty(bool, quiet_ready, READ = quiet_ready, NOTIFY = speech_changed)]
         // "", "analyzing", "transcribing", "done", "unavailable", "failed".
         #[qproperty(QString, transcription_state, READ = transcription_state, NOTIFY = transcription_changed)]
         #[qproperty(QString, transcription_message, READ = transcription_message, NOTIFY = transcription_changed)]
@@ -282,6 +289,10 @@ pub mod qobject {
         fn preview_ripples(self: &Editor) -> QList_QVariant;
         fn preview_keystroke_pills(self: &Editor) -> QList_QVariant;
         fn preview_caption(self: &Editor) -> QMap_QString_QVariant;
+        fn preview_transition(self: &Editor) -> QMap_QString_QVariant;
+        fn quiet_count(self: &Editor) -> i32;
+        fn quiet_saved(self: &Editor) -> f64;
+        fn quiet_ready(self: &Editor) -> bool;
         fn software_rendering(self: &Editor) -> bool;
         fn camera_source_width(self: &Editor) -> i32;
         fn camera_source_height(self: &Editor) -> i32;
@@ -449,6 +460,17 @@ pub mod qobject {
         fn trim_pauses(self: Pin<&mut Editor>) -> i32;
         #[qinvokable]
         fn remove_filler_words(self: Pin<&mut Editor>) -> i32;
+        // Plays the quiet parts faster as one undo step; how many.
+        #[qinvokable]
+        fn speed_up_quiet_parts(self: Pin<&mut Editor>) -> i32;
+        // The project's transition at cuts ("none", "zoom-punch").
+        #[qinvokable]
+        fn set_transition_style(self: Pin<&mut Editor>, style: &QString) -> bool;
+        // The transition at the cut before a clip; "" follows the project's.
+        #[qinvokable]
+        fn set_cut_transition(self: Pin<&mut Editor>, id: &QString, style: &QString) -> bool;
+        #[qinvokable]
+        fn clip_starts_at_cut(self: &Editor, id: &QString) -> bool;
         // Writes the captions beside the default export ("srt" or "vtt"); the path, or empty.
         #[qinvokable]
         fn save_subtitles(self: &Editor, format: &QString) -> QString;
@@ -864,7 +886,7 @@ impl qobject::Editor {
     /// it is stopped and its commands killed. `OMAREEL_NO_TRANSCRIBE=1` leaves the transcript
     /// alone unless asked.
     fn start_speech(mut self: Pin<&mut Self>, force: bool) {
-        use omareel_core::transcript::{audio, backend, stillness, vad};
+        use omareel_core::transcript::{audio, backend, cache, stillness, vad};
         if self.speech_running {
             return;
         }
@@ -874,7 +896,7 @@ impl qobject::Editor {
         }
         let transcribe = force || (document.transcript().is_none() && qenv::int_value_or_zero("OMAREEL_NO_TRANSCRIBE") != 1);
         let measure = document.speech_regions().is_none();
-        let check_screen = document.still_windows().is_none() && !self.stillness_running;
+        let check_screen = document.moving_windows().is_none() && !self.stillness_running;
         if !transcribe && !measure && !check_screen {
             return;
         }
@@ -882,6 +904,9 @@ impl qobject::Editor {
         let bundle = document.bundle_path().to_owned();
         let duration = document.recording().source_duration;
         let geometry = (document.source_width(), document.source_height(), document.capture_scale());
+        // Measurements from an earlier run are read from the cache (transcript::cache), off this
+        // thread: finding the entry reads the video's first MiB.
+        let cache_location = document.cache_location();
         // Silences already known (the speech was measured on an earlier run).
         let known_silences = document.silences_to_check();
         let export_busy = Arc::clone(&self.export_busy);
@@ -910,21 +935,32 @@ impl qobject::Editor {
         let start_stillness = {
             let thread = thread.clone();
             let control = control.clone();
+            let cache_location = cache_location.clone();
             move |silences: Vec<(f64, f64)>| {
                 let spawned = std::thread::Builder::new().name("omareel-stillness".into()).spawn(move || {
-                    let still = match stillness::still_windows(&screen, &silences, duration, geometry, &control) {
-                        Ok(still) => Some(still),
-                        Err(_) if control.cancelled() => None,
-                        Err(error) => {
-                            eprintln!("omareel: could not check the screen for pauses: {error}");
-                            Some(Vec::new())
-                        }
+                    let entry = cache::Entry::new(&cache_location, &screen);
+                    let cached = entry.as_ref().and_then(|entry| entry.screen(&silences, geometry));
+                    let found = match cached {
+                        Some(found) => Some(found),
+                        None => match stillness::check_windows(&screen, &silences, duration, geometry, &control) {
+                            Ok(found) => {
+                                if let Some(Err(error)) = entry.as_ref().map(|entry| entry.store_screen(&silences, geometry, &found)) {
+                                    eprintln!("omareel: could not cache the screen check: {error}");
+                                }
+                                Some(found)
+                            }
+                            Err(_) if control.cancelled() => None,
+                            Err(error) => {
+                                eprintln!("omareel: could not check the screen for pauses: {error}");
+                                Some(stillness::ScreenCheck::default())
+                            }
+                        },
                     };
                     let _ = thread.queue(move |mut editor| {
                         editor.as_mut().rust_mut().stillness_running = false;
-                        match still {
-                            Some(still) => {
-                                editor.edit(|document| document.set_still_windows(still));
+                        match found {
+                            Some(found) => {
+                                editor.edit(|document| document.set_screen_check(found));
                             }
                             None => editor.as_mut().speech_changed(),
                         }
@@ -967,6 +1003,22 @@ impl qobject::Editor {
                     }
                 });
             };
+            // The speech measured on an earlier run, unless the video changed since.
+            let entry = if measure { cache::Entry::new(&cache_location, &screen_for_audio) } else { None };
+            let measured = entry.as_ref().and_then(cache::Entry::speech);
+            let measure = measure && measured.is_none();
+            if let Some(regions) = measured {
+                if check_screen {
+                    check(stillness::silences_to_check(&regions, duration));
+                }
+                let _ = thread.queue(move |editor| {
+                    editor.edit(|document| document.set_speech_regions(regions));
+                });
+                if !transcribe {
+                    finish();
+                    return;
+                }
+            }
             let audio = match audio::extract_with(&screen_for_audio, &control) {
                 Ok(audio) => audio,
                 Err(error) => {
@@ -982,6 +1034,9 @@ impl qobject::Editor {
             };
             if measure {
                 let regions = vad::speech_regions(&audio.samples, &vad::VadSettings::default());
+                if let Some(Err(error)) = entry.as_ref().map(|entry| entry.store_speech(&regions)) {
+                    eprintln!("omareel: could not cache the speech measurement: {error}");
+                }
                 if check_screen {
                     check(stillness::silences_to_check(&regions, duration));
                 }
@@ -1470,6 +1525,11 @@ impl qobject::Editor {
         crate::export::caption_map(&document.preview_caption(), &document.captions())
     }
 
+    fn preview_transition(&self) -> QMap<QMapPair_QString_QVariant> {
+        let frame = self.document.as_ref().map(Document::preview_transition).unwrap_or_default();
+        crate::export::transition_map(&frame)
+    }
+
     fn preview_keystroke_pills(&self) -> QList<QVariant> {
         let Some(document) = self.document.as_ref() else { return QList::default() };
         document
@@ -1566,6 +1626,42 @@ impl qobject::Editor {
             document.remove_source_ranges(&ranges) as i32
         })
         .unwrap_or(0)
+    }
+
+    fn quiet_count(&self) -> i32 {
+        self.document.as_ref().map_or(0, |document| document.quiet_parts(&Default::default()).len() as i32)
+    }
+
+    fn quiet_saved(&self) -> f64 {
+        let Some(document) = self.document.as_ref() else { return 0.0 };
+        document.quiet_parts(&Default::default()).iter().map(|part| part.saved()).sum()
+    }
+
+    fn quiet_ready(&self) -> bool {
+        self.document.as_ref().is_some_and(Document::quiet_parts_ready)
+    }
+
+    fn speed_up_quiet_parts(self: Pin<&mut Self>) -> i32 {
+        self.edit(|document| {
+            let parts = document.quiet_parts(&Default::default());
+            document.speed_up_source_ranges(&parts) as i32
+        })
+        .unwrap_or(0)
+    }
+
+    fn set_transition_style(self: Pin<&mut Self>, style: &QString) -> bool {
+        let style = style.to_string();
+        self.edit(|document| document.set_transition(&style)).unwrap_or(false)
+    }
+
+    fn set_cut_transition(self: Pin<&mut Self>, id: &QString, style: &QString) -> bool {
+        let (id, style) = (id.to_string(), style.to_string());
+        let style = (!style.is_empty()).then_some(style.as_str());
+        self.edit(|document| document.set_cut_transition(&id, style)).unwrap_or(false)
+    }
+
+    fn clip_starts_at_cut(&self, id: &QString) -> bool {
+        self.document.as_ref().is_some_and(|document| document.clip_starts_at_cut(&id.to_string()))
     }
 
     fn remove_filler_words(self: Pin<&mut Self>) -> i32 {

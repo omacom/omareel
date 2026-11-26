@@ -14,12 +14,15 @@ cursor-following zooms. Finished projects export to MP4 or GIF.
 - Non-destructive clip trimming, splitting, speed changes, and timeline zoom editing.
 - Rubber-band multi-selection for zoom blocks, with grouped movement and deletion.
 - Omarchy wallpaper and live accent-color integration.
-- Synthetic cursor smoothing, click rings, idle hiding, and cursor-following auto zooms.
+- Synthetic cursor smoothing, click rings in theme colours, hiding when idle or while typing, and
+  cursor-following auto zooms.
+- Optional zoom-punch transitions that hide the jump at each cut, with the sound faded across it.
 - Aspect presets, padding, rounded corners, inset borders, and configurable shadows.
 - Camera rotation, horizontal flip, independent shadow/border styling, and 720p/1080p capture.
 - Hardware-accelerated MP4 export with CPU fallback, plus GIF export.
 - Speech to text with the dictation engine chosen in Omarchy: captions, SRT/WebVTT subtitles,
-  and one-click trimming of pauses and filler words. Everything stays on this computer.
+  one-click trimming of pauses and filler words, and speeding up quiet stretches where the screen
+  keeps changing (installs, builds, scrolling). Everything stays on this computer.
 - Self-contained `.omareel` project bundles that preserve the source and editor state.
 
 ## Install
@@ -136,7 +139,11 @@ Superwhisper; `omarchy install dictation voxtype` sets one up). With voxtype on 
 and `whisper-cpp` installed, the same model runs through `whisper-cli`, which times every word.
 The Speech section of the editor turns captions on, saves subtitles, and trims pauses (silences
 over a second while nothing changes on screen and the pointer stays put) and filler words (with
-whisper-cpp's measured word times), each as one undo step. Pause trimming needs no engine. See `docs/USAGE.md` for details.
+whisper-cpp's measured word times), each as one undo step. Pause trimming needs no engine.
+"Speed up quiet parts" plays the silent stretches the screen does not stay still through faster
+instead of cutting them. The speech and screen measurements are cached under
+`~/.cache/omareel/omareel/speech-v1/`, keyed by `screen.mp4`, so a recording opens without
+measuring again. See `docs/USAGE.md` for details.
 
 ## Troubleshooting
 
