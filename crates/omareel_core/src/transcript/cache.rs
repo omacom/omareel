@@ -10,8 +10,8 @@
 //! on different threads: `<key>.speech.json` and `<key>.screen.json`.
 //!
 //! ```json
-//! {"version": 1, "video": "/abs/screen.mp4", "speech": [[0.52, 3.1], [4.0, 9.75]]}
-//! {"version": 1, "video": "/abs/screen.mp4", "geometry": [3840, 2160, 2],
+//! {"version": 2, "video": "/abs/screen.mp4", "speech": [[0.52, 3.1], [4.0, 9.75]]}
+//! {"version": 2, "video": "/abs/screen.mp4", "geometry": [3840, 2160, 2],
 //!  "windows": [[3.1, 4.0]], "still": [], "moving": [[3.1, 4.0]]}
 //! ```
 //! A screen entry only counts for the same windows (the silences of the same speech) and the
@@ -24,7 +24,7 @@ use std::io::Read;
 use std::time::UNIX_EPOCH;
 
 /// Bumped when the speech finder or the screen check changes what they find.
-pub const VERSION: i32 = 1;
+pub const VERSION: i32 = 2;
 /// The directory under the cache location.
 pub const DIRECTORY: &str = "speech-v1";
 /// How much of the video's start is hashed.
