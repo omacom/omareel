@@ -605,6 +605,22 @@ private slots:
         QCOMPARE(paddedPacked.size, QSize(16, 8));
         QCOMPARE(paddedPacked.pixelFormat, QString("yuvj444p"));
         QCOMPARE(paddedPacked.pixels, packed.pixels);
+
+        // A frame cut short in transit also only warns ("premature end of data segment"), but
+        // its missing part would be grey: it is dropped. The image is large enough that the cut
+        // falls in its scan data, not its headers (which fail outright).
+        QImage scene(64, 48, QImage::Format_RGB32);
+        for (int y = 0; y < scene.height(); ++y)
+            for (int x = 0; x < scene.width(); ++x)
+                scene.setPixel(x, y, qRgb(x * 4, y * 5, (x * y) % 256));
+        QByteArray whole;
+        QBuffer wholeBuffer(&whole);
+        QVERIFY(wholeBuffer.open(QIODevice::WriteOnly));
+        QVERIFY(scene.save(&wholeBuffer, "JPEG", 95));
+        QVERIFY(!packCameraFrame(QVideoFrame(std::make_unique<JpegTestBuffer>(whole, QSize(64, 48)))).pixels.isEmpty());
+        const QByteArray cutJpeg = whole.left(whole.size() * 2 / 3) + QByteArray("\xff\xd9", 2);
+        QVERIFY(packCameraFrame(QVideoFrame(std::make_unique<JpegTestBuffer>(cutJpeg, QSize(64, 48)))).pixels.isEmpty());
+        QCOMPARE(packCameraFrame(frame).pixels, packed.pixels);
     }
 
     void cameraEncoderSkipsUnmappableFrames()

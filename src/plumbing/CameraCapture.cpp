@@ -184,10 +184,14 @@ CameraRawFrame Omareel::packCameraFrame(QVideoFrame frame)
             int strides[] = {w, chromaWidth, chromaWidth};
             // UVC cameras often pad MJPEG frames before the 0xFFD9 EOI marker, which libjpeg
             // reports as a non-fatal warning; without TJFLAG_STOPONWARNING the planes are
-            // decoded in full while tjDecompressToYUVPlanes returns -1 with TJERR_WARNING.
-            valid = tjDecompressToYUVPlanes(decoder.handle, jpeg, bytes, planes, w, strides, h,
-                                           TJFLAG_FASTDCT) == 0
-                || tjGetErrorCode(decoder.handle) == TJERR_WARNING;
+            // decoded in full while tjDecompressToYUVPlanes returns -1 with TJERR_WARNING. Only
+            // that warning is let through: a frame cut short in transit warns too ("premature
+            // end of data segment"), and libjpeg fills its missing part with grey.
+            const bool decoded = tjDecompressToYUVPlanes(decoder.handle, jpeg, bytes, planes, w, strides, h,
+                                                         TJFLAG_FASTDCT) == 0;
+            valid = decoded
+                || (tjGetErrorCode(decoder.handle) == TJERR_WARNING
+                    && QByteArray(tjGetErrorStr2(decoder.handle)).contains("extraneous bytes before marker 0xd9"));
         }
         frame.unmap();
         if (!valid) {
