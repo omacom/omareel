@@ -51,7 +51,13 @@ impl Document {
             continues = normal;
         }
         let mut parts = Vec::new();
-        for (start, end) in speedup::quiet_ranges(moving, self.recording.source_duration, settings) {
+        let mut quiet = speedup::quiet_ranges(moving, self.recording.source_duration, settings);
+        // Clear of every measured word, as pause trimming is: loudness misses soft words, and a
+        // word sped up 8x is lost.
+        if let Some(transcript) = &self.transcript {
+            quiet = crate::transcript::trim::spare_words(&quiet, transcript);
+        }
+        for (start, end) in quiet {
             for &(run_in, run_out) in &runs {
                 let (from, to) = (cpp::max(start, run_in), cpp::min(end, run_out));
                 if to - from >= settings.min_length {

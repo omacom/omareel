@@ -2040,6 +2040,20 @@ fn quiet_parts_play_faster_in_one_undo_step() {
     assert!((parts[0].saved() - 0.9).abs() < 1e-9);
     // Pause trimming leaves a moving screen alone.
     assert!(qt.document.pause_ranges(&Default::default()).is_empty());
+    // A soft word the loudness missed, measured in the transcript, is never sped up: the part
+    // stops 0.15 s before it.
+    {
+        use crate::transcript::{Segment, Transcript, Word, WordTiming};
+        let heard = Transcript {
+            word_timing: WordTiming::Measured,
+            segments: vec![Segment { start: 1.3, end: 1.5, text: "so".into(), words: vec![Word { start: 1.3, end: 1.5, text: "so".into() }] }],
+            ..Transcript::default()
+        };
+        qt.run(|d| d.set_transcript(Some(heard)));
+        let spared = qt.document.quiet_parts(&settings);
+        assert!(spared.iter().all(|part| part.end <= 1.15 + 1e-9 || part.start >= 1.65 - 1e-9), "{spared:?}");
+        qt.run(|d| d.set_transcript(None));
+    }
 
     qt.seek(1.8);
     let steps = qt.undo_steps();
