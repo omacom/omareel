@@ -294,7 +294,7 @@ fn load_fields_migrate_and_rewritten_files() {
         [("load.txt", outputs.summary), ("fields.txt", outputs.fields), ("migrate.txt", outputs.migrate)]
     {
         let relative = format!("project/{name}");
-        reports.extend(difference(&relative, &read_expected(&relative), text.into_string().as_bytes()));
+        reports.extend(golden_difference(&relative, text.into_string().as_bytes()));
     }
     for (directory, files) in [
         ("load", outputs.load),
@@ -309,7 +309,7 @@ fn load_fields_migrate_and_rewritten_files() {
         for (name, bytes) in files {
             let relative = format!("project/{directory}/{name}");
             if expected_path(&relative).exists() {
-                reports.extend(difference(&relative, &read_expected(&relative), &bytes));
+                reports.extend(golden_difference(&relative, &bytes));
             }
         }
     }
