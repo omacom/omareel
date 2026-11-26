@@ -3,7 +3,8 @@
 //! for everyone. Speech engines that give text only are timed by it, phrase by phrase.
 //!
 //! The level is measured in 20 ms frames. The threshold sits between the recording's quiet (its
-//! 10th percentile) and its loud (95th percentile), never below -50 dBFS; frames above it are
+//! 10th percentile) and its loud (95th percentile, or the loudest half second when speech is too
+//! sparse to reach the 95th), never below -50 dBFS; frames above it are
 //! speech, gaps shorter than [`VadSettings::bridge`] are joined, and blips shorter than
 //! [`VadSettings::min_speech`] are dropped.
 
@@ -12,6 +13,9 @@ use super::audio::SAMPLE_RATE;
 /// One level per 20 ms.
 pub const FRAME_SECONDS: f64 = 0.02;
 const FRAME: usize = (SAMPLE_RATE as usize) / 50;
+/// The loudest frames that still count as "loud" when speech fills under 5% of a recording: half a
+/// second of them.
+const LOUD_FRAMES: usize = 25;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct VadSettings {
@@ -56,7 +60,14 @@ pub fn threshold(levels: &[f64], settings: &VadSettings) -> Option<f64> {
         return None;
     }
     let quiet = percentile(levels, 0.10);
-    let loud = percentile(levels, 0.95);
+    let mut loud = percentile(levels, 0.95);
+    if loud - quiet < 10.0 {
+        // One sentence in a long silent demo fills less than 5% of the frames, so the 95th
+        // percentile is still quiet. Its loudest half second is not; steady noise has none.
+        let mut sorted = levels.to_vec();
+        sorted.sort_by(f64::total_cmp);
+        loud = sorted[sorted.len().saturating_sub(LOUD_FRAMES.min(sorted.len()))];
+    }
     if loud < settings.floor_db || loud - quiet < 10.0 {
         return None;
     }
@@ -200,6 +211,17 @@ pub(crate) mod tests {
         assert!(speech_regions(&vec![0; 32_000], &VadSettings::default()).is_empty());
         assert!(speech_regions(&bursts(2.0, &[], 0.0), &VadSettings::default()).is_empty());
         assert!(speech_regions(&bursts(2.0, &[(0.0, 2.0)], 0.3), &VadSettings::default()).is_empty());
+    }
+
+    #[test]
+    fn one_sentence_in_a_long_recording_is_found() {
+        // 2.7 s of speech in 90 s fills 3% of the frames, under the 95th percentile.
+        let samples = bursts(90.0, &[(20.0, 22.7)], 0.3);
+        let regions = speech_regions(&samples, &VadSettings::default());
+        assert_eq!(regions.len(), 1, "{regions:?}");
+        assert!(close(regions[0].0, 20.0) && close(regions[0].1, 22.7), "{regions:?}");
+        // A lone blip is still not speech.
+        assert!(speech_regions(&bursts(90.0, &[(20.0, 20.06)], 0.3), &VadSettings::default()).is_empty());
     }
 
     #[test]

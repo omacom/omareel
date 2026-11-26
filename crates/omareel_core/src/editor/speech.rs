@@ -127,11 +127,15 @@ impl Document {
     }
 
     /// The pauses "Trim pauses" would cut, in source seconds, limited to what the clips still
-    /// show: silences with no input and a still screen. Empty until the speech is measured and
+    /// show: silences with no input and a still screen, clear of any measured word (see
+    /// `trim::spare_words`). Empty until the speech is measured and
     /// the screen checked ([`Document::pauses_ready`]).
     pub fn pause_ranges(&self, settings: &PauseSettings) -> Vec<(f64, f64)> {
         let (Some(speech), Some(still)) = (&self.speech, &self.still) else { return Vec::new() };
-        let ranges = trim::pause_ranges(speech, self.recording.source_duration, &self.input_activity(), still, settings);
+        let mut ranges = trim::pause_ranges(speech, self.recording.source_duration, &self.input_activity(), still, settings);
+        if let Some(transcript) = &self.transcript {
+            ranges = trim::spare_words(&ranges, transcript);
+        }
         self.visible_source_ranges(&ranges)
     }
 
