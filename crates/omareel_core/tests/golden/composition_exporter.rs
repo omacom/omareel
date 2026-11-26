@@ -123,6 +123,7 @@ fn exporter_txt() {
             motion: &motion,
             keystrokes: &keystrokes,
             captions: &[],
+            cuts: &[],
             camera_width,
             camera_duration,
             camera_offset,

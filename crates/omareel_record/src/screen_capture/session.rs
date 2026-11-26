@@ -416,6 +416,9 @@ pub struct ScreenCapture {
     rate_frames: i32,
     rate_drops: i32,
     last_rate: f64,
+    /// While paused no frames are requested and none are queued: the video holds the frame
+    /// before the pause until the capture resumes, and nothing on screen meanwhile is recorded.
+    paused: bool,
 }
 
 impl Default for ScreenCapture {
@@ -450,7 +453,18 @@ impl ScreenCapture {
             rate_frames: 0,
             rate_drops: 0,
             last_rate: 0.0,
+            paused: false,
         }
+    }
+
+    /// Pauses or resumes the capture (see the `paused` field). A copy in flight when the pause
+    /// begins is dropped when it completes.
+    pub fn set_paused(&mut self, paused: bool) {
+        self.paused = paused;
+    }
+
+    pub fn paused(&self) -> bool {
+        self.paused
     }
 
     fn encoder_pid(&self) -> libc::pid_t {
@@ -813,7 +827,7 @@ impl ScreenCapture {
         }
         let now = monotonic_us();
         let interval_us = i64::from(1_000_000 / self.config.fps);
-        if self.last_capture_request_us == 0 || now - self.last_capture_request_us >= interval_us {
+        if !self.paused && (self.last_capture_request_us == 0 || now - self.last_capture_request_us >= interval_us) {
             // The protocol allows exactly one frame object per session; requesting another
             // while one is outstanding raises duplicate_frame and kills the connection.
             let frame_in_flight = self.state.slots.iter().any(|slot| slot.frame.is_some());
@@ -852,7 +866,7 @@ impl ScreenCapture {
         // stop request (whose signal may land on another thread) is noticed promptly.
         let in_flight = self.state.slots.iter().any(|slot| slot.frame.is_some());
         let due_in_us = self.last_capture_request_us + interval_us - monotonic_us();
-        let wait_ms = if in_flight { 50 } else { (due_in_us + 999).div_euclid(1000).clamp(0, 50) as i32 };
+        let wait_ms = if in_flight || self.paused { 50 } else { (due_in_us + 999).div_euclid(1000).clamp(0, 50) as i32 };
         if let Err((code, display_error)) = self.dispatch_once(wait_ms) {
             *error = format!("Capture connection failed (errno {code}: {}, display error {display_error})", strerror(code));
             return false;
@@ -876,6 +890,10 @@ impl ScreenCapture {
             }
             if slot.failed {
                 self.capture_failures += 1;
+                self.frames.release(index as i32);
+                continue;
+            }
+            if self.paused {
                 self.frames.release(index as i32);
                 continue;
             }

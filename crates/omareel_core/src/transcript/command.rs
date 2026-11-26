@@ -85,7 +85,23 @@ fn subtitle_clips(bundle: &str) -> Result<Vec<Clip>, String> {
         let json = crate::compat::qjson::object_from_json(&bytes).ok_or(format!("{project_path} does not read"))?;
         Project::from_json(&json).clips
     } else {
-        Vec::new()
+        // As export makes a never-opened bundle's project: the recording less what its marks
+        // cut (pauses and retakes), so the subtitles follow the video export makes.
+        let duration = crate::media_probe::probe_video(&qdir::file_path(bundle, "screen.mp4")).map_or(0.0, |info| info.duration);
+        let capture = qfile::read_all(qdir::file_path(bundle, "capture.json"))
+            .ok()
+            .and_then(|bytes| crate::compat::qjson::object_from_json(&bytes))
+            .unwrap_or_default();
+        let marks = crate::recording_marks::RecordingMarks::load_bundle(&qdir::absolute_path(bundle))
+            .made_by(capture.value("stopped_us").to_variant_long_long());
+        if duration > 0.0 && !marks.is_empty() {
+            let mut project = Project::defaults("", duration);
+            project.clips = vec![Clip { id: "c1".into(), in_: 0.0, out: duration, speed: 1.0, ..Clip::default() }];
+            crate::editor::apply_recording_marks(&mut project, &marks, capture.value("first_frame_us").to_variant_long_long(), duration);
+            project.clips
+        } else {
+            Vec::new()
+        }
     };
     Ok(if clips.is_empty() { vec![Clip { id: "c1".into(), in_: 0.0, out: 1e12, ..Clip::default() }] } else { clips })
 }

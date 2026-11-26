@@ -12,6 +12,12 @@ ColumnLayout {
     readonly property var music: editor.project.music || ({})
     readonly property bool hasMusic: editor.music.present === true
 
+    // audio.cleanup is only in the project once something is switched on.
+    readonly property var cleanup: (editor.project.audio && editor.project.audio.cleanup) || ({})
+    readonly property bool denoise: cleanup.denoise === true
+    readonly property real strength: cleanup.strength !== undefined ? cleanup.strength : 0.85
+    readonly property string loudness: cleanup.loudness || "off"
+    readonly property bool cleaning: (denoise && editor.hasMicrophoneAudio) || loudness !== "off"
     OmEmptyState {
         visible: !editor.hasAudio
         iconSource: "qrc:/omareel/assets/icons/lucide/volume-x.svg"
@@ -21,6 +27,52 @@ ColumnLayout {
     EditorSwitch { visible: editor.hasDesktopAudio; text: "System audio"; description: "Sound from apps on your desktop"; checked: editor.hasDesktopAudio && editor.project.audio.desktop; onToggled: editor.setProjectValue("audio.desktop", checked) }
     EditorSwitch { visible: editor.hasMicrophoneAudio; text: "Microphone"; description: "Your voice"; checked: editor.hasMicrophoneAudio && editor.project.audio.mic; onToggled: editor.setProjectValue("audio.mic", checked) }
     PanelSlider { visible: editor.hasAudio; Layout.fillWidth: true; label: "Volume"; path: "audio.volume"; from: 0; to: 2; value: editor.project.audio.volume; stepSize: 0.01; displayScale: 100; suffix: "%" }
+
+    OmSeparator { visible: editor.hasAudio; Layout.fillWidth: true; Layout.topMargin: 2 }
+    PanelHeading { visible: editor.hasAudio; text: "Cleanup" }
+    EditorSwitch {
+        objectName: "denoiseSwitch"
+        visible: editor.hasMicrophoneAudio
+        text: "Reduce noise"
+        // The recording keeps the microphone and the desktop in one track.
+        description: editor.hasDesktopAudio
+            ? "Removes fan, hiss and keyboard noise from your voice. System audio is filtered too, which can dull music."
+            : "Removes fan, hiss and keyboard noise from your voice"
+        checked: root.denoise
+        onToggled: editor.setProjectValue("audio.cleanup.denoise", checked)
+    }
+    PanelSlider { visible: editor.hasMicrophoneAudio && root.denoise; Layout.fillWidth: true; label: "Strength"; path: "audio.cleanup.strength"; from: 0.1; to: 1; value: root.strength; stepSize: 0.05; displayScale: 100; suffix: "%" }
+    PanelLabel { visible: editor.hasAudio; text: "Loudness" }
+    OmButtonGroup {
+        objectName: "loudnessButtons"
+        visible: editor.hasAudio
+        Layout.fillWidth: true
+        options: [{label: "As recorded", value: "off"}, {label: "−16 LUFS", value: "-16"}, {label: "−14 LUFS", value: "-14"}]
+        value: root.loudness
+        onChanged: value => editor.setProjectValue("audio.cleanup.loudness", value)
+    }
+    Label {
+        visible: editor.hasAudio
+        Layout.fillWidth: true
+        text: root.loudness === "-16" ? "Evens out the export to the level of podcasts and YouTube."
+            : root.loudness === "-14" ? "Evens out the export to the level of social video, a little louder."
+            : "The export keeps the recording's level."
+        wrapMode: Text.WordWrap
+        color: theme.textMuted
+        font.pixelSize: theme.type.small
+    }
+    // The preview plays the cleaned sound once it is made; "Hear original" compares.
+    EditorSwitch {
+        objectName: "cleanAudioBypassSwitch"
+        visible: root.cleaning
+        text: "Hear original"
+        description: editor.cleanAudioStatus === "preparing" ? "Preparing the cleaned sound for the preview…"
+            : editor.cleanAudioStatus === "failed" ? "The preview can't play the cleaned sound: " + editor.cleanAudioError
+            : checked ? "The preview plays the sound as recorded" : "The preview plays the cleaned sound"
+        enabled: editor.cleanAudioStatus === "ready" || checked
+        checked: editor.cleanAudioBypass
+        onToggled: editor.cleanAudioBypass = checked
+    }
 
     OmSeparator { Layout.fillWidth: true; Layout.topMargin: 2 }
     PanelHeading { text: "Background music" }

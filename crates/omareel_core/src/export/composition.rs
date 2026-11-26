@@ -14,17 +14,24 @@ use crate::clip_timeline::ClipTimeline;
 use crate::keystroke_track::{KeystrokePill, KeystrokeTrack};
 use crate::layout_timeline::{self, sample_layout};
 use crate::media_probe::VideoInfo;
+use crate::compat::qjson::Object;
 use crate::motion_track::{MotionSample, MotionTrack, RippleSample};
+use crate::overlay_track;
 use crate::project::{Clip, Project};
+use crate::transitions::{self, Cut, TransitionFrame};
+use crate::reframe::ReframeWindow;
 use std::collections::HashMap;
 
-/// The `zoom` map: scale and centre of the zoom, and how fast the centre moves.
+/// The `zoom` map: scale and centre of the zoom, and how fast the centre moves. A reframing
+/// project adds the window the canvas shows (`reframe: true`, `rx`, `ry`, `rw`, `rh`, see
+/// [`crate::reframe`]); the map has no such keys otherwise.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Zoom {
     pub scale: f64,
     pub cx: f64,
     pub cy: f64,
     pub velocity: f64,
+    pub reframe: Option<ReframeWindow>,
 }
 
 /// The `layout` map: how far the webcam has grown to full frame, how visible its bubble is.
@@ -80,6 +87,12 @@ pub struct CompositionState {
     pub keystroke_pills: Vec<KeystrokePill>,
     /// The caption on screen (no lines for none).
     pub caption: CaptionFrame,
+    /// The transition at a cut: the `transition` map, `{scale}`.
+    pub transition: TransitionFrame,
+    /// The overlays showing: each one's project JSON with its `opacity`
+    /// ([`overlay_track::sample_json`]). Blur regions are in the list too, but the exporter has
+    /// already baked them into the recording's pixels.
+    pub overlays: Vec<Object>,
 }
 
 impl CompositionState {
@@ -97,7 +110,7 @@ impl CompositionState {
             camera_source_width: 0,
             camera_source_height: 0,
             time: 0.0,
-            zoom: Zoom { scale: 1.0, cx: 0.5, cy: 0.5, velocity: 0.0 },
+            zoom: Zoom { scale: 1.0, cx: 0.5, cy: 0.5, velocity: 0.0, reframe: None },
             layout: Layout { camera_full: 0.0, bubble: 1.0 },
             media: Media { active: false, ready: true, fit: "fit".into(), width: 16, height: 9 },
             cursor: Cursor {
@@ -111,6 +124,8 @@ impl CompositionState {
             ripples: Vec::new(),
             keystroke_pills: Vec::new(),
             caption: CaptionFrame::default(),
+            transition: TransitionFrame::default(),
+            overlays: Vec::new(),
         }
     }
 
@@ -123,8 +138,13 @@ impl CompositionState {
         let source_time = sources.timeline.recording_source_time(output_time);
         let sample = if insert { MotionSample::default() } else { sources.motion.sample(source_time) };
         self.time = source_time;
-        self.zoom =
-            Zoom { scale: sample.zoom_scale, cx: sample.zoom_cx, cy: sample.zoom_cy, velocity: sample.zoom_center_velocity };
+        self.zoom = Zoom {
+            scale: sample.zoom_scale,
+            cx: sample.zoom_cx,
+            cy: sample.zoom_cy,
+            velocity: sample.zoom_center_velocity,
+            reframe: if insert { None } else { sources.motion.reframe(source_time) },
+        };
         self.cursor = Cursor {
             x: sample.cursor_x,
             y: sample.cursor_y,
@@ -139,6 +159,8 @@ impl CompositionState {
         }
         self.keystroke_pills = if insert { Vec::new() } else { sources.keystrokes.sample(source_time) };
         self.caption = if insert { CaptionFrame::default() } else { captions::sample(sources.captions, output_time) };
+        self.transition = transitions::sample(sources.cuts, output_time);
+        self.overlays = overlay_track::sample_json(&project.overlays, source_time, output_time, !insert, 0.0);
         let layout = sample_layout(
             &project.clips,
             output_time,
@@ -167,6 +189,8 @@ pub struct Sources<'a> {
     pub keystrokes: &'a KeystrokeTrack,
     /// Captions on the output timeline; empty when they are off.
     pub captions: &'a [Cue],
+    /// The cuts between recording clips (`transitions::cuts`).
+    pub cuts: &'a [Cut],
     /// The webcam video's width as probed, 0 without one.
     pub camera_width: i32,
     pub camera_duration: f64,

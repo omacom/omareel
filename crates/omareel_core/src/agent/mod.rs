@@ -14,6 +14,7 @@
 pub mod apply;
 pub mod consent;
 pub mod describe;
+mod polish_ops;
 pub mod runner;
 pub mod scope;
 pub mod skill;
@@ -40,6 +41,36 @@ pub fn open_document(bundle: &str) -> Result<Document, String> {
     // Nothing runs the effects the editor would perform (players, timers).
     document.take_effects();
     Ok(document)
+}
+
+/// What the recorder cut out of the new project (retakes and pauses from the bundle's
+/// `markers.jsonl`), as `(kind, start, end)` in source seconds; none without the file.
+pub fn recording_cuts(bundle: &str, source_duration: f64) -> Vec<(&'static str, f64, f64)> {
+    use crate::recording_marks::RecordingMarks;
+    let marks = RecordingMarks::load_bundle(bundle);
+    if marks.is_empty() {
+        return Vec::new();
+    }
+    let capture = std::fs::read(crate::compat::qdir::file_path(bundle, "capture.json"))
+        .ok()
+        .and_then(|bytes| crate::compat::qjson::object_from_json(&bytes))
+        .unwrap_or_default();
+    let first_frame_us = capture.value("first_frame_us").to_variant_long_long();
+    let marks = marks.made_by(capture.value("stopped_us").to_variant_long_long());
+    let seconds = |us: i64| {
+        let t = if us == i64::MAX { source_duration } else { us.saturating_sub(first_frame_us) as f64 / 1_000_000.0 };
+        t.clamp(0.0, source_duration)
+    };
+    let mut cuts: Vec<(&'static str, f64, f64)> = marks
+        .retakes()
+        .into_iter()
+        .map(|span| ("retake", span))
+        .chain(marks.pauses().into_iter().map(|span| ("pause", span)))
+        .map(|(kind, (start, end))| (kind, seconds(start), seconds(end)))
+        .filter(|&(_, start, end)| end > start)
+        .collect();
+    cuts.sort_by(|a, b| a.1.total_cmp(&b.1));
+    cuts
 }
 
 /// The output spans in which the recording's `[start, end)` plays, in output order. A span cut

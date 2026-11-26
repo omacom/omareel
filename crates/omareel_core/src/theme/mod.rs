@@ -176,6 +176,14 @@ pub fn render_colors() -> (crate::compat::qcolor::QColor, crate::compat::qcolor:
     (color(".background", "#1a1b26"), color(".foreground", "#a9b1d6"))
 }
 
+/// colors.toml's accent, what annotations (overlays) are drawn in unless they name a colour.
+pub fn render_accent() -> crate::compat::qcolor::QColor {
+    use crate::compat::qcolor::QColor;
+    let colors = toml::read(&crate::compat::qdir::file_path(&omarchy_paths::state_root(), "theme/colors.toml"));
+    let accent = QColor::parse(colors.get(".accent").map_or("#7aa2f7", String::as_str));
+    if accent.is_valid() { accent } else { QColor::parse("#7aa2f7") }
+}
+
 /// shell.toml's `[font] base-size` (`^\s*base-size\s*=\s*(\d+)` inside `[font]`), at least
 /// 1, or 12 when there is none.
 pub fn shell_font_base_size() -> i32 {

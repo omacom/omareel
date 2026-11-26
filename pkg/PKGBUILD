@@ -39,6 +39,7 @@ makedepends=(
   'wayland'
 )
 optdepends=('gifsicle: optimize exported GIF files'
+            'wl-clipboard: copy an exported file to the clipboard'
             'qt6-imageformats: WebP stills from omareel frame')
 conflicts=('omarecord')
 source=()
@@ -72,6 +73,7 @@ package() {
   install -Dm644 LICENSES/inter.txt "$pkgdir/usr/share/licenses/$pkgname/inter.txt"
   install -Dm644 LICENSES/cxx-qt-cmake-MIT.txt "$pkgdir/usr/share/licenses/$pkgname/cxx-qt-cmake-MIT.txt"
   install -Dm644 LICENSES/rust-crates.txt "$pkgdir/usr/share/licenses/$pkgname/rust-crates.txt"
+  install -Dm644 LICENSES/rnnoise-models.txt "$pkgdir/usr/share/licenses/$pkgname/rnnoise-models.txt"
   install -Dm644 "$startdir/omareel.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/omareel.svg"
   local size
   for size in 16 32 48 64 128 256 512; do

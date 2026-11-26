@@ -174,16 +174,38 @@ pub fn describe(document: &Document) -> Object {
         ("idle", idle.into()),
     ]);
 
-    // Everything else in project.json, for `set` operations.
+    // Everything else in project.json, for `set` operations (overlays and markers have their
+    // own lists and operations).
     let mut settings = project.to_json();
-    for key in ["clips", "zooms", "version", "defaultsVersion", "name"] {
+    for key in ["clips", "zooms", "version", "defaultsVersion", "name", "overlays", "markers"] {
         settings.remove(key);
     }
 
+    let strings = |list: &[&str]| Value::array(list.iter().map(|&s| Value::from(s)).collect());
+    let presets: Vec<Value> = crate::export::presets::PRESETS
+        .iter()
+        .map(|preset| {
+            Object::from_iter([
+                ("id", Value::from(preset.id)),
+                ("description", preset.description.into()),
+                ("format", preset.format.into()),
+                ("aspect", preset.aspect.into()),
+                ("reframe", if preset.reframe.is_empty() { "off" } else { preset.reframe }.into()),
+            ])
+            .into()
+        })
+        .collect();
     let allowed = Object::from_iter([
         ("speeds", Value::array(allowed_clip_speeds().into_iter().map(Value::from).collect())),
         ("layouts", Value::array(allowed_clip_layouts().into_iter().map(Value::from).collect())),
         ("fits", Value::array(allowed_clip_fits().into_iter().map(Value::from).collect())),
+        ("transitions", strings(&crate::transitions::STYLES)),
+        ("overlay_kinds", strings(&crate::project::OVERLAY_KINDS)),
+        ("blur_styles", strings(&crate::project::BLUR_STYLES)),
+        ("loudness", strings(&crate::project::AudioCleanup::LOUDNESS_TARGETS)),
+        ("reframe", strings(&["follow", "off"])),
+        ("aspects", strings(&crate::project::allowed_aspects())),
+        ("presets", presets.into()),
     ]);
 
     let mut summary = Object::from_iter([
@@ -223,6 +245,76 @@ pub fn describe(document: &Document) -> Object {
     if let Ok(Some(chapters)) = crate::chapters::Chapters::load(document.bundle_path()) {
         summary.insert("chapters", chapters_summary(&chapters, clips));
     }
+    if !project.overlays.is_empty() {
+        let overlays: Vec<Value> =
+            project.overlays.iter().map(|overlay| super::polish_ops::overlay_summary(document, overlay).into()).collect();
+        summary.insert("overlays", overlays);
+    }
+    if !project.markers.is_empty() {
+        let markers: Vec<Value> = project
+            .markers
+            .iter()
+            .map(|marker| {
+                Object::from_iter([
+                    ("id", Value::from(marker.id.as_str())),
+                    ("label", marker.label.as_str().into()),
+                    ("kind", marker.kind.as_str().into()),
+                    ("source", ms(marker.time).into()),
+                    ("output", times(&source_time_outputs(clips, marker.time))),
+                ])
+                .into()
+            })
+            .collect();
+        summary.insert("markers", markers);
+    }
+    let cuts = super::recording_cuts(document.bundle_path(), recording.source_duration);
+    if !cuts.is_empty() {
+        let cuts: Vec<Value> = cuts
+            .into_iter()
+            .map(|(kind, start, end)| {
+                Object::from_iter([
+                    ("kind", Value::from(kind)),
+                    ("source", span(start, end)),
+                    ("output", spans(&source_span_outputs(clips, start, end))),
+                ])
+                .into()
+            })
+            .collect();
+        summary.insert("recording_cuts", cuts);
+    }
+    let transition_cuts: Vec<Value> = document
+        .transition_cuts()
+        .into_iter()
+        .map(|cut| {
+            Object::from_iter([
+                ("clip", Value::from(clips[cut.clip].id.as_str())),
+                ("output", ms(cut.time).into()),
+                ("style", cut.style.name().into()),
+            ])
+            .into()
+        })
+        .collect();
+    summary.insert(
+        "transitions",
+        Object::from_iter([("style", Value::from(project.transition.as_str())), ("cuts", transition_cuts.into())]),
+    );
+    summary.insert(
+        "reframe",
+        Object::from_iter([
+            ("mode", Value::from(if project.reframe.is_empty() { "off" } else { project.reframe.as_str() })),
+            ("active", crate::reframe::active(project, width, height).into()),
+        ]),
+    );
+    let cleanup = &project.audio.cleanup;
+    summary.insert(
+        "audio_cleanup",
+        Object::from_iter([
+            ("denoise", Value::from(cleanup.denoise)),
+            ("strength", cleanup.strength.into()),
+            ("loudness", cleanup.loudness.as_str().into()),
+            ("denoise_available", document.denoise_available().into()),
+        ]),
+    );
     if let Some(music) = document.music() {
         let mut object = Object::from_iter([("file", Value::from(music.file.as_str()))]);
         if let Some(duration) = document.music_duration() {

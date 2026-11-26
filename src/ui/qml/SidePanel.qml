@@ -19,7 +19,8 @@ Rectangle {
         {name:"Camera", meta:"Webcam bubble", icon:"camera.svg"},
         {name:"Keystrokes", meta:"Shortcut overlay", icon:"keyboard.svg"},
         {name:"Audio", meta:"Tracks and volume", icon:"volume-2.svg"},
-        {name:"Speech", meta:"Captions, pauses, and filler words", icon:"captions.svg"}
+        {name:"Speech", meta:"Captions, pauses, and filler words", icon:"captions.svg"},
+        {name:"Annotate", meta:"Text, boxes, arrows, blur, and cards", icon:"pen-line.svg"}
     ]
 
     onSectionChanged: {
@@ -208,7 +209,8 @@ Rectangle {
                                 : root.displayedSection === 4 ? clipPanel
                                 : root.displayedSection === 5 ? cameraPanel
                                 : root.displayedSection === 6 ? keystrokesPanel
-                                : root.displayedSection === 7 ? audioPanel : speechPanel
+                                : root.displayedSection === 7 ? audioPanel
+                                : root.displayedSection === 8 ? speechPanel : overlayPanel
                         }
                     }
                 }
@@ -225,11 +227,13 @@ Rectangle {
     Component { id: keystrokesPanel; KeystrokesPanel { } }
     Component { id: audioPanel; AudioPanel { } }
     Component { id: speechPanel; SpeechPanel { } }
+    Component { id: overlayPanel; OverlayPanel { } }
 
     Connections {
         target: editor
         function onSelectionChanged() {
-            if (editor.selectedZoomId) root.section = 3
+            if (editor.selectedOverlayId) root.section = 9
+            else if (editor.selectedZoomId) root.section = 3
             else if (editor.selectedClipId) root.section = 4
         }
     }

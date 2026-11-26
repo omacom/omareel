@@ -3,6 +3,7 @@
 //! because the files omareel writes must stay byte-identical.
 
 pub mod agent;
+pub mod audio_cleanup;
 pub mod camera_timeline;
 pub mod captions;
 pub mod chapters;
@@ -22,9 +23,13 @@ pub mod microphone_meter;
 pub mod motion_track;
 pub mod music;
 pub mod omarchy_paths;
+pub mod overlay_track;
 pub mod probe;
 pub mod project;
+pub mod recording_marks;
 pub mod recording_preferences;
+pub mod reframe;
 pub mod theme;
 pub mod transcript;
+pub mod transitions;
 pub mod zoom_timeline;

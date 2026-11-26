@@ -54,8 +54,10 @@ ApplicationWindow {
         })
     }
     function prepareScreenshot(view) {
-        if (view === "export") {
+        if (view === "export" || view === "export-shorts") {
             editor.seek(2)
+            exportDialogLoader.active = true
+            exportDialogLoader.item.dialog.presetId = view === "export-shorts" ? "shorts" : ""
             Qt.callLater(window.openExport)
         }
         else if (view === "aspect") bottomBar.openAspectMenu()
@@ -220,11 +222,27 @@ ApplicationWindow {
     Shortcut { sequence: "S"; enabled: !window.singleKeyShortcutsBlocked && !editor.readOnly; onActivated: editor.splitAtPlayhead() }
     Shortcut { sequence: "Z"; enabled: !window.singleKeyShortcutsBlocked && !editor.readOnly; onActivated: editor.addZoomAt(editor.position) }
     Shortcut { sequence: "I"; enabled: !window.singleKeyShortcutsBlocked && !editor.readOnly; onActivated: bottomBar.openInsertDialog() }
+    // Annotations at the playhead.
+    Repeater {
+        model: [["T", "text"], ["R", "box"], ["A", "arrow"], ["N", "badge"], ["B", "blur"], ["Shift+T", "card"]]
+        delegate: Item {
+            required property var modelData
+            Shortcut {
+                sequence: modelData[0]
+                enabled: !window.singleKeyShortcutsBlocked && !editor.readOnly
+                onActivated: editor.addOverlayAt(modelData[1], editor.position, 3)
+            }
+        }
+    }
+    Shortcut { sequence: "M"; enabled: !window.singleKeyShortcutsBlocked; onActivated: editor.jumpToMarker(1) }
+    Shortcut { sequence: "Shift+M"; enabled: !window.singleKeyShortcutsBlocked; onActivated: editor.jumpToMarker(-1) }
+    Shortcut { sequence: "Ctrl+M"; enabled: !window.singleKeyShortcutsBlocked && !editor.readOnly; onActivated: editor.addMarkerAt(editor.position, "") }
     Shortcut {
         sequence: "Delete"
         enabled: !window.singleKeyShortcutsBlocked && !editor.readOnly
         onActivated: {
             if (timeline.hasRange) timeline.deleteSelectedRange()
+            else if (editor.selectedOverlayId) editor.removeOverlay(editor.selectedOverlayId)
             else if (editor.selectedZoomIds.length) editor.removeSelectedZooms()
             else editor.removeClip(editor.selectedClipId)
         }
@@ -247,10 +265,11 @@ ApplicationWindow {
     Shortcut {
         sequence: "Escape"
         enabled: editor.pickingZoomTarget || timeline.hasRange
-            || editor.selectedClipId || editor.selectedZoomId
+            || editor.selectedClipId || editor.selectedZoomId || editor.selectedOverlayId
         onActivated: {
             if (editor.pickingZoomTarget) editor.setPickingZoomTarget(false)
             else if (timeline.hasRange) timeline.clearRange()
+            else if (editor.selectedOverlayId) editor.selectedOverlayId = ""
             else editor.selectedClipId = ""
         }
     }

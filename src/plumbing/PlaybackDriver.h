@@ -69,6 +69,18 @@ public:
     // whenever that changes, however short the file), remainingMs is how long its sound lasts
     // from there (-1: unknown). A player that ran off the end is revived first.
     void syncMusic(qint64 milliseconds, qint64 pass, qint64 remainingMs, qint64 toleranceMs, bool play, double volume);
+    // Plays the screen's or the media player's sound from another file on the same timeline
+    // (the editor's cleaned sound) in place of the file's own, once it has loaded: a player of
+    // its own follows the player's position, rate and play state, so the picture is untouched.
+    // An empty path goes back to the file's own sound. Opening another inserted video clears
+    // the media player's.
+    void setAudioSource(Player player, const QString &path);
+    // The file the screen's or media player's sound plays from now: empty for the file's own.
+    QString audioSource(Player player) const;
+    QString screenAudioSource() const { return audioSource(Screen); }
+    qint64 audioPosition(Player player) const { return otherSound(player).player.position(); }
+    qint64 screenAudioPosition() const { return audioPosition(Screen); }
+    QMediaPlayer::PlaybackState screenAudioState() const { return m_screenSound.player.playbackState(); }
 
     qint64 position(Player player) const;
     // False while the media player's file is still opening or a seek waits on it: it has no
@@ -95,6 +107,28 @@ private:
     QMediaPlayer &player(Player player);
     const QMediaPlayer &player(Player player) const;
     bool playingNow(Player player) const { return m_playingQuery && m_playingQuery(player); }
+    // A player's sound from another file (setAudioSource), on a player of its own.
+    struct OtherSound {
+        QMediaPlayer player;
+        std::unique_ptr<QAudioOutput> output;
+        double volume = 1.0;
+        bool muted = false;
+        // The file has loaded and makes the player's sound.
+        bool active = false;
+        // When it was last moved to correct drift (ms since epoch).
+        qint64 correctedAt = 0;
+    };
+    OtherSound &otherSound(Player player) { return player == Media ? m_mediaSound : m_screenSound; }
+    const OtherSound &otherSound(Player player) const { return player == Media ? m_mediaSound : m_screenSound; }
+    QAudioOutput *ownOutput(Player player) const
+    {
+        return player == Media ? m_mediaAudioOutput.get() : m_audioOutput.get();
+    }
+    // Volume and mute for the screen's or media player's sound, on whichever player makes it.
+    void applyAudio(Player player);
+    // Brings the other-sound player to its player's rate and play state, and to its position
+    // when `seek` or when it has drifted off.
+    void follow(Player player, bool seek);
 
     // Declared before the players so they outlive any frame a player delivers as it is torn down.
     std::function<bool(Player)> m_playingQuery;
@@ -104,6 +138,9 @@ private:
     // Holds one inserted video at a time.
     QMediaPlayer m_mediaPlayer;
     QMediaPlayer m_musicPlayer;
+    // The screen's and the inserted video's sound from setAudioSource()'s files.
+    OtherSound m_screenSound;
+    OtherSound m_mediaSound;
     std::unique_ptr<QAudioOutput> m_audioOutput;
     std::unique_ptr<QAudioOutput> m_mediaAudioOutput;
     std::unique_ptr<QAudioOutput> m_musicAudioOutput;

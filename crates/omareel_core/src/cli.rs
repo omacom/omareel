@@ -11,16 +11,22 @@ commands:\n\
 \x20     --with-webcam, --webcam-device PATH, --webcam-height 720|1080,\n\
 \x20     --no-webcam, --no-selfview, --no-open, --no-bar,\n\
 \x20     --stop, --cancel.\n\
+\x20 record --marker [LABEL] | --retake [SECONDS] | --pause\n\
+\x20     While recording: drop a marker, cut back to the last marker (or the last\n\
+\x20     SECONDS recorded, 5 without a marker) in the new project, or pause and resume.\n\
 \x20 edit <bundle.omareel>\n\
 \x20     Open a recording bundle in the editor.\n\
 \x20 export <bundle> -o <file.mp4|file.gif|file.srt|file.vtt> [options]\n\
 \x20     Export with --fps N, --width W, --quality LEVEL, --gif-fps N,\n\
-\x20     --gif-width W, or --timing. .srt and .vtt write the captions.\n\
+\x20     --gif-width W, --aspect A, --reframe follow|off, or --timing. .srt and\n\
+\x20     .vtt write the captions. --preset youtube|shorts|x|github-gif|slack sets\n\
+\x20     them all for one platform (and the file name when -o is left out).\n\
 \x20 frame <bundle> --at SECONDS [--at ...] -o <file.png|file.jpg> [options]\n\
 \x20     Render the export's frames at output times (12.5 or 1:02.5) as images\n\
 \x20     (out-1.png, out-2.png... for several, or use %d). --count N instead\n\
 \x20     spreads N frames; --sheet puts them on one labelled contact sheet.\n\
-\x20     Options: --width W (a sheet's whole width), --fps N.\n\
+\x20     Options: --width W (a sheet's whole width), --fps N, and --preset ID,\n\
+\x20     --aspect A, --reframe follow|off as for export.\n\
 \x20 transcribe <bundle> [--backend auto|voxtype|hex|superwhisper|whisper-cpp]\n\
 \x20     [--force]\n\
 \x20     Write transcript.json with Omarchy's dictation engine, on this computer.\n\

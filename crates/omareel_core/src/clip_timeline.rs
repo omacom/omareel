@@ -158,6 +158,8 @@ impl ClipTimeline {
                 let id = self.next_id;
                 self.next_id = self.next_id.wrapping_add(1);
                 right.id = qstring::arg(&qstring::arg("%1-s%2", &right.id), &id.to_string());
+                // The transition is for the cut before the clip: it stays with the left piece.
+                right.transition = None;
                 self.clips[i] = left;
                 self.clips.insert(i + 1, right);
                 return true;
@@ -228,6 +230,8 @@ impl ClipTimeline {
                             return false;
                         }
                         right.id = remainder_id.to_owned();
+                        // A new cut, which follows the project's transition.
+                        right.transition = None;
                     }
                     kept.push(right);
                 }
@@ -246,6 +250,19 @@ impl ClipTimeline {
 mod tests {
     use super::*;
     use crate::compat::qround::{q_fuzzy_compare, q_fuzzy_is_null};
+
+    #[test]
+    fn new_pieces_do_not_inherit_the_cut_transition() {
+        let clip = Clip { id: "x".into(), in_: 0.0, out: 10.0, transition: Some("none".into()), ..Clip::default() };
+        let mut timeline = ClipTimeline::new(vec![clip.clone()]);
+        assert!(timeline.split(4.0));
+        assert_eq!(timeline.clips()[0].transition.as_deref(), Some("none"));
+        assert_eq!(timeline.clips()[1].transition, None);
+        let mut timeline = ClipTimeline::new(vec![clip]);
+        assert!(timeline.delete_range(4.0, 6.0, "rest"));
+        assert_eq!(timeline.clips()[0].transition.as_deref(), Some("none"));
+        assert_eq!(timeline.clips()[1].transition, None, "the new cut follows the project");
+    }
 
     /// `QCOMPARE` on doubles: fuzzy, and an expected (fuzzy) zero needs an actual one.
     fn qcompare(actual: f64, expected: f64) -> bool {
