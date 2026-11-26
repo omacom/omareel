@@ -38,7 +38,8 @@ makedepends=(
   'qt6-shadertools'
   'wayland'
 )
-optdepends=('gifsicle: optimize exported GIF files')
+optdepends=('gifsicle: optimize exported GIF files'
+            'qt6-imageformats: WebP stills from omareel frame')
 conflicts=('omarecord')
 source=()
 sha256sums=()
