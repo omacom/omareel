@@ -187,11 +187,14 @@ pub fn build_cues(transcript: &Transcript, clips: &[Clip], style: CaptionStyle) 
                 let last = group[group.len() - 1];
                 let texts: Vec<&str> = group.iter().map(|w| w.text.as_str()).chain([word.text.as_str()]).collect();
                 let chars: usize = group.iter().map(|w| w.text.chars().count() + 1).sum();
-                word.start - last.end > BREAK_GAP
+                // A word that starts with the cue never starts the next: two cues at one time would
+                // leave the first no time to show, and its words would be lost.
+                word.start > group[0].start
+                    && (word.start - last.end > BREAK_GAP
                     || wrap(&texts, LINE_CHARS).len() > MAX_LINES
                     // A new phrase, or a new sentence once there is a line's worth, starts fresh.
                     || (word.segment != last.segment && chars >= 12)
-                    || (ends_sentence(&last.text) && chars >= LINE_CHARS / 2)
+                    || (ends_sentence(&last.text) && chars >= LINE_CHARS / 2))
             }
         };
         if starts_new {
@@ -233,11 +236,12 @@ fn short_cues(words: &[OutputWord], total: f64) -> Vec<Cue> {
             Some(group) => {
                 let last = group[group.len() - 1];
                 let chars: usize = group.iter().map(|w| w.text.chars().count() + 1).sum::<usize>() + word.text.chars().count();
-                group.len() >= SHORT_WORDS
-                    || chars > SHORT_CHARS
-                    || word.start - last.end > SHORT_GAP
-                    || word.segment != last.segment
-                    || ends_clause(&last.text)
+                word.start > group[0].start
+                    && (group.len() >= SHORT_WORDS
+                        || chars > SHORT_CHARS
+                        || word.start - last.end > SHORT_GAP
+                        || word.segment != last.segment
+                        || ends_clause(&last.text))
             }
         };
         if starts_new {
@@ -681,6 +685,20 @@ mod tests {
         );
         let phrase = to_ass(&build_cues(&t, &[clip("a", 0.0, 3.0, 1.0)], CaptionStyle::Phrase), &look);
         assert_eq!(phrase.lines().filter(|l| l.starts_with("Dialogue:")).count(), 1);
+    }
+
+
+    /// Words that share a start time (an engine's rounding) stay in one cue, so none is lost to
+    /// a cue with no time to show.
+    #[test]
+    fn words_at_one_time_are_never_dropped() {
+        let t = measured(&[(1.0, 1.0, "one."), (1.0, 1.2, "two,"), (1.0, 1.3, "three"), (1.4, 1.6, "four")]);
+        for style in CaptionStyle::ALL {
+            let cues = build_cues(&t, &[clip("a", 0.0, 10.0, 1.0)], style);
+            let shown: usize = cues.iter().map(|c| c.lines.join(" ").split(' ').count()).sum();
+            assert_eq!(shown, 4, "{style:?}: {cues:?}");
+            assert!(cues.iter().all(|c| c.end > c.start), "{style:?}: {cues:?}");
+        }
     }
 
 }

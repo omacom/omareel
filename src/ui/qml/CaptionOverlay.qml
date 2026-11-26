@@ -26,6 +26,23 @@ Item {
     // The widest a line may be: lines longer than this (portrait frames, large sizes) wrap
     // inside the pill rather than spilling out of it.
     readonly property real textWidth: Math.max(0, width - 80 * ref - 2 * padX)
+    // A word too wide for the frame on its own (a long word, large, in portrait) can't wrap:
+    // the text shrinks until the longest one fits.
+    readonly property string longestWord: {
+        let longest = ""
+        for (const line of cueLines)
+            for (const word of line.split(" "))
+                if (word.length > longest.length) longest = word
+        return longest
+    }
+    TextMetrics {
+        id: longestMetrics
+        text: root.longestWord
+        font.pixelSize: root.fontPx
+        font.weight: root.isShort ? Font.Black : Font.DemiBold
+    }
+    readonly property real fitScale: longestMetrics.advanceWidth > textWidth && longestMetrics.advanceWidth > 0
+        ? textWidth / longestMetrics.advanceWidth : 1
     anchors.fill: parent
 
     function escaped(text) {
@@ -78,7 +95,7 @@ Item {
             // theme's accent is close to its foreground.
             color: root.active >= 0 ? Qt.alpha(root.textColor, .62 /* captions::UNLIT_OPACITY */) : root.textColor
             textFormat: Text.StyledText
-            font.pixelSize: root.fontPx
+            font.pixelSize: Math.max(1, root.fontPx * root.fitScale)
             font.weight: root.isShort ? Font.Black : Font.DemiBold
         }
         Label {
