@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 6.8 REQUIRED COMPONENTS Core Concurrent Gui GuiPrivate Quick QuickControls2 Multimedia OpenGL ShaderTools Svg Test)
+find_package(Qt6 6.8 REQUIRED COMPONENTS Core Concurrent DBus Gui GuiPrivate Quick QuickControls2 Multimedia OpenGL ShaderTools Svg Test)
 find_package(LayerShellQt REQUIRED)
 
 # The program logic is Rust (crates/). omareel_qt is the one static library linked into C++:
@@ -149,6 +149,7 @@ qt_add_qml_module(omareel_render
     SOURCES
         src/render/FrameSource.h src/render/FrameSource.cpp
         src/render/VideoDecoding.h src/render/VideoDecoding.cpp
+        src/ui/PortalFilePicker.h src/ui/PortalFilePicker.cpp
     QML_FILES
         src/ui/qml/Composition.qml
         src/ui/qml/Background.qml
@@ -226,8 +227,8 @@ qt_add_resources(omareel_render "omareel_assets"
         assets/fonts/Inter-SemiBold.ttf assets/fonts/Inter-Bold.ttf
         assets/sounds/click.wav
 )
-target_include_directories(omareel_render PUBLIC src src/render)
-target_link_libraries(omareel_render PUBLIC omareel_qt omareel_ui Qt6::Concurrent Qt6::Quick Qt6::QuickControls2 Qt6::Multimedia Qt6::OpenGL Qt6::Svg
+target_include_directories(omareel_render PUBLIC src src/render PRIVATE src/ui)
+target_link_libraries(omareel_render PUBLIC omareel_qt omareel_ui Qt6::Concurrent Qt6::DBus Qt6::Quick Qt6::QuickControls2 Qt6::Multimedia Qt6::OpenGL Qt6::Svg
     PRIVATE Qt6::GuiPrivate)
 
 qt_add_executable(omareel src/main.cpp src/ui/CaptureTestClient.cpp)
@@ -251,6 +252,9 @@ if(BUILD_TESTING)
     qt_add_executable(test_editor tests/test_editor.cpp)
     target_link_libraries(test_editor PRIVATE omareel_render Qt6::Test)
     add_test(NAME editor COMMAND test_editor)
+    qt_add_executable(test_portal_file_picker tests/test_portal_file_picker.cpp)
+    target_link_libraries(test_portal_file_picker PRIVATE omareel_render Qt6::Test)
+    add_test(NAME portal_file_picker COMMAND test_portal_file_picker)
     # The Rust crates' own tests. omareel_qt is left out: it only links inside a Qt binary.
     set(OMAREEL_CARGO_TEST ${CMAKE_COMMAND} -E env CARGO_TARGET_DIR=${CMAKE_BINARY_DIR}/cargo/test
         ${Rust_CARGO} test --locked --workspace --exclude omareel_qt --quiet)
