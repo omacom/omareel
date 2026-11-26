@@ -190,8 +190,14 @@ impl Transcript {
     }
 
     /// Writes the bundle's transcript atomically.
+    /// A transcript.json that is a link (a bundle from somewhere else) is replaced, never
+    /// written through: the save would otherwise overwrite whatever it points at.
     pub fn save(&self, bundle: &str) -> Result<(), String> {
-        qsavefile::save(&transcript_path(bundle), self.to_json().to_json(Format::Indented).as_bytes())
+        let path = transcript_path(bundle);
+        if std::fs::symlink_metadata(&path).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
+            std::fs::remove_file(&path).map_err(|error| format!("{path}: {error}"))?;
+        }
+        qsavefile::save(&path, self.to_json().to_json(Format::Indented).as_bytes())
     }
 }
 
@@ -294,4 +300,21 @@ mod tests {
         assert!(estimate_words("", &[(0.0, 1.0)]).is_empty());
         assert!(estimate_words("word", &[]).is_empty());
     }
+
+    /// A bundle whose transcript.json links elsewhere gets a file of its own; the link's target
+    /// is left alone.
+    #[test]
+    fn a_linked_transcript_is_replaced_not_written_through() {
+        let dir = crate::compat::qdir::tests::TempDir::new("transcript-link");
+        let bundle = dir.join("b.omareel");
+        std::fs::create_dir_all(&bundle).unwrap();
+        let target = dir.join("bashrc");
+        std::fs::write(&target, "mine").unwrap();
+        std::os::unix::fs::symlink(&target, transcript_path(&bundle)).unwrap();
+        Transcript::default().save(&bundle).unwrap();
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "mine");
+        let saved = std::fs::symlink_metadata(transcript_path(&bundle)).unwrap();
+        assert!(saved.file_type().is_file());
+    }
+
 }
