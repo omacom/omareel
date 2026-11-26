@@ -204,7 +204,7 @@ impl MotionTrack {
         for i in 0..count {
             let time = cpp::min(track.duration, f64::from(i) / MotionTrack::SAMPLE_RATE);
             let cursor_target = cursor_path::position_at(&raw, time);
-            let (zoom_target, interest) = zoom_timeline::target_and_interest_at(&project.zooms, &raw, time, &project.zoom_style);
+            let (zoom_target, interest) = zoom_timeline::target_and_interest_in(&project.zooms, &raw, time, &project.zoom_style, &project.crop);
             let pressed = track.clicks.iter().any(|click| time >= click.down - 0.13 && time <= click.up);
 
             let mut hidden = !project.cursor.visible;
@@ -283,6 +283,7 @@ impl MotionTrack {
                         center: to_crop(interest.center),
                         follow_cursor: interest.automatic,
                     }),
+                    cut: near_boundary,
                 });
             }
         }

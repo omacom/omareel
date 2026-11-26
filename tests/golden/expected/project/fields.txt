@@ -2336,13 +2336,13 @@ zooms[1].start	4
 zooms[1].end	6.5
 zooms[1].level	3.5
 zooms[1].automaticTarget	false
-zooms[1].target	0.25 0.75
+zooms[1].target	0.22500000000000001 0.64999999999999991
 zooms[2].id	"z3"
 zooms[2].start	7
 zooms[2].end	7.5
 zooms[2].level	2
 zooms[2].automaticTarget	false
-zooms[2].target	0.5 0.5
+zooms[2].target	0.34999999999999998 0.5
 zooms[3].id	"z4"
 zooms[3].start	8
 zooms[3].end	9

@@ -579,6 +579,16 @@ pub fn assert_golden(relative: &str, actual: &str) {
 
 /// Fails with every report collected by a test that compares several files.
 #[track_caller]
+/// [`difference`] against `expected/<relative>`; with `OMAREEL_GOLDEN_BLESS=1` the file is
+/// rewritten instead, like [`assert_golden`].
+pub fn golden_difference(relative: &str, actual: &[u8]) -> Option<String> {
+    if blessing() {
+        std::fs::write(expected_path(relative), actual).expect("the golden file is writable");
+        return None;
+    }
+    difference(relative, &read_expected(relative), actual)
+}
+
 pub fn assert_no_differences(reports: Vec<String>) {
     if !reports.is_empty() {
         panic!("{} file(s) differ:\n{}", reports.len(), reports.join("\n\n"));

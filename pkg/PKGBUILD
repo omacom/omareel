@@ -38,7 +38,8 @@ makedepends=(
   'qt6-shadertools'
   'wayland'
 )
-optdepends=('gifsicle: optimize exported GIF files')
+optdepends=('gifsicle: optimize exported GIF files'
+            'wl-clipboard: copy an exported file to the clipboard')
 conflicts=('omarecord')
 source=()
 sha256sums=()

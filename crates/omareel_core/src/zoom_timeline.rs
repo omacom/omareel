@@ -1,7 +1,7 @@
 //! Automatic zooms and the zoom target over time (`ZoomTimeline`).
 
 use crate::compat::cpp;
-use crate::compat::geometry::PointF;
+use crate::compat::geometry::{PointF, RectF};
 use crate::compat::qjson::{Object, Value};
 use crate::cursor_path::CursorSample;
 use crate::project::{ZoomSegment, ZoomStyle};
@@ -89,18 +89,38 @@ pub fn target_and_interest_at(
     time: f64,
     style: &ZoomStyle,
 ) -> (ZoomFrame, Option<ZoomInterest>) {
+    target_and_interest_in(segments, samples, time, style, &RectF::new(0.0, 0.0, 1.0, 1.0))
+}
+
+/// [`target_and_interest_at`] in a recording cropped to `crop`: the zoom is kept inside the
+/// crop, which is what the frame shows, and snapped to its edges, not the recording's. The
+/// centre is still normalised to the recording.
+pub fn target_and_interest_in(
+    segments: &[ZoomSegment],
+    samples: &[CursorSample],
+    time: f64,
+    style: &ZoomStyle,
+    crop: &RectF,
+) -> (ZoomFrame, Option<ZoomInterest>) {
     let Some((active, aim)) = aim_at(segments, samples, time) else { return (ZoomFrame::default(), None) };
+    let width = crop.width.max(0.0001);
+    let height = crop.height.max(0.0001);
+    let into = |p: PointF| PointF::new((p.x - crop.x) / width, (p.y - crop.y) / height);
+    let out = |p: PointF| PointF::new(crop.x + p.x * width, crop.y + p.y * height);
     match aim {
         Aim::Fixed(target) => (
-            ZoomFrame { scale: active.level, center: clamp_center(target, active.level) },
+            ZoomFrame { scale: active.level, center: out(clamp_center(into(target), active.level)) },
             Some(ZoomInterest { center: target, automatic: false }),
         ),
         Aim::Group(center) => (
-            ZoomFrame { scale: active.level, center: snap_edges(center, active.level, style.snap_to_edges_ratio) },
+            ZoomFrame {
+                scale: active.level,
+                center: out(snap_edges(into(center), active.level, style.snap_to_edges_ratio)),
+            },
             Some(ZoomInterest { center, automatic: true }),
         ),
         Aim::Middle => {
-            let center = PointF::new(0.5, 0.5);
+            let center = out(PointF::new(0.5, 0.5));
             (ZoomFrame { scale: active.level, center }, Some(ZoomInterest { center, automatic: true }))
         }
     }
@@ -240,4 +260,22 @@ mod tests {
         segment.target = PointF::new(0.25, 1.0);
         assert_eq!(target_to_json(&segment).to_json(crate::compat::qjson::Format::Compact), r#"{"x":0.25,"y":1}"#);
     }
+
+    /// In a cropped recording a fixed zoom can aim anywhere in the crop: it is kept inside the
+    /// crop, not the whole recording.
+    #[test]
+    fn zooms_stay_inside_the_crop_and_reach_its_edges() {
+        // The right half of the recording, zoomed 2x at its right edge.
+        let crop = RectF::new(0.5, 0.0, 0.5, 1.0);
+        let mut fixed = zoom(0.0, 2.0);
+        fixed.automatic_target = false;
+        fixed.target = PointF::new(0.98, 0.5);
+        let (frame, _) = target_and_interest_in(&[fixed.clone()], &[sample(0.0, 0.5, 0.5)], 1.0, &ZoomStyle::default(), &crop);
+        // A quarter of the crop's width each side of the centre: 1 - 0.25 of the crop.
+        assert!((frame.center.x - (0.5 + 0.75 * 0.5)).abs() < 1e-9, "{frame:?}");
+        // Uncropped, the same target is held a quarter of the recording from its edge.
+        let full = target_at(&[fixed], &[sample(0.0, 0.5, 0.5)], 1.0, &ZoomStyle::default());
+        assert!((full.center.x - 0.75).abs() < 1e-9, "{full:?}");
+    }
+
 }
