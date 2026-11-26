@@ -264,7 +264,8 @@ impl Document {
     }
 
     /// `resetClipTrims(id)`: the clip spans its whole bounds again. Already reset is success
-    /// without touching history or the saved state.
+    /// without touching history or the saved state, unless its bounds are under the 0.1 s a clip
+    /// needs, which fails as before.
     pub fn reset_clip_trims(&mut self, id: &str) -> bool {
         let index = self.clip_index(id);
         if index < 0 {
