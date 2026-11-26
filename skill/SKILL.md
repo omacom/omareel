@@ -227,9 +227,10 @@ at a time, on screen for 2–4 s, never over what they point at.
   they show and stays with that footage through later cuts.
 - `frame` (text, card by default): the canvas. `rect` is 0–1 of the output
   frame, at output times. omareel keeps it on its moment when the timeline
-  changes: cuts and trimmed pauses move it back, a speed-up retimes it, and
-  one at the very end stays at the end. Don't re-time it yourself after a
-  cut; read `describe` again.
+  changes: cuts and trimmed pauses move it back, `speed-up-quiet` retimes it,
+  and one at the very end stays at the end. Don't re-time it yourself after a
+  cut; read `describe` again. A `speed` op on a clip does not move it: after
+  one, check `describe` and move the overlay with `edit-overlay`.
 
 ```json
 [{"op": "add-overlay", "kind": "box", "from": 12.0, "to": 15.0,

@@ -284,10 +284,43 @@ fn edit_overlay(document: &mut Document, op: &Object) -> OpResult {
     check_fields(op, &current.kind)?;
     let new_anchor = anchor(op, &current.kind, &current.anchor)?;
     let mut patch = look_patch(op, &current.kind, true)?;
+    // A rect given in part is checked whole, with the fields it leaves as they are: otherwise
+    // a wider box past the frame's edge gets its x moved to fit, which nobody asked for.
+    if let Some(given) = patch.value("rect").as_object().cloned() {
+        let r = current.rect;
+        let field = |key: &str, now: f64| given.value(key).to_double(now);
+        let (x, y, w, h) = (field("x", r.x), field("y", r.y), field("w", r.width), field("h", r.height));
+        if x + w > 1.0 + 1e-6 || y + h > 1.0 + 1e-6 {
+            return Err(format!(
+                "\"rect\" would reach past the frame: x {} + w {} and y {} + h {} must each be at most 1 (give x or y too)",
+                ms(x),
+                ms(w),
+                ms(y),
+                ms(h)
+            ));
+        }
+        patch.insert(
+            "rect",
+            Object::from_iter([("x", Value::from(x)), ("y", y.into()), ("w", w.into()), ("h", h.into())]),
+        );
+    }
     if new_anchor != current.anchor {
         patch.insert("anchor", new_anchor.as_str());
     }
     let (from, to) = (optional_number(op, "from")?, optional_number(op, "to")?);
+    // Onto the screen where it plays now, as add-overlay checks: over inserted videos alone there
+    // is no recording to hold it, and the conversion would put it on unrelated footage.
+    if new_anchor == "screen" && current.anchor != "screen" && from.is_none() && to.is_none() {
+        shown_source_extent(document, current.start, current.end)
+            .filter(|(start, end)| end - start > 1e-6)
+            .ok_or_else(|| {
+                format!(
+                    "only inserted videos play at {}–{}; a screen overlay needs the recording (keep \"anchor\": \"frame\")",
+                    ms(current.start),
+                    ms(current.end)
+                )
+            })?;
+    }
     if from.is_some() || to.is_some() {
         // The times not given stay where they are, read on the op's timeline.
         let (now_from, now_to) = if source_timeline(op)? {

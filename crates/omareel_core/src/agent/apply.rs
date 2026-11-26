@@ -823,10 +823,18 @@ pub fn apply_scoped(document: &mut Document, ops: &[Object], dry_run: bool, scop
     }
     // Footage the person cut while recording (a retake, a pause) that the edits bring back.
     let recording_cuts = super::recording_cuts(document.bundle_path(), document.source_duration());
-    let shown = |document: &Document, start: f64, end: f64| {
-        !source_span_outputs(&document.project().clips, start + 0.05, end - 0.05).is_empty()
+    // How much of a cut span the recording clips show (source seconds): a warning for any of it
+    // the edits bring back, also when part of it already showed.
+    let shown = |document: &Document, start: f64, end: f64| -> f64 {
+        document
+            .project()
+            .clips
+            .iter()
+            .filter(|clip| !clip.is_media())
+            .map(|clip| (clip.out.min(end) - clip.in_.max(start)).max(0.0))
+            .sum()
     };
-    let hidden_before: Vec<bool> = recording_cuts.iter().map(|&(_, start, end)| !shown(document, start, end)).collect();
+    let shown_before: Vec<f64> = recording_cuts.iter().map(|&(_, start, end)| shown(document, start, end)).collect();
     let mut run = Run { dry_run, scope, ..Run::default() };
     let mut results = Vec::new();
     for (index, op) in ops.iter().enumerate() {
@@ -858,8 +866,8 @@ pub fn apply_scoped(document: &mut Document, ops: &[Object], dry_run: bool, scop
             }
         }
     }
-    for (&(kind, start, end), hidden) in recording_cuts.iter().zip(hidden_before) {
-        if hidden && shown(document, start, end) {
+    for (&(kind, start, end), before) in recording_cuts.iter().zip(shown_before) {
+        if shown(document, start, end) > before + 0.05 {
             run.warnings.push(format!(
                 "source {}–{} was cut while recording (a {kind}) and now plays again; the person chose to leave it out",
                 ms(start),
