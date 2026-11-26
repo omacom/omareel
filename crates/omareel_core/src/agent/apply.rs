@@ -269,12 +269,16 @@ fn run_op(document: &mut Document, op: &Object, run: &mut Run) -> OpResult {
                     return Err("none of the ranges is in the edited video, or they would remove all of the recording".into());
                 }
             } else {
-                let mut spans = ranges;
-                spans.sort_by(|a, b| b.0.total_cmp(&a.0));
-                for (from, to) in spans {
+                // All checked against the video as it is, then joined: overlapping ranges cut
+                // once, and from the last so the earlier ones stay where they are.
+                for &(from, to) in &ranges {
                     if from < 0.0 || to > document.duration() + 1e-6 {
                         return Err(format!("{from}–{to} is outside the video (0 to {})", ms(document.duration())));
                     }
+                }
+                let mut spans = crate::transcript::trim::merge_ranges(&ranges);
+                spans.sort_by(|a, b| b.0.total_cmp(&a.0));
+                for (from, to) in spans {
                     if !document.delete_output_range(from, to) {
                         return Err(format!("nothing to cut at {from}–{to}, or the cut would remove all of the recording"));
                     }
@@ -493,7 +497,7 @@ fn run_op(document: &mut Document, op: &Object, run: &mut Run) -> OpResult {
                 let imported = if run.dry_run {
                     match (job.probe_audio)(&file) {
                         Ok(duration) => ImportedMusic {
-                            path: format!("media/{}", qdir::FileInfo::new(file.as_str()).file_name()),
+                            path: crate::editor::planned_media_path(&file, document.bundle_path(), "music"),
                             duration,
                             error: String::new(),
                         },

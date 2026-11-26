@@ -318,6 +318,11 @@ fn speech_operations_cut_by_the_transcript() {
     apply_ops(&mut document, &ops(r#"{"op": "delete", "ranges": [[2, 3], [6, 7]]}"#), false).unwrap();
     assert_eq!(spans(&document), vec![(0.0, 2.0, 1.0), (3.0, 6.0, 1.0), (7.0, 10.0, 1.0)]);
     assert!(apply_ops(&mut document, &ops(r#"{"op": "delete", "ranges": [[3, 2]]}"#), false).is_err());
+    // Overlapping output ranges cut their union once: 1 to 4, three seconds, not four.
+    let mut document = open(&bundle, &dir);
+    let (results, _) = apply_ops(&mut document, &ops(r#"{"op": "delete", "ranges": [[1, 3], [2, 4]]}"#), false).unwrap();
+    assert_eq!(results[0].get("removed_seconds").to_double(0.0), 3.0);
+    assert_eq!(spans(&document), vec![(0.0, 1.0, 1.0), (4.0, 10.0, 1.0)]);
 }
 
 #[test]
