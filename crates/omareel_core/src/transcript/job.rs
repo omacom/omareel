@@ -145,12 +145,14 @@ fn reader(pipe: Option<impl Read + Send + 'static>, chunks: mpsc::Sender<Vec<u8>
 
 /// Runs `command` (in a process group of its own, stdin closed) to its end and returns its
 /// output, or why it stopped. `on_output` sees standard output as it comes; returning false
-/// stops the command early, which still counts as a normal end (the output so far is kept).
-/// The group is killed once the command ends too, so nothing it started outlives it.
+/// stops the command early, which still counts as a normal end. The output is kept in
+/// [`Output::stdout`] only when `keep` is set. The group is killed once the command ends too, so
+/// nothing it started outlives it.
 pub fn run_streaming(
     mut command: Command,
     timeout: Option<Duration>,
     control: &Control,
+    keep: bool,
     mut on_output: impl FnMut(&[u8]) -> bool,
 ) -> Result<Output, Stopped> {
     use std::os::unix::process::CommandExt;
@@ -172,13 +174,14 @@ pub fn run_streaming(
     loop {
         if out_open {
             match out_rx.recv_timeout(POLL) {
+                // A command that streams without pause (ffmpeg decoding) still gets every check
+                // below after each chunk.
                 Ok(chunk) => {
                     if wanted {
-                        stdout.extend_from_slice(&chunk);
+                        if keep {
+                            stdout.extend_from_slice(&chunk);
+                        }
                         wanted = on_output(&chunk);
-                    }
-                    if wanted {
-                        continue;
                     }
                 }
                 Err(RecvTimeoutError::Timeout) => {}
@@ -217,7 +220,9 @@ pub fn run_streaming(
     while wanted && out_open {
         match out_rx.recv_timeout(drain_until.saturating_duration_since(Instant::now())) {
             Ok(chunk) => {
-                stdout.extend_from_slice(&chunk);
+                if keep {
+                    stdout.extend_from_slice(&chunk);
+                }
                 wanted = on_output(&chunk);
             }
             Err(_) => break,
@@ -233,7 +238,7 @@ pub fn run_streaming(
 
 /// [`run_streaming`] keeping all the output.
 pub fn run(command: Command, timeout: Option<Duration>, control: &Control) -> Result<Output, Stopped> {
-    run_streaming(command, timeout, control, |_| true)
+    run_streaming(command, timeout, control, true, |_| true)
 }
 
 /// Whether process `pid` still runs. A zombie doesn't: in a container whose first process
@@ -327,10 +332,32 @@ mod tests {
         assert_eq!(run(sh("echo again"), None, &control).unwrap().stdout, b"again\n");
     }
 
+    /// A command that never stops writing is still held, timed out and cancelled.
+    #[test]
+    fn a_busy_command_is_still_held() {
+        let held = Arc::new(AtomicBool::new(false));
+        let flag = Arc::clone(&held);
+        let control = Control { hold: Some(Arc::new(move || flag.load(Ordering::Relaxed))), ..Control::default() };
+        let setter = Arc::clone(&held);
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(200));
+            setter.store(true, Ordering::Relaxed);
+        });
+        let started = Instant::now();
+        let result = run_streaming(sh("yes"), None, &control, false, |_| true);
+        assert!(matches!(result, Err(Stopped::Held)), "{:?}", result.map(|o| o.code));
+        assert!(started.elapsed() < Duration::from_secs(3), "{:?}", started.elapsed());
+
+        let started = Instant::now();
+        let result = run_streaming(sh("yes"), Some(Duration::from_millis(300)), &Control::default(), false, |_| true);
+        assert!(matches!(result, Err(Stopped::TimedOut)));
+        assert!(started.elapsed() < Duration::from_secs(3), "{:?}", started.elapsed());
+    }
+
     #[test]
     fn output_can_stop_the_command_early() {
         let started = Instant::now();
-        let output = run_streaming(sh("echo first; sleep 30; echo second"), None, &Control::default(), |chunk| {
+        let output = run_streaming(sh("echo first; sleep 30; echo second"), None, &Control::default(), true, |chunk| {
             !chunk.starts_with(b"first")
         })
         .unwrap();
