@@ -157,7 +157,20 @@ pub fn copy_file_to_clipboard(path: &str) -> Result<(), String> {
         .map_err(|error| format!("wl-copy: {error}"))?;
     let written = child.stdin.take().map(|mut stdin| stdin.write_all(file_uri_list(&absolute).as_bytes()));
     // wl-copy forks to serve the clipboard and its first process exits once it has the data.
-    let status = child.wait().map_err(|error| format!("wl-copy: {error}"))?;
+    // This runs on the GUI thread: a compositor that doesn't answer gets a second, then the
+    // caller's fallback (QClipboard) has a go.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
+    let status = loop {
+        match child.try_wait().map_err(|error| format!("wl-copy: {error}"))? {
+            Some(status) => break status,
+            None if std::time::Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err("wl-copy didn't answer".into());
+            }
+            None => std::thread::sleep(std::time::Duration::from_millis(10)),
+        }
+    };
     match written {
         Some(Ok(())) if status.success() => Ok(()),
         Some(Err(error)) => Err(format!("wl-copy: {error}")),

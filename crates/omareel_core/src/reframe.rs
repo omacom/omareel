@@ -81,6 +81,9 @@ pub struct Focus {
     pub zoom_scale: f64,
     /// What the active zoom is about, while a zoom segment is active.
     pub zoom: Option<ZoomFocus>,
+    /// The zoom cuts here instead of gliding ("Cut instead of glide"): the window jumps to its
+    /// aim too, rather than following on its spring.
+    pub cut: bool,
 }
 
 /// An active zoom's point of interest, in crop coordinates.
@@ -94,7 +97,7 @@ pub struct ZoomFocus {
 
 impl Default for Focus {
     fn default() -> Focus {
-        Focus { cursor: PointF::new(0.5, 0.5), zoom_scale: 1.0, zoom: None }
+        Focus { cursor: PointF::new(0.5, 0.5), zoom_scale: 1.0, zoom: None, cut: false }
     }
 }
 
@@ -262,8 +265,9 @@ impl ReframeTrack {
             // an edge snap would move a click near the edge off-centre.
             let aim_x = if zoomed { clamp_center(goal_x, w) } else { place(goal_x, w) };
             let aim_y = if zoomed { clamp_center(goal_y, h) } else { place(goal_y, h) };
-            if i == 0 {
+            if i == 0 || f.cut {
                 (x, y) = (aim_x, aim_y);
+                (vx, vy) = (0.0, 0.0);
             } else {
                 integrate(&mut x, &mut vx, aim_x, spring, dt);
                 integrate(&mut y, &mut vy, aim_y, spring, dt);
@@ -434,7 +438,7 @@ mod tests {
         for _ in 0..480 {
             scale += (2.0 - scale) * 0.05;
             let zoom = ZoomFocus { center: PointF::new(0.7, 0.4), follow_cursor: false };
-            focus.push(Focus { cursor: PointF::new(0.2, 0.5), zoom_scale: scale, zoom: Some(zoom) });
+            focus.push(Focus { cursor: PointF::new(0.2, 0.5), zoom_scale: scale, zoom: Some(zoom), cut: false });
         }
         let track = ReframeTrack::build(3.0, RATE, &focus, PORTRAIT, &spring());
         let zoomed = track.sample(3.0);
@@ -451,7 +455,7 @@ mod tests {
         for (i, &(x, y)) in [(0.0, 0.0), (1.0, 1.0), (-0.3, 0.5), (1.4, 0.2), (0.97, 0.5), (0.03, 0.5)].iter().enumerate() {
             for _ in 0..240 {
                 let zoom = (i == 4).then_some(ZoomFocus { center: PointF::new(0.95, 0.9), follow_cursor: true });
-                focus.push(Focus { cursor: PointF::new(x, y), zoom_scale: if i == 4 { 2.5 } else { 1.0 }, zoom });
+                focus.push(Focus { cursor: PointF::new(x, y), zoom_scale: if i == 4 { 2.5 } else { 1.0 }, zoom, cut: false });
             }
         }
         let track = ReframeTrack::build(6.0, RATE, &focus, PORTRAIT, &spring());
@@ -613,4 +617,24 @@ mod tests {
         assert!((made_up.w - PORTRAIT.0 / 2.0).abs() < 1e-12 && made_up.h == 0.5 && inside(&made_up));
         assert!((made_up.x + made_up.w - 1.0).abs() < 1e-12);
     }
+
+    /// With "Cut instead of glide" the window jumps with the zoom instead of gliding after it.
+    #[test]
+    fn a_cut_moves_the_window_at_once() {
+        let spring = Spring { mass: 1.0, stiffness: 100.0, damping: 20.0 };
+        let zoom = ZoomFocus { center: PointF::new(0.9, 0.5), follow_cursor: false };
+        let mut focus = vec![Focus::default(); 10];
+        for (i, f) in focus.iter_mut().enumerate().skip(5) {
+            *f = Focus { cursor: PointF::new(0.5, 0.5), zoom_scale: 2.0, zoom: Some(zoom), cut: i == 5 };
+        }
+        let track = ReframeTrack::build(10.0 / 30.0, 30.0, &focus, (0.5, 1.0), &spring);
+        let window = track.sample(5.0 / 30.0);
+        // Zoomed 2x the window is a quarter wide, its centre right on the target's clamp.
+        assert!((window.x + window.w / 2.0 - clamp_center(0.9, window.w)).abs() < 1e-9, "{window:?}");
+        // Without the cut it is still on its way.
+        focus[5].cut = false;
+        let glide = ReframeTrack::build(10.0 / 30.0, 30.0, &focus, (0.5, 1.0), &spring).sample(5.0 / 30.0);
+        assert!((glide.x + glide.w / 2.0 - clamp_center(0.9, glide.w)).abs() > 0.01, "{glide:?}");
+    }
+
 }

@@ -238,6 +238,7 @@ impl MotionTrack {
                         center: to_crop(interest.center),
                         follow_cursor: interest.automatic,
                     }),
+                    cut: near_boundary,
                 });
             }
         }
