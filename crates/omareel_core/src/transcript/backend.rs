@@ -126,18 +126,49 @@ pub struct VoxtypeConfig {
     pub language: String,
 }
 
-/// Reads `key = "value"` lines by section; enough for voxtype's flat TOML.
+/// A TOML value's text: a basic string ("…", with \" and \\ escapes), a literal string ('…'),
+/// or a bare value up to a comment. A `#` inside quotes is part of the string.
+fn toml_value(raw: &str) -> String {
+    let raw = raw.trim();
+    let mut chars = raw.chars();
+    match chars.next() {
+        Some('"') => {
+            let mut value = String::new();
+            while let Some(c) = chars.next() {
+                match c {
+                    '"' => break,
+                    '\\' => match chars.next() {
+                        Some('n') => value.push('\n'),
+                        Some('t') => value.push('\t'),
+                        Some(other) => value.push(other),
+                        None => break,
+                    },
+                    _ => value.push(c),
+                }
+            }
+            value
+        }
+        Some('\'') => chars.take_while(|&c| c != '\'').collect(),
+        _ => raw.split('#').next().unwrap_or("").trim().to_owned(),
+    }
+}
+
+/// Reads `key = value` lines by section; enough for voxtype's flat TOML.
 pub fn parse_voxtype_config(text: &str) -> VoxtypeConfig {
     let mut config = VoxtypeConfig::default();
     let mut section = String::new();
     for line in text.lines() {
-        let line = line.split('#').next().unwrap_or("").trim();
+        let line = line.trim();
         if line.starts_with('[') {
-            section = line.trim_matches(|c| c == '[' || c == ']').trim().to_owned();
+            let header = line.split('#').next().unwrap_or("");
+            section = header.trim().trim_matches(|c| c == '[' || c == ']').trim().to_owned();
+            continue;
+        }
+        if line.starts_with('#') {
             continue;
         }
         let Some((key, value)) = line.split_once('=') else { continue };
-        let value = value.trim().trim_matches('"').to_owned();
+        let value = toml_value(value);
         match (section.as_str(), key.trim()) {
             ("", "engine") => config.engine = value,
             ("whisper", "model") => config.whisper_model = value,
@@ -675,6 +706,11 @@ mod tests {
         );
         assert_eq!(config, VoxtypeConfig { engine: String::new(), whisper_model: "small.en".into(), language: "en".into() });
         assert_eq!(parse_voxtype_config("engine = \"parakeet\"\n").engine, "parakeet");
+        // Literal strings, and '#' inside quotes.
+        let config = parse_voxtype_config("[whisper]\nmodel = '/m/ggml-#1.bin' # mine\nlanguage = 'en'\n");
+        assert_eq!((config.whisper_model.as_str(), config.language.as_str()), ("/m/ggml-#1.bin", "en"));
+        let config = parse_voxtype_config("[whisper]\nmodel = \"/a \\\"b\\\" #c\" # note\nlanguage = en # bare\n");
+        assert_eq!((config.whisper_model.as_str(), config.language.as_str()), ("/a \"b\" #c", "en"));
     }
 
     #[test]
