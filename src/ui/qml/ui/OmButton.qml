@@ -84,6 +84,7 @@ Button {
             }
             Text {
                 visible: control.text !== ""
+                textFormat: Text.PlainText
                 text: control.text
                 color: control.contentColor
                 font: control.font

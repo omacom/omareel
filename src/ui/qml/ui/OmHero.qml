@@ -14,6 +14,7 @@ ColumnLayout {
         spacing: 8
         Text {
             Layout.fillWidth: true
+            textFormat: Text.PlainText
             text: root.title
             color: theme.textStrong
             font.family: theme.fontFamily
@@ -26,6 +27,7 @@ ColumnLayout {
     Text {
         Layout.fillWidth: true
         visible: root.meta !== ""
+        textFormat: Text.PlainText
         text: root.meta
         elide: Text.ElideRight
         color: theme.textMuted

@@ -37,6 +37,7 @@ ColumnLayout {
         Label {
             objectName: "musicName"
             Layout.fillWidth: true
+            textFormat: Text.PlainText
             text: editor.music.name || ""
             elide: Text.ElideMiddle
             color: theme.textStrong

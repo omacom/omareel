@@ -96,8 +96,9 @@ Dialog {
             Layout.fillWidth: true
             ColumnLayout {
                 spacing: 2
-                Label { text: root.done ? "Export complete" : "Export"; font.pixelSize: theme.type.title; font.weight: Font.DemiBold; color: theme.textStrong }
+                Label { textFormat: Text.PlainText; text: root.done ? "Export complete" : "Export"; font.pixelSize: theme.type.title; font.weight: Font.DemiBold; color: theme.textStrong }
                 Label {
+                    textFormat: Text.PlainText
                     text: editor.formatTime(editor.duration) + "  ·  " + editor.sourceWidth + "×" + editor.sourceHeight + " source"
                     font.family: theme.monoFamily
                     font.pixelSize: theme.type.caption
@@ -167,6 +168,7 @@ Dialog {
                 }
                 Label {
                     anchors.centerIn: parent
+                    textFormat: Text.PlainText
                     text: Math.min(99, Math.round(editor.exportProgress * 100)) + "%"
                     color: theme.textStrong
                     font.family: theme.monoFamily
@@ -202,6 +204,7 @@ Dialog {
                 Label {
                     id: specLabel
                     anchors.centerIn: parent
+                    textFormat: Text.PlainText
                     text: root.format.toUpperCase() + "  " + (root.heightValue === 2160 ? "4K" : root.heightValue + "p") + "  " + root.fpsValue + " fps"
                     color: theme.textStrong
                     font.family: theme.monoFamily
@@ -273,6 +276,7 @@ Dialog {
                 }
                 Label {
                     Layout.fillWidth: true
+                    textFormat: Text.PlainText
                     text: root.outputPath.replace(/^\/home\/[^/]+/, "~")
                     elide: Text.ElideMiddle
                     color: theme.foreground
@@ -308,6 +312,7 @@ Dialog {
                 Layout.fillWidth: true
                 Label {
                     objectName: "exportStatusLabel"
+                    textFormat: Text.PlainText
                     text: editor.exportProgress >= 1 ? "Finishing encoding…" : "Rendering…"
                     color: theme.foreground
                     font.pixelSize: theme.type.small
@@ -315,6 +320,7 @@ Dialog {
                 Item { Layout.fillWidth: true }
                 Label {
                     visible: editor.exportProgress < 1
+                    textFormat: Text.PlainText
                     text: editor.exportFps.toFixed(0) + " fps  ·  " + root.formatEta(editor.exportEtaSeconds) + " left"
                     color: theme.textMuted
                     font.family: theme.monoFamily
@@ -325,6 +331,7 @@ Dialog {
         Label {
             Layout.fillWidth: true
             visible: (editor.exportError.length > 0 || root.pickerError.length > 0) && !editor.exporting
+            textFormat: Text.PlainText
             text: root.pickerError.length > 0 ? root.pickerError : editor.exportError
             color: theme.record
             wrapMode: Text.WordWrap
@@ -333,6 +340,7 @@ Dialog {
         Label {
             Layout.fillWidth: true
             visible: root.done
+            textFormat: Text.PlainText
             text: root.successPath.replace(/^\/home\/[^/]+/, "~")
             elide: Text.ElideMiddle
             horizontalAlignment: Text.AlignHCenter
@@ -346,6 +354,7 @@ Dialog {
             spacing: 8
             Label {
                 visible: !editor.exporting && !root.done
+                textFormat: Text.PlainText
                 text: "≈ " + root.estimatedMegabytes().toFixed(root.estimatedMegabytes() < 10 ? 1 : 0) + " MB"
                 color: theme.textMuted
                 font.family: theme.monoFamily

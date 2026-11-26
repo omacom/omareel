@@ -101,6 +101,7 @@ ColumnLayout {
     }
     Label {
         Layout.fillWidth: true
+        textFormat: Text.PlainText
         text: root.motionIndex() >= 0 ? root.motionCaptions[root.motionIndex()] : "Custom spring."
         wrapMode: Text.WordWrap
         color: theme.textMuted

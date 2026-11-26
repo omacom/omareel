@@ -51,6 +51,7 @@ ToolTip {
             spacing: 8
             Text {
                 anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
                 text: root.text
                 color: theme.textStrong
                 font.family: theme.fontFamily
@@ -60,6 +61,7 @@ ToolTip {
             Text {
                 visible: root.shortcut !== ""
                 anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
                 text: root.shortcut
                 color: theme.textMuted
                 font.family: theme.monoFamily

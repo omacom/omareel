@@ -14,7 +14,8 @@ omareel export BUNDLE.omareel -o OUTPUT.mp4|OUTPUT.gif|OUTPUT.srt|OUTPUT.vtt [op
 omareel transcribe BUNDLE.omareel [--backend NAME] [--force]
 omareel probe BUNDLE.omareel
 omareel describe BUNDLE.omareel
-omareel apply BUNDLE.omareel OPS.json|- [--dry-run] [--describe]
+omareel apply BUNDLE.omareel OPS.json|-|'[...]' [--dry-run] [--describe]
+omareel agent BUNDLE.omareel polish|chapters|ask REQUEST...
 omareel skill [install]
 omareel help
 omareel --version
@@ -124,6 +125,26 @@ is open (`omareel apply`, an AI agent, a text editor), the editor takes the new 
 within half a second as one undoable change; edits made in the editor just before are one
 `Ctrl+Z` away. A file that does not parse yet is ignored until it does.
 
+**Editing with AI.** The top bar's Polish button (`Ctrl+Shift+P`) and the speech-bubble button
+beside it open a drawer that runs the coding agent chosen in Omarchy (Setup › Defaults › Agent;
+Claude Code, and Codex as experimental) on the recording, the way `omareel agent` does. Nothing
+runs until you start it. The first time, Polish only opens the drawer: it says which agent runs,
+that it reads the timeline, the transcript and frames of the video and sends them to its
+provider, and has a Start button. Once started, an agent is remembered
+(`~/.config/omareel/agent.json`), and Polish and `Ctrl+Shift+P` run it at once; the drawer's
+"Ask first" takes that back. Its actions: Polish (trim the ends, cut idle stretches and pauses,
+fix zooms, show keystrokes when shortcuts matter, then check a contact sheet), "Ask the editor…"
+(any request, such as "make it under 60 seconds"), or Write description (chapters, a title and
+a description). The project is saved before the agent starts. It edits through `omareel
+apply`, so each change appears in the editor as it lands and is one `Ctrl+Z` away; chapters
+and the description are saved on their own (`chapters.json`) and can't be undone. While it
+runs, the editor's own editing is off ("The agent is editing… Stop to edit" over the timeline),
+so nothing you change is lost to its next change; it comes back when the agent finishes or
+stops. The drawer lists its messages, the commands it runs, each change, and the frames it
+looked at; Stop ends it at once. Closing the editor stops it too. Chapters show as flags on
+the timeline's ruler (hover for the title, click to seek), and the drawer lists them with
+"Copy YouTube description".
+
 Legacy `.omarecord` bundles remain supported, including bundles under
 `~/Videos/omarecord`. The legacy command name is installed as a compatibility alias. If only
 legacy settings exist, they are copied to `~/.config/omareel/settings.json` on first run and the
@@ -215,6 +236,9 @@ Prints the edited timeline as JSON, for scripts and AI agents:
   `measured` or `estimated`, and each phrase's `text` with its `source` span and the `output`
   spans where it plays.
 - `music` (when set): its file and length.
+- `chapters` (when the bundle has `chapters.json`): `title`, `description`, and each chapter's
+  `source` time, `title`, and `output` time on the edited timeline (`null` once its stretch was
+  cut).
 
 "Source" seconds are times in `screen.mp4`; "output" seconds are times in the edited video.
 
@@ -229,7 +253,8 @@ refresh the skill.
 
 ### `apply BUNDLE OPS`
 
-Runs edit operations from a JSON file (or `-` for standard input) through the editor's own
+Runs edit operations from a JSON file, standard input (`-`), or the argument itself (anything
+starting with `[` or `{`, for agents allowed to run commands but not to write files), through the editor's own
 logic, so they are checked as the editor checks them, and saves `project.json`. It is all or
 nothing: if any operation fails, nothing is saved and the error names it. `--dry-run` checks
 without saving; `--describe` adds the resulting timeline to the report. The report is JSON on
@@ -263,6 +288,13 @@ which no edit moves.
 | `trim-pauses` | optional `min` (seconds of silence, default 1), `keep` (seconds left, default 0.4) |
 | `remove-fillers` | (needs a transcript with measured word times) |
 | `set` | `path` (dotted, e.g. `background.blur`), `value` |
+| `set-chapters` | any of `chapters` (`[{"at", "title"}, ...]`, replacing the list), `title`, `description` |
+
+`set-chapters` writes `chapters.json`, storing each `at` as a source time whichever timeline
+it is given in, and only once the whole list has applied; with everything empty it removes the
+file. The file is written aside first, then `project.json` is saved, then the chapters are
+moved into place, so a failure to write them saves nothing. Chapters aren't part of the
+editor's undo.
 
 ```sh
 omareel apply Recording.omareel - <<'OPS'
@@ -274,6 +306,50 @@ omareel apply Recording.omareel - <<'OPS'
 ]
 OPS
 ```
+
+### `agent BUNDLE polish|chapters|ask REQUEST...`
+
+Runs the coding agent chosen in Omarchy (`~/.config/omarchy/defaults/agent`, what
+`omarchy-default-agent` prints) once, non-interactively, on the recording, as the editor's AI
+drawer does, and prints what it does as JSON lines (`started`, `message`, `command`, `apply`,
+`image`, `problem`, `finished` with its cost and duration when the agent reports them). The exit
+status is 0 when the agent finished. `polish` tightens the recording, `chapters` writes
+`chapters.json`, and `ask` does what the rest of the line asks. Ctrl+C stops the agent.
+
+The agent runs in the bundle's directory with the omareel skill as instructions. What it reads
+(speech, text on screen) can carry instructions of its own, so it is treated as untrusted:
+
+- Every `omareel` it runs is held to this recording: the run sets
+  `OMAREEL_AGENT_SCOPE=BUNDLE<newline>SCRATCH`, and omareel then allows only `describe BUNDLE`,
+  `apply BUNDLE …` (operations inline, on stdin, or in a file in the bundle or scratch
+  directory; files the operations name must be there too), `frame BUNDLE … -o FILE` with the
+  file in the scratch directory, `transcribe BUNDLE`, and `help`. Anything else (`record`,
+  `export`, `edit`, `skill`, `agent`, the launcher, another bundle, an image elsewhere) is
+  refused with exit status 126. Paths are compared with symlinks and `..` resolved.
+- Claude Code: `claude -p --output-format stream-json --verbose --restricted --tools Bash,Read
+  --allowedTools "Bash(omareel describe:*)" "Bash(omareel apply:*)" "Bash(omareel frame:*)"
+  "Bash(omareel transcribe:*)" "Bash(omareel help)" Read --permission-mode dontAsk
+  --strict-mcp-config --no-session-persistence`. Its settings files (and any broader allow
+  rules in them) are ignored, any other command is refused, it has no MCP servers, and its
+  file tool reads only the bundle and the scratch directory.
+- Codex (experimental): `codex exec --json --sandbox workspace-write --ignore-user-config
+  --ignore-rules --ephemeral --skip-git-repo-check -c sandbox_workspace_write.network_access=false
+  -c sandbox_workspace_write.writable_roots=[] -c web_search="disabled"`. Your `config.toml`
+  isn't loaded (no MCP servers, hooks, features or extra writable roots from it; your model
+  choice there doesn't apply either, use `OMAREEL_AGENT_MODEL`). Its commands may write only to
+  the bundle and the scratch directory, without network, but **they can read any file you
+  can**, and what they read goes to OpenAI; its shell isn't limited to `omareel` either.
+
+Each run gets a scratch directory of its own, `~/.cache/omareel/agent/NAME-XXXXXX/`, for the
+frames the agent renders and the run's raw output (`stream.jsonl`, `stderr.txt`); it is removed
+when the next run starts in that editor, when the editor closes, or when `omareel agent` exits.
+Its `bin/omareel` points at the running omareel, first on the agent's `PATH`. The agent dies
+with the editor or `omareel agent`, even when either is killed, and at the end of every run
+(finished, failed, stopped, or after 30 minutes) everything it started is killed: its process
+group, and any process still carrying the run's `OMAREEL_AGENT_SCOPE`, which also finds what
+left the group. Omarchy's account selection is kept: `CLAUDE_CONFIG_DIR` or `CODEX_HOME` comes
+from `omarchy-agent-account-home` when unset. Other agents Omarchy offers aren't supported yet;
+`agent` says so and runs nothing.
 
 ## Editor keys
 
@@ -290,6 +366,7 @@ OPS
 | `Ctrl+Z`, `Ctrl+Shift+Z` | Undo/redo |
 | `Ctrl+S` | Save |
 | `Ctrl+E` | Export |
+| `Ctrl+Shift+P` | Polish with the coding agent |
 
 The timeline fits the full recording at 1×. Scroll either wheel axis or touchpad axis to zoom
 around the pointer, up to 16×; right-button drag pans the zoomed timeline. The bottom toolbar's
@@ -395,6 +472,23 @@ invalidate it:
 Times count from the start of `screen.mp4`, even though its sound track usually starts a little
 after its video (the recorder places the sound by its first sample).
 
+`chapters.json` (once written by `set-chapters`) keeps chapters at source times, so later edits
+move them with the video; a chapter whose start was cut begins where the video picks up again,
+and one whose whole stretch was cut is left out:
+
+```json
+{
+    "chapters": [{"source": 0, "title": "Opening the terminal"}, {"source": 14.2, "title": "Installing the theme"}],
+    "description": "How to install and switch themes in Omarchy.",
+    "title": "Omarchy themes in two minutes",
+    "version": 1
+}
+```
+
+The YouTube description the editor copies is the title, the description, and a `00:00 Title`
+line per chapter (`H:MM:SS` past an hour), with the first chapter at 00:00 and chapters under
+10 seconds left out, as YouTube requires.
+
 `project.json` gains a `captions` object only once captions are changed in the editor, so older
 projects keep their bytes: `{ "enabled": false, "position": "bottom", "size": 1 }` (`position`
 `bottom` or `top`, `size` 0.5 to 2).
@@ -432,6 +526,10 @@ Both trims are one undo step. Engines differ in whether they write fillers out.
   music's target and reported positions in milliseconds, its gain, and whether it plays.
 - `OMAREEL_CAPTURE=gsr` forces the fallback screen capture backend.
 - `OMAREEL_NO_TRANSCRIBE=1` stops the editor transcribing recordings on its own.
+- `OMAREEL_AGENT=claude|codex` runs that agent instead of Omarchy's default;
+  `OMAREEL_AGENT_MODEL=NAME` asks it for a model (`haiku`, `sonnet`, `gpt-5-codex`…);
+  `OMAREEL_AGENT_PROGRAM=PATH` runs another program in its place (tests use
+  `tests/tools/fake-agent.py`, which speaks both agents' streams).
 - `OMAREEL_WHISPER_MODEL=PATH` is the ggml model `whisper-cli` uses.
 - `OMAREEL_CAPTURE=native` selects the native screen capture backend when supported.
 - `OMAREEL_PLUGIN_PATH` selects the capture-exclusion plugin file. An explicit missing path
@@ -468,7 +566,7 @@ Both trims are one undo step. Engines differ in whether they write fillers out.
   first, to exercise playing-state seeks after end-of-media.
 - `OMAREEL_SCREENSHOT_PROJECT_VALUES=JSON` applies path/value pairs through the editor before
   capture, for example `{"camera.rotation":180}`.
-- `OMAREEL_SCREENSHOT_VIEW=export|aspect|background-expanded|background-gradient-3|background-gradient-7|rail-tooltip|camera-proof` opens a transient
+- `OMAREEL_SCREENSHOT_VIEW=export|aspect|background-expanded|background-gradient-3|background-gradient-7|rail-tooltip|camera-proof|agent|agent-polish` opens a transient
   editor surface before capture.
 
 Example:

@@ -30,6 +30,7 @@ ColumnLayout {
     }
     Label {
         Layout.alignment: Qt.AlignHCenter
+        textFormat: Text.PlainText
         text: empty.title
         color: theme.textStrong
         font.pixelSize: theme.type.body
@@ -48,6 +49,7 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.leftMargin: 12; Layout.rightMargin: 12
         Layout.bottomMargin: 8
+        textFormat: Text.PlainText
         text: empty.hint
         color: theme.textMuted
         font.pixelSize: theme.type.small

@@ -29,10 +29,16 @@
 //! | `trim-pauses` | optional `min` (seconds of silence, default 1), `keep` (seconds left, default 0.4) |
 //! | `remove-fillers` | (needs a transcript with measured word times) |
 //! | `set` | `path` (dotted, as in describe's `settings`), `value` |
+//! | `set-chapters` | any of `chapters` (`[{"at", "title"}, ...]`, replacing the list), `title`, `description` |
+//!
+//! `set-chapters` writes the bundle's chapters.json ([`crate::chapters`]), at source times
+//! whatever timeline its `at`s use, and only once the whole list succeeded.
 
 use super::{ms, source_span_outputs, source_time_outputs};
 use crate::compat::qdir;
 use crate::compat::qjson::{self, Format, Object, Value};
+use super::scope::Scope;
+use crate::chapters::{Chapter, Chapters};
 use crate::editor::{Document, Effect, ImportedInsert, ImportedMusic, ZoomTarget};
 use crate::project::{allowed_clip_speeds, Project};
 use crate::transcript::trim::PauseSettings;
@@ -245,6 +251,130 @@ struct Run {
     warnings: Vec<String>,
     /// Videos copied into media/ by this run, removed again if it fails.
     copied: Vec<String>,
+    /// chapters.json as `set-chapters` left it, written once the project is saved.
+    chapters: Option<Chapters>,
+    /// Inside an agent's scope ([`super::scope`]): the files operations name must be in the
+    /// bundle or the scratch directory.
+    scope: Option<Scope>,
+}
+
+impl Run {
+    fn check_file(&self, file: &str) -> Result<(), String> {
+        match &self.scope {
+            Some(scope) => scope.check_file(std::path::Path::new(file)),
+            None => Ok(()),
+        }
+    }
+}
+
+/// The strings in `value` that name a file (they have a `/`), resolved from `bundle`.
+/// The files a project reads, as absolute paths: its background image and wallpaper, its
+/// inserted videos and its music. Only these: a label or a caption that happens to name a path
+/// ("/usr/bin") is text, not a file. A `file://` URL counts as the file it names.
+fn project_files(project: &crate::project::Project, bundle: &str, into: &mut Vec<String>) {
+    let mut add = |text: &str| {
+        let text = text.trim();
+        if text.is_empty() || text.starts_with("omarchy:") {
+            return;
+        }
+        let local = match text.strip_prefix("file://") {
+            Some(rest) => percent_decoded(rest.strip_prefix("localhost").unwrap_or(rest)),
+            None => text.to_owned(),
+        };
+        let path = match local.strip_prefix("~/") {
+            Some(rest) => qdir::file_path(&qdir::home_path(), rest),
+            None => qdir::file_path(bundle, &local),
+        };
+        into.push(path);
+    };
+    add(&project.background.image);
+    add(&project.background.wallpaper);
+    for clip in project.clips.iter().filter(|clip| clip.is_media()) {
+        add(&clip.media);
+    }
+    if let Some(music) = &project.music {
+        add(&music.file);
+    }
+}
+
+/// `%XX` escapes decoded, as in a file URL's path.
+fn percent_decoded(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        let hex = |b: u8| (b as char).to_digit(16);
+        match (bytes[i], bytes.get(i + 1).copied().and_then(hex), bytes.get(i + 2).copied().and_then(hex)) {
+            (b'%', Some(high), Some(low)) => {
+                out.push((high * 16 + low) as u8);
+                i += 3;
+            }
+            (byte, _, _) => {
+                out.push(byte);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// YouTube's limits, which the description is copied into: a title of 100 characters, a
+/// description of 5000. A chapter title gets the title's.
+const TITLE_LIMIT: usize = 100;
+const DESCRIPTION_LIMIT: usize = 5000;
+
+/// `set-chapters`: chapters.json's new contents.
+fn set_chapters(document: &Document, op: &Object, current: Option<Chapters>) -> Result<Chapters, String> {
+    let mut chapters = match current {
+        Some(chapters) => chapters,
+        None => Chapters::load(document.bundle_path())?.unwrap_or_default(),
+    };
+    for key in ["title", "description"] {
+        match op.value(key) {
+            Value::Undefined => {}
+            Value::String(text) => {
+                let text = text.trim().to_owned();
+                let limit = if key == "title" { TITLE_LIMIT } else { DESCRIPTION_LIMIT };
+                if text.chars().count() > limit {
+                    return Err(format!("\"{key}\" is over YouTube's {limit} characters"));
+                }
+                if key == "title" { chapters.title = text } else { chapters.description = text }
+            }
+            _ => return Err(format!("\"{key}\" must be a string")),
+        }
+    }
+    if op.value("chapters").is_undefined() {
+        return Ok(chapters);
+    }
+    let list = op.value("chapters").as_array().ok_or("\"chapters\" must be a list of {\"at\", \"title\"}")?;
+    let source = source_timeline(op)?;
+    let mut new = Vec::with_capacity(list.len());
+    for (index, item) in list.iter().enumerate() {
+        let item = item.as_object().ok_or_else(|| format!("chapter {} must be an object with \"at\" and \"title\"", index + 1))?;
+        let title = item.value("title").as_str().map(str::trim).unwrap_or_default();
+        if title.is_empty() {
+            return Err(format!("chapter {} needs a \"title\"", index + 1));
+        }
+        if title.chars().count() > TITLE_LIMIT {
+            return Err(format!("chapter {}'s title is over {TITLE_LIMIT} characters", index + 1));
+        }
+        let at = number(item, "at").map_err(|error| format!("chapter {}: {error}", index + 1))?;
+        let at = if source {
+            if at < 0.0 || at > document.source_duration() + 1e-6 {
+                return Err(format!("chapter {}: source time {at} is outside the recording (0 to {})", index + 1, ms(document.source_duration())));
+            }
+            at
+        } else {
+            if at < 0.0 || at > document.duration() + 1e-6 {
+                return Err(format!("chapter {}: {at} is outside the video (0 to {})", index + 1, ms(document.duration())));
+            }
+            document.output_to_source(at)
+        };
+        new.push(Chapter { source: at, title: title.to_owned() });
+    }
+    new.sort_by(|a, b| a.source.total_cmp(&b.source));
+    chapters.chapters = new;
+    Ok(chapters)
 }
 
 /// The edits of [`Document`] the operations use, refusing what the editor would refuse.
@@ -377,6 +507,7 @@ fn run_op(document: &mut Document, op: &Object, run: &mut Run) -> OpResult {
         }
         "insert" => {
             let file = qdir::absolute_path(&text(op, "file")?);
+            run.check_file(&file)?;
             let at = if op.value("at").is_undefined() { document.duration() } else { output_time(document, op, "at")? };
             document.set_output_position(at);
             if !document.can_insert_media(&file) {
@@ -493,6 +624,7 @@ fn run_op(document: &mut Document, op: &Object, run: &mut Run) -> OpResult {
         "music" => {
             if !op.value("file").is_undefined() {
                 let file = qdir::absolute_path(&text(op, "file")?);
+                run.check_file(&file)?;
                 let job = document.music_import_job(&file);
                 let imported = if run.dry_run {
                     match (job.probe_audio)(&file) {
@@ -591,6 +723,20 @@ fn run_op(document: &mut Document, op: &Object, run: &mut Run) -> OpResult {
             }
             ok()
         }
+        "set-chapters" => {
+            let chapters = set_chapters(document, op, run.chapters.take())?;
+            let placed = chapters.on_timeline(&document.project().clips).len();
+            if placed < chapters.chapters.len() {
+                run.warnings.push(format!(
+                    "set-chapters: {} of {} chapters don't show, their stretch is cut or shared with another",
+                    chapters.chapters.len() - placed,
+                    chapters.chapters.len()
+                ));
+            }
+            let count = chapters.chapters.len() as i64;
+            run.chapters = Some(chapters);
+            with("chapters", count)
+        }
         "" => Err("missing \"op\"".into()),
         other => Err(format!("unknown op {other:?}")),
     }
@@ -600,17 +746,35 @@ fn run_op(document: &mut Document, op: &Object, run: &mut Run) -> OpResult {
 /// then hold some of the edits, so the caller must not save it. Videos the run copied into
 /// the bundle are removed again on failure; a `dry_run` copies none.
 pub fn apply_ops(document: &mut Document, ops: &[Object], dry_run: bool) -> Result<(Vec<Value>, Vec<String>), String> {
-    apply_ops_copying(document, ops, dry_run).map(|(results, warnings, _)| (results, warnings))
+    apply_all(document, ops, dry_run).map(|applied| (applied.results, applied.warnings))
 }
 
-/// [`apply_ops`], with the videos the run copied into the bundle (absolute paths), which the
-/// caller removes again if it doesn't save.
-pub fn apply_ops_copying(
-    document: &mut Document,
-    ops: &[Object],
-    dry_run: bool,
-) -> Result<(Vec<Value>, Vec<String>, Vec<String>), String> {
-    let mut run = Run { dry_run, ..Run::default() };
+/// What a successful run of operations did.
+pub struct Applied {
+    pub results: Vec<Value>,
+    pub warnings: Vec<String>,
+    /// The bundle's chapters.json as `set-chapters` left it, to write once the project is
+    /// saved; `None` when no operation changed it.
+    pub chapters: Option<Chapters>,
+    /// The videos the run copied into the bundle (absolute paths), which the caller removes
+    /// again if it doesn't save.
+    pub copied: Vec<String>,
+}
+
+/// [`apply_ops`], with the chapters to write.
+pub fn apply_all(document: &mut Document, ops: &[Object], dry_run: bool) -> Result<Applied, String> {
+    apply_scoped(document, ops, dry_run, None)
+}
+
+/// [`apply_all`] inside an agent's scope, when there is one: the files the operations name
+/// (an inserted video, music, a background image set with `set`) must be in the bundle or the
+/// scratch directory.
+pub fn apply_scoped(document: &mut Document, ops: &[Object], dry_run: bool, scope: Option<Scope>) -> Result<Applied, String> {
+    let mut before = Vec::new();
+    if scope.is_some() {
+        project_files(document.project(), document.bundle_path(), &mut before);
+    }
+    let mut run = Run { dry_run, scope, ..Run::default() };
     let mut results = Vec::new();
     for (index, op) in ops.iter().enumerate() {
         let name = op.value("op").to_string_or("");
@@ -629,13 +793,53 @@ pub fn apply_ops_copying(
             }
         }
     }
-    Ok((results, run.warnings, run.copied))
+    if run.scope.is_some() {
+        let mut after = Vec::new();
+        project_files(document.project(), document.bundle_path(), &mut after);
+        for file in after.iter().filter(|file| !before.contains(file) && std::path::Path::new(file.as_str()).exists()) {
+            if let Err(error) = run.check_file(file) {
+                for copy in &run.copied {
+                    let _ = std::fs::remove_file(copy);
+                }
+                return Err(error);
+            }
+        }
+    }
+    // An image the agent made in its scratch directory is gone once the run ends: the project
+    // keeps a copy in the bundle instead.
+    if let (Some(scope), false) = (&run.scope, run.dry_run) {
+        let image = document.project().background.image.clone();
+        let local = image.strip_prefix("file://").map(percent_decoded).unwrap_or_else(|| image.clone());
+        let path = std::path::Path::new(&local);
+        if !image.is_empty() && path.is_absolute() && path.starts_with(&scope.scratch) {
+            let kept = crate::editor::copy_into_media(&local, document.bundle_path(), "background").map_err(|error| {
+                for copy in &run.copied {
+                    let _ = std::fs::remove_file(copy);
+                }
+                error
+            })?;
+            let kept = qdir::file_path(document.bundle_path(), &kept);
+            run.copied.push(kept.clone());
+            document.set_project_value("background.image", Value::from(kept.as_str()), false);
+            document.take_effects();
+        }
+    }
+    Ok(Applied { results, warnings: run.warnings, chapters: run.chapters, copied: run.copied })
 }
 
 /// `omareel apply`: the JSON report, and whether it succeeded. Nothing is saved on failure or
 /// with `dry_run`; `describe_after` adds the timeline as `omareel describe` would print it.
+/// Inside an agent's scope ([`super::scope`], from the environment) the files the operations
+/// name must be in the bundle or the scratch directory.
 pub fn run(bundle: &str, ops_json: &[u8], dry_run: bool, describe_after: bool) -> (String, bool) {
-    run_on(|| super::open_document(bundle), ops_json, dry_run, describe_after)
+    let scope = match Scope::from_env() {
+        Ok(scope) => scope,
+        Err(error) => {
+            let report = Object::from_iter([("ok", Value::from(false)), ("error", error.into())]);
+            return (report.to_json(Format::Indented), false);
+        }
+    };
+    run_in(|| super::open_document(bundle), ops_json, dry_run, describe_after, scope)
 }
 
 /// [`run`] on the document `open` opens, once the operations parse.
@@ -644,6 +848,17 @@ pub fn run_on(
     ops_json: &[u8],
     dry_run: bool,
     describe_after: bool,
+) -> (String, bool) {
+    run_in(open, ops_json, dry_run, describe_after, None)
+}
+
+/// [`run_on`] inside `scope`, when there is one.
+pub fn run_in(
+    open: impl FnOnce() -> Result<Document, String>,
+    ops_json: &[u8],
+    dry_run: bool,
+    describe_after: bool,
+    scope: Option<Scope>,
 ) -> (String, bool) {
     let failure = |error: String| {
         (Object::from_iter([("ok", Value::from(false)), ("error", error.into())]).to_json(Format::Indented), false)
@@ -656,7 +871,7 @@ pub fn run_on(
         Ok(document) => document,
         Err(error) => return failure(error),
     };
-    let (results, warnings, copied) = match apply_ops_copying(&mut document, &ops, dry_run) {
+    let Applied { results, warnings, chapters, copied } = match apply_scoped(&mut document, &ops, dry_run, scope) {
         Ok(done) => done,
         Err(error) => return failure(error),
     };
@@ -674,6 +889,12 @@ pub fn run_on(
         if document.disk_changed() {
             return unsaved("project.json changed while the operations ran (the editor saved?); nothing was saved. Run them again.".into());
         }
+        // All or nothing: chapters.json is written aside first (a failure there saves nothing),
+        // then project.json, then the chapters are moved into place.
+        let staged = match chapters.as_ref().map(|chapters| chapters.stage(document.bundle_path())).transpose() {
+            Ok(staged) => staged,
+            Err(error) => return unsaved(format!("nothing was saved: {error}")),
+        };
         let saved = document.save_now();
         let effects = document.take_effects();
         if !saved {
@@ -682,6 +903,11 @@ pub fn run_on(
                 .find_map(|effect| if let Effect::ErrorOccurred(message) = effect { Some(message) } else { None })
                 .unwrap_or_else(|| "could not save project.json".into());
             return unsaved(error);
+        }
+        if let Some(staged) = staged {
+            if let Err(error) = staged.commit() {
+                return failure(format!("project.json was saved, but not the chapters: {error}"));
+            }
         }
     }
     let project: &Project = document.project();

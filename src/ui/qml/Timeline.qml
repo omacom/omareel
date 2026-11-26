@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Layouts
 import QtQuick.Shapes
 import QtQuick.Controls.impl
 import Omareel.Ui
@@ -203,6 +204,7 @@ FocusScope {
                 }
                 Label {
                     anchors.verticalCenter: parent.verticalCenter
+                    textFormat: Text.PlainText
                     text: modelData.name
                     color: theme.textMuted
                     font.pixelSize: theme.type.caption
@@ -306,6 +308,7 @@ FocusScope {
                         Text {
                             x: 4
                             y: 6
+                            textFormat: Text.PlainText
                             text: root.formatRulerTime(tickDelegate.tickTime)
                             color: theme.textFaint
                             font.pixelSize: theme.type.caption - 1
@@ -345,6 +348,27 @@ FocusScope {
                         if (selectingRange) root.cancelRange()
                         else editor.endScrub()
                         selectingRange = false
+                    }
+                }
+                // Chapters (chapters.json), at their place on the edited timeline.
+                Repeater {
+                    model: typeof agent === "undefined" || !agent.chapters.exists ? []
+                        : agent.chapterMarkers(JSON.stringify(editor.clips))
+                    delegate: Item {
+                        id: chapterMarker
+                        required property var modelData
+                        x: modelData.time * root.pixelsPerSecond
+                        width: 9
+                        height: ruler.height
+                        Rectangle { x: 0; width: 1.5; height: parent.height; color: theme.accent }
+                        Rectangle {
+                            x: 0; y: 0; width: 8; height: 7
+                            radius: theme.rounded ? 1.5 : 0
+                            color: theme.accent
+                        }
+                        HoverHandler { id: chapterHover; cursorShape: Qt.PointingHandCursor }
+                        TapHandler { onTapped: editor.seek(chapterMarker.modelData.time) }
+                        OmLazyToolTip { target: chapterMarker; shown: chapterHover.hovered; text: chapterMarker.modelData.title }
                     }
                 }
             }
@@ -608,6 +632,7 @@ FocusScope {
                         anchors.fill: parent
                         anchors.leftMargin: 6; anchors.rightMargin: 6
                         verticalAlignment: Text.AlignVCenter
+                        textFormat: Text.PlainText
                         text: editor.music.name || ""
                         elide: Text.ElideRight
                         color: theme.textStrong
@@ -721,6 +746,7 @@ FocusScope {
                     Label {
                         id: playheadLabel
                         anchors.centerIn: parent
+                        textFormat: Text.PlainText
                         text: editor.formatTime(editor.position)
                         color: "white"
                         font.family: theme.monoFamily
@@ -755,6 +781,48 @@ FocusScope {
                 Behavior on color {
                     enabled: !editor.loading
                     ColorAnimation { duration: 120; easing.type: Easing.OutCubic }
+                }
+            }
+        }
+    }
+    // While the coding agent edits (Editor.readOnly), the timeline only shows its changes.
+    Rectangle {
+        objectName: "agentEditingOverlay"
+        anchors.fill: parent
+        visible: editor.readOnly
+        color: Qt.alpha(theme.surface, .55)
+        // Clicks and drags stop here; the wheel still scrolls and zooms the timeline.
+        MouseArea {
+            anchors.fill: parent
+            hoverEnabled: true
+            acceptedButtons: Qt.AllButtons
+            onWheel: wheel => wheel.accepted = false
+        }
+        Rectangle {
+            anchors.centerIn: parent
+            width: lockRow.implicitWidth + 24
+            height: lockRow.implicitHeight + 14
+            radius: theme.controlRadius
+            color: theme.raised
+            border.width: 1
+            border.color: theme.strokeStrong
+            RowLayout {
+                id: lockRow
+                anchors.centerIn: parent
+                spacing: 10
+                Label {
+                    textFormat: Text.PlainText
+                    text: "The agent is editing… Stop to edit"
+                    color: theme.textStrong
+                    font.pixelSize: theme.type.small
+                }
+                OmButton {
+                    visible: typeof agent !== "undefined"
+                    bordered: true
+                    destructive: true
+                    text: "Stop"
+                    icon.source: "qrc:/omareel/assets/icons/lucide/square.svg"
+                    onClicked: agent.stop()
                 }
             }
         }

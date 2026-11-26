@@ -124,6 +124,7 @@ set_source_files_properties(
     src/ui/qml/CameraPanel.qml
     src/ui/qml/KeystrokesPanel.qml
     src/ui/qml/SpeechPanel.qml
+    src/ui/qml/AgentDrawer.qml
     src/ui/qml/ExportDialog.qml
     src/ui/qml/InsertClipDialog.qml
     src/ui/qml/Timeline.qml
@@ -185,6 +186,7 @@ qt_add_qml_module(omareel_render
         src/ui/qml/CameraPanel.qml
         src/ui/qml/KeystrokesPanel.qml
         src/ui/qml/SpeechPanel.qml
+        src/ui/qml/AgentDrawer.qml
         src/ui/qml/ExportDialog.qml
         src/ui/qml/InsertClipDialog.qml
         src/ui/qml/Timeline.qml
@@ -226,6 +228,7 @@ qt_add_resources(omareel_render "omareel_assets"
         assets/icons/lucide/eye.svg assets/icons/lucide/eye-off.svg assets/icons/lucide/trash-2.svg
         assets/icons/lucide/video-off.svg assets/icons/lucide/volume-x.svg
         assets/icons/lucide/sparkles.svg assets/icons/lucide/music.svg
+        assets/icons/lucide/copy.svg assets/icons/lucide/message-square.svg assets/icons/lucide/bookmark.svg
         assets/icons/reel.svg
         assets/fonts/Inter-Regular.ttf assets/fonts/Inter-Medium.ttf
         assets/fonts/Inter-SemiBold.ttf assets/fonts/Inter-Bold.ttf
@@ -252,9 +255,16 @@ if(BUILD_TESTING)
     qt_add_executable(test_exporter_smoke tests/test_exporter_smoke.cpp)
     target_link_libraries(test_exporter_smoke PRIVATE omareel_render Qt6::Test)
     add_test(NAME exporter_smoke COMMAND test_exporter_smoke)
+    find_package(Qt6 REQUIRED COMPONENTS Network)
     qt_add_executable(test_editor tests/test_editor.cpp)
-    target_link_libraries(test_editor PRIVATE omareel_render Qt6::Test)
+    target_link_libraries(test_editor PRIVATE omareel_render Qt6::Test Qt6::Network)
     add_test(NAME editor COMMAND test_editor)
+    # `omareel agent` with a fake agent in place of Claude Code and Codex (no tokens spent).
+    find_program(OMAREEL_PYTHON3 python3)
+    if(OMAREEL_PYTHON3)
+        add_test(NAME agent_fake COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/agent_fake_e2e.sh
+            $<TARGET_FILE:omareel> ${CMAKE_CURRENT_SOURCE_DIR})
+    endif()
     qt_add_executable(test_portal_file_picker tests/test_portal_file_picker.cpp)
     target_link_libraries(test_portal_file_picker PRIVATE omareel_render Qt6::Test)
     add_test(NAME portal_file_picker COMMAND test_portal_file_picker)

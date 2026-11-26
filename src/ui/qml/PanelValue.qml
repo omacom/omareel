@@ -1,6 +1,7 @@
 import QtQuick
 
 Text {
+    textFormat: Text.PlainText
     property bool live: false
     color: live ? theme.accent : theme.textMuted
     font.family: theme.monoFamily

@@ -219,6 +219,10 @@ pub fn describe(document: &Document) -> Object {
             ]),
         );
     }
+    // chapters.json: unreadable is the same as missing here; `set-chapters` reports it.
+    if let Ok(Some(chapters)) = crate::chapters::Chapters::load(document.bundle_path()) {
+        summary.insert("chapters", chapters_summary(&chapters, clips));
+    }
     if let Some(music) = document.music() {
         let mut object = Object::from_iter([("file", Value::from(music.file.as_str()))]);
         if let Some(duration) = document.music_duration() {
@@ -227,6 +231,32 @@ pub fn describe(document: &Document) -> Object {
         summary.insert("music", object);
     }
     summary
+}
+
+/// chapters.json with each chapter's output time (`null` once its stretch was cut).
+pub fn chapters_summary(chapters: &crate::chapters::Chapters, clips: &[crate::project::Clip]) -> Object {
+    let placed = chapters.on_timeline(clips);
+    let list: Vec<Value> = chapters
+        .chapters
+        .iter()
+        .map(|chapter| {
+            let output = placed
+                .iter()
+                .find(|p| p.source == chapter.source && p.title == chapter.title)
+                .map_or(Value::Null, |p| Value::from(ms(p.output)));
+            Object::from_iter([
+                ("source", Value::from(ms(chapter.source))),
+                ("output", output),
+                ("title", chapter.title.as_str().into()),
+            ])
+            .into()
+        })
+        .collect();
+    Object::from_iter([
+        ("title", Value::from(chapters.title.as_str())),
+        ("description", chapters.description.as_str().into()),
+        ("chapters", list.into()),
+    ])
 }
 
 /// `omareel describe <bundle>`: the summary, or the error to report. `bundle` is absolute.

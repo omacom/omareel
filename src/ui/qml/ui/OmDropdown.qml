@@ -26,6 +26,7 @@ ComboBox {
         }
         Text {
             Layout.fillWidth: true
+            textFormat: Text.PlainText
             text: control.displayText
             color: control.enabled ? theme.textStrong : theme.textFaint
             font: control.font
@@ -61,6 +62,7 @@ ComboBox {
             Text {
                 anchors.left: parent.left; anchors.right: tick.left; anchors.rightMargin: 8
                 anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
                 text: control.textAt(row.index)
                 color: control.currentIndex === row.index || row.highlighted ? theme.textStrong : theme.foreground
                 font.family: theme.fontFamily; font.pixelSize: theme.type.body
