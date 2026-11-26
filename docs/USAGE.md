@@ -14,6 +14,7 @@ omareel export BUNDLE.omareel -o OUTPUT.mp4|OUTPUT.gif [options]
 omareel probe BUNDLE.omareel
 omareel describe BUNDLE.omareel
 omareel apply BUNDLE.omareel OPS.json|- [--dry-run] [--describe]
+omareel skill [install]
 omareel help
 omareel --version
 ```
@@ -158,6 +159,15 @@ Prints the edited timeline as JSON, for scripts and AI agents:
 - `allowed`: the clip speeds, layouts and fits the editor offers.
 
 "Source" seconds are times in `screen.mp4`; "output" seconds are times in the edited video.
+
+### `skill [install]`
+
+Prints the skill that teaches coding agents to edit and export recordings with `describe`,
+`apply` and `export`. `skill install` writes it to `~/.agents/skills/omareel/SKILL.md` and links
+it from each agent skills directory Omarchy sets up that exists (`~/.claude/skills`,
+`~/.codex/skills`, `~/.pi/agent/skills`, `~/.gemini/config/skills`, `~/.hermes/skills`),
+leaving alone anything else already named `omareel` there. Run it again after an upgrade to
+refresh the skill.
 
 ### `apply BUNDLE OPS`
 

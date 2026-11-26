@@ -24,6 +24,8 @@ commands:\n\
 \x20 apply <bundle> <ops.json|-> [--dry-run] [--describe]\n\
 \x20     Run edit operations (split, delete, speed, zoom, set, ...) as the\n\
 \x20     editor would, all or nothing; an open editor takes the result in.\n\
+\x20 skill [install]\n\
+\x20     Print the skill for coding agents, or install it for them.\n\
 \x20 help\n\
 \x20     Show this help.\n\n\
 Running omareel without a command opens the launcher.\n\

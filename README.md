@@ -21,6 +21,8 @@ cursor-following zooms. Finished projects export to MP4 or GIF.
 - Self-contained `.omareel` project bundles that preserve the source and editor state.
 - Scriptable editing for AI agents and scripts: `omareel describe` prints the edited timeline
   as JSON, `omareel apply` runs checked edit operations, and an open editor follows along.
+  `omareel skill install` teaches your coding agents (Claude Code, Codex, pi, Gemini, Hermes)
+  to use them.
 
 ## Install
 
