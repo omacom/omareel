@@ -24,7 +24,9 @@ ColumnLayout {
         return null
     }
     readonly property string kind: selected ? selected.kind : ""
-    function update(patch) { if (root.selected) editor.updateOverlay(root.selected.id, patch, true) }
+    // `coalesce` for typing and sliders, which run together into one undo step; a button or a
+    // colour is a step of its own.
+    function update(patch, coalesce) { if (root.selected) editor.updateOverlay(root.selected.id, patch, coalesce === true) }
     function sliding(pressed) {
         if (pressed) editor.beginCoalescedEdit("overlay-panel-" + (root.selected ? root.selected.id : ""))
         else editor.endCoalescedEdit()
@@ -65,7 +67,7 @@ ColumnLayout {
             onMoved: {
                 const patch = {}
                 patch[sliderRow.field] = value
-                panel.update(patch)
+                panel.update(patch, true)
             }
         }
     }
@@ -121,7 +123,7 @@ ColumnLayout {
             Layout.fillWidth: true
             placeholderText: root.kind === "card" ? "Title" : "Text"
             text: root.selected ? (root.kind === "card" ? root.selected.title : root.selected.text) || "" : ""
-            onTextEdited: root.update(root.kind === "card" ? {title: text} : {text: text})
+            onTextEdited: root.update(root.kind === "card" ? {title: text} : {text: text}, true)
             onEditingFinished: editor.endCoalescedEdit()
         }
         OmTextField {
@@ -129,7 +131,7 @@ ColumnLayout {
             Layout.fillWidth: true
             placeholderText: "Subtitle"
             text: root.selected && root.kind === "card" ? root.selected.subtitle || "" : ""
-            onTextEdited: root.update({subtitle: text})
+            onTextEdited: root.update({subtitle: text}, true)
             onEditingFinished: editor.endCoalescedEdit()
         }
 

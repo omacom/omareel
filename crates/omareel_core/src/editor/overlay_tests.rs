@@ -148,6 +148,20 @@ fn changing_the_anchor_converts_time_and_place() {
     assert!((back.start - 1.0).abs() < 0.03 && (back.rect.x).abs() < 1e-6 && (back.rect.width - 1.0).abs() < 1e-6, "{back:?}");
 }
 
+/// A frame item moved onto the screen of a sped-up clip covers the source its output span
+/// showed: twice its output length at 2x.
+#[test]
+fn anchoring_to_a_sped_up_screen_keeps_what_it_covered() {
+    let world = World::new("overlay-anchor-speed");
+    let mut qt = world.open(&world.bundle("editor.omareel"));
+    let clip = qt.clip_id(0);
+    assert!(qt.run(|d| d.set_clip_speed(&clip, 2.0)));
+    let id = qt.run(|d| d.add_overlay("box", 0.2, 0.6, Some(RectF::new(0.2, 0.2, 0.2, 0.2)), &patch(r#"{"anchor":"frame"}"#)));
+    assert!(qt.run(|d| d.update_overlay(&id, &patch(r#"{"anchor":"screen"}"#), false)));
+    let o = overlay(&qt, &id);
+    assert!((o.start - 0.4).abs() < 0.03 && (o.end - 1.2).abs() < 0.03, "{o:?}");
+}
+
 #[test]
 fn preview_samples_what_the_exporter_samples() {
     let world = World::new("overlay-sample");

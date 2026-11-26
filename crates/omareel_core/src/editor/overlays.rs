@@ -201,8 +201,12 @@ impl Document {
                 let (start, end) = self.source_range_to_output(current.start, current.end);
                 if start < 0.0 { (self.output_position(), self.output_position() + DEFAULT_OVERLAY_LENGTH) } else { (start, end) }
             } else {
+                // Both ends through the timeline, so a sped-up clip's item keeps the source it
+                // covered (its output length times the speed), not its output length. The end is
+                // taken just before it, in the clip it ends in, not the one after.
                 let start = self.output_to_source(current.start);
-                (start, start + (current.end - current.start))
+                let end = self.output_to_source((current.end - 1e-4).max(current.start)) + 1e-4;
+                (start, if end > start + 0.01 { end } else { start + (current.end - current.start) })
             };
             patch.insert("start", start);
             patch.insert("end", end);
