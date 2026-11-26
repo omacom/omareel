@@ -379,9 +379,16 @@ fn old_zoom_targets_move_out_of_the_crop() {
     // Read back, it stays put.
     assert_eq!(project.to_json().value("zoomTargets").to_string_or(""), "recording");
     assert_eq!(Project::from_json(&project.to_json()).zooms, project.zooms);
-    // Uncropped, nothing moves and nothing is written.
+    // Uncropped, nothing moves.
     json.remove("crop");
     let plain = Project::from_json(&json);
     assert!(q_fuzzy_compare(plain.zooms[0].target.x, 0.5));
-    assert!(!plain.to_json().contains("zoomTargets"));
+    // Cropping it afterwards (an edit reads the project back from its JSON) moves nothing.
+    let mut cropped = plain.to_json();
+    cropped.insert("crop", Object::from_iter([("x", Value::from(0.5)), ("y", 0.0.into()), ("w", 0.5.into()), ("h", 0.5.into())]));
+    assert!(q_fuzzy_compare(Project::from_json(&cropped).zooms[0].target.x, 0.5));
+    // Without fixed targets nothing is written.
+    let mut automatic = Project::defaults("Auto", 10.0).to_json();
+    automatic.insert("zooms", Value::array(vec![zoom("auto", true)]));
+    assert!(!Project::from_json(&automatic).to_json().contains("zoomTargets"));
 }

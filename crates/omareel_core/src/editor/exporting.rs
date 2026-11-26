@@ -139,6 +139,15 @@ pub fn file_uri_list(path: &str) -> String {
     uri
 }
 
+/// The project's name as an export's file name in the recordings directory: a name is free text
+/// (an agent can set it), so "/" can't lead into other directories and leading dots can't climb
+/// out ("../x") or hide the file. Anything else, other scripts included, stays as written.
+pub fn export_file_stem(name: &str) -> String {
+    let stem: String = name.chars().map(|c| if c == '/' || c == '\0' { '-' } else { c }).collect();
+    let stem = stem.trim().trim_start_matches('.').trim();
+    if stem.is_empty() { "Recording".into() } else { stem.to_owned() }
+}
+
 /// Puts the file at `path` on the Wayland clipboard as `text/uri-list` with `wl-copy`, which
 /// keeps offering it after the editor quits. `Err` says why not (no `wl-copy`, no file).
 pub fn copy_file_to_clipboard(path: &str) -> Result<(), String> {
@@ -183,14 +192,14 @@ impl Document {
     /// "gif" and `.mp4` otherwise.
     pub fn default_export_path(&self, format: &str) -> String {
         let suffix = if format == "gif" { ".gif" } else { ".mp4" };
-        qdir::file_path(&omarchy_paths::recordings_directory(), &format!("{}{suffix}", self.project.name))
+        qdir::file_path(&omarchy_paths::recordings_directory(), &format!("{}{suffix}", export_file_stem(&self.project.name)))
     }
 
     /// The export dialog's path for an export preset: its file name for this project in the
     /// recordings directory; empty for an unknown id.
     pub fn preset_export_path(&self, id: &str) -> String {
         presets::find(id).map_or_else(String::new, |preset| {
-            qdir::file_path(&omarchy_paths::recordings_directory(), &preset.file_name(&self.project.name))
+            qdir::file_path(&omarchy_paths::recordings_directory(), &preset.file_name(&export_file_stem(&self.project.name)))
         })
     }
 
@@ -387,4 +396,14 @@ mod tests {
             "preview fps=58.0 average_frame_cost_ms=2.000 drops=2\n"
         );
     }
+
+    #[test]
+    fn export_names_stay_in_the_recordings_directory() {
+        assert_eq!(export_file_stem("Demo 2 — café"), "Demo 2 — café");
+        assert_eq!(export_file_stem("../../.bashrc"), "-..-.bashrc");
+        assert_eq!(export_file_stem("a/b"), "a-b");
+        assert_eq!(export_file_stem(" .hidden"), "hidden");
+        assert_eq!(export_file_stem(".."), "Recording");
+    }
+
 }
