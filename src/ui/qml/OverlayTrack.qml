@@ -141,7 +141,11 @@ Item {
                 property real pressTrackX
                 property real pressBlockX
                 property real pressRight
+                // A click without a drag changes nothing: the block's drawn width is at least
+                // 14 px, more than a short item's own, so writing it back would lengthen it.
+                property bool moved: false
                 mouseArea.onPressed: mouse => {
+                    moved = false
                     root.focusTarget.forceActiveFocus()
                     editor.selectedOverlayId = block.modelData.id
                     pressTrackX = mouseArea.mapToItem(root, mouse.x, mouse.y).x
@@ -155,9 +159,11 @@ Item {
                     const trackX = mouseArea.mapToItem(root, mouse.x, mouse.y).x
                     const nextX = Math.max(0, Math.min(pressRight - root.pixelsPerSecond * .1, pressBlockX + trackX - pressTrackX))
                     block.gestureX = nextX; block.gestureWidth = pressRight - nextX
+                    moved = moved || Math.abs(trackX - pressTrackX) >= 1
                 }
                 mouseArea.onReleased: {
                     block.gestureActive = false
+                    if (!moved) return
                     editor.updateOverlay(block.modelData.id, {start: root.itemTime(block.modelData, block.gestureX / root.pixelsPerSecond)}, false)
                 }
                 mouseArea.onCanceled: block.gestureActive = false
@@ -171,7 +177,9 @@ Item {
                 dragging: mouseArea.pressed
                 property real pressTrackX
                 property real pressWidth
+                property bool moved: false
                 mouseArea.onPressed: mouse => {
+                    moved = false
                     root.focusTarget.forceActiveFocus()
                     editor.selectedOverlayId = block.modelData.id
                     pressTrackX = mouseArea.mapToItem(root, mouse.x, mouse.y).x
@@ -184,9 +192,11 @@ Item {
                     const trackX = mouseArea.mapToItem(root, mouse.x, mouse.y).x
                     block.gestureWidth = Math.max(root.pixelsPerSecond * .1,
                         Math.min(editor.duration * root.pixelsPerSecond - block.gestureX, pressWidth + trackX - pressTrackX))
+                    moved = moved || Math.abs(trackX - pressTrackX) >= 1
                 }
                 mouseArea.onReleased: {
                     block.gestureActive = false
+                    if (!moved) return
                     const item = block.modelData
                     // Just before the end, so the source time is the clip's, not the next one's.
                     const endOutput = (block.gestureX + block.gestureWidth) / root.pixelsPerSecond
