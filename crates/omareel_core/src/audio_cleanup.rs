@@ -421,9 +421,10 @@ impl CleanAudioJob {
             return Ok(None);
         };
         // The graph names the model's path and the inserts' paths, and the fingerprints say
-        // whether the files changed.
+        // whether the files changed. The inputs carry what the graph doesn't: an insert's
+        // in-point is its input's -ss.
         let fingerprints: Vec<&str> = self.inserts.iter().map(|insert| insert.fingerprint.as_str()).collect();
-        let how = format!("measure|{}|{filter}|{}", self.settings.key(), fingerprints.join(","));
+        let how = format!("measure|{}|{filter}|{}|{}", self.settings.key(), fingerprints.join(","), inputs.join(" "));
         let cached = qdir::file_path(&self.cache_directory, &cache_name(&self.fingerprint, &how, ".loudness.json"));
         if let Some(measured) = qfile::read_all(&cached).ok().and_then(|bytes| parse_loudnorm(&qstring::from_utf8(&bytes))) {
             touch(&cached);

@@ -2460,6 +2460,17 @@ fn a_cancelled_job_never_disowns_the_one_that_replaced_it() {
     assert!(third.cancelled.load(Ordering::SeqCst));
 }
 
+/// Turning cleanup off stops the job making its files rather than letting it run on.
+#[test]
+fn turning_cleanup_off_stops_the_running_job() {
+    let world = World::new("audio-cleanup-off");
+    let mut qt = sound_bundle(&world, "Off.omareel", true);
+    act(&mut qt, |d| d.set_audio_cleanup(AudioCleanup { denoise: true, ..AudioCleanup::default() }));
+    let job = qt.document.clean_audio_job().expect("a denoise job");
+    act(&mut qt, |d| d.set_audio_cleanup(AudioCleanup::default()));
+    assert!(job.cancelled.load(Ordering::SeqCst), "nothing wants its files any more");
+}
+
 /// A recording with sound from the microphone, normalised to -16 LUFS.
 fn loud_bundle(world: &World) -> Qt {
     let mut qt = sound_bundle(world, "Loud.omareel", true);
