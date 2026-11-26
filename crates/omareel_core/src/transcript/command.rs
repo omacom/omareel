@@ -77,33 +77,36 @@ pub fn transcribe_command(arguments: &[String]) -> i32 {
     0
 }
 
-/// The clips subtitles follow: the project's, or the whole recording when it has none yet.
-fn subtitle_clips(bundle: &str) -> Result<Vec<Clip>, String> {
+/// The project subtitles follow, if the bundle has one yet.
+fn subtitle_project(bundle: &str) -> Result<Option<Project>, String> {
     let project_path = qdir::file_path(bundle, "project.json");
-    let clips = if Path::new(&project_path).is_file() {
-        let bytes = qfile::read_all(&project_path)?;
-        let json = crate::compat::qjson::object_from_json(&bytes).ok_or(format!("{project_path} does not read"))?;
-        Project::from_json(&json).clips
-    } else {
-        Vec::new()
-    };
-    Ok(if clips.is_empty() { vec![Clip { id: "c1".into(), in_: 0.0, out: 1e12, ..Clip::default() }] } else { clips })
+    if !Path::new(&project_path).is_file() {
+        return Ok(None);
+    }
+    let bytes = qfile::read_all(&project_path)?;
+    let json = crate::compat::qjson::object_from_json(&bytes).ok_or(format!("{project_path} does not read"))?;
+    Ok(Some(Project::from_json(&json)))
 }
 
-/// Writes the captions of `bundle` as SubRip or WebVTT (by `output`'s extension), on the
-/// edited timeline. Returns how many captions it wrote.
+/// Writes the captions of `bundle` as SubRip, WebVTT or ASS (by `output`'s extension), on the
+/// edited timeline and in the project's caption style. Returns how many captions it wrote.
 pub fn export_subtitles(bundle: &str, output: &str) -> Result<usize, String> {
     let transcript = Transcript::load(bundle)?
         .ok_or_else(|| format!("{bundle} has no transcript yet; run `omareel transcribe {bundle}` first"))?;
-    let cues = captions::build_cues(&transcript, &subtitle_clips(bundle)?);
-    let lower = output.to_lowercase();
-    let text = if lower.ends_with(".srt") {
-        captions::to_srt(&cues)
-    } else if lower.ends_with(".vtt") {
-        captions::to_vtt(&cues)
-    } else {
-        return Err("subtitles must end in .srt or .vtt".into());
+    let project = subtitle_project(bundle)?;
+    let clips = match project.as_ref().map(|p| p.clips.clone()).unwrap_or_default() {
+        clips if clips.is_empty() => vec![Clip { id: "c1".into(), in_: 0.0, out: 1e12, ..Clip::default() }],
+        clips => clips,
     };
+    let settings = project.as_ref().and_then(|p| p.captions.clone()).unwrap_or_default();
+    let cues = captions::build_cues(&transcript, &clips, settings.style);
+    let extension = Path::new(output).extension().map(|e| e.to_string_lossy().into_owned()).unwrap_or_default();
+    let aspect = match (&project, crate::media_probe::probe_video(&qdir::file_path(bundle, "screen.mp4"))) {
+        (Some(project), Ok(info)) => crate::editor::aspect_ratio(project, info.width, info.height),
+        _ => 16.0 / 9.0,
+    };
+    let text = captions::subtitle_file(&extension, &cues, &captions::AssLook::themed(aspect, &settings))
+        .ok_or("subtitles must end in .srt, .vtt or .ass")?;
     crate::compat::qsavefile::save(output, text.as_bytes())?;
     Ok(cues.len())
 }

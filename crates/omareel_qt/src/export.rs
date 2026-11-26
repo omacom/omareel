@@ -313,9 +313,13 @@ pub(crate) fn caption_map(
     settings: &omareel_core::project::Captions,
 ) -> QMap<QMapPair_QString_QVariant> {
     let lines: QStringList = frame.lines.iter().map(|line| qstring(line)).collect();
+    let active = frame.active.map_or(-1, |index| index as i32);
     map([
         ("lines", QVariant::from(&lines)),
         ("opacity", QVariant::from(&frame.opacity)),
+        // The lit word's index among the cue's words, -1 for none; the style the cue is in.
+        ("active", QVariant::from(&active)),
+        ("style", QVariant::from(&qstring(frame.style.name()))),
         ("position", QVariant::from(&qstring(&settings.position))),
         ("size", QVariant::from(&settings.size)),
     ])

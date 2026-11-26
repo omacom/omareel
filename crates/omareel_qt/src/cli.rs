@@ -13,7 +13,7 @@ pub mod ffi {
         fn probe(bundle: &str) -> i32;
         /// `omareel transcribe <arguments>`: writes the bundle's transcript.json; the exit status.
         fn transcribe(arguments: Vec<String>) -> i32;
-        /// `omareel export <bundle> -o <file.srt|file.vtt>` for absolute paths; the exit status.
+        /// `omareel export <bundle> -o <file.srt|file.vtt|file.ass>` for absolute paths; the exit status.
         #[cxx_name = "exportSubtitles"]
         fn export_subtitles(bundle: &str, output: &str) -> i32;
         /// Sends the Rust code's Qt-style warnings through Qt's message handler, as the C++'s

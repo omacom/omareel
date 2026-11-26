@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::compat::geometry::PointF;
+use crate::captions::CaptionStyle;
 use crate::compat::qcolor::QColor;
 use crate::compat::qdir::tests::TempDir;
 use crate::compat::qjson::{self, Format, Object, Value};
@@ -364,8 +365,18 @@ fn captions_are_written_only_once_set() {
     let mut json = project.to_json();
     json.insert("captions", Object::from_iter([("enabled", Value::Bool(true)), ("position", "middle".into()), ("size", 9.into())]));
     let read = Project::from_json(&json);
-    assert_eq!(read.captions, Some(Captions { enabled: true, position: "bottom".into(), size: 2.0 }));
+    assert_eq!(read.captions, Some(Captions { enabled: true, position: "bottom".into(), size: 2.0, style: CaptionStyle::Phrase }));
     let written = read.to_json();
     assert_eq!(written.value("captions").to_object().value("size").to_double(0.0), 2.0);
     assert_eq!(Project::from_json(&written), read);
+    assert_eq!(written.value("captions").to_object().value("style").to_string_or(""), "phrase");
+
+    // A style round-trips; an unknown one reads as phrases.
+    for (name, style) in [("short", CaptionStyle::Short), ("highlight", CaptionStyle::Highlight), ("karaoke", CaptionStyle::Phrase)] {
+        let mut json = project.to_json();
+        json.insert("captions", Object::from_iter([("enabled", Value::Bool(true)), ("style", name.into())]));
+        let read = Project::from_json(&json);
+        assert_eq!(read.captions.as_ref().map(|c| c.style), Some(style), "{name}");
+        assert_eq!(Project::from_json(&read.to_json()), read);
+    }
 }

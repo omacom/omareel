@@ -54,17 +54,18 @@ impl Default for Keystrokes {
 }
 
 /// Captions drawn from `transcript.json`. `position`: "bottom" or "top"; `size` scales the
-/// text, 0.5 to 2.
+/// text, 0.5 to 2; `style`: "phrase", "highlight" or "short" (see `captions::CaptionStyle`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Captions {
     pub enabled: bool,
     pub position: String,
     pub size: f64,
+    pub style: crate::captions::CaptionStyle,
 }
 
 impl Default for Captions {
     fn default() -> Captions {
-        Captions { enabled: false, position: "bottom".into(), size: 1.0 }
+        Captions { enabled: false, position: "bottom".into(), size: 1.0, style: Default::default() }
     }
 }
 

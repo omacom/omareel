@@ -41,7 +41,8 @@ QVariantMap projectMap(const omareel::exporter::ExportJob &job)
     ThemeFonts::setApplicationFont(ThemeFonts::interfaceFamily(), omareel::theme::bodyTextSize());
     map[QStringLiteral("renderTheme")] = QVariantMap{
         {QStringLiteral("background"), omareel::theme::renderBackground()},
-        {QStringLiteral("foreground"), omareel::theme::renderForeground()}};
+        {QStringLiteral("foreground"), omareel::theme::renderForeground()},
+        {QStringLiteral("accent"), omareel::theme::renderAccent()}};
     QVariantMap background = map.value(QStringLiteral("background")).toMap();
     const QString image = job.backgroundImage();
     background[QStringLiteral("resolvedImage")] = image.isEmpty() ? QString() : QUrl::fromLocalFile(image).toString();

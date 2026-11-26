@@ -316,7 +316,9 @@ impl ExportJob {
         let keystrokes = KeystrokeTrack::build(input.events(), &project.keystrokes);
         // Captions need a transcript; one that does not read leaves them out.
         let captions = match (project.captions.as_ref().is_some_and(|c| c.enabled), crate::transcript::Transcript::load(&bundle)) {
-            (true, Ok(Some(transcript))) => crate::captions::build_cues(&transcript, &project.clips),
+            (true, Ok(Some(transcript))) => {
+                crate::captions::build_cues(&transcript, &project.clips, project.captions.as_ref().map(|c| c.style).unwrap_or_default())
+            }
             _ => Vec::new(),
         };
 
