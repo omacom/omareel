@@ -153,7 +153,7 @@ the start, well under a second at 1080p.
   Stills use the MP4 export's frame rate and size; for a GIF's frames, pass its `--fps` and
   `--width`.
 
-OUTPUT ends in `.png`, `.jpg` or `.webp`. Each written path is printed on stdout; errors go to
+OUTPUT ends in `.png`, `.jpg` or `.webp` (WebP needs `qt6-imageformats`). Each written path is printed on stdout; errors go to
 stderr with a non-zero exit (2 for bad arguments, 1 when rendering or writing fails).
 
 ### `probe BUNDLE`

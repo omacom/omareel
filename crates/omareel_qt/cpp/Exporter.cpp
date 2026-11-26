@@ -35,6 +35,17 @@ namespace {
 
 // The project as Composition.qml reads it: its JSON as a map, the colours keystroke pills are
 // drawn with, and the background image the job resolved, as a URL.
+// The image turned upside down: QImage::flipped is Qt 6.9's, and CMake takes 6.8, whose
+// mirrored() it replaces.
+static QImage upsideDown(const QImage &image)
+{
+#if QT_VERSION >= QT_VERSION_CHECK(6, 9, 0)
+    return image.flipped(Qt::Vertical);
+#else
+    return image.mirrored(false, true);
+#endif
+}
+
 QVariantMap projectMap(const omareel::exporter::ExportJob &job)
 {
     QVariantMap map = job.projectMap();
@@ -269,7 +280,7 @@ bool Exporter::renderStills(const StillOptions &options, QList<Still> *stills, d
         const QImage frame(reinterpret_cast<const uchar *>(bytes.constData()), width, height, qsizetype(width) * 4,
                            QImage::Format_RGBX8888);
         QImage image = softwareRendering ? frame.convertToFormat(QImage::Format_RGB888)
-                                         : frame.flipped(Qt::Vertical).convertToFormat(QImage::Format_RGB888);
+                                         : upsideDown(frame).convertToFormat(QImage::Format_RGB888);
         Still rendered{std::move(image), times[size_t(still)]};
         if (options.take) {
             if (!options.take(still, rendered, error)) { ok = false; break; }
@@ -307,6 +318,8 @@ QImage Exporter::contactSheet(const QList<Still> &stills, int columns, int gap)
         const int padding = qMax(3, metrics.height() / 4);
         const QRect box(origin.x() + padding, origin.y() + tile.height() - padding - metrics.height() - padding,
                         metrics.horizontalAdvance(label) + 2 * padding, metrics.height() + padding);
+        // A tile too small for its time leaves it out rather than spill over its neighbours.
+        if (!QRect(origin, tile).contains(box)) continue;
         painter.setPen(Qt::NoPen);
         painter.setBrush(QColor(0, 0, 0, 180));
         painter.drawRoundedRect(box, padding, padding);

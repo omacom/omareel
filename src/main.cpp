@@ -31,6 +31,7 @@ extern "C" int omr_ff_preload(void);
 #include <QJsonObject>
 #include <QIcon>
 #include <QProcess>
+#include <QSaveFile>
 #include <QQuickStyle>
 #include <QQuickItem>
 #include <QQuickWindow>
@@ -334,14 +335,18 @@ static int frameCommand(const QStringList &arguments)
                                 << Qt::flush;
         });
     }
+    // Through a QSaveFile, the format named by the suffix: an existing image is replaced only by
+    // a complete one, never left half written when the disk fills.
     const auto save = [](const QImage &image, const QString &path) {
-        const bool jpeg = path.endsWith(QStringLiteral(".jpg"), Qt::CaseInsensitive)
-                       || path.endsWith(QStringLiteral(".jpeg"), Qt::CaseInsensitive);
-        if (image.save(path, nullptr, jpeg ? 90 : -1)) {
-            QTextStream(stdout) << path << Qt::endl;
-            return true;
-        }
-        return false;
+        const QByteArray format = QFileInfo(path).suffix().toLower().toLatin1();
+        const bool jpeg = format == "jpg" || format == "jpeg";
+        QSaveFile file(path);
+        if (!file.open(QIODevice::WriteOnly)) return false;
+        QImageWriter writer(&file, format);
+        if (jpeg) writer.setQuality(90);
+        if (!writer.write(image) || !file.commit()) return false;
+        QTextStream(stdout) << path << Qt::endl;
+        return true;
     };
     // Separate stills are written as they render, so only one is held at a time and an
     // unwritable output stops at the first. A sheet's tiles are small; it keeps them.
