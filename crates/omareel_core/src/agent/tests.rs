@@ -128,7 +128,9 @@ fn run_refuses_to_overwrite_a_save_made_meanwhile() {
     let (report, ok) = super::apply::run_on(
         || {
             let document = open(&bundle, &dir);
-            // The editor saves after apply read the project.
+            // The editor saves after apply read the project, with a video it inserted.
+            std::fs::create_dir_all(format!("{bundle}/media")).unwrap();
+            std::fs::write(format!("{bundle}/media/theirs.mp4"), b"video").unwrap();
             std::fs::write(&project, b"{\"saved\": \"by the editor\"}").unwrap();
             Ok(document)
         },
@@ -138,6 +140,8 @@ fn run_refuses_to_overwrite_a_save_made_meanwhile() {
     );
     assert!(!ok && report.contains("changed while the operations ran"), "{report}");
     assert_eq!(std::fs::read_to_string(&project).unwrap(), "{\"saved\": \"by the editor\"}");
+    // Its video is the editor's, not this run's: it stays.
+    assert!(std::path::Path::new(&format!("{bundle}/media/theirs.mp4")).exists());
 }
 
 #[test]
