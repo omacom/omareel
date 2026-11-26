@@ -127,11 +127,11 @@ ColumnLayout {
         spacing: 8
         EditorButton {
             text: "Save .srt"
-            onClicked: root.savedPath = editor.saveSubtitles("srt")
+            onClicked: root.savedPath = editor.saveSubtitles("srt") || "-"
         }
         EditorButton {
             text: "Save .vtt"
-            onClicked: root.savedPath = editor.saveSubtitles("vtt")
+            onClicked: root.savedPath = editor.saveSubtitles("vtt") || "-"
         }
         EditorButton {
             objectName: "saveAssButton"
@@ -145,10 +145,11 @@ ColumnLayout {
         Layout.fillWidth: true
         elide: Text.ElideMiddle
         textFormat: Text.PlainText
-        color: theme.textMuted
+        // "-": saving failed (the folder can't be written, or the disk is full).
+        color: root.savedPath === "-" ? theme.record : theme.textMuted
         font.family: theme.fontFamily
         font.pixelSize: theme.type.small
-        text: "Saved " + root.savedPath
+        text: root.savedPath === "-" ? "Couldn't save the subtitles next to the export" : "Saved " + root.savedPath
     }
 
     OmSeparator { visible: editor.hasAudio; Layout.fillWidth: true }
