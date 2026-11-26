@@ -1,9 +1,9 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.impl
-import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtQuick.Shapes
+import Omareel
 import Omareel.Ui
 
 Dialog {
@@ -14,13 +14,14 @@ Dialog {
     modal: true
     padding: 20
     standardButtons: Dialog.NoButton
-    closePolicy: editor.exporting ? Popup.NoAutoClose : Popup.CloseOnEscape
+    closePolicy: editor.exporting || outputDialog.busy ? Popup.NoAutoClose : Popup.CloseOnEscape
     property string format: "mp4"
     property int heightValue: 1080
     property int fpsValue: 60
     property string qualityValue: "social"
     property string outputPath: editor.defaultExportPath(format)
     property string successPath: ""
+    property string pickerError: ""
     property var previewGrab: null
     property url previewUrl: ""
     readonly property var heights: format === "mp4"
@@ -57,6 +58,7 @@ Dialog {
             qualityValue = editor.project.export.gif.quality
         }
         outputPath = editor.defaultExportPath(format)
+        pickerError = ""
         editor.setProjectValue("export.format", value)
     }
     function qualityCaption() {
@@ -76,6 +78,7 @@ Dialog {
     }
     onOpened: {
         successPath = ""
+        pickerError = ""
         selectFormat(editor.project.export.format || "mp4")
     }
 
@@ -103,7 +106,7 @@ Dialog {
             }
             Item { Layout.fillWidth: true }
             OmIconButton {
-                enabled: !editor.exporting
+                enabled: !editor.exporting && !outputDialog.busy
                 icon.source: "qrc:/omareel/assets/icons/lucide/x.svg"
                 Accessible.name: "Close export"
                 onClicked: root.close()
@@ -208,9 +211,10 @@ Dialog {
         }
 
         ColumnLayout {
+            objectName: "exportOptionsLayout"
             Layout.fillWidth: true
             visible: !root.done
-            enabled: !editor.exporting
+            enabled: !editor.exporting && !outputDialog.busy
             opacity: enabled ? 1 : .5
             spacing: 10
             Behavior on opacity { NumberAnimation { duration: 200 } }
@@ -275,7 +279,7 @@ Dialog {
                     font.family: theme.monoFamily
                     font.pixelSize: theme.type.caption
                 }
-                OmButton { text: "Change…"; font.pixelSize: theme.type.small; onClicked: outputDialog.open() }
+                OmButton { text: "Change…"; font.pixelSize: theme.type.small; onClicked: { root.pickerError = ""; outputDialog.open() } }
             }
         }
 
@@ -320,8 +324,8 @@ Dialog {
         }
         Label {
             Layout.fillWidth: true
-            visible: editor.exportError.length > 0 && !editor.exporting
-            text: editor.exportError
+            visible: (editor.exportError.length > 0 || root.pickerError.length > 0) && !editor.exporting
+            text: root.pickerError.length > 0 ? root.pickerError : editor.exportError
             color: theme.record
             wrapMode: Text.WordWrap
             font.pixelSize: theme.type.small
@@ -364,13 +368,17 @@ Dialog {
             }
             OmButton {
                 visible: !editor.exporting && !root.done
+                enabled: !outputDialog.busy
                 Layout.preferredWidth: 120
                 primary: true
                 text: "Export"
                 icon.source: "qrc:/omareel/assets/icons/lucide/download.svg"
-                onClicked: editor.exportTo(root.outputPath, {
-                    fps: root.fpsValue, height: root.heightValue, quality: root.qualityValue
-                })
+                onClicked: {
+                    root.pickerError = ""
+                    editor.exportTo(root.outputPath, {
+                        fps: root.fpsValue, height: root.heightValue, quality: root.qualityValue
+                    })
+                }
             }
             OmButton {
                 visible: root.done
@@ -386,13 +394,23 @@ Dialog {
         target: editor
         function onExportFinished(path) { root.successPath = path }
     }
-    FileDialog {
+    PortalFilePicker {
         id: outputDialog
+        objectName: "exportOutputPicker"
+        mode: PortalFilePicker.SaveFile
         title: "Export to"
-        fileMode: FileDialog.SaveFile
-        defaultSuffix: root.format
-        selectedFile: "file://" + root.outputPath
+        suggestedPath: root.outputPath
         nameFilters: root.format === "gif" ? ["GIF image (*.gif)"] : ["MP4 video (*.mp4)"]
-        onAccepted: root.outputPath = selectedFile.toString().replace(/^file:\/\//, "")
+        onAccepted: {
+            const suffix = "." + root.format
+            if (!selectedPath.toLowerCase().endsWith(suffix)) {
+                root.pickerError = "Export file must end in " + suffix
+                return
+            }
+            root.pickerError = ""
+            root.outputPath = selectedPath
+        }
+        onCancelled: root.pickerError = ""
+        onFailed: message => root.pickerError = message
     }
 }
