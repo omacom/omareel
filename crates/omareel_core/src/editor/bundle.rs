@@ -173,6 +173,9 @@ pub struct Recording {
     pub has_desktop_audio: bool,
     pub has_microphone_audio: bool,
     pub camera: Option<CameraRecording>,
+    /// Where the recording was paused, in seconds of screen.mp4 (sorted, apart). A clip's trims
+    /// stop at them, so Reset trims never brings a pause back into the edit.
+    pub paused: Vec<(f64, f64)>,
 }
 
 impl Default for Recording {
@@ -188,6 +191,7 @@ impl Default for Recording {
             has_desktop_audio: false,
             has_microphone_audio: false,
             camera: None,
+            paused: Vec::new(),
         }
     }
 }
@@ -345,11 +349,12 @@ pub fn load_bundle_with(bundle_path: &str, probes: &Probes, save_migration: bool
         result?;
         project
     };
+    // Marks made after the recorder cleaned input.jsonl for them are left out.
+    let stopped_us = capture_root.value("stopped_us").to_variant_long_long();
+    let marks = RecordingMarks::load_bundle(&bundle_path).made_by(stopped_us);
+    let first_frame_us = capture_root.value("first_frame_us").to_variant_long_long();
+    recording.paused = marks.paused_spans(first_frame_us, recording.source_duration);
     if new {
-        // Marks made after the recorder cleaned input.jsonl for them are left out.
-        let stopped_us = capture_root.value("stopped_us").to_variant_long_long();
-        let marks = RecordingMarks::load_bundle(&bundle_path).made_by(stopped_us);
-        let first_frame_us = capture_root.value("first_frame_us").to_variant_long_long();
         apply_recording_marks(&mut project, &marks, first_frame_us, recording.source_duration);
     }
     fit_project_to_recording(&mut project, &recording);

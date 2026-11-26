@@ -119,7 +119,12 @@ pub fn add_retake(seconds: Option<f64>, via: &str) -> Result<(Mark, f64), String
     with_active_recording(|state| {
         let bundle = state.value("bundle").to_string_or("");
         let now_us = monotonic_us();
-        let marks = RecordingMarks::load_bundle(&bundle);
+        let marks = with_requested_resume(
+            RecordingMarks::load_bundle(&bundle),
+            state.value("pause_requested").to_bool(false),
+            state.value("pause_request_us").to_variant_long_long(),
+            now_us,
+        );
         let started_us = state.value("started_us").to_variant_long_long();
         let mut mark = Mark::new(MarkKind::Retake, mark_time(state, now_us));
         mark.set_made_us(now_us);
@@ -130,6 +135,18 @@ pub fn add_retake(seconds: Option<f64>, via: &str) -> Result<(Mark, f64), String
         let cut_us = recorded_between(mark.from_us, mark.monotonic_us, &marks.pauses());
         Ok((mark, cut_us as f64 / 1_000_000.0))
     })
+}
+
+/// The marks as they will be once the recorder catches up: a resume asked for (`pause_requested`
+/// off again, at `request_us`) is written by the recorder only at its next poll, 50 to 90 ms
+/// later. A retake in between would otherwise see the pause still open and reach back past it
+/// to the marker before, cutting the take recorded before the pause.
+fn with_requested_resume(mut marks: RecordingMarks, pause_requested: bool, request_us: i64, now_us: i64) -> RecordingMarks {
+    let open = marks.pauses().last().is_some_and(|&(start, end)| end == i64::MAX && start <= request_us);
+    if open && !pause_requested && request_us > 0 && request_us <= now_us {
+        marks.marks.push(Mark::new(MarkKind::Resume, request_us));
+    }
+    marks
 }
 
 /// `omareel record --pause`: asks the recorder to pause, or to resume when a pause is already
@@ -791,4 +808,26 @@ mod tests {
         assert_eq!(read.marks, [marker, Mark::new(MarkKind::Pause, 7)]);
         std::fs::remove_dir_all(&dir).unwrap();
     }
+
+    /// A retake just after a resume, before the recorder wrote the resume mark, cuts only what
+    /// was recorded since the resume, not the take before the pause.
+    #[test]
+    fn a_retake_right_after_resuming_keeps_the_take_before_the_pause() {
+        let s = 1_000_000;
+        let marks = RecordingMarks {
+            marks: vec![Mark::new(MarkKind::Marker, 3 * s), Mark::new(MarkKind::Pause, 10 * s)],
+        };
+        // Resume asked at 12 s; the retake comes at 12.05 s, before the recorder's resume mark.
+        let known = with_requested_resume(marks.clone(), false, 12 * s, 12 * s + 50_000);
+        let from = retake_from(12 * s + 50_000, &known.marks, 0, None);
+        assert_eq!(from, 12 * s);
+        assert_eq!(known.pauses(), vec![(10 * s, 12 * s)]);
+        // Still paused (no resume asked): nothing is added.
+        let still = with_requested_resume(marks.clone(), true, 10 * s, 11 * s);
+        assert_eq!(still.marks.len(), 2);
+        // Not paused at all: nothing either.
+        let plain = RecordingMarks { marks: vec![Mark::new(MarkKind::Marker, 3 * s)] };
+        assert_eq!(with_requested_resume(plain, false, 1 * s, 5 * s).marks.len(), 1);
+    }
+
 }

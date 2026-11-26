@@ -220,18 +220,23 @@ impl RecordingMarks {
     /// What the new project cuts, in seconds of `screen.mp4` (its first frame at
     /// `first_frame_us`), clamped to `0..duration`, sorted and merged.
     pub fn cut_spans(&self, first_frame_us: i64, duration: f64) -> Vec<(f64, f64)> {
-        let seconds = |us: i64| {
-            if us == i64::MAX { duration } else { (us.saturating_sub(first_frame_us)) as f64 / 1_000_000.0 }
-        };
-        let spans: Vec<(f64, f64)> = self
-            .pauses()
-            .into_iter()
-            .chain(self.retakes())
-            .map(|(start, end)| (seconds(start).clamp(0.0, duration), seconds(end).clamp(0.0, duration)))
-            .filter(|(start, end)| end > start)
-            .collect();
-        merge_spans(spans)
+        to_seconds(self.pauses().into_iter().chain(self.retakes()), first_frame_us, duration)
     }
+
+    /// The paused spans alone, as [`RecordingMarks::cut_spans`] gives them.
+    pub fn paused_spans(&self, first_frame_us: i64, duration: f64) -> Vec<(f64, f64)> {
+        to_seconds(self.pauses().into_iter(), first_frame_us, duration)
+    }
+}
+
+fn to_seconds(spans: impl Iterator<Item = (i64, i64)>, first_frame_us: i64, duration: f64) -> Vec<(f64, f64)> {
+    let seconds =
+        |us: i64| if us == i64::MAX { duration } else { (us.saturating_sub(first_frame_us)) as f64 / 1_000_000.0 };
+    let spans: Vec<(f64, f64)> = spans
+        .map(|(start, end)| (seconds(start).clamp(0.0, duration), seconds(end).clamp(0.0, duration)))
+        .filter(|(start, end)| end > start)
+        .collect();
+    merge_spans(spans)
 }
 
 /// Sorts spans and joins those that overlap or touch.

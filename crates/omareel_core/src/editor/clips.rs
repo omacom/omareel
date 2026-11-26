@@ -74,7 +74,17 @@ impl Document {
     pub(crate) fn clip_bounds(&mut self, index: i32) -> (f64, f64) {
         let clip = self.project.clips[index as usize].clone();
         if !clip.is_media() {
-            return self.timeline().recording_bounds(index, self.recording.source_duration);
+            let (mut lower, mut upper) = self.timeline().recording_bounds(index, self.recording.source_duration);
+            // Paused time stays out: the edges stop at the pauses either side of the clip.
+            for &(start, end) in &self.recording.paused {
+                if end <= clip.in_ + 1e-6 {
+                    lower = lower.max(end);
+                }
+                if start >= clip.out - 1e-6 {
+                    upper = upper.min(start);
+                }
+            }
+            return (lower, upper);
         }
         let info = self.insert_info(&clip.media);
         (0.0, if info.is_valid() { info.duration } else { clip.out })
