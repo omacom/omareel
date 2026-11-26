@@ -1660,7 +1660,7 @@ fn start_still(work: &DecodePlan, frame: i32) -> StillDecoders {
 /// The screen frame the export still holds at output frame `before` (the first of a clip that
 /// gave none): the last one an earlier recording clip gave, inserted videos skipped, with the
 /// output frame it is.
-fn held_screen_frame(work: &DecodePlan, before: i32, error: &mut String) -> Option<(Vec<u8>, i32)> {
+fn held_screen_frame(work: &DecodePlan, before: i32, error: &mut String) -> Option<(Vec<u8>, (i32, i32))> {
     let mut frame = before - 1;
     while frame >= 0 {
         let seek = still::clip_seek(&work.timeline, work.fps, frame);
@@ -1678,8 +1678,9 @@ fn held_screen_frame(work: &DecodePlan, before: i32, error: &mut String) -> Opti
             );
             decoder.cancel();
             // With the output frame it shows, for its blur overlays.
-            if let Some((pixels, grid)) = picture {
-                return Some((pixels, frame - (seek.index - grid)));
+            if let Some((pixels, (first, last))) = picture {
+                let output = |grid: i32| frame - (seek.index - grid);
+                return Some((pixels, (output(first), output(last))));
             }
         }
         frame -= seek.index + 1;
@@ -1691,7 +1692,8 @@ fn held_screen_frame(work: &DecodePlan, before: i32, error: &mut String) -> Opti
 /// whether that worked). When it gives nothing, the frame is past the video's end and the
 /// export showed the last frame it got: `restart` starts the decoder at earlier grid frames
 /// ([`still::fallback_starts`]) and the last frame read up to `index` is the one. With it, the
-/// grid frame it really is.
+/// grid frames it shows: the first where this picture appeared and the last read (ffmpeg repeats
+/// a video's last frame for as long as the file says it lasts, so these can be far apart).
 fn read_still(
     decoder: &mut FfmpegDecoder,
     started: bool,
@@ -1699,15 +1701,21 @@ fn read_still(
     back: i32,
     restart: &mut dyn FnMut(&mut FfmpegDecoder, i32, &mut String) -> bool,
     error: &mut String,
-) -> Option<(Vec<u8>, i32)> {
+) -> Option<(Vec<u8>, (i32, i32))> {
     for (attempt, start) in still::fallback_starts(index, back).into_iter().enumerate() {
         if if attempt == 0 { !started } else { !restart(decoder, start, error) } {
             continue;
         }
-        let mut last = None;
+        let mut last: Option<(Vec<u8>, (i32, i32))> = None;
         for grid in start..=index {
             match decoder.read_frame(error) {
-                Some(frame) => last = Some((frame, grid)),
+                Some(frame) => {
+                    let first = match &last {
+                        Some((previous, (first, _))) if *previous == frame => *first,
+                        _ => grid,
+                    };
+                    last = Some((frame, (first, grid)));
+                }
                 None => break,
             }
         }
@@ -1749,11 +1757,14 @@ fn still_decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &Ato
         // before the sound) shows what the export holds there: the last screen frame of the
         // recording clips before it. With the output frame the picture really is.
         let picture = match picture {
-            Some((pixels, grid)) => Some((pixels, decoders.frame - (decoders.seek.index - grid))),
+            Some((pixels, (first, last))) => {
+                let output = |grid: i32| decoders.frame - (decoders.seek.index - grid);
+                Some((pixels, (output(first), output(last))))
+            }
             None if !clip.is_media() => held_screen_frame(work, decoders.frame - decoders.seek.index, &mut error),
             None => None,
         };
-        let Some((picture, shown_frame)) = picture else {
+        let Some((picture, shown_frames)) = picture else {
             push_error(shared, if error.is_empty() { "Decoder ended before the first frame".into() } else { error });
             break;
         };
@@ -1794,13 +1805,18 @@ fn still_decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &Ato
         // Blur regions are baked into a still's recording frame as into the export's: at the
         // time the still stands for and, when the decoder ran out and an earlier frame stands
         // in, at that frame's own time, so a blur over the frame shown is never missed.
+        // ... at every output frame from where the picture shown first appeared to the last
+        // that repeats it.
         let source_time = work.timeline.source_time(still::frame_time(decoders.frame, work.fps));
-        let shown_time = work.timeline.source_time(still::frame_time(shown_frame.max(0), work.fps));
+        let mut times = vec![(source_time, clip.speed)];
+        for frame in shown_frames.0.max(0)..=shown_frames.1.max(0) {
+            times.push((work.timeline.source_time(still::frame_time(frame, work.fps)), clip.speed));
+        }
         queue.packets.push_back(DecodedPacket {
             image: if insert {
                 None
             } else {
-                redacted(picture.as_ref(), work, &[(source_time, clip.speed), (shown_time, clip.speed)])
+                redacted(picture.as_ref(), work, &times)
             },
             camera_image,
             error: String::new(),
