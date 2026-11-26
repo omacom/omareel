@@ -157,7 +157,9 @@ impl FfmpegDecoder {
         // the start shows the frame on screen at each instant.
         let mut video_filter = format!("fps={}:start_time=0", number_f64(self.fps, 'g', 12));
         if self.skip_frames > 0 {
-            video_filter += &format!(",trim=start_frame={}", self.skip_frames);
+            // Counted from 0 again: frames that start later than 0 make ffmpeg pad the raw stream
+            // with copies of the first one, which would shift every frame number after it.
+            video_filter += &format!(",trim=start_frame={},setpts=PTS-STARTPTS", self.skip_frames);
         }
         if self.scale {
             if self.yuv {
