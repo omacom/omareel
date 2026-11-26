@@ -40,7 +40,10 @@ pub fn parse_ops(json: &[u8]) -> Result<Vec<Object>, String> {
     let value = qjson::from_json(json).map_err(|error| format!("operations are not valid JSON: {}", error.error_string()))?;
     let list = match &value {
         Value::Array(items) => items.clone(),
-        Value::Object(object) if object.contains("ops") => object.value("ops").to_array(),
+        Value::Object(object) if object.contains("ops") => match object.value("ops") {
+            Value::Array(items) => items.clone(),
+            _ => return Err("\"ops\" must be an array of operations".into()),
+        },
         Value::Object(_) => vec![value.clone()],
         _ => return Err("operations must be a JSON array or object".into()),
     };
@@ -292,7 +295,7 @@ fn run_op(document: &mut Document, op: &Object, run: &mut Run) -> OpResult {
                 // What the import would find, without copying the video into the bundle.
                 match (job.probe_video)(&file) {
                     Ok(info) if info.is_valid() => ImportedInsert {
-                        path: format!("media/{}", qdir::FileInfo::new(file.as_str()).file_name()),
+                        path: crate::editor::planned_insert_path(&file, document.bundle_path()),
                         info,
                         error: String::new(),
                     },
@@ -404,9 +407,15 @@ fn run_op(document: &mut Document, op: &Object, run: &mut Run) -> OpResult {
         }
         "set" => {
             let path = text(op, "path")?;
-            if path.split('.').next().is_some_and(|root| matches!(root, "clips" | "zooms")) {
-                return Err("clips and zooms change through their own operations".into());
+            // As set_project_value reads it: empty parts (".clips", "a..b") are skipped.
+            let parts: Vec<&str> = path.split('.').filter(|part| !part.is_empty()).collect();
+            match parts.first() {
+                None => return Err("\"path\" names no setting".into()),
+                Some(&("clips" | "zooms")) => return Err("clips and zooms change through their own operations".into()),
+                Some(&("version" | "defaultsVersion")) => return Err(format!("{} is not a setting", parts[0])),
+                Some(_) => {}
             }
+            let path = parts.join(".");
             let value = op.value("value").clone();
             if value.is_undefined() {
                 return Err("\"value\" is required".into());
@@ -473,11 +482,30 @@ pub fn run_on(
         Ok(document) => document,
         Err(error) => return failure(error),
     };
+    // Videos an insert copies in, so a save that doesn't happen takes them out again.
+    let media = qdir::file_path(document.bundle_path(), "media");
+    let listing = || -> Vec<String> {
+        std::fs::read_dir(&media)
+            .map(|entries| entries.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().into_owned()).collect())
+            .unwrap_or_default()
+    };
+    let before = listing();
     let (results, warnings) = match apply_ops(&mut document, &ops, dry_run) {
         Ok(done) => done,
         Err(error) => return failure(error),
     };
     if !dry_run {
+        let unsaved = |error: String| {
+            for name in listing().into_iter().filter(|name| !before.contains(name)) {
+                let _ = std::fs::remove_file(qdir::file_path(&media, &name));
+            }
+            failure(error)
+        };
+        // The editor (or another apply) saved while these ran: saving now would throw its
+        // edits away.
+        if document.disk_changed() {
+            return unsaved("project.json changed while the operations ran (the editor saved?); nothing was saved. Run them again.".into());
+        }
         let saved = document.save_now();
         let effects = document.take_effects();
         if !saved {
@@ -485,7 +513,7 @@ pub fn run_on(
                 .into_iter()
                 .find_map(|effect| if let Effect::ErrorOccurred(message) = effect { Some(message) } else { None })
                 .unwrap_or_else(|| "could not save project.json".into());
-            return failure(error);
+            return unsaved(error);
         }
     }
     let project: &Project = document.project();
