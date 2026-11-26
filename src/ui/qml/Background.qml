@@ -25,8 +25,11 @@ Item {
         anchors.fill: parent
         clip: true
         visible: root.settings.type === "gradient"
+        property int stopCount: 0
 
         Rectangle {
+            // No stops paint nothing, as the canvas did: the solid colour underneath shows.
+            visible: gradientLayer.stopCount > 0
             readonly property real diagonal: Math.ceil(Math.sqrt(gradientLayer.width * gradientLayer.width
                                                                  + gradientLayer.height * gradientLayer.height))
             width: diagonal
@@ -49,11 +52,21 @@ Item {
             const old = []
             for (let k = 0; k < fill.stops.length; ++k)
                 old.push(fill.stops[k])
-            const stops = root.settings.gradient ? root.settings.gradient.stops || [] : []
+            // In position order (stable), as a canvas gradient takes them; a stop at the same
+            // position as the one before starts a hard edge there, which a canvas draws and a
+            // Gradient blends unless the second sits just after the first.
+            const stops = (root.settings.gradient ? root.settings.gradient.stops || [] : [])
+                .map((stop, index) => ({ color: stop[0], position: Number(stop[1]), index: index }))
+                .sort((a, b) => a.position - b.position || a.index - b.index)
             const made = []
-            for (let i = 0; i < stops.length; ++i)
-                made.push(stopComponent.createObject(fill, { color: stops[i][0], position: stops[i][1] }))
+            let previous = -1
+            for (let i = 0; i < stops.length; ++i) {
+                const position = stops[i].position <= previous ? previous + 0.0001 : stops[i].position
+                previous = position
+                made.push(stopComponent.createObject(fill, { color: stops[i].color, position: position }))
+            }
             fill.stops = made
+            stopCount = made.length
             for (let j = 0; j < old.length; ++j)
                 old[j].destroy()
         }
