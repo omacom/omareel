@@ -136,7 +136,7 @@ ColumnLayout {
         EditorButton {
             objectName: "saveAssButton"
             text: "Save .ass"
-            onClicked: root.savedPath = editor.saveSubtitles("ass")
+            onClicked: root.savedPath = editor.saveSubtitles("ass") || "-"
         }
         Item { Layout.fillWidth: true }
     }
