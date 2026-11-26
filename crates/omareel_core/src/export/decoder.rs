@@ -41,6 +41,8 @@ pub struct FfmpegDecoder {
     cancelled: bool,
     /// Planar YUV 4:2:0 frames as the video holds them, instead of RGBA ([`set_yuv`](Self::set_yuv)).
     yuv: bool,
+    /// Output frames dropped before the first one given ([`set_skip_frames`](Self::set_skip_frames)).
+    skip_frames: i32,
 }
 
 impl Default for FfmpegDecoder {
@@ -67,6 +69,7 @@ impl FfmpegDecoder {
             eof: false,
             cancelled: false,
             yuv: false,
+            skip_frames: 0,
         }
     }
 
@@ -119,6 +122,14 @@ impl FfmpegDecoder {
         self.yuv = yuv;
     }
 
+    /// For the next start: drop this many output frames (on the grid from the start) before
+    /// the first one given, inside ffmpeg. A still that must land on the export's grid exactly
+    /// starts where the export does and skips to its frame, rather than seeking there, which
+    /// moves the grid's origin and can round a source frame onto the other side of a tie.
+    pub fn set_skip_frames(&mut self, frames: i32) {
+        self.skip_frames = frames.max(0);
+    }
+
     /// Whether the frames are YUV 4:2:0 ([`set_yuv`](Self::set_yuv) at the last start).
     pub fn yuv(&self) -> bool {
         self.yuv
@@ -145,6 +156,9 @@ impl FfmpegDecoder {
         // it empty. Decoding from the keyframe before the start and anchoring the output grid at
         // the start shows the frame on screen at each instant.
         let mut video_filter = format!("fps={}:start_time=0", number_f64(self.fps, 'g', 12));
+        if self.skip_frames > 0 {
+            video_filter += &format!(",trim=start_frame={}", self.skip_frames);
+        }
         if self.scale {
             if self.yuv {
                 video_filter += &format!(",scale={}:{}:flags=bilinear", self.width, self.height);

@@ -64,6 +64,34 @@ fn clip_rate(clip: &Clip, fps: i32) -> f64 {
     number_f64(f64::from(fps) / clip.speed, 'g', 12).parse().unwrap_or(f64::from(fps))
 }
 
+/// Where a decoder for `clip` starts, and how many output frames it skips, so that its first
+/// frame given is the export's frame `index` of that clip, decoded on exactly the export's grid.
+///
+/// The export's decoder starts at the clip's in-point; ffmpeg counts the grid from the start
+/// it is given. Starting at the frame's own time moves the origin by a fraction of a microsecond
+/// tick, and a source frame that falls exactly between two output frames (every other frame of a
+/// 24 fps video at 60) can round to the other one. So the start is the in-point plus a whole
+/// number of seconds that is also a whole number of output frames (its timestamps then shift by
+/// an exact integer), and the frames from there to `index` are skipped inside ffmpeg: at most a
+/// few seconds' worth, whatever the position.
+pub fn grid_start(clip: &Clip, fps: i32, index: i32) -> (f64, i32) {
+    let rate = clip_rate(clip, fps);
+    let unit = (1..=100).find(|&k| {
+        let frames = f64::from(k) * rate;
+        (frames - frames.round()).abs() < 1e-9
+    });
+    match unit {
+        Some(unit) if index > 0 && rate > 0.0 => {
+            let unit = f64::from(unit);
+            let whole = (f64::from(index) / rate / unit).floor() * unit;
+            let before = cpp::int_cast((whole * rate).round()).clamp(0, index);
+            (clip.in_ + whole, index - before)
+        }
+        // A rate with no such second within 100 (never for the speeds offered): seek to it.
+        _ => (clip_start(clip, fps, index), 0),
+    }
+}
+
 /// Where in its file a decoder for `clip` starts so that its first frame is the export's frame
 /// `index` of that clip.
 pub fn clip_start(clip: &Clip, fps: i32, index: i32) -> f64 {
@@ -458,4 +486,19 @@ mod tests {
             assert_eq!(parse_frame_args(&args(line)), Err(error.to_owned()), "{line}");
         }
     }
+
+    /// A still's decoder starts a whole number of seconds (and output frames) into the clip and
+    /// skips the rest, so its grid is the export's exactly.
+    #[test]
+    fn stills_start_on_the_exports_grid() {
+        let clip = Clip { id: "c".into(), in_: 2.5, out: 100.0, speed: 1.0, ..Clip::default() };
+        assert_eq!(grid_start(&clip, 60, 2), (2.5, 2));
+        assert_eq!(grid_start(&clip, 60, 61), (3.5, 1));
+        assert_eq!(grid_start(&clip, 60, 600), (12.5, 0));
+        // At 16x a 60 fps export takes 3.75 source frames a second: four seconds is 15 frames.
+        let fast = Clip { speed: 16.0, ..clip.clone() };
+        assert_eq!(grid_start(&fast, 60, 16), (6.5, 1));
+        assert_eq!(grid_start(&clip, 60, 0), (2.5, 0));
+    }
+
 }

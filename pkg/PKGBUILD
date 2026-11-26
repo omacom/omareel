@@ -39,7 +39,8 @@ makedepends=(
   'wayland'
 )
 optdepends=('gifsicle: optimize exported GIF files'
-            'wl-clipboard: copy an exported file to the clipboard')
+            'wl-clipboard: copy an exported file to the clipboard'
+            'qt6-imageformats: WebP stills from omareel frame')
 conflicts=('omarecord')
 source=()
 sha256sums=()

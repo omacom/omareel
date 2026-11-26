@@ -1418,8 +1418,10 @@ fn redacted(decoded: Option<&Image>, work: &DecodePlan, times: &[(f64, f64)]) ->
 /// Starts `decoder` on `clip` at its frame `index` (0 at its in point): the recording at the
 /// decode size, or an inserted video scaled to its own size.
 fn start_clip_decoder(decoder: &mut FfmpegDecoder, clip: &Clip, index: i32, work: &DecodePlan, error: &mut String) -> bool {
-    let start = if index > 0 { still::clip_start(clip, work.fps, index) } else { clip.in_ };
+    // On the export's grid exactly (still::grid_start); index 0 is the export's own start.
+    let (start, skip) = if index > 0 { still::grid_start(clip, work.fps, index) } else { (clip.in_, 0) };
     decoder.set_yuv(!clip.is_media() && work.screen_yuv.is_some());
+    decoder.set_skip_frames(skip);
     if clip.is_media() {
         let info = work.inserts.get(&clip.media).copied().unwrap_or_default();
         let (width, height) = plan::insert_decode_size(work.width, work.height, &info);
@@ -1626,7 +1628,7 @@ const STILL_AHEAD: usize = 3;
 /// The decoders started for one still: the clip's at the frame the export's would give there,
 /// and the webcam's when the frame shows it.
 struct StillDecoders {
-    /// The output frame.
+    /// The output frame the still is.
     frame: i32,
     clip_index: i32,
     seek: still::ClipSeek,
@@ -1653,6 +1655,36 @@ fn start_still(work: &DecodePlan, frame: i32) -> StillDecoders {
         (index, camera_decoder, camera_started, camera_error)
     });
     StillDecoders { frame, clip_index: seek.clip, seek, decoder, started, error, camera }
+}
+
+/// The screen frame the export still holds at output frame `before` (the first of a clip that
+/// gave none): the last one an earlier recording clip gave, inserted videos skipped, with the
+/// output frame it is.
+fn held_screen_frame(work: &DecodePlan, before: i32, error: &mut String) -> Option<(Vec<u8>, i32)> {
+    let mut frame = before - 1;
+    while frame >= 0 {
+        let seek = still::clip_seek(&work.timeline, work.fps, frame);
+        let clip = usize::try_from(seek.clip).ok().and_then(|index| work.clips.get(index))?;
+        if !clip.is_media() {
+            let mut decoder = FfmpegDecoder::new();
+            let started = start_clip_decoder(&mut decoder, clip, seek.index, work, error);
+            let picture = read_still(
+                &mut decoder,
+                started,
+                seek.index,
+                2 * work.fps,
+                &mut |decoder, start, error| start_clip_decoder(decoder, clip, start, work, error),
+                error,
+            );
+            decoder.cancel();
+            // With the output frame it shows, for its blur overlays.
+            if let Some((pixels, grid)) = picture {
+                return Some((pixels, frame - (seek.index - grid)));
+            }
+        }
+        frame -= seek.index + 1;
+    }
+    None
 }
 
 /// Frame `index` of a decoder's grid, `decoder` having been started at it (`started` says
@@ -1713,7 +1745,15 @@ fn still_decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &Ato
             &mut error,
         );
         decoders.decoder.cancel();
-        let Some((picture, picture_index)) = picture else {
+        // A recording clip with no frames of its own (the screen didn't change, or the video ends
+        // before the sound) shows what the export holds there: the last screen frame of the
+        // recording clips before it. With the output frame the picture really is.
+        let picture = match picture {
+            Some((pixels, grid)) => Some((pixels, decoders.frame - (decoders.seek.index - grid))),
+            None if !clip.is_media() => held_screen_frame(work, decoders.frame - decoders.seek.index, &mut error),
+            None => None,
+        };
+        let Some((picture, shown_frame)) = picture else {
             push_error(shared, if error.is_empty() { "Decoder ended before the first frame".into() } else { error });
             break;
         };
@@ -1755,7 +1795,6 @@ fn still_decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &Ato
         // time the still stands for and, when the decoder ran out and an earlier frame stands
         // in, at that frame's own time, so a blur over the frame shown is never missed.
         let source_time = work.timeline.source_time(still::frame_time(decoders.frame, work.fps));
-        let shown_frame = decoders.frame - (decoders.seek.index - picture_index);
         let shown_time = work.timeline.source_time(still::frame_time(shown_frame.max(0), work.fps));
         queue.packets.push_back(DecodedPacket {
             image: if insert {
