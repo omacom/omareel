@@ -117,6 +117,9 @@ pub struct AgentRunnerRust {
     available: bool,
     problem: QString,
     consented: bool,
+    /// The agent the person allowed in this window when agent.json couldn't be written (a
+    /// read-only ~/.config): re-reading the file mustn't take that back until the window closes.
+    window_consent: Option<String>,
     experimental: bool,
     running: bool,
     task: QString,
@@ -152,6 +155,7 @@ impl cxx_qt::Constructor<(QString,)> for qobject::AgentRunner {
             available: false,
             problem: QString::default(),
             consented: false,
+            window_consent: None,
             experimental: false,
             running: false,
             task: QString::default(),
@@ -183,9 +187,10 @@ impl qobject::AgentRunner {
             Choice::NoneChosen => (String::new(), ""),
         };
         let (consented, experimental) = match &choice {
-            Choice::Ready { adapter, .. } | Choice::NotInstalled { adapter } => {
-                (omareel_core::agent::consent::allowed(adapter.id), adapter.experimental)
-            }
+            Choice::Ready { adapter, .. } | Choice::NotInstalled { adapter } => (
+                omareel_core::agent::consent::allowed(adapter.id) || self.window_consent.as_deref() == Some(adapter.id),
+                adapter.experimental,
+            ),
             _ => (false, false),
         };
         let mut this = self.as_mut().rust_mut();
@@ -270,10 +275,12 @@ impl qobject::AgentRunner {
             Choice::Ready { adapter, .. } | Choice::NotInstalled { adapter } => adapter.id,
             _ => return,
         };
-        if let Err(error) = omareel_core::agent::consent::set_allowed(id, allowed) {
+        let saved = omareel_core::agent::consent::set_allowed(id, allowed);
+        if let Err(error) = &saved {
             // Still allowed for this window; the drawer asks again next time.
             omareel_core::compat::qlog::warning(&format!("omareel: {error}"));
         }
+        self.as_mut().rust_mut().window_consent = (allowed && saved.is_err()).then(|| id.to_owned());
         self.as_mut().rust_mut().consented = allowed;
         self.agent_changed();
     }

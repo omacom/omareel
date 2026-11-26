@@ -393,6 +393,12 @@ fn chapters_are_written_at_source_times_and_follow_later_cuts() {
     let (report, ok) = run(r#"[{"op": "set-chapters", "chapters": [{"at": 1, "title": ""}]}]"#, false);
     assert!(!ok);
     assert_eq!(report.value("error").as_str(), Some("operation 1 (set-chapters): chapter 1 needs a \"title\""));
+    // Text over YouTube's limits is refused, not pasted into a description.
+    let long = "x".repeat(101);
+    let (report, ok) = run(&format!(r#"[{{"op": "set-chapters", "chapters": [{{"at": 1, "title": "{long}"}}]}}]"#), false);
+    assert!(!ok && report.value("error").to_string_or("").contains("over 100 characters"), "{report:?}");
+    let (report, ok) = run(&format!(r#"[{{"op": "set-chapters", "description": "{}"}}]"#, "y".repeat(5001)), false);
+    assert!(!ok && report.value("error").to_string_or("").contains("5000"), "{report:?}");
     let (report, _) = run(r#"[{"op": "set-chapters", "timeline": "source", "chapters": [{"at": 99, "title": "Late"}]}]"#, false);
     assert!(report.value("error").to_string_or("").contains("outside the recording (0 to 10)"), "{report:?}");
     // An empty set removes the file.
@@ -458,12 +464,17 @@ fn scoped_operations_name_only_files_inside() {
         format!(r#"[{{"op": "music", "file": "{outside}"}}]"#),
         format!(r#"[{{"op": "set", "path": "background.image", "value": "{outside}"}}]"#),
         format!(r#"[{{"op": "set", "path": "background.image", "value": "{scratch}/../private.png"}}]"#),
+        // A file URL names the same file.
+        format!(r#"[{{"op": "set", "path": "background.image", "value": "file://{}"}}]"#, outside.replace('.', "%2E")),
     ] {
         let (report, ok) = run(ops.clone());
         assert!(!ok, "{ops}: {report:?}");
         assert!(report.value("error").to_string_or("").contains("outside the recording"), "{ops}: {report:?}");
     }
     assert!(!std::path::Path::new(&format!("{bundle}/media/private.png")).exists());
+    // Text that names a path is text, not a file: a caption or a label may say "/usr/bin".
+    let (report, ok) = run(format!(r#"[{{"op": "set", "path": "name", "value": "{outside}"}}]"#));
+    assert!(ok, "{report:?}");
     // A file in the scratch directory is fine, and without a scope anything is.
     let (report, ok) = run(format!(r#"[{{"op": "set", "path": "background.image", "value": "{scratch}/fine.png"}}]"#));
     assert!(ok, "{report:?}");

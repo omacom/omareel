@@ -265,21 +265,60 @@ impl Run {
 }
 
 /// The strings in `value` that name a file (they have a `/`), resolved from `bundle`.
-fn file_strings(value: &Value, bundle: &str, into: &mut Vec<String>) {
-    match value {
-        Value::String(text) if text.contains('/') => {
-            let home = qdir::home_path();
-            let path = match text.strip_prefix("~/") {
-                Some(rest) => qdir::file_path(&home, rest),
-                None => qdir::file_path(bundle, text),
-            };
-            into.push(path);
+/// The files a project reads, as absolute paths: its background image and wallpaper, its
+/// inserted videos and its music. Only these: a label or a caption that happens to name a path
+/// ("/usr/bin") is text, not a file. A `file://` URL counts as the file it names.
+fn project_files(project: &crate::project::Project, bundle: &str, into: &mut Vec<String>) {
+    let mut add = |text: &str| {
+        let text = text.trim();
+        if text.is_empty() || text.starts_with("omarchy:") {
+            return;
         }
-        Value::Array(items) => items.iter().for_each(|item| file_strings(item, bundle, into)),
-        Value::Object(object) => object.iter().for_each(|(_, item)| file_strings(item, bundle, into)),
-        _ => {}
+        let local = match text.strip_prefix("file://") {
+            Some(rest) => percent_decoded(rest.strip_prefix("localhost").unwrap_or(rest)),
+            None => text.to_owned(),
+        };
+        let path = match local.strip_prefix("~/") {
+            Some(rest) => qdir::file_path(&qdir::home_path(), rest),
+            None => qdir::file_path(bundle, &local),
+        };
+        into.push(path);
+    };
+    add(&project.background.image);
+    add(&project.background.wallpaper);
+    for clip in project.clips.iter().filter(|clip| clip.is_media()) {
+        add(&clip.media);
+    }
+    if let Some(music) = &project.music {
+        add(&music.file);
     }
 }
+
+/// `%XX` escapes decoded, as in a file URL's path.
+fn percent_decoded(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        let hex = |b: u8| (b as char).to_digit(16);
+        match (bytes[i], bytes.get(i + 1).copied().and_then(hex), bytes.get(i + 2).copied().and_then(hex)) {
+            (b'%', Some(high), Some(low)) => {
+                out.push((high * 16 + low) as u8);
+                i += 3;
+            }
+            (byte, _, _) => {
+                out.push(byte);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// YouTube's limits, which the description is copied into: a title of 100 characters, a
+/// description of 5000. A chapter title gets the title's.
+const TITLE_LIMIT: usize = 100;
+const DESCRIPTION_LIMIT: usize = 5000;
 
 /// `set-chapters`: chapters.json's new contents.
 fn set_chapters(document: &Document, op: &Object, current: Option<Chapters>) -> Result<Chapters, String> {
@@ -292,6 +331,10 @@ fn set_chapters(document: &Document, op: &Object, current: Option<Chapters>) -> 
             Value::Undefined => {}
             Value::String(text) => {
                 let text = text.trim().to_owned();
+                let limit = if key == "title" { TITLE_LIMIT } else { DESCRIPTION_LIMIT };
+                if text.chars().count() > limit {
+                    return Err(format!("\"{key}\" is over YouTube's {limit} characters"));
+                }
                 if key == "title" { chapters.title = text } else { chapters.description = text }
             }
             _ => return Err(format!("\"{key}\" must be a string")),
@@ -308,6 +351,9 @@ fn set_chapters(document: &Document, op: &Object, current: Option<Chapters>) -> 
         let title = item.value("title").as_str().map(str::trim).unwrap_or_default();
         if title.is_empty() {
             return Err(format!("chapter {} needs a \"title\"", index + 1));
+        }
+        if title.chars().count() > TITLE_LIMIT {
+            return Err(format!("chapter {}'s title is over {TITLE_LIMIT} characters", index + 1));
         }
         let at = number(item, "at").map_err(|error| format!("chapter {}: {error}", index + 1))?;
         let at = if source {
@@ -710,7 +756,7 @@ pub fn apply_all(document: &mut Document, ops: &[Object], dry_run: bool) -> Resu
 pub fn apply_scoped(document: &mut Document, ops: &[Object], dry_run: bool, scope: Option<Scope>) -> Result<Applied, String> {
     let mut before = Vec::new();
     if scope.is_some() {
-        file_strings(&Value::Object(document.project().to_json()), document.bundle_path(), &mut before);
+        project_files(document.project(), document.bundle_path(), &mut before);
     }
     let mut run = Run { dry_run, scope, ..Run::default() };
     let mut results = Vec::new();
@@ -733,7 +779,7 @@ pub fn apply_scoped(document: &mut Document, ops: &[Object], dry_run: bool, scop
     }
     if run.scope.is_some() {
         let mut after = Vec::new();
-        file_strings(&Value::Object(document.project().to_json()), document.bundle_path(), &mut after);
+        project_files(document.project(), document.bundle_path(), &mut after);
         for file in after.iter().filter(|file| !before.contains(file) && std::path::Path::new(file.as_str()).exists()) {
             if let Err(error) = run.check_file(file) {
                 for copy in &run.copied {
