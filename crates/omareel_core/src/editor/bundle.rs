@@ -392,6 +392,38 @@ fn same_file_info(a: &str, b: &str) -> bool {
 /// leading dots dropped, "clip" if nothing is left, the suffix lower-cased, then `-2`, `-3`...),
 /// copied through a hidden `.part` file. A video already in this bundle's `media/` is used where
 /// it is.
+/// Where [`import_insert`] would put `source`, relative to the bundle: the video itself when it
+/// already lies in `media/`, else a free name there (`clip.mp4`, then `clip-2.mp4`, ...).
+pub fn planned_insert_path(source: &str, bundle_path: &str) -> String {
+    let media = qdir::file_path(bundle_path, "media");
+    let file = FileInfo::new(source);
+    if qdir::dir_exists(&media)
+        && same_file_info(&file.canonical_path(), &FileInfo::new(media.as_str()).canonical_file_path())
+        && !sanitized_media_path(&format!("media/{}", file.file_name())).is_empty()
+    {
+        return format!("media/{}", file.file_name());
+    }
+    format!("media/{}", free_media_name(&file, &media))
+}
+
+fn free_media_name(file: &FileInfo, media: &str) -> String {
+    let mut base = replace_unsafe_name_characters(&file.complete_base_name());
+    base = base.trim_start_matches('.').to_owned();
+    if base.is_empty() {
+        base = "clip".into();
+    }
+    let suffix = file.suffix();
+    let suffix = if suffix.is_empty() { String::new() } else { format!(".{}", qstring::to_lower(&suffix)) };
+    let mut name = format!("{base}{suffix}");
+    // `base` holds no '%', so the C++'s chained QString::arg is plain formatting.
+    let mut n: i32 = 2;
+    while qdir::dir_contains(media, &name) {
+        name = format!("{base}-{n}{suffix}");
+        n = n.wrapping_add(1);
+    }
+    name
+}
+
 pub fn import_insert(source: &str, bundle_path: &str, probe_video: &dyn Fn(&str) -> Result<VideoInfo, String>) -> ImportedInsert {
     let mut result = ImportedInsert::default();
     match probe_video(source) {
@@ -418,20 +450,7 @@ pub fn import_insert(source: &str, bundle_path: &str, probe_video: &dyn Fn(&str)
         result.error = qstring::arg("Could not create %1", &media);
         return result;
     }
-    let mut base = replace_unsafe_name_characters(&file.complete_base_name());
-    base = base.trim_start_matches('.').to_owned();
-    if base.is_empty() {
-        base = "clip".into();
-    }
-    let suffix = file.suffix();
-    let suffix = if suffix.is_empty() { String::new() } else { format!(".{}", qstring::to_lower(&suffix)) };
-    let mut name = format!("{base}{suffix}");
-    // `base` holds no '%', so the C++'s chained QString::arg is plain formatting.
-    let mut n: i32 = 2;
-    while qdir::dir_contains(&media, &name) {
-        name = format!("{base}-{n}{suffix}");
-        n = n.wrapping_add(1);
-    }
+    let name = free_media_name(&file, &media);
     let partial = qdir::file_path(&media, &format!(".{name}.part"));
     if let Err(error) = clone_or_copy(source, &partial) {
         result.error = error;
