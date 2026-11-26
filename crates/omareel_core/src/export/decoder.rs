@@ -181,6 +181,12 @@ impl FfmpegDecoder {
             number_f64(self.length, 'f', 6),
             "-vf".into(),
             video_filter,
+            // Pictures only: with the sound mapped too, ffmpeg writes it into the same pipe, and
+            // once the video ends before the sound it is read as frames (silence comes out as
+            // transparent frames, the background where the last picture should be held).
+            "-an".into(),
+            "-sn".into(),
+            "-dn".into(),
             "-f".into(),
             "rawvideo".into(),
             "-pix_fmt".into(),
