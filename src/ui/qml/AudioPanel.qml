@@ -1,8 +1,8 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.impl
-import QtQuick.Dialogs
 import QtQuick.Layouts
+import Omareel
 import Omareel.Ui
 
 ColumnLayout {
@@ -79,11 +79,13 @@ ColumnLayout {
         PanelSlider { Layout.fillWidth: true; label: "Fade out"; path: "music.fadeOut"; from: 0; to: 10; value: root.music.fadeOut ?? 2; stepSize: 0.1; decimals: 1; suffix: " s" }
     }
 
-    FileDialog {
+    PortalFilePicker {
         id: musicDialog
+        objectName: "musicPicker"
         title: "Choose background music"
         nameFilters: ["Audio (*.mp3 *.m4a *.aac *.ogg *.oga *.opus *.flac *.wav)",
                       "Videos (*.mp4 *.mov *.mkv *.webm *.m4v *.avi)", "All files (*)"]
-        onAccepted: editor.addMusic(selectedFile)
+        onAccepted: url => editor.addMusic(url)
+        onFailed: message => console.warn("omareel:", message)
     }
 }
