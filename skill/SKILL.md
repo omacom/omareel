@@ -33,7 +33,7 @@ here needs a display.
 4. Export when asked: `omareel export <bundle> -o out.mp4` (or `out.gif`).
    Options: `--width W` (MP4 or GIF; height follows the aspect), `--fps N`,
    `--quality low|medium|high|best|web-low|web-high|social|studio`. Without
-   them, the project's export settings apply (`settings.exportSettings`).
+   them, the project's export settings apply (`settings.export`).
 
 `apply` reports JSON like this:
 `{"ok": true, "saved": true, "output_duration": 42.5, "clips": 3, "zooms": 4,
@@ -41,10 +41,12 @@ here needs a display.
 "warnings": [], "describe": {…}}`. `describe` is only there with `--describe`.
 Each result's `output_duration` is the video's length after that operation,
 not the amount cut. On failure the report is `{"ok": false, "error":
-"operation 2 (speed): …"}` and nothing is saved.
+"operation 2 (speed): …"}` and nothing is saved. If project.json changed while the
+operations ran (the editor saved), apply saves nothing and says so: run them
+again.
 
 `omareel help` lists every command in this version. Commands exit 0 on
-success and 1 on failure. `describe` and `apply` print JSON on stdout.
+success, 1 on failure, and 2 on a usage error (a wrong option or argument). `describe` and `apply` print JSON on stdout.
 
 ## Times
 
@@ -107,8 +109,8 @@ was cut).
 | `set` | `path`, `value`, e.g. `{"op": "set", "path": "keystrokes.enabled", "value": true}` |
 
 Rules the editor enforces, which `apply` reports as errors:
-- Zooms can't overlap, cover at least a second of the recording, and have a
-  `level` from 1 to 4.
+- Zooms must not overlap, must cover at least a second of the recording, and
+  need a `level` from 1 to 4.
 - Output times must be inside the video (0 to `output.duration`).
 - A clip can't be shorter than 0.1 s, and a cut can't remove all of the recording.
 - Speeds must be one of the allowed values.
