@@ -436,6 +436,16 @@ fn run_op(document: &mut Document, op: &Object, run: &mut Run) -> OpResult {
 /// then hold some of the edits, so the caller must not save it. Videos the run copied into
 /// the bundle are removed again on failure; a `dry_run` copies none.
 pub fn apply_ops(document: &mut Document, ops: &[Object], dry_run: bool) -> Result<(Vec<Value>, Vec<String>), String> {
+    apply_ops_copying(document, ops, dry_run).map(|(results, warnings, _)| (results, warnings))
+}
+
+/// [`apply_ops`], with the videos the run copied into the bundle (absolute paths), which the
+/// caller removes again if it doesn't save.
+pub fn apply_ops_copying(
+    document: &mut Document,
+    ops: &[Object],
+    dry_run: bool,
+) -> Result<(Vec<Value>, Vec<String>, Vec<String>), String> {
     let mut run = Run { dry_run, ..Run::default() };
     let mut results = Vec::new();
     for (index, op) in ops.iter().enumerate() {
@@ -455,7 +465,7 @@ pub fn apply_ops(document: &mut Document, ops: &[Object], dry_run: bool) -> Resu
             }
         }
     }
-    Ok((results, run.warnings))
+    Ok((results, run.warnings, run.copied))
 }
 
 /// `omareel apply`: the JSON report, and whether it succeeded. Nothing is saved on failure or
@@ -482,22 +492,16 @@ pub fn run_on(
         Ok(document) => document,
         Err(error) => return failure(error),
     };
-    // Videos an insert copies in, so a save that doesn't happen takes them out again.
-    let media = qdir::file_path(document.bundle_path(), "media");
-    let listing = || -> Vec<String> {
-        std::fs::read_dir(&media)
-            .map(|entries| entries.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().into_owned()).collect())
-            .unwrap_or_default()
-    };
-    let before = listing();
-    let (results, warnings) = match apply_ops(&mut document, &ops, dry_run) {
+    let (results, warnings, copied) = match apply_ops_copying(&mut document, &ops, dry_run) {
         Ok(done) => done,
         Err(error) => return failure(error),
     };
     if !dry_run {
+        // Only the videos this run copied in go again: anything else new in media/ was saved
+        // by someone else (the editor, another apply) and is theirs.
         let unsaved = |error: String| {
-            for name in listing().into_iter().filter(|name| !before.contains(name)) {
-                let _ = std::fs::remove_file(qdir::file_path(&media, &name));
+            for copy in &copied {
+                let _ = std::fs::remove_file(copy);
             }
             failure(error)
         };
