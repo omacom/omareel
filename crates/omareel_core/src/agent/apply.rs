@@ -803,6 +803,9 @@ pub struct Applied {
     /// The bundle's chapters.json as `set-chapters` left it, to write once the project is
     /// saved; `None` when no operation changed it.
     pub chapters: Option<Chapters>,
+    /// The videos the run copied into the bundle (absolute paths), which the caller removes
+    /// again if it doesn't save.
+    pub copied: Vec<String>,
 }
 
 /// [`apply_ops`], with the chapters to write.
@@ -864,7 +867,26 @@ pub fn apply_scoped(document: &mut Document, ops: &[Object], dry_run: bool, scop
             ));
         }
     }
-    Ok(Applied { results, warnings: run.warnings, chapters: run.chapters })
+    // An image the agent made in its scratch directory is gone once the run ends: the project
+    // keeps a copy in the bundle instead.
+    if let (Some(scope), false) = (&run.scope, run.dry_run) {
+        let image = document.project().background.image.clone();
+        let local = image.strip_prefix("file://").map(percent_decoded).unwrap_or_else(|| image.clone());
+        let path = std::path::Path::new(&local);
+        if !image.is_empty() && path.is_absolute() && path.starts_with(&scope.scratch) {
+            let kept = crate::editor::copy_into_media(&local, document.bundle_path(), "background").map_err(|error| {
+                for copy in &run.copied {
+                    let _ = std::fs::remove_file(copy);
+                }
+                error
+            })?;
+            let kept = qdir::file_path(document.bundle_path(), &kept);
+            run.copied.push(kept.clone());
+            document.set_project_value("background.image", Value::from(kept.as_str()), false);
+            document.take_effects();
+        }
+    }
+    Ok(Applied { results, warnings: run.warnings, chapters: run.chapters, copied: run.copied })
 }
 
 /// `omareel apply`: the JSON report, and whether it succeeded. Nothing is saved on failure or
@@ -911,22 +933,16 @@ pub fn run_in(
         Ok(document) => document,
         Err(error) => return failure(error),
     };
-    // Videos an insert copies in, so a save that doesn't happen takes them out again.
-    let media = qdir::file_path(document.bundle_path(), "media");
-    let listing = || -> Vec<String> {
-        std::fs::read_dir(&media)
-            .map(|entries| entries.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().into_owned()).collect())
-            .unwrap_or_default()
-    };
-    let before = listing();
-    let Applied { results, warnings, chapters } = match apply_scoped(&mut document, &ops, dry_run, scope) {
+    let Applied { results, warnings, chapters, copied } = match apply_scoped(&mut document, &ops, dry_run, scope) {
         Ok(done) => done,
         Err(error) => return failure(error),
     };
     if !dry_run {
+        // Only the videos this run copied in go again: anything else new in media/ was saved
+        // by someone else (the editor, another apply) and is theirs.
         let unsaved = |error: String| {
-            for name in listing().into_iter().filter(|name| !before.contains(name)) {
-                let _ = std::fs::remove_file(qdir::file_path(&media, &name));
+            for copy in &copied {
+                let _ = std::fs::remove_file(copy);
             }
             failure(error)
         };
