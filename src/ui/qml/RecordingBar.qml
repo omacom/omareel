@@ -123,6 +123,10 @@ ApplicationWindow {
                 target: recordingBar
                 function onMarkAdded(kind) {
                     const button = kind === "retake" ? retakeButton : markerButton
+                    // A flash still lit on the other button goes out first, so a marker then a
+                    // retake within 0.7 s doesn't leave the marker lit.
+                    if (markFlash.target && markFlash.target !== button)
+                        markFlash.target.on = false
                     button.on = true
                     markFlash.target = button
                     markFlash.restart()

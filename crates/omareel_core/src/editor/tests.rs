@@ -1765,6 +1765,14 @@ fn recording_marks_make_the_new_project_and_markers_edit() {
     result.unwrap();
     project.save(&project_path).unwrap();
     assert_eq!(std::fs::read(&project_path).unwrap(), saved);
+
+    // Reset trims brings the retake's cut back but never the pause (source 1.4 to the end), even
+    // in a project reopened from project.json; dragging the trim stops there too.
+    let mut qt = world.open(&bundle);
+    let id = qt.document.project().clips[1].id.clone();
+    assert!(qt.run(|d| d.reset_clip_trims(&id)));
+    let clip = &qt.document.project().clips[1];
+    assert_eq!((clip.in_, clip.out), (0.5, 1.4));
 }
 
 // A bundle without markers.jsonl opens as it always did, and its project has no markers key.
