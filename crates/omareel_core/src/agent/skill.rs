@@ -24,6 +24,10 @@ pub fn install(home: &Path) -> Result<Vec<String>, String> {
     }
     std::fs::create_dir_all(&directory).map_err(|error| format!("cannot create {}: {error}", directory.display()))?;
     let file = directory.join("SKILL.md");
+    // The same for the file: a SKILL.md linked into a checkout is someone's working copy.
+    if let Ok(target) = std::fs::read_link(&file) {
+        return Err(format!("{} is a link to {}; leaving it alone", file.display(), target.display()));
+    }
     std::fs::write(&file, SKILL).map_err(|error| format!("cannot write {}: {error}", file.display()))?;
     let mut report = vec![format!("installed {}", file.display())];
     for relative in AGENT_SKILL_DIRS {
@@ -114,4 +118,27 @@ mod tests {
         assert_eq!(std::fs::read_to_string(installed.join("SKILL.md")).unwrap(), SKILL);
         assert_eq!(std::fs::read_link(home_path.join(".claude/skills/omareel")).unwrap(), installed);
     }
+
+    /// A SKILL.md that links elsewhere (a checkout) is never written through.
+    #[test]
+    fn a_linked_skill_file_is_left_alone() {
+        let home = TempDir::new("skill-linked-file");
+        let home_path = Path::new(&home.0);
+        let checkout = home_path.join("checkout-SKILL.md");
+        std::fs::write(&checkout, "mine").unwrap();
+        let directory = home_path.join(".agents/skills/omareel");
+        std::fs::create_dir_all(&directory).unwrap();
+        std::os::unix::fs::symlink(&checkout, directory.join("SKILL.md")).unwrap();
+        let error = install(home_path).unwrap_err();
+        assert!(error.contains("leaving it alone"), "{error}");
+        assert_eq!(std::fs::read_to_string(&checkout).unwrap(), "mine");
+    }
+
+    /// Every settings path the skill names is one describe prints.
+    #[test]
+    fn the_skill_names_real_settings() {
+        assert!(!SKILL.contains("exportSettings"));
+        assert!(SKILL.contains("settings.export"));
+    }
+
 }

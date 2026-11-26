@@ -11,6 +11,9 @@ Item {
     readonly property real size: caption && caption.size ? caption.size : 1
     readonly property color pillColor: Qt.alpha(colors.background, .85)
     readonly property color textColor: colors.foreground
+    // The widest a line may be: lines longer than this (portrait frames, large sizes) wrap
+    // inside the pill rather than spilling out of it.
+    readonly property real textWidth: Math.max(0, width - 80 * ref - 36 * size * ref)
     anchors.fill: parent
 
     Rectangle {
@@ -30,22 +33,29 @@ Item {
         border.width: root.ref
         border.color: Qt.alpha(root.textColor, .12)
 
-        Column {
+        // The cue's own lines when each fits; otherwise all of it rewrapped to the width, so
+        // a line too long for a portrait frame doesn't leave its last word alone.
+        Label {
             id: lines
+            readonly property var cueLines: root.caption && root.caption.lines ? root.caption.lines : []
+            readonly property bool fits: natural.implicitWidth <= root.textWidth
             anchors.centerIn: parent
-            spacing: 2 * root.size * root.ref
-            Repeater {
-                model: root.caption && root.caption.lines ? root.caption.lines : []
-                delegate: Label {
-                    required property string modelData
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: modelData
-                    color: root.textColor
-                    textFormat: Text.PlainText
-                    font.pixelSize: 36 * root.size * root.ref
-                    font.weight: Font.DemiBold
-                }
-            }
+            width: Math.min(implicitWidth, root.textWidth)
+            text: fits ? cueLines.join("\n") : cueLines.join(" ")
+            wrapMode: Text.WordWrap
+            horizontalAlignment: Text.AlignHCenter
+            lineHeight: 1.06
+            color: root.textColor
+            textFormat: Text.PlainText
+            font.pixelSize: 36 * root.size * root.ref
+            font.weight: Font.DemiBold
+        }
+        Label {
+            id: natural
+            visible: false
+            text: lines.cueLines.join("\n")
+            textFormat: Text.PlainText
+            font: lines.font
         }
     }
 }

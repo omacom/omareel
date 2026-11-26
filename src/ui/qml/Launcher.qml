@@ -1,9 +1,9 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.impl
-import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtQuick.Effects
+import Omareel
 import Omareel.Ui
 
 ApplicationWindow {
@@ -652,9 +652,15 @@ ApplicationWindow {
     Shortcut { sequence: "Return"; enabled: !window.busy && !settingsPopover.visible; onActivated: window.beginRecording() }
     Shortcut { sequence: "Enter"; enabled: !window.busy && !settingsPopover.visible; onActivated: window.beginRecording() }
 
-    FolderDialog {
+    PortalFilePicker {
         id: folderDialog
+        objectName: "openBundlePicker"
+        mode: PortalFilePicker.OpenFolder
         title: "Open an omareel bundle"
-        onAccepted: launcher.openBundle(selectedFolder)
+        onAccepted: launcher.openBundle(selectedPath)
+        onFailed: message => {
+            window.errorMessage = message
+            errorTimer.restart()
+        }
     }
 }

@@ -93,6 +93,34 @@ pub fn pause_ranges(
     merge_ranges(&ranges)
 }
 
+/// Air left beside a word that a cut would otherwise reach (seconds).
+pub const WORD_MARGIN: f64 = 0.15;
+
+/// `ranges` with every measured word, plus [`WORD_MARGIN`] either side, taken out of them, so a
+/// cut found by loudness never clips a word the loudness missed (a soft start or a trailing
+/// "so"). Unchanged when the word times are estimated: they are not exact enough to move a cut.
+pub fn spare_words(ranges: &[(f64, f64)], transcript: &Transcript) -> Vec<(f64, f64)> {
+    if transcript.word_timing != WordTiming::Measured {
+        return ranges.to_vec();
+    }
+    let words = merge_ranges(&transcript.words().map(|w| (w.start - WORD_MARGIN, w.end + WORD_MARGIN)).collect::<Vec<_>>());
+    let mut kept = Vec::new();
+    for &(from, to) in ranges {
+        let mut start = from;
+        for &(a, b) in words.iter().filter(|(a, b)| *b > from && *a < to) {
+            if a > start {
+                kept.push((start, a));
+            }
+            start = start.max(b);
+        }
+        if to > start {
+            kept.push((start, to));
+        }
+    }
+    kept.retain(|(a, b)| b - a > 0.05);
+    kept
+}
+
 /// Hesitation sounds, as engines spell them (compared lower case, letters only).
 pub const FILLER_WORDS: &[&str] =
     &["um", "umm", "ummm", "uh", "uhh", "uhm", "erm", "er", "err", "ah", "ahh", "hm", "hmm", "hmmm", "mm", "mmm", "eh"];
@@ -176,6 +204,28 @@ mod tests {
                 Silence { start: 13.0, end: 15.0, leading: false, trailing: true },
             ]
         );
+    }
+
+    #[test]
+    fn pauses_spare_measured_words() {
+        let words = vec![
+            Word { start: 1.5, end: 3.0, text: "Hello".into() },
+            // Said softly in the middle of what loudness called a pause.
+            Word { start: 6.0, end: 6.3, text: "so".into() },
+        ];
+        let mut transcript = Transcript {
+            word_timing: WordTiming::Measured,
+            segments: vec![Segment { start: 1.5, end: 6.3, text: String::new(), words }],
+            ..Transcript::default()
+        };
+        let ranges = [(0.0, 1.45), (3.2, 8.0)];
+        let spared = spare_words(&ranges, &transcript);
+        assert_eq!(spared.len(), 3, "{spared:?}");
+        assert!((spared[0].1 - 1.35).abs() < 1e-9, "{spared:?}");
+        assert!((spared[1].0 - 3.2).abs() < 1e-9 && (spared[1].1 - 5.85).abs() < 1e-9, "{spared:?}");
+        assert!((spared[2].0 - 6.45).abs() < 1e-9 && spared[2].1 == 8.0, "{spared:?}");
+        transcript.word_timing = WordTiming::Estimated;
+        assert_eq!(spare_words(&ranges, &transcript), ranges.to_vec());
     }
 
     #[test]

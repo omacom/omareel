@@ -350,10 +350,14 @@ static int frameCommand(const QStringList &arguments)
     // A sheet's --width is the sheet's; each tile renders at its share.
     options.width = request.sheet ? grid.tile_width : request.width;
     const QString output = QFileInfo(request.output).absoluteFilePath();
+    // Where each still goes: "%d" in the name (directories included) takes its number.
+    const QStringList paths = omareel::exporter::stillOutputPaths(output, stills);
     // Bad arguments, found before anything renders: exit status 2, as for the others.
-    if (!QFileInfo(QFileInfo(output).absolutePath()).isDir()) {
-        QTextStream(stderr) << "omareel: no directory " << QFileInfo(output).absolutePath() << '\n';
-        return 2;
+    for (const QString &path : request.sheet ? QStringList{output} : paths) {
+        if (!QFileInfo(QFileInfo(path).absolutePath()).isDir()) {
+            QTextStream(stderr) << "omareel: no directory " << QFileInfo(path).absolutePath() << '\n';
+            return 2;
+        }
     }
     if (!QImageWriter::supportedImageFormats().contains(QFileInfo(output).suffix().toLower().toLatin1())) {
         QTextStream(stderr) << "omareel: this Qt cannot write ." << QFileInfo(output).suffix() << " images\n";
@@ -379,7 +383,6 @@ static int frameCommand(const QStringList &arguments)
     };
     // Separate stills are written as they render, so only one is held at a time and an
     // unwritable output stops at the first. A sheet's tiles are small; it keeps them.
-    const QStringList paths = omareel::exporter::stillOutputPaths(output, stills);
     if (!request.sheet) {
         options.take = [&](int index, const Still &still, QString *error) {
             if (save(still.image, paths[index])) return true;

@@ -357,8 +357,10 @@ pub fn music_input_arguments(music: &Music, path: &str) -> Vec<String> {
 /// ffmpeg's `sidechaincompress` with the preview's settings ([`crate::music`]).
 pub fn music_filter(music: &MusicMix, output_duration: f64, duck_key: Option<&str>) -> String {
     let duration = number_f64(output_duration, 'f', 6);
+    // Times counted from the samples: a looping input (-stream_loop with -ss) starts each pass
+    // with timestamps that go back, which the encoder reads as packets out of order.
     let mut filter = format!(
-        "[{}:a:0]asetpts=PTS-STARTPTS,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,\
+        "[{}:a:0]asetpts=N/SR/TB,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,\
          apad=whole_dur={duration},atrim=end={duration},volume={}",
         music.input,
         number_f64(music.volume, 'g', 8)
@@ -968,7 +970,7 @@ mod tests {
         assert_eq!(
             audio_filter_with_music(&segments, 0.8, &[0.5], 3, 4.25, Some(&mix)),
             "S0[a0];[a0]concat=n=1:v=0:a=1,volume=0.8,asplit=2[source][duckkey];\
-             [4:a:0]asetpts=PTS-STARTPTS,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,\
+             [4:a:0]asetpts=N/SR/TB,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,\
              apad=whole_dur=4.250000,atrim=end=4.250000,volume=0.25,afade=t=in:st=0:d=1.000000,\
              afade=t=out:st=2.250000:d=2.000000[musicsrc];\
              [musicsrc][duckkey]sidechaincompress=threshold=0.03:ratio=6:attack=20:release=400[music];\
@@ -980,7 +982,7 @@ mod tests {
         let quiet = Music { duck: false, fade_in: 0.0, fade_out: 0.0, ..music.clone() };
         assert_eq!(
             audio_filter_with_music(&[], 1.0, &[], -1, 3.0, Some(&MusicMix::new(1, &music, 3.0))),
-            "[1:a:0]asetpts=PTS-STARTPTS,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,\
+            "[1:a:0]asetpts=N/SR/TB,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,\
              apad=whole_dur=3.000000,atrim=end=3.000000,volume=0.25,afade=t=in:st=0:d=1.000000,\
              afade=t=out:st=1.000000:d=2.000000[music];\
              [music]amix=inputs=1:normalize=0:duration=longest,apad=pad_dur=3.000000,atrim=duration=3.000000[aout]"
@@ -988,7 +990,7 @@ mod tests {
         assert_eq!(
             audio_filter_with_music(&segments, 1.0, &[], -1, 3.0, Some(&MusicMix::new(1, &quiet, 3.0))),
             "S0[a0];[a0]concat=n=1:v=0:a=1,volume=1[source];\
-             [1:a:0]asetpts=PTS-STARTPTS,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,\
+             [1:a:0]asetpts=N/SR/TB,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,\
              apad=whole_dur=3.000000,atrim=end=3.000000,volume=0.25[music];\
              [source][music]amix=inputs=2:normalize=0:duration=longest,apad=pad_dur=3.000000,atrim=duration=3.000000[aout]"
         );

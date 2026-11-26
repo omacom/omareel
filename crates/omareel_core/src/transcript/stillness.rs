@@ -148,7 +148,7 @@ pub fn check_windows(
                     Ok(())
                 });
             }
-            let result = job::run_streaming(command, None, control, |chunk| {
+            let result = job::run_streaming(command, None, control, false, |chunk| {
                 pending.extend_from_slice(chunk);
                 let size = check.frame_size();
                 let mut used = 0;

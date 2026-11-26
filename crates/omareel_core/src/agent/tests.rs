@@ -105,6 +105,39 @@ fn a_failing_operation_says_which_and_why() {
     let error = apply_ops(&mut document, &ops(r#"{"op": "split", "at": 99}"#), false).unwrap_err();
     assert!(error.contains("outside the video"), "{error}");
     assert!(parse_ops(b"[1]").is_err());
+    // "ops" that isn't a list is an error, not an empty batch that reports success.
+    assert!(parse_ops(br#"{"ops": {"op": "split", "at": 2}}"#).unwrap_err().contains("must be an array"));
+    // A path set_project_value would read as clips or zooms is refused like them.
+    for path in [".clips", "zooms.", "..clips.0"] {
+        let json = format!(r#"{{"op": "set", "path": "{path}", "value": []}}"#);
+        let error = apply_ops(&mut document, &ops(&json), true).unwrap_err();
+        assert!(error.contains("their own operations"), "{path}: {error}");
+    }
+    let error = apply_ops(&mut document, &ops(r#"{"op": "set", "path": "version", "value": 9}"#), true).unwrap_err();
+    assert!(error.contains("not a setting"), "{error}");
+    assert!(apply_ops(&mut document, &ops(r#"{"op": "set", "path": ".", "value": 1}"#), true).is_err());
+}
+
+/// A save in between (the editor's autosave) is never overwritten: apply reports it and saves
+/// nothing.
+#[test]
+fn run_refuses_to_overwrite_a_save_made_meanwhile() {
+    let dir = TempDir::new("agent-race");
+    let bundle = bundle(&dir);
+    let project = format!("{bundle}/project.json");
+    let (report, ok) = super::apply::run_on(
+        || {
+            let document = open(&bundle, &dir);
+            // The editor saves after apply read the project.
+            std::fs::write(&project, b"{\"saved\": \"by the editor\"}").unwrap();
+            Ok(document)
+        },
+        br#"[{"op": "split", "at": 2}]"#,
+        false,
+        false,
+    );
+    assert!(!ok && report.contains("changed while the operations ran"), "{report}");
+    assert_eq!(std::fs::read_to_string(&project).unwrap(), "{\"saved\": \"by the editor\"}");
 }
 
 #[test]
@@ -285,6 +318,11 @@ fn speech_operations_cut_by_the_transcript() {
     apply_ops(&mut document, &ops(r#"{"op": "delete", "ranges": [[2, 3], [6, 7]]}"#), false).unwrap();
     assert_eq!(spans(&document), vec![(0.0, 2.0, 1.0), (3.0, 6.0, 1.0), (7.0, 10.0, 1.0)]);
     assert!(apply_ops(&mut document, &ops(r#"{"op": "delete", "ranges": [[3, 2]]}"#), false).is_err());
+    // Overlapping output ranges cut their union once: 1 to 4, three seconds, not four.
+    let mut document = open(&bundle, &dir);
+    let (results, _) = apply_ops(&mut document, &ops(r#"{"op": "delete", "ranges": [[1, 3], [2, 4]]}"#), false).unwrap();
+    assert_eq!(results[0].get("removed_seconds").to_double(0.0), 3.0);
+    assert_eq!(spans(&document), vec![(0.0, 1.0, 1.0), (4.0, 10.0, 1.0)]);
 }
 
 #[test]
@@ -393,6 +431,12 @@ fn chapters_are_written_at_source_times_and_follow_later_cuts() {
     let (report, ok) = run(r#"[{"op": "set-chapters", "chapters": [{"at": 1, "title": ""}]}]"#, false);
     assert!(!ok);
     assert_eq!(report.value("error").as_str(), Some("operation 1 (set-chapters): chapter 1 needs a \"title\""));
+    // Text over YouTube's limits is refused, not pasted into a description.
+    let long = "x".repeat(101);
+    let (report, ok) = run(&format!(r#"[{{"op": "set-chapters", "chapters": [{{"at": 1, "title": "{long}"}}]}}]"#), false);
+    assert!(!ok && report.value("error").to_string_or("").contains("over 100 characters"), "{report:?}");
+    let (report, ok) = run(&format!(r#"[{{"op": "set-chapters", "description": "{}"}}]"#, "y".repeat(5001)), false);
+    assert!(!ok && report.value("error").to_string_or("").contains("5000"), "{report:?}");
     let (report, _) = run(r#"[{"op": "set-chapters", "timeline": "source", "chapters": [{"at": 99, "title": "Late"}]}]"#, false);
     assert!(report.value("error").to_string_or("").contains("outside the recording (0 to 10)"), "{report:?}");
     // An empty set removes the file.
@@ -458,12 +502,17 @@ fn scoped_operations_name_only_files_inside() {
         format!(r#"[{{"op": "music", "file": "{outside}"}}]"#),
         format!(r#"[{{"op": "set", "path": "background.image", "value": "{outside}"}}]"#),
         format!(r#"[{{"op": "set", "path": "background.image", "value": "{scratch}/../private.png"}}]"#),
+        // A file URL names the same file.
+        format!(r#"[{{"op": "set", "path": "background.image", "value": "file://{}"}}]"#, outside.replace('.', "%2E")),
     ] {
         let (report, ok) = run(ops.clone());
         assert!(!ok, "{ops}: {report:?}");
         assert!(report.value("error").to_string_or("").contains("outside the recording"), "{ops}: {report:?}");
     }
     assert!(!std::path::Path::new(&format!("{bundle}/media/private.png")).exists());
+    // Text that names a path is text, not a file: a caption or a label may say "/usr/bin".
+    let (report, ok) = run(format!(r#"[{{"op": "set", "path": "name", "value": "{outside}"}}]"#));
+    assert!(ok, "{report:?}");
     // A file in the scratch directory is fine, and without a scope anything is.
     let (report, ok) = run(format!(r#"[{{"op": "set", "path": "background.image", "value": "{scratch}/fine.png"}}]"#));
     assert!(ok, "{report:?}");
