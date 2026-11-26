@@ -128,7 +128,9 @@ fn run_refuses_to_overwrite_a_save_made_meanwhile() {
     let (report, ok) = super::apply::run_on(
         || {
             let document = open(&bundle, &dir);
-            // The editor saves after apply read the project.
+            // The editor saves after apply read the project, with a video it inserted.
+            std::fs::create_dir_all(format!("{bundle}/media")).unwrap();
+            std::fs::write(format!("{bundle}/media/theirs.mp4"), b"video").unwrap();
             std::fs::write(&project, b"{\"saved\": \"by the editor\"}").unwrap();
             Ok(document)
         },
@@ -138,6 +140,8 @@ fn run_refuses_to_overwrite_a_save_made_meanwhile() {
     );
     assert!(!ok && report.contains("changed while the operations ran"), "{report}");
     assert_eq!(std::fs::read_to_string(&project).unwrap(), "{\"saved\": \"by the editor\"}");
+    // Its video is the editor's, not this run's: it stays.
+    assert!(std::path::Path::new(&format!("{bundle}/media/theirs.mp4")).exists());
 }
 
 #[test]
@@ -513,9 +517,13 @@ fn scoped_operations_name_only_files_inside() {
     // Text that names a path is text, not a file: a caption or a label may say "/usr/bin".
     let (report, ok) = run(format!(r#"[{{"op": "set", "path": "name", "value": "{outside}"}}]"#));
     assert!(ok, "{report:?}");
-    // A file in the scratch directory is fine, and without a scope anything is.
+    // A file in the scratch directory is fine, and without a scope anything is. The project
+    // keeps a copy in the bundle, since the scratch directory goes when the run ends.
     let (report, ok) = run(format!(r#"[{{"op": "set", "path": "background.image", "value": "{scratch}/fine.png"}}]"#));
     assert!(ok, "{report:?}");
+    let saved = std::fs::read_to_string(format!("{bundle}/project.json")).unwrap();
+    assert!(saved.contains(&format!("{bundle}/media/fine.png")), "{saved}");
+    assert!(std::path::Path::new(&format!("{bundle}/media/fine.png")).exists());
     let (report, ok) = super::apply::run_on(
         || Ok(open(&bundle, &dir)),
         format!(r#"[{{"op": "set", "path": "background.image", "value": "{outside}"}}]"#).as_bytes(),
