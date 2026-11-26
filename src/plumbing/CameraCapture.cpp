@@ -97,13 +97,28 @@ bool FirstFrameTimestamp::recordFrameArrival(qint64 monotonicValue, qint64 realt
 {
     if (m_firstFrameUs > 0) return true;
     if (m_path.isEmpty() || monotonicValue <= 0 || realtimeUs <= 0) return false;
+    if (!write(monotonicValue, realtimeUs)) return false;
+    m_firstFrameUs = monotonicValue;
+    m_firstRealtimeUs = realtimeUs;
+    return true;
+}
+
+bool FirstFrameTimestamp::shift(qint64 byUs)
+{
+    if (m_firstFrameUs <= 0 || byUs <= 0) return true;
+    if (!write(m_firstFrameUs + byUs, m_firstRealtimeUs + byUs)) return false;
+    m_firstFrameUs += byUs;
+    m_firstRealtimeUs += byUs;
+    return true;
+}
+
+bool FirstFrameTimestamp::write(qint64 monotonicValue, qint64 realtimeUs)
+{
     QSaveFile file(m_path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) return false;
     file.write("monotonic_microsec\trealtime_microsec\n");
     file.write(QByteArray::number(monotonicValue) + '\t' + QByteArray::number(realtimeUs) + '\n');
-    if (!file.commit()) return false;
-    m_firstFrameUs = monotonicValue;
-    return true;
+    return file.commit();
 }
 
 qint64 CameraFrameClock::frameTimeUs(qint64 startTimeUs, qint64 arrivalUs)
@@ -432,6 +447,8 @@ void CameraEncoder::run()
     QSize size;
     bool launched = false;
     QString failure;
+    // Frames in a row that couldn't be decoded (not ones the queue dropped for being full).
+    qint64 unreadable = 0;
     const auto remainingMs = [this] {
         return int(std::max<qint64>(0, (m_stopDeadline.load() - monotonicUs()) / 1000));
     };
@@ -464,13 +481,20 @@ void CameraEncoder::run()
         item.frame = {};
         if (packed.pixels.isEmpty()) {
             // A single corrupt USB frame mid-stream is dropped rather than killing the recording;
-            // only fail when the camera never delivers a usable frame.
-            if (++m_dropped >= 30 && !launched) {
+            // only fail when the camera's first thirty frames in a row can't be decoded.
+            ++m_dropped;
+            ++unreadable;
+            if (unreadable >= 30 && !launched) {
                 failure = QStringLiteral("Could not map camera frame");
                 break;
             }
+            // Three seconds of them after it started: the webcam video is stuck on its last good
+            // frame. Said once, in the log; the recording goes on.
+            if (launched && unreadable == 90)
+                qWarning().noquote() << "Camera frames have been unreadable for three seconds; the webcam video holds its last good frame";
             continue;
         }
+        unreadable = 0;
         if (!launched) {
             const QByteArray header = cameraStreamHeader(packed);
             if (header.isEmpty()) {
@@ -501,6 +525,7 @@ void CameraEncoder::run()
             failure = QStringLiteral("Camera encoder pipe failed or stalled for two seconds: ") + errorText();
             break;
         }
+        if (m_firstWrittenUs.load() < 0) m_firstWrittenUs.store(item.timestampUs);
         ++m_encoded;
         const QString text = errorText();
         if (!text.isEmpty()) qWarning().noquote() << "Camera ffmpeg:" << text;
@@ -605,6 +630,16 @@ void CameraCapture::stop()
 
 void CameraCapture::finishStop()
 {
+    // The video starts at the first frame the encoder wrote; frames before it that couldn't be
+    // decoded were dropped, so the recorded first-frame time moves with it, keeping the webcam
+    // in step with the screen.
+    if (m_encoder && m_encoder->firstWrittenOffsetUs() > 0 && !m_timestamp.shift(m_encoder->firstWrittenOffsetUs())) {
+        if (m_errorString.isEmpty()) {
+            m_errorString = QStringLiteral("Could not write camera timestamp");
+            qWarning().noquote() << m_errorString;
+            emit errorOccurred(m_errorString);
+        }
+    }
     if (m_encoder && !m_encoder->error().isEmpty() && m_errorString.isEmpty()) {
         m_errorString = m_encoder->error();
         qWarning().noquote() << m_errorString;

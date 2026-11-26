@@ -120,6 +120,7 @@ struct EncodeResult {
     QString error;
     qint64 encoded = 0;
     qint64 dropped = 0;
+    qint64 firstWrittenUs = -1;
 };
 
 // Records frames at the given CLOCK_MONOTONIC times through the camera encoder (libx264). The
@@ -139,7 +140,7 @@ EncodeResult encode(const QString &path, const QList<QPair<QVideoFrame, qint64>>
     }
     encoder.requestStop();
     encoder.wait(20000);
-    return {encoder.error(), encoder.encodedFrames(), encoder.droppedFrames()};
+    return {encoder.error(), encoder.encodedFrames(), encoder.droppedFrames(), encoder.firstWrittenOffsetUs()};
 }
 
 // The top-level MP4 boxes: type and offset.
@@ -176,6 +177,14 @@ private slots:
         QCOMPARE(file.readAll(), QByteArray("monotonic_microsec\trealtime_microsec\n"
                                             "1234567\t9876543\n"));
         QCOMPARE(timestamp.firstFrameUs(), qint64(1234567));
+
+        // Frames the encoder couldn't decode before its first written one move the start.
+        QVERIFY(timestamp.shift(66666));
+        file.close();
+        QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
+        QCOMPARE(file.readAll(), QByteArray("monotonic_microsec\trealtime_microsec\n"
+                                            "1301233\t9943209\n"));
+        QCOMPARE(timestamp.firstFrameUs(), qint64(1301233));
     }
 
     void frameClockKeepsDriverSpacing()
@@ -643,6 +652,14 @@ private slots:
         QCOMPARE(failed.error, QStringLiteral("Could not map camera frame"));
         QCOMPARE(failed.encoded, qint64(0));
         QCOMPARE(failed.dropped, qint64(2));
+
+        // Unreadable frames before the first good one: the video starts at the good one, and
+        // the encoder says how far after the first submitted frame that was.
+        const QString latePath = directory.filePath(QStringLiteral("late.mp4"));
+        const EncodeResult late = encode(latePath, {{bad, 1000000}, {bad, 1033333}, {good, 1066666}, {good, 1100000}});
+        QCOMPARE(late.error, QString());
+        QCOMPARE(late.encoded, qint64(2));
+        QCOMPARE(late.firstWrittenUs, qint64(66666));
     }
 
     void cameraNodesFollowSavedPaths()
