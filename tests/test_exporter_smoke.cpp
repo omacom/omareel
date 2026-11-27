@@ -1,4 +1,5 @@
 #include "Exporter.h"
+#include "ExportRenderer.h"
 #include "ProjectJson.h"
 
 #include <QDir>
@@ -112,6 +113,19 @@ private slots:
     {
         QCOMPARE(paddedEvenSize(1367, 781), QSize(1368, 782));
         QCOMPARE(paddedEvenSize(1920, 1080), QSize(1920, 1080));
+    }
+
+    void emptyFrameDetectionDistinguishesOpaqueBlack()
+    {
+        QVERIFY(ExportRenderer::isEmptyFrame(QByteArray()));
+        QVERIFY(ExportRenderer::isEmptyFrame(QByteArray(16, '\0')));
+        // An opaque pure-black RGBA frame has alpha=255 and must not be treated as empty.
+        QByteArray opaqueBlack(16, '\0');
+        for (int i = 3; i < opaqueBlack.size(); i += 4) opaqueBlack[i] = char(0xff);
+        QVERIFY(!ExportRenderer::isEmptyFrame(opaqueBlack));
+        QByteArray trailingPixel(16, '\0');
+        trailingPixel[15] = 1;
+        QVERIFY(!ExportRenderer::isEmptyFrame(trailingPixel));
     }
 
     void backpressure_data()

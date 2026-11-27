@@ -130,6 +130,24 @@ QByteArray ExportRenderer::mapReadback(ReadbackSlot &slot, QString *error)
     return bytes;
 }
 
+bool ExportRenderer::isEmptyFrame(const QByteArray &pixels)
+{
+    return std::all_of(pixels.cbegin(), pixels.cend(), [](char byte) { return byte == 0; });
+}
+
+bool ExportRenderer::checkFirstFrame(const QByteArray &pixels, QString *error)
+{
+    if (m_checkedFirstFrame) return true;
+    m_checkedFirstFrame = true;
+    if (!isEmptyFrame(pixels)) return true;
+    if (error) {
+        *error = m_softwareRendering
+            ? QStringLiteral("Rendered frame was empty")
+            : QStringLiteral("Rendered frame was empty (GPU framebuffer readback produced no pixels)");
+    }
+    return false;
+}
+
 void ExportRenderer::setScreenYuv(const YuvFrame &frame)
 {
     QMetaObject::invokeMethod(m_frameSource, "setYuvFrame", Qt::DirectConnection, Q_ARG(Omareel::YuvFrame, frame));
@@ -164,6 +182,10 @@ bool ExportRenderer::renderFrame(const QImage &screen, const QImage &camera, con
         }
         *pixels = QByteArray(reinterpret_cast<const char *>(rendered.constBits()),
                              rendered.sizeInBytes());
+        if (!checkFirstFrame(*pixels, error)) {
+            pixels->clear();
+            return false;
+        }
         return true;
     }
     m_fbo->bind();
@@ -187,10 +209,16 @@ bool ExportRenderer::renderFrame(const QImage &screen, const QImage &camera, con
     if (slot.frame >= 0) {
         QString mapError;
         *pixels = mapReadback(slot, &mapError);
+        if (mapError.isEmpty() && !checkFirstFrame(*pixels, &mapError)) pixels->clear();
         if (!mapError.isEmpty()) {
             if (error) *error = mapError;
             return false;
         }
+    }
+    // Qt may leave another framebuffer bound after endFrame(); read from ours.
+    if (!m_fbo->bind()) {
+        if (error) *error = QStringLiteral("Could not bind render framebuffer for readback");
+        return false;
     }
     m_glExtra->glBindBuffer(GL_PIXEL_PACK_BUFFER, slot.buffer);
     m_glExtra->glReadPixels(0, 0, m_width, m_height, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
@@ -208,7 +236,13 @@ bool ExportRenderer::takePendingFrame(QByteArray *pixels, QString *error)
         const int frame = m_pendingFrame++;
         auto &slot = m_readbacks[frame % int(m_readbacks.size())];
         if (slot.frame != frame) continue;
-        *pixels = mapReadback(slot, error);
+        QString readError;
+        *pixels = mapReadback(slot, &readError);
+        if (readError.isEmpty() && !checkFirstFrame(*pixels, &readError)) pixels->clear();
+        if (!readError.isEmpty()) {
+            if (error) *error = readError;
+            return false;
+        }
         return true;
     }
     return false;
