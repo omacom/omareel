@@ -103,8 +103,10 @@ public:
     bool renderFrame(const QImage &screen, const QImage &camera, const QImage &insert,
                      QByteArray *pixels, QString *error);
     // After the last frame: the frames still being read back, oldest first, one per call; false
-    // once none is left. A frame that could not be read comes back empty with *error set.
+    // once none is left or if a readback failed (leaving *error set).
     bool takePendingFrame(QByteArray *pixels, QString *error);
+    // True when a read-back RGBA frame has no non-zero bytes (empty/transparent framebuffer).
+    static bool isEmptyFrame(const QByteArray &pixels);
     // Frees the readback buffers once no frame is left to take.
     void releaseReadbacks();
     // Releases the scene graph's resources before a successful export tears the renderer down.
@@ -116,6 +118,7 @@ public:
 private:
     struct ReadbackSlot { unsigned int buffer = 0; int frame = -1; };
     QByteArray mapReadback(ReadbackSlot &slot, QString *error);
+    bool checkFirstFrame(const QByteArray &pixels, QString *error);
 
     int m_width = 0;
     int m_height = 0;
@@ -141,6 +144,7 @@ private:
     QOpenGLExtraFunctions *m_glExtra = nullptr;
     int m_frame = 0;
     int m_pendingFrame = -1;
+    bool m_checkedFirstFrame = false;
     Timing m_timing;
 };
 
