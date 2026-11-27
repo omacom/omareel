@@ -100,6 +100,11 @@ pub struct Document {
     pub(crate) project: Project,
     pub(crate) input: InputLog,
     pub(crate) keystroke_track: KeystrokeTrack,
+    pub(crate) transcript: Option<crate::transcript::Transcript>,
+    pub(crate) caption_cues: Vec<crate::captions::Cue>,
+    pub(crate) speech: Option<Vec<(f64, f64)>>,
+    /// The silences the screen stays still through (`transcript::stillness`), once checked.
+    pub(crate) still: Option<Vec<(f64, f64)>>,
     pub(crate) inserts: HashMap<String, VideoInfo>,
     pub(crate) probe_video: ProbeVideo,
     pub(crate) history: History,
@@ -185,6 +190,11 @@ impl Document {
             document.emit(Effect::StartAutosaveTimer);
         }
         document.thumbnails.ensure_source(&document.thumbnail_context(), "screen");
+        // A transcript that does not read is as good as none; transcribing again replaces it.
+        if let Ok(Some(transcript)) = crate::transcript::Transcript::load(bundle_path) {
+            document.transcript = Some(transcript);
+            document.rebuild_captions();
+        }
         Ok(document)
     }
 
@@ -208,6 +218,10 @@ impl Document {
             project,
             input,
             keystroke_track,
+            transcript: None,
+            caption_cues: Vec::new(),
+            speech: None,
+            still: None,
             inserts,
             probe_video,
             history: History::default(),
@@ -621,6 +635,7 @@ impl Document {
     pub(crate) fn changed(&mut self, motion: bool) {
         self.project_map_revision += 1;
         self.keystroke_track = KeystrokeTrack::build(self.input.events(), &self.project.keystrokes);
+        self.rebuild_captions();
         let (volume, muted) = self.screen_audio();
         self.emit(Effect::SetScreenAudio { volume, muted });
         self.emit(Effect::UpdateInsertAudio);

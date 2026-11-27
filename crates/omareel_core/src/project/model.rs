@@ -53,6 +53,21 @@ impl Default for Keystrokes {
     }
 }
 
+/// Captions drawn from `transcript.json`. `position`: "bottom" or "top"; `size` scales the
+/// text, 0.5 to 2.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Captions {
+    pub enabled: bool,
+    pub position: String,
+    pub size: f64,
+}
+
+impl Default for Captions {
+    fn default() -> Captions {
+        Captions { enabled: false, position: "bottom".into(), size: 1.0 }
+    }
+}
+
 /// A piece of the recording, or of an inserted video when `media` is set.
 /// `layout`: "default" shows the screen with the camera bubble, "camera" the webcam full
 /// frame, "screen" the screen without the bubble. Inserted videos ignore it.

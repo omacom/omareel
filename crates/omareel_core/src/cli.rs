@@ -13,9 +13,12 @@ commands:\n\
 \x20     --stop, --cancel.\n\
 \x20 edit <bundle.omareel>\n\
 \x20     Open a recording bundle in the editor.\n\
-\x20 export <bundle> -o <file.mp4|file.gif> [options]\n\
+\x20 export <bundle> -o <file.mp4|file.gif|file.srt|file.vtt> [options]\n\
 \x20     Export with --fps N, --width W, --quality LEVEL, --gif-fps N,\n\
-\x20     --gif-width W, or --timing.\n\
+\x20     --gif-width W, or --timing. .srt and .vtt write the captions.\n\
+\x20 transcribe <bundle> [--backend auto|voxtype|hex|superwhisper|whisper-cpp]\n\
+\x20     [--force]\n\
+\x20     Write transcript.json with Omarchy's dictation engine, on this computer.\n\
 \x20 probe <bundle>\n\
 \x20     Print a JSON summary of a recording bundle.\n\
 \x20 help\n\

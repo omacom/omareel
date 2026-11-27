@@ -46,6 +46,7 @@ class CompositionState : public QObject
     Q_PROPERTY(QVariantMap cursor MEMBER cursor NOTIFY changed)
     Q_PROPERTY(QVariantList ripples MEMBER ripples NOTIFY changed)
     Q_PROPERTY(QVariantList keystrokePills MEMBER keystrokePills NOTIFY changed)
+    Q_PROPERTY(QVariantMap caption MEMBER caption NOTIFY changed)
     Q_PROPERTY(bool softwareRendering MEMBER softwareRendering CONSTANT)
 public:
     using QObject::QObject;
@@ -66,6 +67,7 @@ public:
     QVariantMap cursor;
     QVariantList ripples;
     QVariantList keystrokePills;
+    QVariantMap caption;
     bool softwareRendering = false;
     void notifyChanged() { emit changed(); }
 signals:
