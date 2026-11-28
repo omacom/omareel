@@ -7,6 +7,8 @@ Item {
     required property var settings
     required property var colors
     property real ref: 1
+    // Extra room kept below pills at the bottom (for a camera bubble there).
+    property real bottomInset: 0
     readonly property color pillColor: Qt.alpha(colors.background, .85)
     readonly property color textColor: colors.foreground
     anchors.fill: parent
@@ -20,6 +22,7 @@ Item {
         anchors.top: root.settings.position.startsWith("top") ? parent.top : undefined
         anchors.bottom: root.settings.position.startsWith("bottom") ? parent.bottom : undefined
         anchors.margins: 40 * root.ref
+        anchors.bottomMargin: 40 * root.ref + root.bottomInset
 
         Repeater {
             model: root.pills

@@ -19,6 +19,9 @@ struct ExportOptions {
     int gifFps = 0;
     int gifWidth = 0;
     bool timing = false;
+    QString preset;   // an export preset's id (crates/omareel_core/src/export/presets.rs)
+    QString aspect;   // the project's aspect for this export only
+    QString reframe;  // "follow" or "off" for this export only
 };
 
 // Exports a bundle to MP4 or GIF. What to export and how is decided in Rust

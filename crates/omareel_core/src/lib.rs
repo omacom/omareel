@@ -21,5 +21,6 @@ pub mod omarchy_paths;
 pub mod probe;
 pub mod project;
 pub mod recording_preferences;
+pub mod reframe;
 pub mod theme;
 pub mod zoom_timeline;

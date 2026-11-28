@@ -108,7 +108,8 @@ bool Exporter::run(const ExportOptions &options, QString *error)
 {
     ::rust::Box<omareel::exporter::ExportJob> job = omareel::exporter::newExportJob();
     const omareel::exporter::ExportOptions jobOptions{options.bundlePath, options.outputPath, options.fps,
-        options.width, options.quality, options.gifFps, options.gifWidth, options.timing};
+        options.width, options.quality, options.gifFps, options.gifWidth, options.timing, options.preset,
+        options.aspect, options.reframe};
     if (!job->prepare(jobOptions, *m_cancel, *error)) return false;
     const omareel::exporter::Composition composition = job->composition();
     const int totalFrames = job->totalFrames();

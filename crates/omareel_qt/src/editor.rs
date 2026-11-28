@@ -31,7 +31,7 @@ use std::thread::JoinHandle;
 use std::time::Instant;
 
 use crate::export::ffi::ExportOptions;
-use crate::export::{json_map, json_variant, map};
+use crate::export::{json_map, json_variant, map, zoom_map};
 use crate::theme::to_qt;
 
 #[cxx_qt::bridge]
@@ -80,7 +80,16 @@ pub mod qobject {
         #[cxx_name = "zoomTarget"]
         fn zoom_target(target: &QVariant, x: &mut f64, y: &mut f64) -> bool;
         #[cxx_name = "exportSettings"]
-        fn export_settings(settings: &QMap_QString_QVariant, fps: &mut i32, height: &mut i32, quality: &mut QString);
+        fn export_settings(
+            settings: &QMap_QString_QVariant,
+            fps: &mut i32,
+            height: &mut i32,
+            quality: &mut QString,
+            aspect: &mut QString,
+            reframe: &mut QString,
+        );
+        #[cxx_name = "copyFileToClipboard"]
+        fn copy_file_to_clipboard(path: &QString);
         #[cxx_name = "softwareRendering"]
         fn software_rendering() -> bool;
         #[cxx_name = "copyToClipboard"]
@@ -418,6 +427,22 @@ pub mod qobject {
         fn open_containing_folder(self: &Editor, path: &QString);
         #[qinvokable]
         fn copy_path(self: &Editor, path: &QString);
+        /// Puts the exported file on the clipboard (`text/uri-list` through wl-copy, or Qt's
+        /// clipboard without it), to paste into chat apps and file managers.
+        #[qinvokable]
+        fn copy_file(self: &Editor, path: &QString) -> bool;
+        /// The export presets: `{id, label, description, format, height, fps, quality, aspect,
+        /// reframe}` maps.
+        #[qinvokable]
+        fn export_presets(self: &Editor) -> QList_QVariant;
+        #[qinvokable]
+        fn preset_export_path(self: &Editor, id: &QString) -> QString;
+        /// Saves a preset's settings into the project, as one undo step.
+        #[qinvokable]
+        fn apply_export_preset(self: Pin<&mut Editor>, id: &QString) -> bool;
+        /// "follow" or "off".
+        #[qinvokable]
+        fn set_reframe(self: Pin<&mut Editor>, mode: &QString) -> bool;
         #[qinvokable]
         fn refresh_omarchy_theme(self: Pin<&mut Editor>);
         #[qinvokable]
@@ -1163,12 +1188,7 @@ impl qobject::Editor {
     fn preview_zoom(&self) -> QMap<QMapPair_QString_QVariant> {
         let Some(document) = self.document.as_ref() else { return QMap::default() };
         let zoom = document.preview_zoom();
-        map([
-            ("scale", QVariant::from(&zoom.scale)),
-            ("cx", QVariant::from(&zoom.cx)),
-            ("cy", QVariant::from(&zoom.cy)),
-            ("velocity", QVariant::from(&zoom.velocity)),
-        ])
+        zoom_map(zoom.scale, zoom.cx, zoom.cy, zoom.velocity, zoom.reframe)
     }
 
     fn preview_layout(&self) -> QMap<QMapPair_QString_QVariant> {
@@ -1545,9 +1565,16 @@ impl qobject::Editor {
         }
         self.as_mut().save_now();
         let path = qobject::text_url_path(path).to_string();
-        let (mut fps, mut height, mut quality) = (0, 0, QString::default());
-        qobject::export_settings(settings, &mut fps, &mut height, &mut quality);
-        let settings = ExportDialogSettings { fps, height, quality: quality.to_string() };
+        let (mut fps, mut height, mut quality, mut aspect, mut reframe) =
+            (0, 0, QString::default(), QString::default(), QString::default());
+        qobject::export_settings(settings, &mut fps, &mut height, &mut quality, &mut aspect, &mut reframe);
+        let settings = ExportDialogSettings {
+            fps,
+            height,
+            quality: quality.to_string(),
+            aspect: aspect.to_string(),
+            reframe: reframe.to_string(),
+        };
         let request = {
             let mut rust = self.as_mut().rust_mut();
             let Some(document) = rust.document.as_mut() else { return };
@@ -1567,6 +1594,9 @@ impl qobject::Editor {
                 gif_fps: request.gif_fps,
                 gif_width: request.gif_width,
                 timing: false,
+                preset: QString::default(),
+                aspect: qstring(&request.aspect),
+                reframe: qstring(&request.reframe),
             });
         }
     }
@@ -1588,6 +1618,51 @@ impl qobject::Editor {
 
     fn copy_path(&self, path: &QString) {
         qobject::copy_to_clipboard(path);
+    }
+
+    fn copy_file(&self, path: &QString) -> bool {
+        match editor::copy_file_to_clipboard(&path.to_string()) {
+            Ok(()) => true,
+            Err(error) => {
+                print_error(&format!("omareel: copying the file with wl-copy failed: {error}\n"));
+                qobject::copy_file_to_clipboard(path);
+                std::path::Path::new(&path.to_string()).is_file()
+            }
+        }
+    }
+
+    fn export_presets(&self) -> QList<QVariant> {
+        editor::export_presets()
+            .iter()
+            .map(|p| {
+                QVariant::from(&map([
+                    ("id", QVariant::from(&qstring(p.id))),
+                    ("label", QVariant::from(&qstring(p.label))),
+                    ("description", QVariant::from(&qstring(p.description))),
+                    ("format", QVariant::from(&qstring(p.format))),
+                    ("height", QVariant::from(&p.height)),
+                    ("fps", QVariant::from(&p.fps)),
+                    ("quality", QVariant::from(&qstring(p.quality))),
+                    ("aspect", QVariant::from(&qstring(p.aspect))),
+                    ("reframe", QVariant::from(&qstring(p.reframe))),
+                ]))
+            })
+            .collect()
+    }
+
+    fn preset_export_path(&self, id: &QString) -> QString {
+        let id = id.to_string();
+        self.document.as_ref().map_or_else(QString::default, |document| qstring(&document.preset_export_path(&id)))
+    }
+
+    fn apply_export_preset(self: Pin<&mut Self>, id: &QString) -> bool {
+        let id = id.to_string();
+        self.edit(|document| document.apply_export_preset(&id)).unwrap_or(false)
+    }
+
+    fn set_reframe(self: Pin<&mut Self>, mode: &QString) -> bool {
+        let mode = mode.to_string();
+        self.edit(|document| document.set_reframe(&mode)).unwrap_or(false)
     }
 
     fn trace_input(&self, object_name: &QString, phase: &QString, x: f64, y: f64) {

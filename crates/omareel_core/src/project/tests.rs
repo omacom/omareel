@@ -351,3 +351,44 @@ fn camera_crop_folds_into_shape() {
         assert_eq!(Project::from_json(&loaded.to_json()).camera.shape, expected_shape, "{row}");
     }
 }
+
+/// Before 0.6 a fixed zoom target was relative to the crop; it reads relative to the whole
+/// recording now, once (the file then says "zoomTargets": "recording"). Automatic targets
+/// don't move, and nothing is added to a project without a crop.
+#[test]
+fn old_zoom_targets_move_out_of_the_crop() {
+    let mut json = Project::defaults("Old", 10.0).to_json();
+    json.insert("crop", Object::from_iter([("x", Value::from(0.5)), ("y", 0.0.into()), ("w", 0.5.into()), ("h", 0.5.into())]));
+    let zoom = |id: &str, automatic: bool| -> Value {
+        let target: Value =
+            if automatic { "auto".into() } else { Object::from_iter([("x", Value::from(0.5)), ("y", Value::from(0.5))]).into() };
+        Object::from_iter([
+            ("id", Value::from(id)),
+            ("start", Value::from(1.0)),
+            ("end", Value::from(3.0)),
+            ("level", Value::from(2.0)),
+            ("target", target),
+        ])
+        .into()
+    };
+    json.insert("zooms", Value::array(vec![zoom("fixed", false), zoom("auto", true)]));
+    let project = Project::from_json(&json);
+    let fixed = &project.zooms[0];
+    assert!(q_fuzzy_compare(fixed.target.x, 0.75) && q_fuzzy_compare(fixed.target.y, 0.25), "{:?}", fixed.target);
+    assert!(q_fuzzy_compare(project.zooms[1].target.x, 0.5));
+    // Read back, it stays put.
+    assert_eq!(project.to_json().value("zoomTargets").to_string_or(""), "recording");
+    assert_eq!(Project::from_json(&project.to_json()).zooms, project.zooms);
+    // Uncropped, nothing moves.
+    json.remove("crop");
+    let plain = Project::from_json(&json);
+    assert!(q_fuzzy_compare(plain.zooms[0].target.x, 0.5));
+    // Cropping it afterwards (an edit reads the project back from its JSON) moves nothing.
+    let mut cropped = plain.to_json();
+    cropped.insert("crop", Object::from_iter([("x", Value::from(0.5)), ("y", 0.0.into()), ("w", 0.5.into()), ("h", 0.5.into())]));
+    assert!(q_fuzzy_compare(Project::from_json(&cropped).zooms[0].target.x, 0.5));
+    // Without fixed targets nothing is written.
+    let mut automatic = Project::defaults("Auto", 10.0).to_json();
+    automatic.insert("zooms", Value::array(vec![zoom("auto", true)]));
+    assert!(!Project::from_json(&automatic).to_json().contains("zoomTargets"));
+}

@@ -169,6 +169,8 @@ class FakeEditor : public QObject
     Q_PROPERTY(int sourceHeight READ sourceHeight CONSTANT)
     Q_PROPERTY(QVariantList wallpaperGroups READ wallpaperGroups CONSTANT)
     Q_PROPERTY(QVariantList gradients READ gradients CONSTANT)
+    Q_PROPERTY(int outputWidth READ outputWidth CONSTANT)
+    Q_PROPERTY(int outputHeight READ outputHeight CONSTANT)
 
 public:
     explicit FakeEditor(QString exportDir, QObject *parent = nullptr)
@@ -224,6 +226,13 @@ public:
     Q_INVOKABLE void cancelExport() {}
     Q_INVOKABLE void openContainingFolder(const QString &) {}
     Q_INVOKABLE void copyPath(const QString &) {}
+    // The export presets (#40): none here, so the dialog edits the project's own settings.
+    Q_INVOKABLE QVariantList exportPresets() const { return {}; }
+    Q_INVOKABLE QString presetExportPath(const QString &) const { return {}; }
+    Q_INVOKABLE void applyExportPreset(const QString &) {}
+    Q_INVOKABLE bool copyFile(const QString &) { return false; }
+    int outputWidth() const { return 1920; }
+    int outputHeight() const { return 1080; }
 
 signals:
     void exportFinished(const QString &path);

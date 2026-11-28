@@ -194,6 +194,10 @@ impl Project {
         if allowed_aspects().contains(&aspect.as_str()) {
             p.aspect = aspect;
         }
+        let reframe = source.value("reframe").to_string_or("");
+        if crate::reframe::MODES.contains(&reframe.as_str()) {
+            p.reframe = reframe;
+        }
         let crop = source.value("crop").to_object();
         p.crop = RectF::new(
             crop.value("x").to_double(0.0),
@@ -378,6 +382,18 @@ impl Project {
         p.export_settings.gif.height = g.value("height").to_int(480);
         p.export_settings.gif.quality = g.value("quality").to_string_or("studio");
         p.export_settings.gif.loop_ = g.value("loop").to_bool(true);
+        // Before 0.6 a fixed zoom target was normalised to the crop; it is the recording's now.
+        // Files written since say so ("zoomTargets": "recording", wherever there is a fixed
+        // target); an older one's targets move out of the crop, once.
+        if source.value("zoomTargets").to_string_or("") != "recording" {
+            let crop = p.crop;
+            for zoom in p.zooms.iter_mut().filter(|zoom| !zoom.automatic_target) {
+                zoom.target = crate::compat::geometry::PointF::new(
+                    crop.x + zoom.target.x * crop.width,
+                    crop.y + zoom.target.y * crop.height,
+                );
+            }
+        }
         p
     }
 
@@ -476,7 +492,7 @@ impl Project {
         let a = &self.audio;
         let cam = &self.camera;
         let e = &self.export_settings;
-        Object::from_iter([
+        let mut json = Object::from_iter([
             ("version", Value::from(self.version)),
             ("defaultsVersion", self.defaults_version.into()),
             ("name", self.name.as_str().into()),
@@ -549,7 +565,18 @@ impl Project {
                     ),
                 ]),
             ),
-        ])
+        ]);
+        // Written only when set, so projects that don't reframe stay as they were.
+        if !self.reframe.is_empty() {
+            json.insert("reframe", self.reframe.as_str());
+        }
+        // Fixed zoom targets are the recording's, not the crop's (see from_json), said wherever
+        // there is one, cropped or not: a project cropped later is read back from this JSON, and
+        // without it the targets would move into the new crop.
+        if self.zooms.iter().any(|zoom| !zoom.automatic_target) {
+            json.insert("zoomTargets", "recording");
+        }
+        json
     }
 
     /// Reads `project.json`, writing it back when a migration changed it. On failure the

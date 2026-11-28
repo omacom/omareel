@@ -16,8 +16,11 @@ cursor-following zooms. Finished projects export to MP4 or GIF.
 - Omarchy wallpaper and live accent-color integration.
 - Synthetic cursor smoothing, click rings, idle hiding, and cursor-following auto zooms.
 - Aspect presets, padding, rounded corners, inset borders, and configurable shadows.
+- Auto-reframe for vertical and square canvases: the screen fills the frame and follows the
+  cursor and zooms, identically in the preview and the export.
 - Camera rotation, horizontal flip, independent shadow/border styling, and 720p/1080p capture.
-- Hardware-accelerated MP4 export with CPU fallback, plus GIF export.
+- Hardware-accelerated MP4 export with CPU fallback, plus GIF export, with presets for YouTube,
+  Shorts, X, GitHub GIFs, and Slack, and copy-to-clipboard of the finished file.
 - Self-contained `.omareel` project bundles that preserve the source and editor state.
 
 ## Install
@@ -76,6 +79,7 @@ Useful commands include:
 omareel record --region --with-desktop-audio
 omareel edit ~/Videos/omareel/Recording.omareel
 omareel export Recording.omareel -o recording.mp4
+omareel export Recording.omareel --preset shorts   # 1080×1920, reframed
 omareel probe Recording.omareel
 omareel help
 ```
