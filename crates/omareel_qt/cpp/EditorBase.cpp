@@ -121,6 +121,7 @@ void EditorBase::startExport(const omareel::exporter::ExportOptions &request)
     options.gifWidth = request.gif_width;
     options.timing = request.timing;
     m_exporter = new Exporter(this);
+    connect(m_exporter, &Exporter::measuring, this, [this](double fraction) { exportMeasured(fraction); });
     connect(m_exporter, &Exporter::progress, this, [this](int frame, int total) { exportProgressed(frame, total); });
     // The finished exporter is released before the editor hears about it, so a handler that
     // starts another export keeps its new exporter.

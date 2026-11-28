@@ -37,6 +37,8 @@ pub struct ExportRequest {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ExportState {
     pub exporting: bool,
+    /// Measuring the sound's loudness before the frames (`progress` is that pass's then).
+    pub measuring: bool,
     pub progress: f64,
     pub fps: f64,
     pub eta_seconds: i32,
@@ -183,9 +185,19 @@ impl Document {
         Some(request)
     }
 
+    /// `Exporter::measuring(fraction)`: the loudness pass before the frames.
+    pub fn export_measured(&mut self, fraction: f64) {
+        self.export.measuring = true;
+        self.export.progress = fraction.clamp(0.0, 1.0);
+        self.export.fps = 0.0;
+        self.export.eta_seconds = 0;
+        self.emit(Effect::ExportProgressChanged);
+    }
+
     /// `Exporter::progress(frame, total)`, with the milliseconds since [`Document::begin_export`].
     pub fn export_progressed(&mut self, frame: i32, total: i32, elapsed_ms: i64) {
         let (progress, fps, eta) = export_progress(frame, total, elapsed_ms);
+        self.export.measuring = false;
         self.export.progress = progress;
         self.export.fps = fps;
         self.export.eta_seconds = eta;
@@ -195,6 +207,7 @@ impl Document {
     /// `Exporter::finished(path)`.
     pub fn export_finished(&mut self, path: &str) {
         self.export.exporting = false;
+        self.export.measuring = false;
         self.export.progress = 1.0;
         self.export.eta_seconds = 0;
         self.export.exported_path = path.to_owned();
@@ -206,6 +219,7 @@ impl Document {
     /// `Exporter::failed(error)`.
     pub fn export_failed(&mut self, error: &str) {
         self.export.exporting = false;
+        self.export.measuring = false;
         self.export.error = error.to_owned();
         self.export.eta_seconds = 0;
         self.emit(Effect::ExportingChanged);

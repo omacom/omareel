@@ -160,6 +160,17 @@ pub mod ffi {
         /// renderer converts them on the GPU.
         #[cxx_name = "setYuvScreen"]
         fn set_yuv_screen(self: &mut ExportJob, yuv: bool);
+        /// Starts measuring the loudness of the export's sound on a thread, when the project
+        /// normalises it: true then. False with `error` set when it could not start.
+        #[cxx_name = "startLoudnessMeasure"]
+        fn start_loudness_measure(self: &mut ExportJob, error: &mut QString) -> bool;
+        /// The fraction of the loudness measurement done.
+        #[cxx_name = "loudnessProgress"]
+        fn loudness_progress(self: &ExportJob) -> f64;
+        #[cxx_name = "loudnessDone"]
+        fn loudness_done(self: &ExportJob) -> bool;
+        #[cxx_name = "waitLoudness"]
+        fn wait_loudness(self: &ExportJob, timeout_ms: u64);
         /// Once the renderer is ready: temporary files, the encoder and the decoder.
         fn start(self: &mut ExportJob, software_rendering: bool, error: &mut QString) -> bool;
         /// Waits for frame `frame` and updates the composition; false with `error` set to end.
@@ -473,6 +484,31 @@ impl ExportJob {
     fn set_yuv_screen(&mut self, yuv: bool) {
         if let Some(job) = self.job.as_mut() {
             job.set_yuv_screen(yuv);
+        }
+    }
+
+    fn start_loudness_measure(&mut self, error: &mut QString) -> bool {
+        let Some(job) = self.job.as_mut() else { return false };
+        match job.start_loudness_measure() {
+            Ok(started) => started,
+            Err(message) => {
+                *error = qstring(&message);
+                false
+            }
+        }
+    }
+
+    fn loudness_progress(&self) -> f64 {
+        self.job.as_ref().map_or(0.0, export::ExportJob::loudness_progress)
+    }
+
+    fn loudness_done(&self) -> bool {
+        self.job.as_ref().is_none_or(export::ExportJob::loudness_done)
+    }
+
+    fn wait_loudness(&self, timeout_ms: u64) {
+        if let Some(job) = self.job.as_ref() {
+            job.wait_loudness(timeout_ms);
         }
     }
 

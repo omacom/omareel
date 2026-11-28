@@ -118,11 +118,53 @@ pub struct Audio {
     pub desktop: bool,
     pub mic: bool,
     pub volume: f64,
+    pub cleanup: AudioCleanup,
 }
 
 impl Default for Audio {
     fn default() -> Audio {
-        Audio { desktop: true, mic: true, volume: 1.0 }
+        Audio { desktop: true, mic: true, volume: 1.0, cleanup: AudioCleanup::default() }
+    }
+}
+
+/// `audio.cleanup`, written only when it differs from the default (all off), so projects from
+/// before it load and save byte for byte.
+/// `denoise`: RNNoise noise suppression of the recording's sound (fan, hiss, keyboard, room
+/// tone). It is meant for the microphone: the recording has one track mixing the microphone
+/// with the desktop sound, so it applies only when the recording has microphone sound, and
+/// then filters the desktop sound too.
+/// `strength`: how much of the denoised sound replaces the original, 0.1 to 1.
+/// `loudness`: the export's integrated loudness target in LUFS, two-pass and linear where the
+/// true peak allows (-1.5 dBTP once encoded): "off", "-16" (podcasts, YouTube) or "-14" (social
+/// video).
+#[derive(Clone, Debug, PartialEq)]
+pub struct AudioCleanup {
+    pub denoise: bool,
+    pub strength: f64,
+    pub loudness: String,
+}
+
+impl Default for AudioCleanup {
+    fn default() -> AudioCleanup {
+        AudioCleanup { denoise: false, strength: 0.85, loudness: "off".into() }
+    }
+}
+
+impl AudioCleanup {
+    pub const LOUDNESS_TARGETS: [&'static str; 3] = ["off", "-16", "-14"];
+
+    /// Whether anything is switched on.
+    pub fn active(&self) -> bool {
+        self.denoise || self.loudness_lufs().is_some()
+    }
+
+    /// The loudness target in LUFS, `None` for "off".
+    pub fn loudness_lufs(&self) -> Option<f64> {
+        match self.loudness.as_str() {
+            "-16" => Some(-16.0),
+            "-14" => Some(-14.0),
+            _ => None,
+        }
     }
 }
 

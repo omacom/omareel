@@ -3,6 +3,8 @@
 #include "ExportRenderer.h"
 #include "omareel_qt/src/theme.cxxqt.h"
 
+#include <QCoreApplication>
+#include <QEventLoop>
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QImage>
@@ -110,6 +112,19 @@ bool Exporter::run(const ExportOptions &options, QString *error)
     const omareel::exporter::ExportOptions jobOptions{options.bundlePath, options.outputPath, options.fps,
         options.width, options.quality, options.gifFps, options.gifWidth, options.timing};
     if (!job->prepare(jobOptions, *m_cancel, *error)) return false;
+    // Loudness normalisation measures the sound first, a pass over all of it. Keep Cancel and the
+    // status responsive meanwhile.
+    if (job->startLoudnessMeasure(*error)) {
+        emit measuring(0.0);
+        while (!job->loudnessDone()) {
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+            job->waitLoudness(20);
+            emit measuring(job->loudnessProgress());
+        }
+        emit measuring(1.0);
+    } else if (!error->isEmpty()) {
+        return false;
+    }
     const omareel::exporter::Composition composition = job->composition();
     const int totalFrames = job->totalFrames();
 
