@@ -120,6 +120,7 @@ struct EncodeResult {
     QString error;
     qint64 encoded = 0;
     qint64 dropped = 0;
+    qint64 firstWrittenUs = -1;
 };
 
 // Records frames at the given CLOCK_MONOTONIC times through the camera encoder (libx264). The
@@ -139,7 +140,7 @@ EncodeResult encode(const QString &path, const QList<QPair<QVideoFrame, qint64>>
     }
     encoder.requestStop();
     encoder.wait(20000);
-    return {encoder.error(), encoder.encodedFrames(), encoder.droppedFrames()};
+    return {encoder.error(), encoder.encodedFrames(), encoder.droppedFrames(), encoder.firstWrittenOffsetUs()};
 }
 
 // The top-level MP4 boxes: type and offset.
@@ -176,6 +177,14 @@ private slots:
         QCOMPARE(file.readAll(), QByteArray("monotonic_microsec\trealtime_microsec\n"
                                             "1234567\t9876543\n"));
         QCOMPARE(timestamp.firstFrameUs(), qint64(1234567));
+
+        // Frames the encoder couldn't decode before its first written one move the start.
+        QVERIFY(timestamp.shift(66666));
+        file.close();
+        QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
+        QCOMPARE(file.readAll(), QByteArray("monotonic_microsec\trealtime_microsec\n"
+                                            "1301233\t9943209\n"));
+        QCOMPARE(timestamp.firstFrameUs(), qint64(1301233));
     }
 
     void frameClockKeepsDriverSpacing()
@@ -588,6 +597,69 @@ private slots:
         QVERIFY(int(uchar(packed.pixels[256])) > 250);
         QVideoFrame broken(std::make_unique<JpegTestBuffer>(QByteArray("invalid JPEG")));
         QVERIFY(packCameraFrame(broken).pixels.isEmpty());
+
+        // A truncated header fails without poisoning the thread-local TurboJPEG handle.
+        QVideoFrame truncatedHeader(std::make_unique<JpegTestBuffer>(jpeg.left(20)));
+        QVERIFY(packCameraFrame(truncatedHeader).pixels.isEmpty());
+        QCOMPARE(packCameraFrame(frame).pixels, packed.pixels);
+
+        // UVC webcams often pad MJPEG payloads with extra bytes before the 0xFFD9 EOI marker,
+        // which triggers a recoverable libjpeg warning (TJERR_WARNING).
+        QVERIFY(jpeg.endsWith(QByteArray("\xff\xd9", 2)));
+        qsizetype bodyEnd = jpeg.size() - 2;
+        while (bodyEnd > 0 && uchar(jpeg[bodyEnd - 1]) == 0xff) --bodyEnd;
+        const QByteArray paddedJpeg = jpeg.left(bodyEnd) + QByteArray(16, '\0') + QByteArray("\xff\xd9", 2);
+        QVideoFrame paddedFrame(std::make_unique<JpegTestBuffer>(paddedJpeg));
+        const auto paddedPacked = packCameraFrame(paddedFrame);
+        QCOMPARE(paddedPacked.size, QSize(16, 8));
+        QCOMPARE(paddedPacked.pixelFormat, QString("yuvj444p"));
+        QCOMPARE(paddedPacked.pixels, packed.pixels);
+
+        // A frame cut short in transit also only warns ("premature end of data segment"), but
+        // its missing part would be grey: it is dropped. The image is large enough that the cut
+        // falls in its scan data, not its headers (which fail outright).
+        QImage scene(64, 48, QImage::Format_RGB32);
+        for (int y = 0; y < scene.height(); ++y)
+            for (int x = 0; x < scene.width(); ++x)
+                scene.setPixel(x, y, qRgb(x * 4, y * 5, (x * y) % 256));
+        QByteArray whole;
+        QBuffer wholeBuffer(&whole);
+        QVERIFY(wholeBuffer.open(QIODevice::WriteOnly));
+        QVERIFY(scene.save(&wholeBuffer, "JPEG", 95));
+        QVERIFY(!packCameraFrame(QVideoFrame(std::make_unique<JpegTestBuffer>(whole, QSize(64, 48)))).pixels.isEmpty());
+        const QByteArray cutJpeg = whole.left(whole.size() * 2 / 3) + QByteArray("\xff\xd9", 2);
+        QVERIFY(packCameraFrame(QVideoFrame(std::make_unique<JpegTestBuffer>(cutJpeg, QSize(64, 48)))).pixels.isEmpty());
+        QCOMPARE(packCameraFrame(frame).pixels, packed.pixels);
+    }
+
+    void cameraEncoderSkipsUnmappableFrames()
+    {
+        if (!haveFfmpeg()) QSKIP("ffmpeg is not installed");
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const QSize size(64, 48);
+        const QVideoFrame good = nv12Frame(size, 100);
+        const QVideoFrame bad(std::make_unique<JpegTestBuffer>(QByteArray("invalid JPEG"), size));
+
+        const QString path = directory.filePath(QStringLiteral("camera.mp4"));
+        const EncodeResult result = encode(path, {{good, 1000000}, {bad, 1033333}, {good, 1066666}});
+        QCOMPARE(result.error, QString());
+        QCOMPARE(result.encoded, qint64(2));
+        QCOMPARE(result.dropped, qint64(1));
+
+        const QString failedPath = directory.filePath(QStringLiteral("failed.mp4"));
+        const EncodeResult failed = encode(failedPath, {{bad, 1000000}, {bad, 1033333}});
+        QCOMPARE(failed.error, QStringLiteral("Could not map camera frame"));
+        QCOMPARE(failed.encoded, qint64(0));
+        QCOMPARE(failed.dropped, qint64(2));
+
+        // Unreadable frames before the first good one: the video starts at the good one, and
+        // the encoder says how far after the first submitted frame that was.
+        const QString latePath = directory.filePath(QStringLiteral("late.mp4"));
+        const EncodeResult late = encode(latePath, {{bad, 1000000}, {bad, 1033333}, {good, 1066666}, {good, 1100000}});
+        QCOMPARE(late.error, QString());
+        QCOMPARE(late.encoded, qint64(2));
+        QCOMPARE(late.firstWrittenUs, qint64(66666));
     }
 
     void cameraNodesFollowSavedPaths()

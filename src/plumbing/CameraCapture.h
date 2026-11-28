@@ -35,11 +35,16 @@ public:
 
     void setPath(const QString &path);
     bool recordFrameArrival(qint64 monotonicUs, qint64 realtimeUs);
+    // Moves the recorded first frame `byUs` later: the encoder dropped that many microseconds of
+    // frames it couldn't decode before the first it wrote, which the video starts with.
+    bool shift(qint64 byUs);
     qint64 firstFrameUs() const { return m_firstFrameUs; }
 
 private:
+    bool write(qint64 monotonicUs, qint64 realtimeUs);
     QString m_path;
     qint64 m_firstFrameUs = 0;
+    qint64 m_firstRealtimeUs = 0;
 };
 
 // When each camera frame was captured, in CLOCK_MONOTONIC microseconds. Qt's V4L2 camera puts
@@ -102,6 +107,9 @@ public:
     QString error() const;
     qint64 encodedFrames() const { return m_encoded.load(); }
     qint64 droppedFrames() const { return m_dropped.load(); }
+    // How far after the first submitted frame the first frame written to ffmpeg came (the video
+    // starts there), or -1 before one was written.
+    qint64 firstWrittenOffsetUs() const { return m_firstWrittenUs.load(); }
 
 protected:
     void run() override;
@@ -121,6 +129,7 @@ private:
     std::atomic<qint64> m_stopDeadline{0};
     std::atomic<qint64> m_encoded{0};
     std::atomic<qint64> m_dropped{0};
+    std::atomic<qint64> m_firstWrittenUs{-1};
 };
 // The /dev/videoN node a saved camera path refers to now, or empty when it isn't plugged in.
 QString cameraNodePath(const QString &path);
