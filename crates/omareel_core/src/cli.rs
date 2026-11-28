@@ -16,6 +16,11 @@ commands:\n\
 \x20 export <bundle> -o <file.mp4|file.gif> [options]\n\
 \x20     Export with --fps N, --width W, --quality LEVEL, --gif-fps N,\n\
 \x20     --gif-width W, or --timing.\n\
+\x20 frame <bundle> --at SECONDS [--at ...] -o <file.png|file.jpg> [options]\n\
+\x20     Render the export's frames at output times (12.5 or 1:02.5) as images\n\
+\x20     (out-1.png, out-2.png... for several, or use %d). --count N instead\n\
+\x20     spreads N frames; --sheet puts them on one labelled contact sheet.\n\
+\x20     Options: --width W (a sheet's whole width), --fps N.\n\
 \x20 probe <bundle>\n\
 \x20     Print a JSON summary of a recording bundle.\n\
 \x20 help\n\
