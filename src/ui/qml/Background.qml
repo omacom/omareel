@@ -16,34 +16,65 @@ Item {
         visible: root.settings.type !== "none"
                  && (root.settings.type === "color" || !backgroundImage.visible || backgroundImage.status !== Image.Ready)
     }
-    Canvas {
-        id: gradientCanvas
+    // The gradient is a scene-graph Rectangle, drawn in the frame that shows it. A Canvas
+    // painted a frame late, so an export's first frame (and the preview's) had no gradient.
+    // The canvas drew a linear gradient along the angle across the diagonal, centred: the same
+    // as a vertical gradient on a square the diagonal wide, turned about the centre and clipped.
+    Item {
+        id: gradientLayer
         anchors.fill: parent
+        clip: true
         visible: root.settings.type === "gradient"
-        // Painted only while shown: a hidden Canvas still repaints on request, a whole-frame
-        // QPainter fill and image copy (an export asked for one every frame).
-        onWidthChanged: if (visible) requestPaint()
-        onHeightChanged: if (visible) requestPaint()
-        onVisibleChanged: if (visible) requestPaint()
-        onPaint: {
-            const ctx = getContext("2d")
-            ctx.reset()
-            const angle = (root.settings.gradient.angle - 90) * Math.PI / 180
-            const radius = Math.sqrt(width * width + height * height) / 2
-            const cx = width / 2
-            const cy = height / 2
-            const dx = Math.cos(angle) * radius
-            const dy = Math.sin(angle) * radius
-            const gradient = ctx.createLinearGradient(cx - dx, cy - dy, cx + dx, cy + dy)
-            const stops = root.settings.gradient.stops
-            for (let i = 0; i < stops.length; ++i)
-                gradient.addColorStop(stops[i][1], stops[i][0])
-            ctx.fillStyle = gradient
-            ctx.fillRect(0, 0, width, height)
+        property int stopCount: 0
+
+        Rectangle {
+            // No stops paint nothing, as the canvas did: the solid colour underneath shows.
+            visible: gradientLayer.stopCount > 0
+            readonly property real diagonal: Math.ceil(Math.sqrt(gradientLayer.width * gradientLayer.width
+                                                                 + gradientLayer.height * gradientLayer.height))
+            width: diagonal
+            height: diagonal
+            x: (gradientLayer.width - width) / 2
+            y: (gradientLayer.height - height) / 2
+            // A vertical gradient runs downwards, which is the canvas's angle 180.
+            rotation: (root.settings.gradient ? root.settings.gradient.angle : 180) - 180
+            gradient: Gradient { id: fill }
         }
+
+        Component {
+            id: stopComponent
+            GradientStop {}
+        }
+
+        function rebuild() {
+            // A copy: `fill.stops` is a live view of the list, so after the reassignment below
+            // it would hold the new stops, and those would be destroyed instead of the old.
+            const old = []
+            for (let k = 0; k < fill.stops.length; ++k)
+                old.push(fill.stops[k])
+            // In position order (stable), as a canvas gradient takes them; a stop at the same
+            // position as the one before starts a hard edge there, which a canvas draws and a
+            // Gradient blends unless the second sits just after the first.
+            const stops = (root.settings.gradient ? root.settings.gradient.stops || [] : [])
+                .map((stop, index) => ({ color: stop[0], position: Number(stop[1]), index: index }))
+                .sort((a, b) => a.position - b.position || a.index - b.index)
+            const made = []
+            let previous = -1
+            for (let i = 0; i < stops.length; ++i) {
+                const position = stops[i].position <= previous ? previous + 0.0001 : stops[i].position
+                previous = position
+                made.push(stopComponent.createObject(fill, { color: stops[i].color, position: position }))
+            }
+            fill.stops = made
+            stopCount = made.length
+            for (let j = 0; j < old.length; ++j)
+                old[j].destroy()
+        }
+
+        Component.onCompleted: rebuild()
         Connections {
             target: root
-            function onSettingsChanged() { if (gradientCanvas.visible) gradientCanvas.requestPaint() }
+            function onSettingsChanged() { gradientLayer.rebuild() }
         }
     }
     Image {
