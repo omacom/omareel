@@ -13,6 +13,8 @@ cursor-following zooms. Finished projects export to MP4 or GIF.
 - Optional desktop and microphone audio in a single compatible audio track.
 - Non-destructive clip trimming, splitting, speed changes, and timeline zoom editing.
 - Rubber-band multi-selection for zoom blocks, with grouped movement and deletion.
+- Annotations: text labels, boxes with an optional spotlight, arrows, numbered steps, blur or
+  pixelate regions baked into the export, and title cards, edited on the preview and timeline.
 - Omarchy wallpaper and live accent-color integration.
 - Synthetic cursor smoothing, click rings, idle hiding, and cursor-following auto zooms.
 - Aspect presets, padding, rounded corners, inset borders, and configurable shadows.
@@ -110,7 +112,9 @@ want the bar to appear.
 | `Shift+Left` / `Shift+Right` | Seek one second |
 | `S` | Split the selected clip at the playhead |
 | `Z` | Add a zoom at the playhead |
-| `Delete` | Delete the selected time range, zoom, or clip |
+| `T` / `R` / `A` / `N` / `B` | Add text, a box, an arrow, a step number, or a blur region |
+| `Shift+T` | Add a title card |
+| `Delete` | Delete the selected time range, annotation, zoom, or clip |
 | `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / redo |
 | `Ctrl+S` | Save now |
 | `Ctrl+E` | Open export |

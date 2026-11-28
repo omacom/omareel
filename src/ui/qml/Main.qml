@@ -175,11 +175,24 @@ ApplicationWindow {
     Shortcut { sequence: "S"; enabled: !window.singleKeyShortcutsBlocked; onActivated: editor.splitAtPlayhead() }
     Shortcut { sequence: "Z"; enabled: !window.singleKeyShortcutsBlocked; onActivated: editor.addZoomAt(editor.position) }
     Shortcut { sequence: "I"; enabled: !window.singleKeyShortcutsBlocked; onActivated: bottomBar.openInsertDialog() }
+    // Annotations at the playhead.
+    Repeater {
+        model: [["T", "text"], ["R", "box"], ["A", "arrow"], ["N", "badge"], ["B", "blur"], ["Shift+T", "card"]]
+        delegate: Item {
+            required property var modelData
+            Shortcut {
+                sequence: modelData[0]
+                enabled: !window.singleKeyShortcutsBlocked
+                onActivated: editor.addOverlayAt(modelData[1], editor.position, 3)
+            }
+        }
+    }
     Shortcut {
         sequence: "Delete"
         enabled: !window.singleKeyShortcutsBlocked
         onActivated: {
             if (timeline.hasRange) timeline.deleteSelectedRange()
+            else if (editor.selectedOverlayId) editor.removeOverlay(editor.selectedOverlayId)
             else if (editor.selectedZoomIds.length) editor.removeSelectedZooms()
             else editor.removeClip(editor.selectedClipId)
         }
@@ -197,10 +210,11 @@ ApplicationWindow {
     Shortcut {
         sequence: "Escape"
         enabled: editor.pickingZoomTarget || timeline.hasRange
-            || editor.selectedClipId || editor.selectedZoomId
+            || editor.selectedClipId || editor.selectedZoomId || editor.selectedOverlayId
         onActivated: {
             if (editor.pickingZoomTarget) editor.setPickingZoomTarget(false)
             else if (timeline.hasRange) timeline.clearRange()
+            else if (editor.selectedOverlayId) editor.selectedOverlayId = ""
             else editor.selectedClipId = ""
         }
     }

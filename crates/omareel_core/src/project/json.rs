@@ -1,6 +1,7 @@
 //! Reading, migrating and writing `project.json` (`Project.cpp`).
 
 use super::model::*;
+use super::overlays::{overlays_from_json, overlays_to_json};
 use super::styles::*;
 use crate::compat::cpp;
 use crate::compat::geometry::{PointF, RectF};
@@ -247,6 +248,7 @@ impl Project {
             }
             p.zooms.push(z);
         }
+        p.overlays = overlays_from_json(source.value("overlays"));
         let zs = source.value("zoomStyle").to_object();
         p.zoom_style.spring = spring_from_json(&zs.value("spring").to_object(), &p.zoom_style.spring);
         p.zoom_style.snap_to_edges_ratio = zs.value("snapToEdgesRatio").to_double(0.25);
@@ -476,7 +478,7 @@ impl Project {
         let a = &self.audio;
         let cam = &self.camera;
         let e = &self.export_settings;
-        Object::from_iter([
+        let mut root = Object::from_iter([
             ("version", Value::from(self.version)),
             ("defaultsVersion", self.defaults_version.into()),
             ("name", self.name.as_str().into()),
@@ -549,7 +551,11 @@ impl Project {
                     ),
                 ]),
             ),
-        ])
+        ]);
+        if !self.overlays.is_empty() {
+            root.insert("overlays", overlays_to_json(&self.overlays));
+        }
+        root
     }
 
     /// Reads `project.json`, writing it back when a migration changed it. On failure the

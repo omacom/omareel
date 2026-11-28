@@ -9,8 +9,10 @@
 use super::Document;
 use crate::camera_timeline::map_camera_time;
 use crate::compat::cpp;
+use crate::compat::qjson::Object;
 use crate::keystroke_track::KeystrokePill;
 use crate::motion_track::{MotionSample, RippleSample};
+use crate::overlay_track;
 
 /// `zoom`: `{scale, cx, cy, velocity}`, all doubles.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -63,6 +65,8 @@ pub struct PreviewComposition {
     pub ripples: Vec<RippleSample>,
     /// `keystrokePills`: `{keys (QStringList), text, opacity}` maps.
     pub keystroke_pills: Vec<KeystrokePill>,
+    /// `overlays`: the overlays showing, each one's project JSON with its `opacity`.
+    pub overlays: Vec<Object>,
     pub camera_visible: bool,
 }
 
@@ -133,6 +137,52 @@ impl Document {
         self.keystroke_track.sample(self.source_position())
     }
 
+    /// The overlays in effect at the output position, as the exporter samples them
+    /// ([`overlay_track::sample_json`]), except that the selected one shows at full opacity
+    /// while it is being edited (a new one starts at the playhead, where its fade-in hides it),
+    /// and a blur region shows from [`overlay_track::PREVIEW_BLUR_PAD`] of output before its
+    /// span to as long after ([`Document::preview_blur_shown`]).
+    pub fn preview_overlays(&self) -> Vec<Object> {
+        let sampled = overlay_track::sample_by(
+            &self.project.overlays,
+            self.source_position(),
+            self.output_position,
+            !self.showing_insert(),
+            &|overlay| self.preview_blur_shown(overlay),
+        );
+        let mut items = overlay_track::to_json(&self.project.overlays, sampled);
+        for item in &mut items {
+            if !self.selected_overlay_id.is_empty() && item.value("id").as_str() == Some(self.selected_overlay_id.as_str()) {
+                item.insert("opacity", 1.0);
+            }
+        }
+        items
+    }
+
+    /// Whether the preview shows a blur region now: some recording that plays within
+    /// [`overlay_track::PREVIEW_BLUR_PAD`] of output either side of the playhead falls in its
+    /// span. The video presents its frames ahead of the overlays that follow them, and across
+    /// a cut it may still show the other side's frame, so the region covers the frames either
+    /// way.
+    pub fn preview_blur_shown(&self, overlay: &crate::project::Overlay) -> bool {
+        let pad = overlay_track::PREVIEW_BLUR_PAD;
+        let (from, to) = (self.output_position - pad, self.output_position + pad);
+        let mut start = 0.0;
+        for clip in &self.project.clips {
+            let length = (clip.out - clip.in_) / clip.speed;
+            let end = start + length;
+            if !clip.is_media() && end >= from && start <= to {
+                let first = clip.in_ + (cpp::max(from, start) - start) * clip.speed;
+                let last = clip.in_ + (cpp::min(to, end) - start) * clip.speed;
+                if last >= overlay.start && first < overlay.end {
+                    return true;
+                }
+            }
+            start = end;
+        }
+        false
+    }
+
     /// `cameraVisible()`: a camera, no inserted clip, and the camera started; a full-frame camera
     /// holds its first frame until it started instead of leaving the frame empty.
     pub fn camera_visible(&self) -> bool {
@@ -154,6 +204,7 @@ impl Document {
             cursor: self.preview_cursor(),
             ripples: self.preview_ripples(),
             keystroke_pills: self.preview_keystroke_pills(),
+            overlays: self.preview_overlays(),
             camera_visible: self.camera_visible(),
         }
     }

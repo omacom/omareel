@@ -35,14 +35,20 @@ impl ImportJob {
 /// `visibleSourceSpan` in `deleteOutputRange`: the first and last recording time of a zoom
 /// that some recording clip still shows (infinities when none does).
 fn visible_source_span(zoom: &ZoomSegment, clips: &[Clip]) -> (f64, f64) {
+    visible_span(zoom.start, zoom.end, clips)
+}
+
+/// The first and last recording time of `start`..`end` that some recording clip still shows
+/// (infinities when none does).
+pub(crate) fn visible_span(span_start: f64, span_end: f64, clips: &[Clip]) -> (f64, f64) {
     let mut first = f64::INFINITY;
     let mut last = f64::NEG_INFINITY;
     for clip in clips {
         if clip.is_media() {
             continue;
         }
-        let start = cpp::max(zoom.start, clip.in_);
-        let end = cpp::min(zoom.end, clip.out);
+        let start = cpp::max(span_start, clip.in_);
+        let end = cpp::min(span_end, clip.out);
         if end - start <= 1e-9 {
             continue;
         }
@@ -158,6 +164,10 @@ impl Document {
             return false;
         }
         self.snapshot("");
+        let clip = &self.project.clips[i];
+        let clip_start = self.timeline().output_time(index, clip.in_);
+        let clip_end = clip_start + (clip.out - clip.in_) / clip.speed;
+        self.cut_frame_overlays(clip_start, clip_end);
         self.project.clips.remove(i);
         self.selected_clip_id = self.project.clips[i.min(self.project.clips.len() - 1)].id.clone();
         self.emit(Effect::Seek(cpp::min(self.output_position, self.duration())));
@@ -205,6 +215,9 @@ impl Document {
     pub fn apply_delete_output_range(&mut self, cut: OutputCut) {
         let OutputCut { from, clips } = cut;
         self.snapshot("");
+        let removed = self.duration() - ClipTimeline::new(clips.clone()).total_duration();
+        self.cut_frame_overlays(from, from + removed);
+        self.cut_screen_overlays(&clips);
         let mut surviving = Vec::new();
         let mut zooms_changed = false;
         for zoom in &self.project.zooms {

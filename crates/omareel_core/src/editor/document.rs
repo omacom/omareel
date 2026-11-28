@@ -107,6 +107,10 @@ pub struct Document {
     pub(crate) selected_clip_id: String,
     pub(crate) selected_zoom_id: String,
     pub(crate) selected_zoom_ids: Vec<String>,
+    pub(crate) selected_overlay_id: String,
+    /// The video's length at the edit's snapshot, until the edit's `changed` refits the
+    /// frame-anchored overlays to the new length ([`Document::fit_frame_overlays`]).
+    pub(crate) duration_before_edit: Option<f64>,
     pub(crate) picking_zoom_target: bool,
     pub(crate) output_position: f64,
     pub(crate) playback_range_start: f64,
@@ -215,6 +219,8 @@ impl Document {
             selected_clip_id: String::new(),
             selected_zoom_id: String::new(),
             selected_zoom_ids: Vec::new(),
+            selected_overlay_id: String::new(),
+            duration_before_edit: None,
             picking_zoom_target: false,
             output_position: 0.0,
             playback_range_start: -1.0,
@@ -610,6 +616,7 @@ impl Document {
 
     /// `snapshot(coalesceKey)`.
     pub(crate) fn snapshot(&mut self, coalesce_key: &str) {
+        self.duration_before_edit = Some(self.duration());
         let current = self.project.to_json();
         if self.history.snapshot(coalesce_key, current) {
             self.emit(Effect::HistoryChanged);
@@ -619,6 +626,9 @@ impl Document {
     /// `changed(motion)`: the project changed. The keystroke pills are rebuilt here; the rest is
     /// queued.
     pub(crate) fn changed(&mut self, motion: bool) {
+        if let Some(before) = self.duration_before_edit.take() {
+            self.fit_frame_overlays(before);
+        }
         self.project_map_revision += 1;
         self.keystroke_track = KeystrokeTrack::build(self.input.events(), &self.project.keystrokes);
         let (volume, muted) = self.screen_audio();
@@ -651,6 +661,7 @@ impl Document {
     /// the clip at the playhead, zoom selections that are gone dropped, and a seek to where the
     /// playhead now falls.
     fn restore(&mut self, json: &Object) {
+        self.duration_before_edit = None;
         self.project = Project::from_json(json);
         if !self.selected_clip_id.is_empty() && self.clip_index(&self.selected_clip_id) < 0 {
             self.selected_clip_id = if self.project.clips.is_empty() {
@@ -665,6 +676,9 @@ impl Document {
         self.selected_zoom_ids = retained;
         if self.zoom_index(&self.selected_zoom_id) < 0 {
             self.selected_zoom_id = self.selected_zoom_ids.first().cloned().unwrap_or_default();
+        }
+        if self.overlay_index(&self.selected_overlay_id) < 0 {
+            self.selected_overlay_id.clear();
         }
         self.changed(true);
         if !self.project.clips.is_empty() {
@@ -760,9 +774,10 @@ impl Document {
 
     /// `setSelectedClipId`: selecting a clip deselects zooms and stops picking a zoom target.
     pub fn set_selected_clip_id(&mut self, id: &str) {
-        if id != self.selected_clip_id || !self.selected_zoom_id.is_empty() {
+        if id != self.selected_clip_id || !self.selected_zoom_id.is_empty() || !self.selected_overlay_id.is_empty() {
             self.set_picking_zoom_target(false);
             self.selected_clip_id = id.to_owned();
+            self.clear_overlay_selection();
             self.selected_zoom_id.clear();
             self.selected_zoom_ids.clear();
             self.emit(Effect::SelectionChanged);
@@ -771,8 +786,9 @@ impl Document {
 
     /// `setSelectedZoomId`: one zoom (or none), and no clip.
     pub fn set_selected_zoom_id(&mut self, id: &str) {
-        if id != self.selected_zoom_id || !self.selected_clip_id.is_empty() {
+        if id != self.selected_zoom_id || !self.selected_clip_id.is_empty() || !self.selected_overlay_id.is_empty() {
             self.set_picking_zoom_target(false);
+            self.clear_overlay_selection();
             self.selected_zoom_id = id.to_owned();
             self.selected_zoom_ids = if id.is_empty() { Vec::new() } else { vec![id.to_owned()] };
             self.selected_clip_id.clear();
@@ -791,7 +807,7 @@ impl Document {
         let primary = valid.first().cloned().unwrap_or_default();
         if valid == self.selected_zoom_ids
             && primary == self.selected_zoom_id
-            && (valid.is_empty() || self.selected_clip_id.is_empty())
+            && (valid.is_empty() || (self.selected_clip_id.is_empty() && self.selected_overlay_id.is_empty()))
         {
             return;
         }
@@ -801,6 +817,7 @@ impl Document {
         self.selected_zoom_id = primary;
         if any {
             self.selected_clip_id.clear();
+            self.clear_overlay_selection();
         }
         self.emit(Effect::SelectionChanged);
     }

@@ -1686,3 +1686,6 @@ fn real_ffmpeg_probes_and_builds_frames() {
         eprintln!("ffmpeg could not write a display matrix");
     }
 }
+
+#[path = "overlay_tests.rs"]
+mod overlay_tests;

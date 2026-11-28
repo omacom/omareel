@@ -18,6 +18,7 @@ pub mod decoder;
 pub mod encoder_pipe;
 pub mod hardware;
 pub mod plan;
+pub mod redact;
 
 use crate::clip_timeline::ClipTimeline;
 use crate::compat::qdir::{self, FileInfo};
@@ -32,6 +33,7 @@ use crate::keystroke_track::KeystrokeTrack;
 use crate::media_probe::{self, VideoInfo};
 use crate::motion_track::MotionTrack;
 use crate::omarchy_paths;
+use crate::overlay_track;
 use crate::project::{Clip, Project};
 use crate::zoom_timeline;
 use composition::{CompositionState, Sources};
@@ -190,6 +192,8 @@ struct DecodePlan {
     total_frames: i32,
     /// The recording's frames come as YUV in this layout ([`ExportJob::set_yuv_screen`]).
     screen_yuv: Option<YuvLayout>,
+    /// The project's blur overlays, baked into the recording's frames ([`redact`]).
+    redactions: Vec<crate::project::Overlay>,
 }
 
 pub struct ExportJob {
@@ -708,6 +712,7 @@ impl ExportJob {
             } else {
                 None
             },
+            redactions: self.project.overlays.iter().filter(|overlay| overlay.kind == "blur").cloned().collect(),
         };
         let shared = Arc::clone(&self.decode);
         let cancelled = Arc::clone(&self.cancelled);
@@ -1073,6 +1078,37 @@ fn image(pixels: Vec<u8>, width: i32, height: i32, yuv: Option<YuvLayout>) -> Im
     Image { width, height, pixels: Arc::new(pixels), yuv }
 }
 
+/// The recording's frame with the blur overlays near any of `times` baked in, or the frame as
+/// decoded (shared, not copied) when none are. Each time is a recording time the timeline put
+/// the frame at, with the speed of its clip: the frame's own (when it was decoded) and, for a
+/// frame held on after its decoder ran out, the time it stands in for now. A blur covers a
+/// margin around its span ([`overlay_track::export_blur_pad`]), since the decoder's frame can
+/// be a frame or two away from the time the timeline names.
+fn redacted(decoded: Option<&Image>, work: &DecodePlan, times: &[(f64, f64)]) -> Option<Image> {
+    let image = decoded?;
+    let pads: Vec<(f64, f64)> = times
+        .iter()
+        .map(|&(source_time, speed)| (source_time, overlay_track::export_blur_pad(work.media.fps, f64::from(work.fps), speed)))
+        .collect();
+    let regions: Vec<redact::Redaction> = work
+        .redactions
+        .iter()
+        .filter(|overlay| pads.iter().any(|&(source_time, pad)| overlay_track::blur_near(overlay, source_time, pad)))
+        .map(redact::Redaction::of)
+        .collect();
+    if regions.is_empty() {
+        return Some(image.clone());
+    }
+    let mut pixels = image.pixels.as_ref().clone();
+    let (width, height) = (image.width.max(0) as usize, image.height.max(0) as usize);
+    if image.yuv.is_some() {
+        redact::redact_yuv420(&mut pixels, width, height, &regions);
+    } else {
+        redact::redact_rgba(&mut pixels, width, height, &regions);
+    }
+    Some(Image { pixels: Arc::new(pixels), ..image.clone() })
+}
+
 /// Starts `decoder` on `clip`: the recording at the decode size, or an inserted video scaled to
 /// its own size.
 fn start_clip_decoder(decoder: &mut FfmpegDecoder, clip: &Clip, work: &DecodePlan, error: &mut String) -> bool {
@@ -1120,6 +1156,9 @@ fn decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &AtomicBoo
     // The last frame of the recording and of the current inserted clip, kept apart so a clip
     // that runs out of frames repeats its own last frame, never the other's.
     let mut decoded: Option<Image> = None;
+    // The recording time (and clip speed) `decoded` was read for: a frame held on (its clip's
+    // decoder ran out, or an inserted video plays) is redacted for that time too.
+    let mut decoded_at = (0.0, 1.0);
     let mut insert_decoded: Option<Image> = None;
     let mut camera_decoded: Option<Image> = None;
     let mut camera_frame = -1;
@@ -1193,6 +1232,7 @@ fn decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &AtomicBoo
             let yuv = if decoder.yuv() { work.screen_yuv } else { None };
             *shown = Some(image(next, decoder.width(), decoder.height(), yuv));
             if !clip.is_media() {
+                decoded_at = (work.timeline.source_time(output_time), clip.speed);
                 *lock(&shared.acceleration) = decoder.acceleration();
             }
         } else if shown.is_none() {
@@ -1262,7 +1302,11 @@ fn decode_thread(work: &DecodePlan, shared: &DecodeShared, cancelled: &AtomicBoo
             break;
         }
         queue.packets.push_back(DecodedPacket {
-            image: decoded.clone(),
+            image: if clip.is_media() {
+                redacted(decoded.as_ref(), work, &[decoded_at])
+            } else {
+                redacted(decoded.as_ref(), work, &[decoded_at, (work.timeline.source_time(output_time), clip.speed)])
+            },
             camera_image: camera_decoded.clone(),
             error: String::new(),
             clip: clip_index,

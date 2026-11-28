@@ -137,7 +137,10 @@ FocusScope {
         target: editor
         function onDurationChanged() { root.clearRange() }
     }
-    implicitHeight: editor.hasCamera ? 204 : 148
+    // The Overlays lane shows once there is an annotation; the camera lane goes below it.
+    readonly property bool hasOverlays: editor.overlays.length > 0
+    readonly property real cameraLaneY: hasOverlays ? 200 : 144
+    implicitHeight: 148 + (editor.hasCamera ? 56 : 0) + (hasOverlays ? 56 : 0)
     property real labelWidth: 72
     readonly property real timelinePadding: 40
     property real basePixels: Math.max(1, width - labelWidth - timelinePadding)
@@ -160,7 +163,7 @@ FocusScope {
         const precision = tickStepSeconds >= .1 ? 1 : tickStepSeconds >= .01 ? 2 : 3
         return time + "." + ("00" + (milliseconds % 1000)).slice(-3).slice(0, precision)
     }
-    readonly property int trackCount: editor.hasCamera ? 3 : 2
+    readonly property int trackCount: 2 + (editor.hasCamera ? 1 : 0) + (hasOverlays ? 1 : 0)
     readonly property real tracksBottom: 32 + trackCount * 48 + (trackCount - 1) * 8
 
     Rectangle { anchors.fill: parent; color: theme.surface }
@@ -179,9 +182,9 @@ FocusScope {
         width: root.labelWidth
         height: parent.height
         Repeater {
-            model: editor.hasCamera
-                ? [{name: "Clip", icon: "film.svg"}, {name: "Zoom", icon: "zoom-in.svg"}, {name: "Camera", icon: "camera.svg"}]
-                : [{name: "Clip", icon: "film.svg"}, {name: "Zoom", icon: "zoom-in.svg"}]
+            model: [{name: "Clip", icon: "film.svg"}, {name: "Zoom", icon: "zoom-in.svg"}]
+                .concat(root.hasOverlays ? [{name: "Overlay", icon: "pen-line.svg"}] : [])
+                .concat(editor.hasCamera ? [{name: "Camera", icon: "camera.svg"}] : [])
             delegate: Row {
                 required property var modelData
                 required property int index
@@ -420,10 +423,29 @@ FocusScope {
                 focusTarget: root
             }
             Rectangle {
+                visible: root.hasOverlays
+                x: 0
+                y: 144
+                width: Math.max(parent.width, editor.duration * root.pixelsPerSecond)
+                height: 48
+                radius: theme.controlRadius
+                color: Qt.alpha(theme.foreground, theme.dark ? .025 : .035)
+            }
+            OverlayTrack {
+                objectName: "overlayTrack"
+                visible: root.hasOverlays
+                x: 0
+                y: 148
+                width: parent.width
+                height: 40
+                pixelsPerSecond: root.pixelsPerSecond
+                focusTarget: root
+            }
+            Rectangle {
                 id: cameraTrack
                 visible: editor.hasCamera
                 x: 0
-                y: 144
+                y: root.cameraLaneY
                 width: parent.width
                 height: 48
                 radius: theme.controlRadius
@@ -433,7 +455,7 @@ FocusScope {
                 id: cameraBlock
                 visible: editor.hasCamera
                 x: 0
-                y: cameraHover.hovered ? 147 : 148
+                y: root.cameraLaneY + (cameraHover.hovered ? 3 : 4)
                 width: Math.max(20, editor.duration * root.pixelsPerSecond)
                 height: 40
                 radius: theme.controlRadius
