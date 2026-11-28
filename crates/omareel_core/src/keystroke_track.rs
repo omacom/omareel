@@ -30,6 +30,8 @@ struct Group {
     start: f64,
     last: f64,
     keys: Vec<String>,
+    /// Each key press in the pill: its time and its combination ("Ctrl + S").
+    presses: Vec<(f64, String)>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -250,16 +252,18 @@ impl KeystrokeTrack {
             if keys.is_empty() {
                 continue;
             }
+            let combination = keys.join(" + ");
 
             let starts_group = match track.groups.last() {
                 None => true,
                 Some(last) => event.time - last.last > 0.6 || last.keys.len() + keys.len() > 6,
             };
             if starts_group {
-                track.groups.push(Group { start: event.time, last: event.time, keys: Vec::new() });
+                track.groups.push(Group { start: event.time, last: event.time, keys: Vec::new(), presses: Vec::new() });
             }
             let group = track.groups.last_mut().expect("a group was just ensured");
             group.last = event.time;
+            group.presses.push((event.time, combination));
             for key in keys {
                 if group.keys.len() >= 6 {
                     break;
@@ -268,6 +272,12 @@ impl KeystrokeTrack {
             }
         }
         track
+    }
+
+    /// Each shortcut pressed, at its own time ("Ctrl + S"), in order. A pill can hold several
+    /// pressed within 0.6 s of each other; each is listed here at the moment it was pressed.
+    pub fn presses(&self) -> impl Iterator<Item = (f64, String)> + '_ {
+        self.groups.iter().flat_map(|group| group.presses.iter().cloned())
     }
 
     /// The pills showing at `time`: fully visible until `hold_ms` after their last key, then
@@ -485,4 +495,16 @@ mod tests {
         let track = KeystrokeTrack::build(&[key_down(1.0, 25, "KEY_P", &["ctrl"])], &Keystrokes::default());
         assert!(track.sample(1.0).is_empty());
     }
+
+    /// Shortcuts pressed close together share a pill but keep their own times.
+    #[test]
+    fn presses_keep_their_own_times() {
+        let events = [key_down(1.0, 46, "KEY_C", &["ctrl"]), key_down(1.4, 47, "KEY_V", &["ctrl"])];
+        let settings = Keystrokes { enabled: true, ..Keystrokes::default() };
+        let track = KeystrokeTrack::build(&events, &settings);
+        assert_eq!(track.groups.len(), 1);
+        let presses: Vec<(f64, String)> = track.presses().collect();
+        assert_eq!(presses, vec![(1.0, "Ctrl + C".to_owned()), (1.4, "Ctrl + V".to_owned())]);
+    }
+
 }

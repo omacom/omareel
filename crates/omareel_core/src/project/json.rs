@@ -555,6 +555,11 @@ impl Project {
     /// Reads `project.json`, writing it back when a migration changed it. On failure the
     /// error comes with a bare project, as the C++ returned one.
     pub fn load(path: &str) -> (Project, Result<(), String>) {
+        Project::load_with(path, true)
+    }
+
+    /// [`Project::load`], writing a migrated project back only when `save_migration`.
+    pub fn load_with(path: &str, save_migration: bool) -> (Project, Result<(), String>) {
         let bytes = match qfile::read_all(path) {
             Ok(bytes) => bytes,
             Err(error) => return (Project::default(), Err(error)),
@@ -566,7 +571,7 @@ impl Project {
         };
         let (json, migrated) = Project::migrate_defaults(&object);
         let project = Project::from_json(&json);
-        if migrated {
+        if migrated && save_migration {
             if let Err(error) = project.save(path) {
                 return (project, Err(error));
             }

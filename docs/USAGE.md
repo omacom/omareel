@@ -12,6 +12,8 @@ omareel record [--region|--fullscreen|--window] [options]
 omareel edit BUNDLE.omareel
 omareel export BUNDLE.omareel -o OUTPUT.mp4|OUTPUT.gif [options]
 omareel probe BUNDLE.omareel
+omareel describe BUNDLE.omareel
+omareel apply BUNDLE.omareel OPS.json|- [--dry-run] [--describe]
 omareel help
 omareel --version
 ```
@@ -115,7 +117,10 @@ settings file. The fallback cannot omit overlays placed inside its capture area.
 ### `edit BUNDLE`
 
 Opens an `.omareel` bundle. Changes autosave to `project.json` after 500 ms and may also be
-saved immediately with `Ctrl+S`.
+saved immediately with `Ctrl+S`. When another program writes `project.json` while the editor
+is open (`omareel apply`, an AI agent, a text editor), the editor takes the new project in
+within half a second as one undoable change; edits made in the editor just before are one
+`Ctrl+Z` away. A file that does not parse yet is ignored until it does.
 
 Legacy `.omarecord` bundles remain supported, including bundles under
 `~/Videos/omarecord`. The legacy command name is installed as a compatibility alias. If only
@@ -134,6 +139,69 @@ end-to-end throughput measurements.
 
 Prints JSON containing source duration, frame rate, dimensions, input-event counts, and the
 auto-generated zoom summary.
+
+### `describe BUNDLE`
+
+Prints the edited timeline as JSON, for scripts and AI agents:
+
+- `source` and `output`: the recording (size, frame rate, audio, camera) and the edited video
+  (duration, aspect, export size).
+- `clips`: each clip's `id`, `kind` (`recording` or `video`), `output` span, `source` span (or
+  `media` and `media_range` for an inserted video), `speed`, and `layout` or `fit`.
+- `zooms`: each zoom's `id`, `source` span, the `output` spans where it plays, `level` and
+  `target` (`"auto"` or `{x, y}` from 0 to 1).
+- `activity`: clicks (with normalized positions), keyboard shortcuts, and `idle` stretches of
+  two seconds or more without any input, each with its source time and the output times where
+  it plays (an empty list when it was cut).
+- `settings`: the rest of `project.json` (background, frame, cursor, keystrokes, audio, camera,
+  export settings), whose dotted paths `apply`'s `set` takes.
+- `allowed`: the clip speeds, layouts and fits the editor offers.
+
+"Source" seconds are times in `screen.mp4`; "output" seconds are times in the edited video.
+
+### `apply BUNDLE OPS`
+
+Runs edit operations from a JSON file (or `-` for standard input) through the editor's own
+logic, so they are checked as the editor checks them, and saves `project.json`. It is all or
+nothing: if any operation fails, nothing is saved and the error names it. `--dry-run` checks
+without saving; `--describe` adds the resulting timeline to the report. The report is JSON on
+standard output; the exit status is 1 on failure.
+
+The operations are a JSON array (or `{"ops": [...]}`, or a single operation). They run in
+order, and output times refer to the timeline as it is when each one runs, so a cut moves what
+comes after it. Add `"timeline": "source"` to an operation to give recording times instead,
+which no edit moves.
+
+| Operation | Fields |
+| --- | --- |
+| `split` | `at` |
+| `delete` | `from`, `to` |
+| `trim` | `clip`, `in` and/or `out` (source seconds; an inserted video's own) |
+| `remove-clip` | `clip` |
+| `merge` | `clip`, `with`: `next` or `previous` |
+| `move-clip` | `clip` (an inserted video), `direction`: `earlier` or `later` |
+| `reset-trims` | `clip` |
+| `speed` | `clip` or `at`, `speed` (one of `allowed.speeds`) |
+| `layout` | `clip` or `at`, `layout`: `default`, `camera` or `screen` |
+| `fit` | `clip` or `at`, `fit`: `fit`, `fill` or `framed` |
+| `insert` | `file`, `at` (default: the end) |
+| `zoom` | `from`, `to`, `level` (1–4, default 2), `target` (`"auto"` or `{"x": 0–1, "y": 0–1}`) |
+| `edit-zoom` | `id`, any of `from`, `to`, `level`, `target` |
+| `remove-zoom` | `id` |
+| `clear-zooms` | |
+| `regenerate-zooms` | |
+| `set` | `path` (dotted, e.g. `background.blur`), `value` |
+
+```sh
+omareel apply Recording.omareel - <<'OPS'
+[
+  {"op": "delete", "from": 0, "to": 1.5},
+  {"op": "speed", "at": 20, "speed": 2},
+  {"op": "zoom", "from": 31, "to": 35, "level": 2.5, "target": {"x": 0.7, "y": 0.4}},
+  {"op": "set", "path": "keystrokes.enabled", "value": true}
+]
+OPS
+```
 
 ## Editor keys
 

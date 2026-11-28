@@ -2,6 +2,7 @@
 //! from a Qt class (number formatting, JSON, colours, paths), `compat` reproduces it exactly,
 //! because the files omareel writes must stay byte-identical.
 
+pub mod agent;
 pub mod camera_timeline;
 pub mod cli;
 pub mod clip_timeline;
