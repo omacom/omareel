@@ -272,7 +272,25 @@ impl ExportJob {
             }
             let input = InputLog::load_bundle(&qdir::absolute_path(&bundle), media.duration)?;
             let clicks: Vec<f64> = input.click_downs(true).iter().map(|event| event.time).collect();
-            project.zooms = zoom_timeline::generate(&clicks, media.duration);
+            // The recording's pauses and retakes are cut, as the editor's new project cuts them
+            // (a bundle exported without ever being opened mustn't show what was paused), and
+            // the zooms are made for what is left, as the editor makes them.
+            let capture = qfile::read_all(qdir::file_path(&bundle, "capture.json"))
+                .ok()
+                .and_then(|bytes| qjson::object_from_json(&bytes))
+                .unwrap_or_default();
+            let marks = crate::recording_marks::RecordingMarks::load_bundle(&qdir::absolute_path(&bundle))
+                .made_by(capture.value("stopped_us").to_variant_long_long());
+            if marks.is_empty() {
+                project.zooms = zoom_timeline::generate(&clicks, media.duration);
+            } else {
+                if project.clips.is_empty() {
+                    project.clips = vec![Clip { id: "c1".into(), in_: 0.0, out: media.duration, speed: 1.0, ..Clip::default() }];
+                }
+                let first_frame_us = capture.value("first_frame_us").to_variant_long_long();
+                crate::editor::apply_recording_marks(&mut project, &marks, first_frame_us, media.duration);
+                project.zooms = crate::editor::generate_visible_zooms(&clicks, &project.clips, media.duration);
+            }
         }
         if project.clips.is_empty() {
             project.clips = vec![Clip { id: "c1".into(), in_: 0.0, out: media.duration, speed: 1.0, ..Clip::default() }];

@@ -5,6 +5,7 @@
 
 use crate::camera::camera_node_path;
 use crate::capture::{CaptureMode, RecordOptions};
+use crate::recorder::marks;
 use crate::recorder::start::start_detached;
 use crate::recorder::state;
 use omareel_core::compat::qdir;
@@ -36,6 +37,9 @@ fn to_int(text: &str) -> i32 {
 /// running, or starts one with the saved preferences and the options given.
 pub fn record_command(arguments: &[String], out: &mut dyn Write, err: &mut dyn Write) -> i32 {
     let has = |name: &str| arguments.iter().any(|argument| argument == name);
+    if has("--marker") || has("--retake") || has("--pause") {
+        return mark_command(arguments, out, err);
+    }
     if state::is_recording() {
         if has("--stop") && has("--cancel") {
             return usage(err, "choose either --stop or --cancel");
@@ -163,6 +167,58 @@ pub fn record_command(arguments: &[String], out: &mut dyn Write, err: &mut dyn W
     let outcome = start_detached(&options);
     line(if outcome.code == 0 { out } else { err }, &outcome.message);
     outcome.code
+}
+
+/// `omareel record --marker [LABEL]`, `--retake [SECONDS]` and `--pause`: marks the running
+/// recording (see `recorder::marks`). Status 1 when nothing is recording, 2 for a failure.
+fn mark_command(arguments: &[String], out: &mut dyn Write, err: &mut dyn Write) -> i32 {
+    let Some(action) = arguments.first().map(String::as_str) else { return usage(err, "missing record option") };
+    let value = arguments.get(1).filter(|value| !value.starts_with("--"));
+    if arguments.len() > if value.is_some() { 2 } else { 1 } {
+        return usage(err, &format!("{action} takes no other options"));
+    }
+    let clock = |mark_us: i64| {
+        let recorded = marks::recorded_us(&state::recording_state(), mark_us);
+        crate::recording_bar::elapsed_text(recorded, 0)
+    };
+    let result = match action {
+        "--marker" => marks::add_marker(value.map_or("", String::as_str), "").map(|mark| {
+            let label = if mark.label.is_empty() { String::new() } else { format!(" \"{}\"", mark.label) };
+            format!("Marker{label} at {}", clock(mark.monotonic_us))
+        }),
+        "--retake" => {
+            let seconds = match value {
+                Some(text) => match qnumber::to_double(text).filter(|seconds| seconds.is_finite() && *seconds > 0.0) {
+                    Some(seconds) => Some(seconds),
+                    None => return usage(err, "--retake takes a number of seconds above 0"),
+                },
+                None => None,
+            };
+            // The cut's recorded seconds: paused time inside it is cut anyway and not counted.
+            marks::add_retake(seconds, "").map(|(mark, cut)| {
+                format!(
+                    "Retake at {}: the last {} s recorded will be cut",
+                    clock(mark.monotonic_us),
+                    qnumber::number_f64(cut, 'f', 1)
+                )
+            })
+        }
+        "--pause" if value.is_none() => {
+            marks::toggle_pause("").map(|paused| if paused { "Pausing".to_owned() } else { "Resuming".to_owned() })
+        }
+        "--pause" => return usage(err, "--pause takes no value"),
+        _ => return usage(err, "--marker, --retake and --pause take no other options"),
+    };
+    match result {
+        Ok(message) => {
+            line(out, &message);
+            0
+        }
+        Err(error) => {
+            line(err, &format!("omareel: {error}"));
+            if error == "No recording is active" { 1 } else { 2 }
+        }
+    }
 }
 
 /// `omareel __selfview-ipc <command>`: the command into the standby self-view host's file.

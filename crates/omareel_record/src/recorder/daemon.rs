@@ -15,13 +15,14 @@
 //! thread, the audio recorder, gpu-screen-recorder, and the samplers last.
 
 use super::audio::{finish_audio_capture, start_audio_capture};
+use super::marks::{bar_box, scrub_input, PauseControl};
 use super::files::{
     drain_recorder_output, first_frame_timestamp, last_non_empty_line, write_input_log, write_json,
 };
 use super::self_view::{monitor_layouts, self_view_placement};
 use super::state::{
-    notify_stop_failure, read_state_file, run_optional_detached, self_view_host_path, state_file_path,
-    update_recording_state, write_last_error,
+    notify_stop_failure, read_state_file, remove_state_file_locked, run_optional_detached, self_view_host_path,
+    state_file_path, update_recording_state, write_last_error,
 };
 use super::{
     DiscardActions, GsrExitClassification, camera_capture_block, classify_gsr_exit, debug_start_stage,
@@ -39,6 +40,7 @@ use omareel_core::compat::qjson::{self, Object, Value};
 use omareel_core::compat::qprocess::{self, ChannelMode, DetachedChannels, ExitStatus, Process, ProcessState};
 use omareel_core::compat::qround::q_round;
 use omareel_core::compat::{qfile, qnumber, qstring};
+use omareel_core::recording_marks::RecordingMarks;
 use omareel_core::recording_preferences::RecordingPreferences;
 use std::fs::File;
 use std::io::Write;
@@ -355,7 +357,7 @@ fn initial_state(
     state.insert("countdown_width", 240);
     state.insert("countdown_height", 240);
     state.insert("bar_visible", !options.no_bar && !overlay_monitor.is_empty());
-    state.insert("bar_width", if options.webcam { 448 } else { 288 });
+    state.insert("bar_width", if options.webcam { 560 } else { 400 });
     state.insert("bar_height", 40);
     state.insert("selfview", self_view.visible);
     state.insert("selfview_safe", self_view.safe);
@@ -531,7 +533,8 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
     let mut native_capture = environment_backend != "gsr" && options.capture_backend != "gsr";
     let mut capture_backend = if native_capture { "ext-image-copy-capture" } else { "gsr" }.to_owned();
     let mut plugin_exclusion = capture_exclusion::ensure_loaded(&application_dir_path()).loaded && native_capture;
-    let output_names: Vec<String> = monitor_layouts().into_iter().map(|layout| layout.name).collect();
+    let layouts = monitor_layouts();
+    let output_names: Vec<String> = layouts.iter().map(|layout| layout.name.clone()).collect();
     let mut overlay_monitor = capture_exclusion::overlay_monitor(plugin_exclusion, &region.monitor_name, &output_names);
     if !plugin_exclusion {
         self_view.monitor = overlay_monitor.clone();
@@ -766,7 +769,14 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
         );
     }
     refresh_indicators();
+    let mut pause_control = PauseControl::new(&bundle);
     while !stop_requested() && !capture_loop_failed {
+        // `omareel record --pause` and the bar ask through the state file (marks.rs).
+        if let Some(paused) = pause_control.poll(read_state) {
+            if native_capture {
+                screen_capture.set_paused(paused);
+            }
+        }
         if options.webcam && !camera_available && read_state().value("camera_status").to_string_or("") == "ready" {
             camera_available = true;
             camera_backend = "ffmpeg-pipe".into();
@@ -786,6 +796,8 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
             msleep(40);
         }
     }
+    // The last paused-state write lands before `stopping` or the state's removal.
+    pause_control.finish();
     let unexpected_exit = !stop_requested() && capture_loop_failed;
     if DISCARD_REQUESTED.load(Ordering::SeqCst) {
         cursor_sampler.stop();
@@ -829,7 +841,7 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
             })),
             remove_bundle: Some(Box::new(|| !qdir::file_exists(&bundle) || qdir::remove_recursively(&bundle))),
             remove_state: Some(Box::new(|| {
-                qfile::remove(&state_file_path());
+                remove_state_file_locked(&state_file_path());
             })),
         });
         refresh_indicators();
@@ -848,7 +860,13 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
     if options.webcam {
         stopping.push(("camera_stop", true.into()));
     }
-    update_state(&stopping);
+    // Under the lock: a mark command checks it there, so from now on none is added (marks.rs).
+    let stopping: Object = stopping.into_iter().collect();
+    for _ in 0..3 {
+        if update_recording_state(&stopping).is_ok() {
+            break;
+        }
+    }
     if native_capture {
         if !screen_capture.finish(&mut error) {
             capture_loop_failed = true;
@@ -923,8 +941,25 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
     cursor_sampler.stop();
     evdev_listener.stop();
 
-    let cursor = cursor_sampler.samples();
-    let device_events = evdev_listener.events();
+    // What happened while paused, and the keybinds and clicks that made marks, stay out of
+    // input.jsonl; without marks it is written as before. A mark made after `stopped_us` is
+    // ignored here and by the editor alike.
+    let marks = RecordingMarks::load_bundle(&bundle).made_by(stopped_us);
+    let bar = if marks.marks.iter().any(|mark| mark.from_bar()) {
+        let state = read_state();
+        let monitor = state.value("overlay_monitor").to_string_or("");
+        layouts.iter().find(|layout| layout.name == monitor).and_then(|layout| {
+            bar_box(
+                layout.geometry,
+                layout.reserved.top,
+                state.value("bar_width").to_double(0.0),
+                state.value("bar_height").to_double(0.0),
+            )
+        })
+    } else {
+        None
+    };
+    let (cursor, device_events) = scrub_input(&cursor_sampler.samples(), &evdev_listener.events(), &marks, bar);
     let first_frame_us = first_frame_timestamp(&timestamp_path);
 
     let (duration_ok, probed_duration) = match recorded_duration(&video) {
@@ -998,10 +1033,16 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
     audio.insert("microphoneDevice", options.microphone_device.as_str());
     capture.insert("audio", audio);
     if native_capture {
-        let captured_span_us = (screen_capture.last_frame_us() - screen_capture.first_frame_us()).max(1);
+        // Over the time the capture ran between its first and last frames: the pauses it took
+        // there are left out. 0 when that is unknown (fewer than two frames, or no time).
+        let (first_us, last_us) = (screen_capture.first_frame_us(), screen_capture.last_frame_us());
+        let captured_span_us = last_us - first_us - pause_control.capture_paused_within(first_us, last_us);
         let frames = screen_capture.encoded_frames();
-        let measured_rate =
-            if frames > 1 { f64::from(frames - 1) * 1_000_000.0 / captured_span_us as f64 } else { 0.0 };
+        let measured_rate = if frames > 1 && first_us > 0 && captured_span_us > 0 {
+            f64::from(frames - 1) * 1_000_000.0 / captured_span_us as f64
+        } else {
+            0.0
+        };
         let mut statistics = Object::new();
         statistics.insert("frames", frames);
         statistics.insert("drops", screen_capture.dropped_frames());
@@ -1072,7 +1113,7 @@ pub fn daemon_main(arguments: &[String], warn: &dyn Fn(&str)) -> i32 {
     if !ok && (!FileInfo::new(video.clone()).is_file() || FileInfo::new(video.clone()).size() == 0) {
         qdir::remove_recursively(&bundle);
     }
-    qfile::remove(&state_file_path());
+    remove_state_file_locked(&state_file_path());
     if ok && !options.no_open {
         // The editor first: everything after it can happen while it opens.
         debug_start_stage("stop_editor_launch", daemon_start_us, "");

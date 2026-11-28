@@ -23,6 +23,8 @@ Rectangle {
         {key:"Space", action:"Play / pause"}, {key:"← →", action:"Step one frame"},
         {key:"Shift ← →", action:"Jump one second"}, {key:"S", action:"Split at playhead"},
         {key:"Z", action:"Add zoom"}, {key:"I", action:"Insert a video"},
+        {key:"M", action:"Next marker"}, {key:"Shift M", action:"Previous marker"},
+        {key:"Ctrl M", action:"Add marker"},
         {key:"Delete", action:"Remove selection"},
         {key:"Backspace", action:"Remove range"},
         {key:"Ctrl Z", action:"Undo"}, {key:"Ctrl Shift Z", action:"Redo"},

@@ -34,7 +34,7 @@ impl ImportJob {
 
 /// `visibleSourceSpan` in `deleteOutputRange`: the first and last recording time of a zoom
 /// that some recording clip still shows (infinities when none does).
-fn visible_source_span(zoom: &ZoomSegment, clips: &[Clip]) -> (f64, f64) {
+pub(crate) fn visible_source_span(zoom: &ZoomSegment, clips: &[Clip]) -> (f64, f64) {
     let mut first = f64::INFINITY;
     let mut last = f64::NEG_INFINITY;
     for clip in clips {
@@ -68,7 +68,17 @@ impl Document {
     pub(crate) fn clip_bounds(&mut self, index: i32) -> (f64, f64) {
         let clip = self.project.clips[index as usize].clone();
         if !clip.is_media() {
-            return self.timeline().recording_bounds(index, self.recording.source_duration);
+            let (mut lower, mut upper) = self.timeline().recording_bounds(index, self.recording.source_duration);
+            // Paused time stays out: the edges stop at the pauses either side of the clip.
+            for &(start, end) in &self.recording.paused {
+                if end <= clip.in_ + 1e-6 {
+                    lower = lower.max(end);
+                }
+                if start >= clip.out - 1e-6 {
+                    upper = upper.min(start);
+                }
+            }
+            return (lower, upper);
         }
         let info = self.insert_info(&clip.media);
         (0.0, if info.is_valid() { info.duration } else { clip.out })

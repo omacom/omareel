@@ -106,6 +106,7 @@ pub mod qobject {
         #[qproperty(QMap_QString_QVariant, project, READ = project_map, NOTIFY = project_changed)]
         #[qproperty(QList_QVariant, clips, READ = clips, NOTIFY = project_changed)]
         #[qproperty(QList_QVariant, zooms, READ = zooms, NOTIFY = project_changed)]
+        #[qproperty(QList_QVariant, markers, READ = markers, NOTIFY = project_changed)]
         #[qproperty(QString, bundle_path, READ = bundle_path, CONSTANT)]
         #[qproperty(QString, bundle_name, READ = bundle_name, NOTIFY = project_changed)]
         #[qproperty(f64, duration, READ = duration, NOTIFY = duration_changed)]
@@ -216,6 +217,7 @@ pub mod qobject {
         fn project_map(self: &Editor) -> QMap_QString_QVariant;
         fn clips(self: &Editor) -> QList_QVariant;
         fn zooms(self: &Editor) -> QList_QVariant;
+        fn markers(self: &Editor) -> QList_QVariant;
         fn bundle_path(self: &Editor) -> QString;
         fn bundle_name(self: &Editor) -> QString;
         fn duration(self: &Editor) -> f64;
@@ -391,6 +393,16 @@ pub mod qobject {
         fn set_zoom_target_from_preview(self: Pin<&mut Editor>, x: f64, y: f64) -> bool;
         #[qinvokable]
         fn remove_zoom(self: Pin<&mut Editor>, id: &QString) -> bool;
+        /// A marker at the recording time playing at `output_time`; its id, or "".
+        #[qinvokable]
+        fn add_marker_at(self: Pin<&mut Editor>, output_time: f64, label: &QString) -> QString;
+        #[qinvokable]
+        fn rename_marker(self: Pin<&mut Editor>, id: &QString, label: &QString) -> bool;
+        #[qinvokable]
+        fn remove_marker(self: Pin<&mut Editor>, id: &QString) -> bool;
+        /// Seeks to the next (`direction` 1) or previous (-1) marker; false without one.
+        #[qinvokable]
+        fn jump_to_marker(self: Pin<&mut Editor>, direction: i32) -> bool;
         #[qinvokable]
         fn select_zooms_in_output_range(self: Pin<&mut Editor>, output_start: f64, output_end: f64);
         #[qinvokable]
@@ -955,6 +967,27 @@ impl qobject::Editor {
         self.project_list("zooms")
     }
 
+    /// `{id, label, kind, number, sourceTime, time}` for each marker in recording order, `time`
+    /// the output time or -1 while cut away, `number` counting from 1.
+    fn markers(&self) -> QList<QVariant> {
+        let Some(document) = self.document.as_ref() else { return QList::default() };
+        document
+            .marker_rows()
+            .into_iter()
+            .enumerate()
+            .map(|(index, row)| {
+                QVariant::from(&map([
+                    ("id", QVariant::from(&qstring(&row.marker.id))),
+                    ("label", QVariant::from(&qstring(&row.marker.label))),
+                    ("kind", QVariant::from(&qstring(&row.marker.kind))),
+                    ("number", QVariant::from(&(index as i32 + 1))),
+                    ("sourceTime", QVariant::from(&row.marker.time)),
+                    ("time", QVariant::from(&row.output_time.unwrap_or(-1.0))),
+                ]))
+            })
+            .collect()
+    }
+
     fn bundle_path(&self) -> QString {
         qstring(&self.bundle_path)
     }
@@ -1493,6 +1526,25 @@ impl qobject::Editor {
     fn remove_zoom(self: Pin<&mut Self>, id: &QString) -> bool {
         let id = id.to_string();
         self.edit(|document| document.remove_zoom(&id)).unwrap_or(false)
+    }
+
+    fn add_marker_at(self: Pin<&mut Self>, output_time: f64, label: &QString) -> QString {
+        let label = label.to_string();
+        qstring(&self.edit(|document| document.add_marker_at_output(output_time, &label)).unwrap_or_default())
+    }
+
+    fn rename_marker(self: Pin<&mut Self>, id: &QString, label: &QString) -> bool {
+        let (id, label) = (id.to_string(), label.to_string());
+        self.edit(|document| document.rename_marker(&id, &label)).unwrap_or(false)
+    }
+
+    fn remove_marker(self: Pin<&mut Self>, id: &QString) -> bool {
+        let id = id.to_string();
+        self.edit(|document| document.remove_marker(&id)).unwrap_or(false)
+    }
+
+    fn jump_to_marker(self: Pin<&mut Self>, direction: i32) -> bool {
+        self.edit(|document| document.jump_to_marker(direction)).unwrap_or(false)
     }
 
     fn select_zooms_in_output_range(self: Pin<&mut Self>, output_start: f64, output_end: f64) {
