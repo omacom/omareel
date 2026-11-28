@@ -38,6 +38,7 @@ unsafe extern "C" {
     fn omr_stream_next(stream: *mut RawStream, y: *mut u8, uv: *mut u8, time: *mut c_double) -> c_int;
     fn omr_stream_close(stream: *mut RawStream);
     fn omr_probe(path: *const c_char, info: *mut RawInfo) -> c_int;
+    fn omr_audio_duration(path: *const c_char, duration: *mut c_double, error: *mut c_char, error_size: usize) -> c_int;
     fn omr_frame_times(path: *const c_char, times: *mut *mut c_double) -> c_long;
     fn omr_keyframe_times(path: *const c_char, times: *mut *mut c_double) -> c_long;
     fn omr_color_space_name(space: c_int) -> *const c_char;
@@ -121,6 +122,23 @@ pub fn probe(path: &str) -> Result<Probe, String> {
         rotation: (raw.has_rotation != 0).then_some(raw.rotation),
         rotate_tag: (raw.has_rotate_tag != 0).then(|| text(&raw.rotate_tag)),
     })
+}
+
+/// The length of the first audio stream's sound (`-map 0:a:0`), its own rather than the
+/// file's: `Ok(None)` when the file has no audio stream, `Ok(Some(d))` with `d` 0 or less when
+/// the stream holds no sound, or why the libraries could not read it. Read from the packets
+/// when the header gives no length or one guessed from the bitrate.
+pub fn audio_duration(path: &str) -> Result<Option<f64>, String> {
+    let c = c_path(path).ok_or_else(|| format!("{path}: invalid path"))?;
+    let mut duration: c_double = -1.0;
+    let mut error = [0 as c_char; 512];
+    // SAFETY: the C side writes the duration and at most `error.len()` bytes of error.
+    let code = unsafe { omr_audio_duration(c.as_ptr(), &mut duration, error.as_mut_ptr(), error.len()) };
+    match code {
+        0 => Ok(None),
+        1 => Ok(Some(duration)),
+        _ => Err(text(&error)),
+    }
 }
 
 /// When each frame of the first video stream starts, in seconds and in order, as ffprobe's

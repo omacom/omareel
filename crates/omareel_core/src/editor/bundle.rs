@@ -392,45 +392,96 @@ pub fn import_insert(source: &str, bundle_path: &str, probe_video: &dyn Fn(&str)
     if !result.info.is_valid() {
         return result;
     }
+    match copy_into_media(source, bundle_path, "clip") {
+        Ok(path) => result.path = path,
+        Err(error) => result.error = error,
+    }
+    result
+}
+
+/// Brings a file into the bundle's `media/` directory as [`import_insert`] does, naming it from
+/// its own name (`fallback` when nothing is left of that); returns its bundle-relative path. A
+/// file already in this bundle's `media/` is used where it is.
+pub fn copy_into_media(source: &str, bundle_path: &str, fallback: &str) -> Result<String, String> {
     let media = qdir::file_path(bundle_path, "media");
+    // A media/ that is a link leads out of the bundle: writing through it would put the copy
+    // (and its partial file) somewhere else entirely.
+    if std::fs::symlink_metadata(&media).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
+        return Err(qstring::arg("%1 is a link; not copying into it", &media));
+    }
     let file = FileInfo::new(source);
     let media_exists = qdir::dir_exists(&media);
     if media_exists
         && same_file_info(&file.canonical_path(), &FileInfo::new(media.as_str()).canonical_file_path())
         && !sanitized_media_path(&format!("media/{}", file.file_name())).is_empty()
     {
-        result.path = format!("media/{}", file.file_name());
-        return result;
+        return Ok(format!("media/{}", file.file_name()));
     }
     if !media_exists && !qdir::mkpath(&media) {
-        result.error = qstring::arg("Could not create %1", &media);
-        return result;
+        return Err(qstring::arg("Could not create %1", &media));
     }
     let mut base = replace_unsafe_name_characters(&file.complete_base_name());
     base = base.trim_start_matches('.').to_owned();
     if base.is_empty() {
-        base = "clip".into();
+        base = fallback.into();
     }
     let suffix = file.suffix();
     let suffix = if suffix.is_empty() { String::new() } else { format!(".{}", qstring::to_lower(&suffix)) };
-    let mut name = format!("{base}{suffix}");
     // `base` holds no '%', so the C++'s chained QString::arg is plain formatting.
-    let mut n: i32 = 2;
-    while qdir::dir_contains(&media, &name) {
-        name = format!("{base}-{n}{suffix}");
-        n = n.wrapping_add(1);
+    let free_name = || {
+        let mut name = format!("{base}{suffix}");
+        let mut n: i32 = 2;
+        while qdir::dir_contains(&media, &name) {
+            name = format!("{base}-{n}{suffix}");
+            n = n.wrapping_add(1);
+        }
+        name
+    };
+    // A partial file of this copy's own: a music import and a video insert can run at once, and
+    // two copies writing one `.NAME.part` would mix.
+    static COPIES: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    let copy = COPIES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let partial = qdir::file_path(&media, &format!(".{}.{}-{copy}.part", free_name(), std::process::id()));
+    clone_or_copy(source, &partial)?;
+    // The other copy may have taken the name meanwhile: the next free one, then.
+    for _ in 0..8 {
+        let name = free_name();
+        if rename_no_replace(&partial, &qdir::file_path(&media, &name)) {
+            return Ok(format!("media/{name}"));
+        }
+        if !qdir::dir_contains(&media, &name) {
+            let _ = std::fs::remove_file(&partial);
+            return Err(qstring::arg("Could not add %1 to the recording", &name));
+        }
     }
-    let partial = qdir::file_path(&media, &format!(".{name}.part"));
-    if let Err(error) = clone_or_copy(source, &partial) {
-        result.error = error;
-        return result;
+    let _ = std::fs::remove_file(&partial);
+    Err(qstring::arg("Could not add %1 to the recording", &free_name()))
+}
+
+/// What [`import_music`] brought into the bundle: the music's media path and the length of its
+/// sound, or why not.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ImportedMusic {
+    pub path: String,
+    pub duration: f64,
+    pub error: String,
+}
+
+/// Probes a file's sound (an audio file, or a video whose sound is used) and brings the file
+/// into the bundle's `media/` directory as [`import_insert`] does.
+pub fn import_music(source: &str, bundle_path: &str, probe_audio: &dyn Fn(&str) -> Result<f64, String>) -> ImportedMusic {
+    let mut result = ImportedMusic::default();
+    match probe_audio(source) {
+        Ok(duration) => result.duration = duration,
+        Err(error) => {
+            result.error = error;
+            return result;
+        }
     }
-    if !rename_no_replace(&partial, &qdir::file_path(&media, &name)) {
-        let _ = std::fs::remove_file(&partial);
-        result.error = qstring::arg("Could not add %1 to the recording", &name);
-        return result;
+    match copy_into_media(source, bundle_path, "music") {
+        Ok(path) => result.path = path,
+        Err(error) => result.error = error,
     }
-    result.path = format!("media/{name}");
     result
 }
 
@@ -659,6 +710,22 @@ mod tests {
 
     fn video() -> VideoInfo {
         VideoInfo { width: 320, height: 240, duration: 0.7, fps: 30.0, audio: false }
+    }
+
+    #[test]
+    fn a_linked_media_directory_is_not_written_through() {
+        let dir = TempDir::new("editor-import-link");
+        let bundle = dir.join("b.omareel");
+        let elsewhere = dir.join("elsewhere");
+        std::fs::create_dir_all(&bundle).unwrap();
+        std::fs::create_dir_all(&elsewhere).unwrap();
+        std::os::unix::fs::symlink(&elsewhere, format!("{bundle}/media")).unwrap();
+        let song = dir.join("song.mp3");
+        std::fs::write(&song, b"music").unwrap();
+        let imported = import_music(&song, &bundle, &|_: &str| Ok(3.0));
+        assert!(imported.error.contains("is a link"), "{imported:?}");
+        assert_eq!(std::fs::read_dir(&elsewhere).unwrap().count(), 0);
+        assert!(!import_insert(&song, &bundle, &fixed_probe(video())).error.is_empty());
     }
 
     #[test]

@@ -127,6 +127,7 @@ pub struct Document {
     pub(crate) cache_location: Option<String>,
     pub(crate) new_id: Box<dyn FnMut() -> String + Send>,
     pub(crate) effects: RefCell<Vec<Effect>>,
+    pub(crate) music: super::music::MusicState,
 }
 
 /// The recording [`Document::preload`] is opening, and its path.
@@ -185,6 +186,7 @@ impl Document {
             document.emit(Effect::StartAutosaveTimer);
         }
         document.thumbnails.ensure_source(&document.thumbnail_context(), "screen");
+        document.probe_music();
         Ok(document)
     }
 
@@ -235,6 +237,7 @@ impl Document {
             cache_location: None,
             new_id: Box::new(random_uuid),
             effects: RefCell::new(Vec::new()),
+            music: Default::default(),
         }
     }
 
@@ -621,6 +624,7 @@ impl Document {
     pub(crate) fn changed(&mut self, motion: bool) {
         self.project_map_revision += 1;
         self.keystroke_track = KeystrokeTrack::build(self.input.events(), &self.project.keystrokes);
+        self.probe_music();
         let (volume, muted) = self.screen_audio();
         self.emit(Effect::SetScreenAudio { volume, muted });
         self.emit(Effect::UpdateInsertAudio);
