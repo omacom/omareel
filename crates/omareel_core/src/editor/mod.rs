@@ -45,11 +45,13 @@ mod document;
 mod exporting;
 mod history;
 mod ids;
+mod music;
 pub mod playback;
 mod presets;
 #[cfg(test)]
 mod tests;
 mod project_map;
+mod speech;
 mod thumbnails;
 mod zooms;
 
@@ -59,6 +61,7 @@ pub use composition::*;
 pub use document::*;
 pub use exporting::*;
 pub use ids::random_uuid;
+pub use music::{MusicImportJob, MusicPlayback, ProbeAudio};
 pub use playback::{CameraSync, MediaSeek, NextClip, NextClipKind, Player, PlayerPosition, Transport};
 pub use presets::clean_preset_name;
 pub use thumbnails::*;
@@ -101,6 +104,8 @@ pub enum Effect {
     ErrorOccurred(String),
     /// `autosaved(path)`.
     Autosaved(String),
+    /// The transcript or the measured speech changed (not in the C++).
+    TranscriptChanged,
 
     /// `Editor::seek(outputTime)`: unless there are no clips, stop the scrub timer and scrubbing,
     /// [`Document::set_output_position`] to [`Document::clamp_playback_position`] of it (resetting
@@ -126,4 +131,7 @@ pub enum Effect {
     /// `OmarchyPaths::generateWallpaperThumbnail(path, thumbnail)` off the GUI thread, then
     /// [`Document::wallpaper_thumbnail_ready`].
     GenerateWallpaperThumbnail { path: String, thumbnail: String },
+    /// Run [`Document::music_import_job`] for this source off the GUI thread, then
+    /// [`Document::finish_music_import`].
+    StartMusicImport(String),
 }

@@ -260,6 +260,25 @@ pub fn camera_offset(capture: &Object) -> f64 {
 /// `Editor::loadBundle`, with the bundle path made absolute as the constructor made it. The
 /// error is `m_error` as the C++ left it (empty when ffprobe could not run).
 pub fn load_bundle(bundle_path: &str, probes: &Probes) -> Result<Bundle, String> {
+    load_bundle_with(bundle_path, probes, true)
+}
+
+/// What opening a bundle corrects in any project it reads: a timeline of inserted videos alone
+/// gets the recording back as its first clip, and audio the recording doesn't have is off.
+pub fn fit_project_to_recording(project: &mut Project, recording: &Recording) {
+    if project.clips.iter().all(Clip::is_media) {
+        project.clips.insert(
+            0,
+            Clip { id: "c1".into(), in_: 0.0, out: recording.source_duration, speed: 1.0, ..Clip::default() },
+        );
+    }
+    project.audio.desktop = project.audio.desktop && recording.has_desktop_audio;
+    project.audio.mic = project.audio.mic && recording.has_microphone_audio;
+}
+
+/// [`load_bundle`]; a project.json that needed migrating is written back only when
+/// `save_migration` (a read-only look, such as `omareel describe`, leaves the file alone).
+pub fn load_bundle_with(bundle_path: &str, probes: &Probes, save_migration: bool) -> Result<Bundle, String> {
     let bundle_path = qdir::absolute_path(bundle_path);
     let project_path = qdir::file_path(&bundle_path, "project.json");
     let video_path = qdir::file_path(&bundle_path, "screen.mp4");
@@ -321,16 +340,11 @@ pub fn load_bundle(bundle_path: &str, probes: &Probes) -> Result<Bundle, String>
             &camera_capture,
         )
     } else {
-        let (project, result) = Project::load(&project_path);
+        let (project, result) = Project::load_with(&project_path, save_migration);
         result?;
         project
     };
-    if project.clips.iter().all(Clip::is_media) {
-        project.clips.insert(
-            0,
-            Clip { id: "c1".into(), in_: 0.0, out: recording.source_duration, speed: 1.0, ..Clip::default() },
-        );
-    }
+    fit_project_to_recording(&mut project, &recording);
     // A missing inserted video keeps its clip; it shows as missing and blocks export.
     let mut inserts = HashMap::new();
     for clip in &project.clips {
@@ -339,8 +353,6 @@ pub fn load_bundle(bundle_path: &str, probes: &Probes) -> Result<Bundle, String>
             inserts.insert(clip.media.clone(), info);
         }
     }
-    project.audio.desktop = project.audio.desktop && recording.has_desktop_audio;
-    project.audio.mic = project.audio.mic && recording.has_microphone_audio;
     let input = InputLog::load_bundle(&bundle_path, recording.source_duration)?;
     if new {
         let clicks: Vec<f64> = input.click_downs(true).iter().map(|click| click.time).collect();
@@ -380,6 +392,44 @@ fn same_file_info(a: &str, b: &str) -> bool {
 /// leading dots dropped, "clip" if nothing is left, the suffix lower-cased, then `-2`, `-3`...),
 /// copied through a hidden `.part` file. A video already in this bundle's `media/` is used where
 /// it is.
+/// Where [`import_insert`] would put `source`, relative to the bundle: the video itself when it
+/// already lies in `media/`, else a free name there (`clip.mp4`, then `clip-2.mp4`, ...).
+pub fn planned_insert_path(source: &str, bundle_path: &str) -> String {
+    planned_media_path(source, bundle_path, "clip")
+}
+
+/// Where [`copy_into_media`] would put `source` (`fallback` naming a file whose own name leaves
+/// nothing), relative to the bundle.
+pub fn planned_media_path(source: &str, bundle_path: &str, fallback: &str) -> String {
+    let media = qdir::file_path(bundle_path, "media");
+    let file = FileInfo::new(source);
+    if qdir::dir_exists(&media)
+        && same_file_info(&file.canonical_path(), &FileInfo::new(media.as_str()).canonical_file_path())
+        && !sanitized_media_path(&format!("media/{}", file.file_name())).is_empty()
+    {
+        return format!("media/{}", file.file_name());
+    }
+    format!("media/{}", free_media_name(&file, &media, fallback))
+}
+
+fn free_media_name(file: &FileInfo, media: &str, fallback: &str) -> String {
+    let mut base = replace_unsafe_name_characters(&file.complete_base_name());
+    base = base.trim_start_matches('.').to_owned();
+    if base.is_empty() {
+        base = fallback.into();
+    }
+    let suffix = file.suffix();
+    let suffix = if suffix.is_empty() { String::new() } else { format!(".{}", qstring::to_lower(&suffix)) };
+    let mut name = format!("{base}{suffix}");
+    // `base` holds no '%', so the C++'s chained QString::arg is plain formatting.
+    let mut n: i32 = 2;
+    while qdir::dir_contains(media, &name) {
+        name = format!("{base}-{n}{suffix}");
+        n = n.wrapping_add(1);
+    }
+    name
+}
+
 pub fn import_insert(source: &str, bundle_path: &str, probe_video: &dyn Fn(&str) -> Result<VideoInfo, String>) -> ImportedInsert {
     let mut result = ImportedInsert::default();
     match probe_video(source) {
@@ -392,45 +442,80 @@ pub fn import_insert(source: &str, bundle_path: &str, probe_video: &dyn Fn(&str)
     if !result.info.is_valid() {
         return result;
     }
+    match copy_into_media(source, bundle_path, "clip") {
+        Ok(path) => result.path = path,
+        Err(error) => result.error = error,
+    }
+    result
+}
+
+/// Brings a file into the bundle's `media/` directory as [`import_insert`] does, naming it from
+/// its own name (`fallback` when nothing is left of that); returns its bundle-relative path. A
+/// file already in this bundle's `media/` is used where it is.
+pub fn copy_into_media(source: &str, bundle_path: &str, fallback: &str) -> Result<String, String> {
     let media = qdir::file_path(bundle_path, "media");
+    // A media/ that is a link leads out of the bundle: writing through it would put the copy
+    // (and its partial file) somewhere else entirely.
+    if std::fs::symlink_metadata(&media).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
+        return Err(qstring::arg("%1 is a link; not copying into it", &media));
+    }
     let file = FileInfo::new(source);
     let media_exists = qdir::dir_exists(&media);
     if media_exists
         && same_file_info(&file.canonical_path(), &FileInfo::new(media.as_str()).canonical_file_path())
         && !sanitized_media_path(&format!("media/{}", file.file_name())).is_empty()
     {
-        result.path = format!("media/{}", file.file_name());
-        return result;
+        return Ok(format!("media/{}", file.file_name()));
     }
     if !media_exists && !qdir::mkpath(&media) {
-        result.error = qstring::arg("Could not create %1", &media);
-        return result;
+        return Err(qstring::arg("Could not create %1", &media));
     }
-    let mut base = replace_unsafe_name_characters(&file.complete_base_name());
-    base = base.trim_start_matches('.').to_owned();
-    if base.is_empty() {
-        base = "clip".into();
+    let free_name = || free_media_name(&file, &media, fallback);
+    // A partial file of this copy's own: a music import and a video insert can run at once, and
+    // two copies writing one `.NAME.part` would mix.
+    static COPIES: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    let copy = COPIES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let partial = qdir::file_path(&media, &format!(".{}.{}-{copy}.part", free_name(), std::process::id()));
+    clone_or_copy(source, &partial)?;
+    // The other copy may have taken the name meanwhile: the next free one, then.
+    for _ in 0..8 {
+        let name = free_name();
+        if rename_no_replace(&partial, &qdir::file_path(&media, &name)) {
+            return Ok(format!("media/{name}"));
+        }
+        if !qdir::dir_contains(&media, &name) {
+            let _ = std::fs::remove_file(&partial);
+            return Err(qstring::arg("Could not add %1 to the recording", &name));
+        }
     }
-    let suffix = file.suffix();
-    let suffix = if suffix.is_empty() { String::new() } else { format!(".{}", qstring::to_lower(&suffix)) };
-    let mut name = format!("{base}{suffix}");
-    // `base` holds no '%', so the C++'s chained QString::arg is plain formatting.
-    let mut n: i32 = 2;
-    while qdir::dir_contains(&media, &name) {
-        name = format!("{base}-{n}{suffix}");
-        n = n.wrapping_add(1);
+    let _ = std::fs::remove_file(&partial);
+    Err(qstring::arg("Could not add %1 to the recording", &free_name()))
+}
+
+/// What [`import_music`] brought into the bundle: the music's media path and the length of its
+/// sound, or why not.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ImportedMusic {
+    pub path: String,
+    pub duration: f64,
+    pub error: String,
+}
+
+/// Probes a file's sound (an audio file, or a video whose sound is used) and brings the file
+/// into the bundle's `media/` directory as [`import_insert`] does.
+pub fn import_music(source: &str, bundle_path: &str, probe_audio: &dyn Fn(&str) -> Result<f64, String>) -> ImportedMusic {
+    let mut result = ImportedMusic::default();
+    match probe_audio(source) {
+        Ok(duration) => result.duration = duration,
+        Err(error) => {
+            result.error = error;
+            return result;
+        }
     }
-    let partial = qdir::file_path(&media, &format!(".{name}.part"));
-    if let Err(error) = clone_or_copy(source, &partial) {
-        result.error = error;
-        return result;
+    match copy_into_media(source, bundle_path, "music") {
+        Ok(path) => result.path = path,
+        Err(error) => result.error = error,
     }
-    if !rename_no_replace(&partial, &qdir::file_path(&media, &name)) {
-        let _ = std::fs::remove_file(&partial);
-        result.error = qstring::arg("Could not add %1 to the recording", &name);
-        return result;
-    }
-    result.path = format!("media/{name}");
     result
 }
 
@@ -659,6 +744,22 @@ mod tests {
 
     fn video() -> VideoInfo {
         VideoInfo { width: 320, height: 240, duration: 0.7, fps: 30.0, audio: false }
+    }
+
+    #[test]
+    fn a_linked_media_directory_is_not_written_through() {
+        let dir = TempDir::new("editor-import-link");
+        let bundle = dir.join("b.omareel");
+        let elsewhere = dir.join("elsewhere");
+        std::fs::create_dir_all(&bundle).unwrap();
+        std::fs::create_dir_all(&elsewhere).unwrap();
+        std::os::unix::fs::symlink(&elsewhere, format!("{bundle}/media")).unwrap();
+        let song = dir.join("song.mp3");
+        std::fs::write(&song, b"music").unwrap();
+        let imported = import_music(&song, &bundle, &|_: &str| Ok(3.0));
+        assert!(imported.error.contains("is a link"), "{imported:?}");
+        assert_eq!(std::fs::read_dir(&elsewhere).unwrap().count(), 0);
+        assert!(!import_insert(&song, &bundle, &fixed_probe(video())).error.is_empty());
     }
 
     #[test]

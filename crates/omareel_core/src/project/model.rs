@@ -53,6 +53,21 @@ impl Default for Keystrokes {
     }
 }
 
+/// Captions drawn from `transcript.json`. `position`: "bottom" or "top"; `size` scales the
+/// text, 0.5 to 2.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Captions {
+    pub enabled: bool,
+    pub position: String,
+    pub size: f64,
+}
+
+impl Default for Captions {
+    fn default() -> Captions {
+        Captions { enabled: false, position: "bottom".into(), size: 1.0 }
+    }
+}
+
 /// A piece of the recording, or of an inserted video when `media` is set.
 /// `layout`: "default" shows the screen with the camera bubble, "camera" the webcam full
 /// frame, "screen" the screen without the bubble. Inserted videos ignore it.
@@ -124,6 +139,34 @@ impl Default for Audio {
     fn default() -> Audio {
         Audio { desktop: true, mic: true, volume: 1.0 }
     }
+}
+
+/// Background music under the whole edited video (`music` in project.json, only there when
+/// set). `file`: path relative to the bundle, inside its media/ directory. `volume`: the
+/// music's gain, 0 to 1. `fade_in` and `fade_out`: seconds at the start and end of the output.
+/// `duck`: the music drops while the recording's own sound plays. `loop_`: a file shorter than
+/// the video starts over (from its beginning). `start`: seconds into the file the music begins
+/// at, for its first pass.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Music {
+    pub file: String,
+    pub volume: f64,
+    pub fade_in: f64,
+    pub fade_out: f64,
+    pub duck: bool,
+    pub loop_: bool,
+    pub start: f64,
+}
+
+impl Default for Music {
+    fn default() -> Music {
+        Music { file: String::new(), volume: 0.25, fade_in: 1.0, fade_out: 2.0, duck: true, loop_: true, start: 0.0 }
+    }
+}
+
+impl Music {
+    /// The longest fade either way, in seconds.
+    pub const MAX_FADE: f64 = 10.0;
 }
 
 #[derive(Clone, Debug, PartialEq)]

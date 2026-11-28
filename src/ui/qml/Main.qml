@@ -114,6 +114,7 @@ ApplicationWindow {
                 scaleFactor: window.timelineScale
                 onScaleFactorRequested: value => window.timelineScale = value
                 onCameraSelected: sidePanel.section = 5
+                onMusicSelected: sidePanel.section = 7
             }
         }
     }

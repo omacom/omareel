@@ -52,6 +52,7 @@ FocusScope {
         Qt.callLater(root.applyZoomAnchor)
     }
     signal cameraSelected()
+    signal musicSelected()
     property real rangeAnchor: -1
     property real rangeHead: -1
     property bool selectingRange: false
@@ -137,7 +138,7 @@ FocusScope {
         target: editor
         function onDurationChanged() { root.clearRange() }
     }
-    implicitHeight: editor.hasCamera ? 204 : 148
+    implicitHeight: (editor.hasCamera ? 204 : 148) + (hasMusic ? musicLaneHeight + 8 : 0)
     property real labelWidth: 72
     readonly property real timelinePadding: 40
     property real basePixels: Math.max(1, width - labelWidth - timelinePadding)
@@ -161,7 +162,12 @@ FocusScope {
         return time + "." + ("00" + (milliseconds % 1000)).slice(-3).slice(0, precision)
     }
     readonly property int trackCount: editor.hasCamera ? 3 : 2
+    // The background music's thin lane, under the other tracks while there is music.
+    readonly property bool hasMusic: editor.music.present === true
+    readonly property real musicLaneY: 32 + trackCount * 56
+    readonly property real musicLaneHeight: 28
     readonly property real tracksBottom: 32 + trackCount * 48 + (trackCount - 1) * 8
+        + (hasMusic ? musicLaneHeight + 8 : 0)
 
     Rectangle { anchors.fill: parent; color: theme.surface }
     Rectangle {
@@ -202,6 +208,26 @@ FocusScope {
                     font.pixelSize: theme.type.caption
                     font.weight: Font.Medium
                 }
+            }
+        }
+        Row {
+            visible: root.hasMusic
+            x: 10
+            y: root.musicLaneY + (root.musicLaneHeight - height) / 2
+            spacing: 5
+            IconImage {
+                anchors.verticalCenter: parent.verticalCenter
+                width: 12; height: 12
+                source: "qrc:/omareel/assets/icons/lucide/music.svg"
+                sourceSize: Qt.size(12, 12)
+                color: theme.textFaint
+            }
+            Label {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Music"
+                color: theme.textMuted
+                font.pixelSize: theme.type.caption
+                font.weight: Font.Medium
             }
         }
     }
@@ -527,6 +553,79 @@ FocusScope {
                     target: cameraBlock
                     shown: cameraHover.hovered
                     text: "Camera settings"
+                }
+            }
+
+            Rectangle {
+                id: musicTrack
+                visible: root.hasMusic
+                x: 0
+                y: root.musicLaneY
+                width: parent.width
+                height: root.musicLaneHeight
+                radius: theme.controlRadius
+                color: Qt.alpha(theme.foreground, theme.dark ? .025 : .035)
+            }
+            Rectangle {
+                id: musicBlock
+                objectName: "musicBlock"
+                visible: root.hasMusic
+                x: 0
+                y: root.musicLaneY + 3
+                width: Math.max(20, (editor.music.extent || 0) * root.pixelsPerSecond)
+                height: root.musicLaneHeight - 6
+                radius: theme.smallRadius
+                color: Qt.alpha(theme.accent, musicHover.hovered ? .26 : .16)
+                border.width: 1
+                border.color: musicHover.hovered ? Qt.alpha(theme.accent, .8) : Qt.alpha(theme.accent, .45)
+                clip: true
+                // The music's loudness across the output, once measured.
+                Repeater {
+                    model: root.hasMusic ? editor.music.waveform : []
+                    delegate: Rectangle {
+                        required property real modelData
+                        required property int index
+                        readonly property real step: editor.duration * root.pixelsPerSecond
+                            / Math.max(1, editor.music.waveform.length)
+                        x: index * step
+                        width: Math.max(1, step - (step > 3 ? 1 : 0))
+                        height: Math.max(1, modelData * (musicBlock.height - 6))
+                        y: (musicBlock.height - height) / 2
+                        color: Qt.alpha(theme.accent, .55)
+                        visible: x < musicBlock.width
+                    }
+                }
+                Rectangle {
+                    anchors.left: parent.left; anchors.leftMargin: 6
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Math.min(musicLabel.implicitWidth + 12, musicBlock.width - 12)
+                    height: 16
+                    radius: theme.smallRadius
+                    color: Qt.alpha(theme.canvas, .78)
+                    visible: width > 20
+                    Label {
+                        id: musicLabel
+                        anchors.fill: parent
+                        anchors.leftMargin: 6; anchors.rightMargin: 6
+                        verticalAlignment: Text.AlignVCenter
+                        text: editor.music.name || ""
+                        elide: Text.ElideRight
+                        color: theme.textStrong
+                        font.pixelSize: theme.type.caption
+                        font.weight: Font.DemiBold
+                    }
+                }
+                HoverHandler { id: musicHover }
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onPressed: root.forceActiveFocus()
+                    onClicked: root.musicSelected()
+                }
+                OmLazyToolTip {
+                    target: musicBlock
+                    shown: musicHover.hovered
+                    text: "Music settings"
                 }
             }
 

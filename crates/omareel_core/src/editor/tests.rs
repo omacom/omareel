@@ -7,7 +7,7 @@ use super::*;
 use crate::compat::qdir::tests::TempDir;
 use crate::compat::qjson::{Object, Value};
 use crate::compat::qround::q_fuzzy_compare;
-use crate::project::{Clip, Project};
+use crate::project::{Clip, Music, Project};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -111,6 +111,10 @@ impl Qt {
                     Effect::StartImport(source) => {
                         let imported = self.document.import_job(source).run();
                         self.document.finish_import(imported);
+                    }
+                    Effect::StartMusicImport(source) => {
+                        let imported = self.document.music_import_job(source).run();
+                        self.document.finish_music_import(imported);
                     }
                     _ => {}
                 }
@@ -1685,4 +1689,327 @@ fn real_ffmpeg_probes_and_builds_frames() {
     } else {
         eprintln!("ffmpeg could not write a display matrix");
     }
+}
+
+/// What `probe_audio` says of a music file: 0.5 s of sound for `*.ogg`, none otherwise.
+fn audio_probe(path: &str) -> Result<f64, String> {
+    if !std::path::Path::new(path).is_file() {
+        return Err(format!("{path} does not exist"));
+    }
+    if path.ends_with(".ogg") { Ok(0.5) } else { Err("song.txt has no sound".into()) }
+}
+
+fn open_with_music_probe(world: &World, bundle: &str) -> Qt {
+    let mut qt = world.open(bundle);
+    qt.document.set_audio_probe(Arc::new(audio_probe));
+    qt
+}
+
+#[test]
+fn music_is_added_copied_and_undone() {
+    let world = World::new("music-add");
+    let bundle = world.bundle("music.omareel");
+    let mut qt = open_with_music_probe(&world, &bundle);
+    qt.run(|d| d.save_now());
+    let saved = std::fs::read(format!("{bundle}/project.json")).unwrap();
+    assert!(!String::from_utf8_lossy(&saved).contains("\"music\":"));
+
+    let song = world.path("My Song!.ogg");
+    std::fs::write(&song, b"ogg").unwrap();
+    qt.run(|d| d.set_music(&song)).unwrap();
+    let music = qt.document.music().cloned().expect("music");
+    assert_eq!(music, Music { file: "media/My Song_.ogg".into(), ..Music::default() });
+    assert_eq!(std::fs::read(format!("{bundle}/media/My Song_.ogg")).unwrap(), b"ogg");
+    assert_eq!(qt.document.music_duration(), Some(0.5));
+    assert!(qt.document.can_undo());
+
+    // Its settings go through setProjectValue, coalescing like any slider.
+    qt.run(|d| d.set_project_value("music.volume", 0.5.into(), true));
+    qt.run(|d| d.set_project_value("music.volume", 0.6.into(), true));
+    qt.run(|d| d.set_project_value("music.duck", false.into(), false));
+    let music = qt.document.music().unwrap();
+    assert_eq!((music.volume, music.duck), (0.6, false));
+
+    // Saved, and read back.
+    qt.run(|d| d.save_now());
+    let reopened = world.open(&bundle);
+    assert_eq!(reopened.document.music(), qt.document.music());
+
+    assert!(qt.run(|d| d.clear_music()));
+    assert!(qt.document.music().is_none());
+    assert!(!qt.run(|d| d.clear_music()));
+    qt.run(|d| d.undo());
+    assert_eq!(qt.document.music().map(|m| m.volume), Some(0.6));
+    qt.run(|d| d.undo());
+    qt.run(|d| d.undo());
+    assert_eq!(qt.document.music().map(|m| (m.volume, m.duck)), Some((0.25, true)));
+    qt.run(|d| d.undo());
+    assert!(qt.document.music().is_none());
+    assert!(!qt.document.can_undo());
+
+    // A file without sound is refused, changing nothing.
+    let text = world.path("song.txt");
+    std::fs::write(&text, b"text").unwrap();
+    assert_eq!(qt.run(|d| d.set_music(&text)), Err("song.txt has no sound".into()));
+    assert!(qt.document.music().is_none());
+}
+
+#[test]
+fn music_settings_need_music() {
+    let world = World::new("music-settings");
+    let bundle = world.bundle("music.omareel");
+    let mut qt = open_with_music_probe(&world, &bundle);
+    qt.run(|d| d.set_project_value("music.volume", 0.5.into(), false));
+    assert!(qt.document.music().is_none());
+    assert!(!qt.document.can_undo());
+    assert_eq!(qt.document.music_playback(0.0), None);
+}
+
+#[test]
+fn music_import_runs_off_the_gui_thread() {
+    let world = World::new("music-import");
+    let bundle = world.bundle("music.omareel");
+    let mut qt = open_with_music_probe(&world, &bundle);
+    let song = world.path("loop.ogg");
+    std::fs::write(&song, b"ogg").unwrap();
+    qt.document.start_music_import(&song);
+    assert!(qt.document.music_importing());
+    let effects = qt.drain();
+    assert!(effects.contains(&Effect::StartMusicImport(song.clone())));
+    assert!(!qt.document.music_importing());
+    assert_eq!(qt.document.music().map(|m| m.file.as_str()), Some("media/loop.ogg"));
+    // Replacing it keeps the settings but starts the new file from its beginning.
+    qt.run(|d| d.set_project_value("music.start", 0.25.into(), false));
+    qt.run(|d| d.set_project_value("music.fadeIn", 0.0.into(), false));
+    let other = world.path("other.ogg");
+    std::fs::write(&other, b"ogg").unwrap();
+    qt.document.start_music_import(&other);
+    qt.drain();
+    let music = qt.document.music().unwrap();
+    assert_eq!((music.file.as_str(), music.start, music.fade_in), ("media/other.ogg", 0.0, 0.0));
+    // A failed import is an import error.
+    qt.document.start_music_import(&world.path("missing.ogg"));
+    qt.drain();
+    assert!(qt.document.import_error().contains("does not exist"));
+    assert_eq!(qt.document.music().map(|m| m.file.as_str()), Some("media/other.ogg"));
+}
+
+#[test]
+fn music_playback_follows_the_output() {
+    let world = World::new("music-playback");
+    let bundle = world.bundle("music.omareel");
+    let mut qt = open_with_music_probe(&world, &bundle);
+    let song = world.path("loop.ogg");
+    std::fs::write(&song, b"ogg").unwrap();
+    qt.run(|d| d.set_music(&song)).unwrap();
+    qt.run(|d| d.set_project_value("music.fadeIn", 0.5.into(), false));
+    qt.run(|d| d.set_project_value("music.fadeOut", 1.0.into(), false));
+    qt.run(|d| d.set_project_value("music.start", 0.1.into(), false));
+    // The recording is 2 s; the 0.5 s file starts 0.1 s in, then loops.
+    let at = |qt: &Qt, t: f64| qt.document.music_playback(t).unwrap();
+    assert_eq!(at(&qt, 0.0).position_ms, 100);
+    assert_eq!(at(&qt, 0.0).gain, 0.0);
+    assert_eq!(at(&qt, 0.25).gain, 0.125);
+    assert_eq!(at(&qt, 0.3).position_ms, 400);
+    assert_eq!(at(&qt, 0.4).position_ms, 0);
+    assert_eq!(at(&qt, 1.0).position_ms, 100);
+    assert_eq!(at(&qt, 1.0).gain, 0.25);
+    assert_eq!(at(&qt, 1.5).gain, 0.125);
+    assert!(at(&qt, 1.9).audible);
+    assert!(at(&qt, 1.0).path.ends_with("/media/loop.ogg"));
+    // Each start over is a new pass, which the player seeks on however short the file; how
+    // long the sound lasts from there tells it whether it ran out early.
+    assert_eq!((at(&qt, 0.3).pass, at(&qt, 0.3).remaining_ms), (0, 100));
+    assert_eq!((at(&qt, 0.4).pass, at(&qt, 0.4).remaining_ms), (1, 500));
+    assert_eq!((at(&qt, 1.0).pass, at(&qt, 1.0).position_ms), (2, 100));
+    // A start past the end of the file starts where export does: 1.2 s into the 0.5 s loop
+    // is 0.2 s.
+    qt.run(|d| d.set_project_value("music.start", 1.2.into(), false));
+    assert_eq!((at(&qt, 0.0).position_ms, at(&qt, 0.0).pass), (200, 0));
+    assert_eq!((at(&qt, 0.35).position_ms, at(&qt, 0.35).pass), (50, 1));
+    qt.run(|d| d.set_project_value("music.start", 0.1.into(), false));
+    // Without looping it runs out.
+    qt.run(|d| d.set_project_value("music.loop", false.into(), false));
+    assert!(!at(&qt, 0.45).audible);
+    assert_eq!(qt.document.music_lane(4).unwrap(), (0.4, Vec::new()));
+    // Ducking needs the recording's sound; this one has none, so there is nothing to measure
+    // but the music.
+    assert_eq!(qt.document.take_audio_levels_requests(), vec![format!("{bundle}/media/loop.ogg")]);
+    assert!(qt.document.take_audio_levels_requests().is_empty());
+    qt.document.set_audio_levels(&format!("{bundle}/media/loop.ogg"), crate::music::AudioLevels { rate: 10.0, rms: vec![0.2, 0.4, 0.1, 0.1, 0.1] });
+    let (extent, waveform) = qt.document.music_lane(4).unwrap();
+    assert_eq!(extent, 0.4);
+    assert_eq!(waveform, vec![1.0, 0.0, 0.0, 0.0]);
+}
+
+#[test]
+fn music_ducks_under_the_recordings_sound_in_the_preview() {
+    let world = World::new("music-duck");
+    let bundle = world.bundle("duck.omareel");
+    std::fs::write(format!("{bundle}/capture.json"), br#"{"fps":30,"first_frame_us":1000,"audio":{"desktop":true,"mic":true}}"#).unwrap();
+    let with_sound = |path: &str| media_probe(path).map(|info| MediaInfo { audio: true, ..info });
+    let probes = Probes { media: Arc::new(with_sound), video: Arc::new(video_probe) };
+    let locations = Locations { config: Some(world.path("config")), cache: Some(world.path("cache")) };
+    let mut document = Document::open_with(&bundle, &probes, locations).unwrap();
+    document.set_audio_probe(Arc::new(audio_probe));
+    let song = world.path("loop.ogg");
+    std::fs::write(&song, b"ogg").unwrap();
+    document.set_music(&song).unwrap();
+    document.set_project_value("music.fadeIn", 0.0.into(), false);
+    document.set_project_value("music.fadeOut", 0.0.into(), false);
+    let screen = format!("{bundle}/screen.mp4");
+    let requests = document.take_audio_levels_requests();
+    assert!(requests.contains(&screen), "{requests:?}");
+    // Before the recording's levels are known the music plays at its own volume.
+    assert_eq!(document.music_playback(1.5).unwrap().gain, 0.25);
+    // Quiet for the first second, then a voice at -12 dBFS RMS.
+    let mut rms = vec![0.0_f32; 50];
+    rms.extend(vec![0.25_f32; 50]);
+    document.set_audio_levels(&screen, crate::music::AudioLevels { rate: 50.0, rms });
+    assert_eq!(document.music_playback(0.5).unwrap().gain, 0.25);
+    let ducked = document.music_playback(1.5).unwrap().gain;
+    assert!(ducked < 0.25 * 0.2, "{ducked}");
+    // The switch turns it off.
+    document.set_project_value("music.duck", false.into(), false);
+    assert_eq!(document.music_playback(1.5).unwrap().gain, 0.25);
+    // A recording whose sound is switched off does not duck.
+    document.set_project_value("music.duck", true.into(), false);
+    document.set_project_value("audio.desktop", false.into(), false);
+    document.set_project_value("audio.mic", false.into(), false);
+    assert_eq!(document.music_playback(1.5).unwrap().gain, 0.25);
+}
+
+fn clip_spans(qt: &Qt) -> Vec<(f64, f64, f64)> {
+    let round = |t: f64| (t * 1e6).round() / 1e6;
+    qt.document.project().clips.iter().map(|c| (round(c.in_), round(c.out), c.speed)).collect()
+}
+
+#[test]
+fn removing_source_ranges_is_one_undo_step() {
+    let world = World::new("editor-remove-ranges");
+    let mut qt = world.open(&world.bundle("ranges.omareel"));
+    let original = clip_spans(&qt);
+    assert_eq!(original, [(0.0, 2.0, 1.0)]);
+    let steps = qt.undo_steps();
+    qt.effects.clear();
+    assert_eq!(qt.run(|d| d.remove_source_ranges(&[(1.0, 1.2), (0.3, 0.5)])), 2);
+    assert_eq!(clip_spans(&qt), [(0.0, 0.3, 1.0), (0.5, 1.0, 1.0), (1.2, 2.0, 1.0)]);
+    assert_eq!(qt.undo_steps(), steps + 1);
+    assert_eq!(qt.effects[..2], [Effect::Pause, Effect::HistoryChanged]);
+    assert!((qt.document.duration() - 1.6).abs() < 1e-9);
+    qt.run(Document::undo);
+    assert_eq!(clip_spans(&qt), original);
+
+    // Nothing to cut, or everything: no change and no undo step.
+    let steps = qt.undo_steps();
+    assert_eq!(qt.run(|d| d.remove_source_ranges(&[])), 0);
+    assert_eq!(qt.run(|d| d.remove_source_ranges(&[(0.0, 2.0)])), 0);
+    assert_eq!(qt.run(|d| d.remove_source_ranges(&[(5.0, 6.0)])), 0);
+    assert_eq!(qt.undo_steps(), steps);
+    assert_eq!(clip_spans(&qt), original);
+}
+
+#[test]
+fn removing_source_ranges_across_cuts_and_speeds() {
+    let world = World::new("editor-remove-ranges-speed");
+    let mut qt = world.open(&world.bundle("ranges.omareel"));
+    // Cut 1.0..1.2 out, then play the rest at 2x.
+    assert!(qt.run(|d| d.delete_output_range(1.0, 1.2)));
+    let second = qt.clip_id(1);
+    assert!(qt.run(|d| d.set_clip_speed(&second, 2.0)));
+    assert_eq!(clip_spans(&qt), [(0.0, 1.0, 1.0), (1.2, 2.0, 2.0)]);
+    // One range spans the earlier cut; a leftover under 0.1 s at the start goes too.
+    assert_eq!(qt.run(|d| d.remove_source_ranges(&[(0.9, 1.5), (0.05, 0.5)])), 2);
+    assert_eq!(clip_spans(&qt), [(0.5, 0.9, 1.0), (1.5, 2.0, 2.0)]);
+    assert!((qt.document.duration() - (0.4 + 0.25)).abs() < 1e-9);
+    // A range already cut away does nothing.
+    assert_eq!(qt.run(|d| d.remove_source_ranges(&[(1.0, 1.4)])), 0);
+}
+
+#[test]
+fn removing_source_ranges_keeps_the_playhead_on_the_moment() {
+    let world = World::new("editor-remove-ranges-playhead");
+    let mut qt = world.open(&world.bundle("ranges.omareel"));
+    qt.seek(1.5);
+    assert_eq!(qt.run(|d| d.remove_source_ranges(&[(0.2, 0.7)])), 1);
+    assert!((qt.document.output_position() - 1.0).abs() < 1e-9);
+    assert!((qt.document.source_position() - 1.5).abs() < 1e-9);
+}
+
+#[test]
+fn captions_follow_the_clips_and_stay_out_of_old_projects() {
+    use crate::transcript::{Segment, Transcript, Word};
+    let world = World::new("editor-captions");
+    let bundle = world.bundle("captions.omareel");
+    let mut qt = world.open(&bundle);
+    assert!(!qt.document.project().to_json().contains("captions"));
+    assert!(!qt.document.captions().enabled);
+    let words = vec![
+        Word { start: 0.1, end: 0.4, text: "Hello".into() },
+        Word { start: 0.5, end: 0.8, text: "um".into() },
+        Word { start: 1.0, end: 1.4, text: "world.".into() },
+    ];
+    let mut transcript = Transcript {
+        segments: vec![Segment { start: 0.1, end: 1.4, text: "Hello um world.".into(), words }],
+        ..Transcript::default()
+    };
+    // Estimated word times are not good enough to cut by.
+    transcript.save(&bundle).unwrap();
+    qt = world.open(&bundle);
+    assert!(!qt.document.can_remove_fillers());
+    assert!(qt.document.filler_ranges().is_empty());
+    transcript.word_timing = crate::transcript::WordTiming::Measured;
+    transcript.save(&bundle).unwrap();
+    qt = world.open(&bundle);
+    assert!(qt.document.can_remove_fillers());
+    assert_eq!(qt.document.caption_cues().len(), 1);
+    assert_eq!(qt.document.caption_cues()[0].lines, ["Hello um world."]);
+    // Off by default: nothing shows.
+    qt.seek(0.3);
+    assert!(qt.document.preview_caption().lines.is_empty());
+    qt.run(|d| d.set_project_value("captions.enabled", Value::Bool(true), false));
+    let json = qt.document.project().to_json();
+    assert_eq!(json.value("captions").to_object().value("position").to_string_or(""), "bottom");
+    qt.seek(0.3);
+    assert_eq!(qt.document.preview_caption().lines, ["Hello um world."]);
+
+    // Remove the filler: one undo step, and the caption loses it.
+    let fillers = qt.document.filler_ranges();
+    assert_eq!(fillers.len(), 1);
+    assert_eq!(qt.run(|d| d.remove_source_ranges(&fillers)), 1);
+    assert_eq!(qt.document.caption_cues()[0].lines, ["Hello world."]);
+    assert!(qt.document.filler_ranges().is_empty());
+    qt.run(Document::undo);
+    assert_eq!(qt.document.caption_cues()[0].lines, ["Hello um world."]);
+}
+
+#[test]
+fn pause_ranges_need_speech_and_skip_activity() {
+    let world = World::new("editor-pauses");
+    let settings = crate::transcript::trim::PauseSettings { min_pause: 0.5, keep: 0.2 };
+    // The fixture's cursor keeps moving: someone showing something, not a pause.
+    let mut qt = world.open(&world.bundle("moving.omareel"));
+    assert!(qt.document.pause_ranges(&settings).is_empty());
+    qt.document.set_speech_regions(vec![(0.0, 0.4), (1.4, 2.0)]);
+    qt.document.set_still_windows(vec![(0.0, 2.0)]);
+    assert!(qt.document.input_activity().iter().any(|&t| (0.4..=1.4).contains(&t)));
+    assert!(qt.document.pause_ranges(&settings).is_empty());
+
+    let still = world.bundle("still.omareel");
+    std::fs::write(format!("{still}/input.jsonl"), b"").unwrap();
+    let mut qt = world.open(&still);
+    qt.document.set_speech_regions(vec![(0.0, 0.4), (1.4, 2.0)]);
+    assert_eq!(qt.document.silences_to_check(), Some(vec![(0.4, 1.4)]));
+    // Not before the screen is checked, nor when it moves during the silence.
+    assert!(!qt.document.pauses_ready());
+    assert!(qt.document.pause_ranges(&settings).is_empty());
+    qt.document.set_still_windows(Vec::new());
+    assert!(qt.document.pauses_ready());
+    assert!(qt.document.pause_ranges(&settings).is_empty());
+    qt.document.set_still_windows(vec![(0.4, 1.4)]);
+    let ranges = qt.document.pause_ranges(&settings);
+    assert_eq!(ranges.len(), 1);
+    assert!((ranges[0].0 - 0.5).abs() < 1e-9 && (ranges[0].1 - 1.3).abs() < 1e-9, "{ranges:?}");
+    assert_eq!(qt.run(|d| d.remove_source_ranges(&ranges)), 1);
+    assert!(qt.document.pause_ranges(&settings).is_empty());
 }

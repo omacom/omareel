@@ -61,6 +61,38 @@ pub fn sanitized_media_path(path: &str) -> String {
     clean
 }
 
+/// The project's `music`: `None` unless it is an object naming a file inside media/; the
+/// numbers are kept to what the editor offers.
+pub fn music_from_json(value: &Value) -> Option<Music> {
+    let m = value.as_object()?;
+    let file = sanitized_media_path(&m.value("file").to_string_or(""));
+    if file.is_empty() {
+        return None;
+    }
+    let d = Music::default();
+    Some(Music {
+        file,
+        volume: cpp::clamp(m.value("volume").to_double(d.volume), 0.0, 1.0),
+        fade_in: cpp::clamp(m.value("fadeIn").to_double(d.fade_in), 0.0, Music::MAX_FADE),
+        fade_out: cpp::clamp(m.value("fadeOut").to_double(d.fade_out), 0.0, Music::MAX_FADE),
+        duck: m.value("duck").to_bool(d.duck),
+        loop_: m.value("loop").to_bool(d.loop_),
+        start: cpp::max(0.0, m.value("start").to_double(d.start)),
+    })
+}
+
+pub fn music_to_json(music: &Music) -> Value {
+    obj([
+        ("file", music.file.as_str().into()),
+        ("volume", music.volume.into()),
+        ("fadeIn", music.fade_in.into()),
+        ("fadeOut", music.fade_out.into()),
+        ("duck", music.duck.into()),
+        ("loop", music.loop_.into()),
+        ("start", music.start.into()),
+    ])
+}
+
 pub fn allowed_aspects() -> [&'static str; 7] {
     ["auto", "16:9", "1:1", "4:3", "9:16", "3:4", "4:5"]
 }
@@ -321,10 +353,21 @@ impl Project {
         // typing, and the keystroke track hides any an older recording has.
         p.keystrokes.hold_ms = cpp::clamp(keystrokes.value("holdMs").to_int(900), 100, 5000);
 
+        p.captions = source.value("captions").as_object().map(|captions| {
+            let d = Captions::default();
+            let position = captions.value("position").to_string_or(&d.position);
+            Captions {
+                enabled: captions.value("enabled").to_bool(d.enabled),
+                position: if position == "top" { position } else { d.position },
+                size: cpp::clamp(captions.value("size").to_double(d.size), 0.5, 2.0),
+            }
+        });
+
         let a = source.value("audio").to_object();
         p.audio.desktop = a.value("desktop").to_bool(true);
         p.audio.mic = a.value("mic").to_bool(true);
         p.audio.volume = a.value("volume").to_double(1.0);
+        p.music = music_from_json(source.value("music"));
         let camera = source.value("camera").to_object();
         p.camera.enabled = camera.value("enabled").to_bool(false);
         p.camera.position = camera.value("position").to_string_or("bottom-right");
@@ -474,9 +517,12 @@ impl Project {
         ]);
         let k = &self.keystrokes;
         let a = &self.audio;
+        let captions = self.captions.as_ref().map_or(Value::Undefined, |c| {
+            obj([("enabled", c.enabled.into()), ("position", c.position.as_str().into()), ("size", c.size.into())])
+        });
         let cam = &self.camera;
         let e = &self.export_settings;
-        Object::from_iter([
+        let mut root = Object::from_iter([
             ("version", Value::from(self.version)),
             ("defaultsVersion", self.defaults_version.into()),
             ("name", self.name.as_str().into()),
@@ -514,6 +560,8 @@ impl Project {
                 ]),
             ),
             ("audio", obj([("desktop", a.desktop.into()), ("mic", a.mic.into()), ("volume", a.volume.into())])),
+            // Absent until the user changes captions (inserting Undefined leaves it out).
+            ("captions", captions),
             (
                 "camera",
                 obj([
@@ -549,12 +597,22 @@ impl Project {
                     ),
                 ]),
             ),
-        ])
+        ]);
+        // Written only when set, so projects without music stay as they were.
+        if let Some(music) = &self.music {
+            root.insert("music", music_to_json(music));
+        }
+        root
     }
 
     /// Reads `project.json`, writing it back when a migration changed it. On failure the
     /// error comes with a bare project, as the C++ returned one.
     pub fn load(path: &str) -> (Project, Result<(), String>) {
+        Project::load_with(path, true)
+    }
+
+    /// [`Project::load`], writing a migrated project back only when `save_migration`.
+    pub fn load_with(path: &str, save_migration: bool) -> (Project, Result<(), String>) {
         let bytes = match qfile::read_all(path) {
             Ok(bytes) => bytes,
             Err(error) => return (Project::default(), Err(error)),
@@ -566,7 +624,7 @@ impl Project {
         };
         let (json, migrated) = Project::migrate_defaults(&object);
         let project = Project::from_json(&json);
-        if migrated {
+        if migrated && save_migration {
             if let Err(error) = project.save(path) {
                 return (project, Err(error));
             }

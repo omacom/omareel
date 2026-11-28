@@ -181,8 +181,13 @@ pub struct Project {
     pub cursor: Cursor,
     pub keystrokes: Keystrokes,
     pub audio: Audio,
+    /// Background music; `None` keeps `music` out of project.json.
+    pub music: Option<Music>,
     pub camera: Camera,
     pub export_settings: ExportSettings,
+    /// Captions from the transcript; `None` until the user first changes them, so projects
+    /// that never did keep their bytes.
+    pub captions: Option<Captions>,
 }
 
 impl Project {
@@ -205,8 +210,10 @@ impl Default for Project {
             cursor: Cursor::default(),
             keystrokes: Keystrokes::default(),
             audio: Audio::default(),
+            music: None,
             camera: Camera::default(),
             export_settings: ExportSettings::default(),
+            captions: None,
         }
     }
 }
